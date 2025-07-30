@@ -2,7 +2,7 @@
 use crate::agent::AgentMap;
 use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::ProcessMap;
-use crate::region::{RegionID, RegionMap};
+use crate::region::{Region, RegionID, RegionMap};
 use crate::time_slice::TimeSliceInfo;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -39,7 +39,7 @@ impl Model {
     }
 
     /// Iterate over the model's regions (region IDs).
-    pub fn iter_regions(&self) -> impl Iterator<Item = &RegionID> + '_ {
+    pub fn iter_regions(&self) -> indexmap::map::Keys<'_, RegionID, Region> {
         self.regions.keys()
     }
 }
