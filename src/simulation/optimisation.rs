@@ -58,6 +58,11 @@ impl VariableMap {
             .iter()
             .map(|((asset, time_slice), var)| (asset, time_slice, *var))
     }
+
+    /// Iterate over the map's keys
+    fn keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
+        self.0.keys()
+    }
 }
 
 /// The solution to the dispatch optimisation problem
@@ -95,7 +100,6 @@ impl Solution<'_> {
     /// Activity for each active asset
     pub fn iter_activity(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         self.variables
-            .0
             .keys()
             .zip(self.solution.columns())
             .map(|((asset, time_slice), activity)| (asset, time_slice, Activity(*activity)))
@@ -140,7 +144,6 @@ impl Solution<'_> {
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
         self.variables
-            .0
             .keys()
             .zip(self.solution.dual_columns())
             .map(|((asset, time_slice), dual)| (asset, time_slice, MoneyPerActivity(*dual)))
@@ -157,7 +160,7 @@ impl Solution<'_> {
         variable_idx: &Range<usize>,
         output: &'a [f64],
     ) -> impl Iterator<Item = (&'a AssetRef, &'a TimeSliceID, T)> + use<'a, T> {
-        let keys = self.variables.0.keys().skip(variable_idx.start);
+        let keys = self.variables.keys().skip(variable_idx.start);
         assert!(keys.len() >= variable_idx.len());
 
         keys.zip(output[variable_idx.clone()].iter())
