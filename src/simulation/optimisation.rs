@@ -3,15 +3,16 @@
 //! This is used to calculate commodity flows and prices.
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::CommodityID;
+use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
-use anyhow::Result;
+use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use log::debug;
 use std::collections::HashSet;
@@ -50,33 +51,7 @@ pub struct VariableMap {
     asset_vars: AssetVariableMap,
     existing_asset_var_idx: Range<usize>,
     unmet_demand_vars: UnmetDemandVariableMap,
-    _unmet_demand_var_idx: Range<usize>,
-}
-
-fn new_unmet_demand_variables_map(
-    problem: &mut Problem,
-    model: &Model,
-    commodities: &[CommodityID],
-) -> (UnmetDemandVariableMap, Range<usize>) {
-    // This line **must** come before we add more variables
-    let start = problem.num_cols();
-
-    // Add variables
-    let voll = model.parameters.value_of_lost_load;
-    let map = iproduct!(
-        commodities.iter(),
-        model.iter_regions(),
-        model.time_slice_info.iter_ids()
-    )
-    .map(|(commodity_id, region_id, time_slice)| {
-        let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-        let var = problem.add_column(voll.value(), 0.0..);
-
-        (key, var)
-    })
-    .collect();
-
-    (map, start..problem.num_cols())
+    unmet_demand_var_idx: Range<usize>,
 }
 
 impl VariableMap {
@@ -89,15 +64,13 @@ impl VariableMap {
     /// * `input_prices` - Optional explicit prices for input commodities
     /// * `existing_assets` - The asset pool
     /// * `candidate_assets` - Candidate assets for inclusion in active pool
-    /// * `commodities` - The subset of commodities we are considering
     /// * `year` - Current milestone year
-    fn new(
+    fn new_with_asset_vars(
         problem: &mut Problem,
         model: &Model,
         input_prices: Option<&CommodityPrices>,
         existing_assets: &[AssetRef],
         candidate_assets: &[AssetRef],
-        commodities: &[CommodityID],
         year: u32,
     ) -> Self {
         let mut asset_vars = AssetVariableMap::new();
@@ -117,15 +90,50 @@ impl VariableMap {
             candidate_assets,
             year,
         );
-        let (unmet_demand_vars, unmet_demand_var_idx) =
-            new_unmet_demand_variables_map(problem, model, commodities);
 
         Self {
             asset_vars,
             existing_asset_var_idx,
-            unmet_demand_vars,
-            _unmet_demand_var_idx: unmet_demand_var_idx,
+            unmet_demand_vars: UnmetDemandVariableMap::default(),
+            unmet_demand_var_idx: Range::default(),
         }
+    }
+
+    /// Add unmet demand variables to the map and the problem
+    ///
+    /// # Arguments
+    ///
+    /// * `problem` - The optimisation problem
+    /// * `model` - The model
+    /// * `commodities` - The subset of commodities the problem is being run for
+    fn add_unmet_demand_variables(
+        &mut self,
+        problem: &mut Problem,
+        model: &Model,
+        commodities: &[CommodityID],
+    ) {
+        assert!(!commodities.is_empty());
+
+        // This line **must** come before we add more variables
+        let start = problem.num_cols();
+
+        // Add variables
+        let voll = model.parameters.value_of_lost_load;
+        self.unmet_demand_vars.extend(
+            iproduct!(
+                commodities.iter(),
+                model.iter_regions(),
+                model.time_slice_info.iter_ids()
+            )
+            .map(|(commodity_id, region_id, time_slice)| {
+                let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
+                let var = problem.add_column(voll.value(), 0.0..);
+
+                (key, var)
+            }),
+        );
+
+        self.unmet_demand_var_idx = start..problem.num_cols();
     }
 
     /// Get the asset [`Variable`] corresponding to the given parameters.
@@ -139,7 +147,6 @@ impl VariableMap {
     }
 
     /// Get the unmet demand [`Variable`] corresponding to the given parameters.
-    #[allow(dead_code)]
     fn get_unmet_demand_var(
         &self,
         commodity_id: &CommodityID,
@@ -214,6 +221,19 @@ impl Solution<'_> {
             &self.variables.existing_asset_var_idx,
             self.solution.columns(),
         )
+    }
+
+    /// Iterate over unmet demand
+    pub fn iter_unmet_demand(
+        &self,
+    ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, Flow)> {
+        self.variables
+            .unmet_demand_vars
+            .keys()
+            .zip(self.solution.columns()[self.variables.unmet_demand_var_idx.clone()].iter())
+            .map(|((commodity_id, region_id, time_slice), flow)| {
+                (commodity_id, region_id, time_slice, Flow(*flow))
+            })
     }
 
     /// Keys and dual values for commodity balance constraints.
@@ -333,6 +353,9 @@ fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID
 
 /// Provides the interface for running the dispatch optimisation.
 ///
+/// The caller can allow the dispatch run to return without error when demand is not met by calling
+/// the `with_unmet_demand_allowed` method.
+///
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
@@ -405,18 +428,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// This is an internal function as callers always want to save results.
     fn run_no_save(&self) -> Result<Solution<'model>> {
-        // Set up problem
-        let mut problem = Problem::default();
-        let variables = VariableMap::new(
-            &mut problem,
-            self.model,
-            self.input_prices,
-            self.existing_assets,
-            self.candidate_assets,
-            self.commodities,
-            self.year,
-        );
-
         // If the user provided no commodities, we all use of them
         let all_commodities: Vec<_>;
         let commodities = if self.commodities.is_empty() {
@@ -427,6 +438,74 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         };
         if let Some(input_prices) = self.input_prices {
             check_input_prices(input_prices, commodities);
+        }
+
+        // Try running dispatch. If it fails because the model is infeasible, it is likely that this
+        // is due to unmet demand, in this case, we rerun dispatch including extra variables to
+        // track the unmet demand so we can report the offending regions/commodities to users
+        match self.run_without_unmet_demand(commodities) {
+            Ok(solution) => Ok(solution),
+            Err(ModelError::Infeasible) => {
+                let pairs = self
+                    .get_regions_and_commodities_with_unmet_demand(commodities)
+                    .expect("Failed to run dispatch to calculate unmet demand");
+
+                ensure!(
+                    !pairs.is_empty(),
+                    "Model is infeasible, but there was no unmet demand"
+                );
+
+                bail!(
+                    "Demand was not met for the following region and commodity pairs: {}",
+                    format_items_with_cap(pairs)
+                )
+            }
+            Err(err) => Err(err)?,
+        }
+    }
+
+    /// Run dispatch without unmet demand variables
+    fn run_without_unmet_demand(
+        &self,
+        commodities: &[CommodityID],
+    ) -> Result<Solution<'model>, ModelError> {
+        self.run_internal(commodities, /*allow_unmet_demand=*/ false)
+    }
+
+    /// Run dispatch to diagnose which regions and commodities have unmet demand
+    fn get_regions_and_commodities_with_unmet_demand(
+        &self,
+        commodities: &[CommodityID],
+    ) -> Result<IndexSet<(RegionID, CommodityID)>> {
+        let solution = self.run_internal(commodities, /*allow_unmet_demand=*/ true)?;
+        Ok(solution
+            .iter_unmet_demand()
+            .filter(|(_, _, _, flow)| *flow > Flow(0.0))
+            .map(|(commodity_id, region_id, _, _)| (region_id.clone(), commodity_id.clone()))
+            .collect())
+    }
+
+    /// Run dispatch for specified commodities, optionally including unmet demand variables
+    fn run_internal(
+        &self,
+        commodities: &[CommodityID],
+        allow_unmet_demand: bool,
+    ) -> Result<Solution<'model>, ModelError> {
+        // Set up problem
+        let mut problem = Problem::default();
+        let mut variables = VariableMap::new_with_asset_vars(
+            &mut problem,
+            self.model,
+            self.input_prices,
+            self.existing_assets,
+            self.candidate_assets,
+            self.year,
+        );
+
+        // If unmet demand is enabled for this dispatch run (and is allowed by the model param) then
+        // we add variables representing unmet demand
+        if allow_unmet_demand {
+            variables.add_unmet_demand_variables(&mut problem, self.model, commodities);
         }
 
         // Add constraints
