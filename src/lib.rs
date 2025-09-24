@@ -1,5 +1,9 @@
 //! Common functionality for MUSE 2.0.
 #![warn(missing_docs)]
+
+use dirs::config_dir;
+use std::path::PathBuf;
+
 pub mod agent;
 pub mod asset;
 pub mod cli;
@@ -21,3 +25,15 @@ pub mod year;
 
 #[cfg(test)]
 mod fixture;
+
+/// Get config dir for program.
+///
+/// In the unlikely event this path cannot be retrieved, the CWD will be returned.
+pub fn get_muse2_config_dir() -> PathBuf {
+    let Some(mut config_dir) = config_dir() else {
+        return PathBuf::default();
+    };
+
+    config_dir.push("muse2");
+    config_dir
+}
