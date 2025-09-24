@@ -44,10 +44,6 @@ impl Settings {
     ///
     /// If the file is not present, default values for settings will be used
     ///
-    /// # Arguments
-    ///
-    /// * `model_dir` - Folder containing model configuration files
-    ///
     /// # Returns
     ///
     /// The program settings as a `Settings` struct or an error if the file is invalid
