@@ -5,10 +5,22 @@
 Once you have installed MUSE 2.0, you should be able to run it via the `muse2` command-line program.
 For details of the command-line interface, [see here](./command_line_help.md).
 
-You can also configure the behaviour of MUSE 2.0 by creating a `settings.toml` file. For more
-information, see [the documentation for this file][settings.toml-docs].
+## Modifying the program settings
 
-[settings.toml-docs]: https://energysystemsmodellinglab.github.io/MUSE_2.0/file_formats/program_settings.html
+You can configure the behaviour of MUSE 2.0 with the `settings.toml` file. To edit this file, run:
+
+```sh
+muse2 settings edit
+```
+
+There are also some more commands for working with the settings file; for details, run: `muse2
+settings help`.
+
+For information about the available settings, see [the documentation for the `settings.toml`
+file][settings.toml-docs].
+
+[settings.toml-docs]:
+https://energysystemsmodellinglab.github.io/MUSE_2.0/file_formats/program_settings.html
 
 ## Setting the log level
 
