@@ -10,6 +10,8 @@ use std::path::Path;
 pub enum SettingsSubcommands {
     /// Edit the program settings file
     Edit,
+    /// Delete the settings file, if any
+    Delete,
     /// Get the path to where the settings file is read from
     Path,
     /// Write the contents of a placeholder `settings.toml` to the console
@@ -21,6 +23,7 @@ impl SettingsSubcommands {
     pub fn execute(self) -> Result<()> {
         match self {
             Self::Edit => handle_edit_command()?,
+            Self::Delete => handle_delete_command()?,
             Self::Path => handle_path_command(),
             Self::DumpDefault => handle_dump_default_command(),
         }
@@ -56,6 +59,20 @@ fn handle_edit_command() -> Result<()> {
     // Allow user to edit in text editor
     println!("Opening settings file for editing: {}", file_path.display());
     edit::edit_file(&file_path)?;
+
+    Ok(())
+}
+
+/// Handle the `delete` command
+fn handle_delete_command() -> Result<()> {
+    let file_path = get_settings_file_path();
+    if file_path.exists() {
+        fs::remove_file(&file_path)
+            .with_context(|| format!("Error deleting file: {}", file_path.display()))?;
+        println!("Deleted settings file: {}", file_path.display());
+    } else {
+        eprintln!("No settings file to delete");
+    }
 
     Ok(())
 }
