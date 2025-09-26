@@ -637,6 +637,11 @@ impl AssetPool {
 
         // Move assets from future to active
         for mut asset in self.future.drain(0..count) {
+            // Ignore assets that have already been decommissioned
+            if asset.max_decommission_year() <= year {
+                continue;
+            }
+
             asset.commission(AssetID(self.next_id), "user input");
             self.next_id += 1;
             self.active.push(asset.into());
@@ -807,7 +812,7 @@ mod tests {
     use super::*;
     use crate::commodity::{Commodity, CommodityID, CommodityType};
     use crate::fixture::{
-        assert_error, commodity_id, process, process_parameter_map, region_id, time_slice,
+        assert_error, asset, commodity_id, process, process_parameter_map, region_id, time_slice,
     };
     use crate::process::{
         FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessID,
@@ -954,7 +959,7 @@ mod tests {
             capital_cost: MoneyPerCapacity(5.0),
             fixed_operating_cost: MoneyPerCapacityPerYear(2.0),
             variable_operating_cost: MoneyPerActivity(1.0),
-            lifetime: 5,
+            lifetime: 20,
             discount_rate: Dimensionless(0.9),
             capacity_to_activity: ActivityPerCapacity(1.0),
         });
@@ -1091,28 +1096,38 @@ mod tests {
     }
 
     #[rstest]
+    fn test_asset_pool_commission_already_decommissioned(asset: Asset) {
+        let year = asset.max_decommission_year();
+        let mut asset_pool = AssetPool::new(vec![asset]);
+        assert!(asset_pool.active.is_empty());
+        asset_pool.update_for_year(year);
+        assert!(asset_pool.active.is_empty());
+    }
+
+    #[rstest]
     fn test_asset_pool_decommission_old(mut asset_pool: AssetPool) {
         asset_pool.commission_new(2020);
+        assert!(asset_pool.future.is_empty());
         assert_eq!(asset_pool.active.len(), 2);
-        asset_pool.decommission_old(2020); // should decommission first asset (lifetime == 5)
+        asset_pool.decommission_old(2030); // should decommission first asset (lifetime == 5)
         assert_eq!(asset_pool.active.len(), 1);
         assert_eq!(asset_pool.active[0].commission_year, 2020);
         assert_eq!(asset_pool.decommissioned.len(), 1);
         assert_eq!(asset_pool.decommissioned[0].commission_year, 2010);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2020));
-        asset_pool.decommission_old(2022); // nothing to decommission
+        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2030));
+        asset_pool.decommission_old(2032); // nothing to decommission
         assert_eq!(asset_pool.active.len(), 1);
         assert_eq!(asset_pool.active[0].commission_year, 2020);
         assert_eq!(asset_pool.decommissioned.len(), 1);
         assert_eq!(asset_pool.decommissioned[0].commission_year, 2010);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2020));
-        asset_pool.decommission_old(2025); // should decommission second asset
+        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2030));
+        asset_pool.decommission_old(2040); // should decommission second asset
         assert!(asset_pool.active.is_empty());
         assert_eq!(asset_pool.decommissioned.len(), 2);
         assert_eq!(asset_pool.decommissioned[0].commission_year, 2010);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2020));
+        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2030));
         assert_eq!(asset_pool.decommissioned[1].commission_year, 2020);
-        assert_eq!(asset_pool.decommissioned[1].decommission_year(), Some(2025));
+        assert_eq!(asset_pool.decommissioned[1].decommission_year(), Some(2040));
     }
 
     #[rstest]
