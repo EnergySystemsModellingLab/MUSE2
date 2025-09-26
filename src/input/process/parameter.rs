@@ -111,8 +111,8 @@ where
 
         // Get years
         let process_years = &process.years;
-        let parameter_years =
-            parse_year_str(&param_raw.years, process_years).with_context(|| {
+        let parameter_years = parse_year_str(&param_raw.years, process_years.iter().copied())
+            .with_context(|| {
                 format!("Invalid year for process {id}. Valid years are {process_years:?}")
             })?;
 

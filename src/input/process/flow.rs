@@ -94,9 +94,10 @@ where
 
         // Get years
         let process_years = &process.years;
-        let record_years = parse_year_str(&record.years, process_years).with_context(|| {
-            format!("Invalid year for process {id}. Valid years are {process_years:?}")
-        })?;
+        let record_years = parse_year_str(&record.years, process_years.iter().copied())
+            .with_context(|| {
+                format!("Invalid year for process {id}. Valid years are {process_years:?}")
+            })?;
 
         // Get commodity
         let commodity = commodities

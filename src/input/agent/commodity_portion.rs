@@ -80,7 +80,10 @@ where
         // Insert portion for the commodity/year(s)
         let commodity_id_raw = agent_commodity_portion_raw.commodity_id.as_str();
         let commodity_id = commodities.get_id(commodity_id_raw)?;
-        let years = parse_year_str(&agent_commodity_portion_raw.years, milestone_years)?;
+        let years = parse_year_str(
+            &agent_commodity_portion_raw.years,
+            milestone_years.iter().copied(),
+        )?;
         for year in years {
             try_insert(
                 entry,

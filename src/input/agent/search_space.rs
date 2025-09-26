@@ -55,7 +55,7 @@ impl AgentSearchSpaceRaw {
         let commodity_id = commodity_ids.get_id(&self.commodity_id)?;
 
         // Check that the year is a valid milestone year
-        let year = parse_year_str(&self.years, milestone_years)?;
+        let year = parse_year_str(&self.years, milestone_years.iter().copied())?;
 
         let agent_id = agents.get_id(&self.agent_id)?;
 

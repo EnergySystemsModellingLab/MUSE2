@@ -3,16 +3,6 @@ use crate::input::is_sorted_and_unique;
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 
-/// Parse a single year from a string and check it is in `valid_years`
-fn parse_and_validate_year(s: &str, valid_years: &[u32]) -> Option<u32> {
-    let year = s.trim().parse::<u32>().ok()?;
-    if valid_years.binary_search(&year).is_ok() {
-        Some(year)
-    } else {
-        None
-    }
-}
-
 /// Parse a string of years separated by semicolons into a vector of u32 years.
 ///
 /// The string can be either "all" (case-insensitive), a single year, or a semicolon-separated list
@@ -21,34 +11,31 @@ fn parse_and_validate_year(s: &str, valid_years: &[u32]) -> Option<u32> {
 /// # Arguments
 ///
 /// - `s` - Input string to parse
-/// - `valid_years` - The possible years which can be referenced in `s` (must be sorted and unique)
+/// - `valid_years` - The possible years which can be referenced in `s`
 ///
 /// # Returns
 ///
 /// A [`Vec`] of years or an error.
-///
-/// # Panics
-///
-/// If `valid_years` is unsorted or non-unique.
-pub fn parse_year_str(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
-    // We depend on this in `parse_and_validate_year`
-    assert!(
-        is_sorted_and_unique(valid_years),
-        "`valid_years` must be sorted and unique"
-    );
-
+pub fn parse_year_str<I, J>(s: &str, valid_years: I) -> Result<Vec<u32>>
+where
+    I: IntoIterator<Item = u32, IntoIter = J> + Clone,
+    J: Iterator<Item = u32> + Clone,
+{
     let s = s.trim();
     ensure!(!s.is_empty(), "No years provided");
+    let valid_years = valid_years.into_iter();
 
     if s.eq_ignore_ascii_case("all") {
-        return Ok(Vec::from_iter(valid_years.iter().copied()));
+        return Ok(Vec::from_iter(valid_years));
     }
 
+    let parse_and_validate_year = |s: &str| {
+        let year = s.trim().parse::<u32>().ok()?;
+        valid_years.clone().contains(&year).then_some(year)
+    };
     let years: Vec<_> = s
         .split(';')
-        .map(|y| {
-            parse_and_validate_year(y, valid_years).with_context(|| format!("Invalid year: {y}"))
-        })
+        .map(|y| parse_and_validate_year(y).with_context(|| format!("Invalid year: {y}")))
         .try_collect()?;
 
     ensure!(
@@ -77,7 +64,10 @@ mod tests {
         #[case] milestone_years: &[u32],
         #[case] expected: &[u32],
     ) {
-        assert_eq!(parse_year_str(input, milestone_years).unwrap(), expected);
+        assert_eq!(
+            parse_year_str(input, milestone_years.iter().copied()).unwrap(),
+            expected
+        );
     }
 
     #[rstest]
@@ -91,6 +81,9 @@ mod tests {
         #[case] milestone_years: &[u32],
         #[case] error_msg: &str,
     ) {
-        assert_error!(parse_year_str(input, milestone_years), error_msg);
+        assert_error!(
+            parse_year_str(input, milestone_years.iter().copied()),
+            error_msg
+        );
     }
 }

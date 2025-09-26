@@ -96,7 +96,7 @@ where
     for cost in iter {
         let commodity_id = commodity_ids.get_id(&cost.commodity_id)?;
         let regions = parse_region_str(&cost.regions, region_ids)?;
-        let years = parse_year_str(&cost.years, milestone_years)?;
+        let years = parse_year_str(&cost.years, milestone_years.iter().copied())?;
         let ts_selection = time_slice_info.get_selection(&cost.time_slice)?;
 
         // Get or create CommodityLevyMap for this commodity

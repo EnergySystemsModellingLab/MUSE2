@@ -59,7 +59,10 @@ where
     let mut map: HashMap<AgentID, AgentCostLimitsMap> = HashMap::new();
     for agent_cost_limits_raw in iter {
         let cost_limits = agent_cost_limits_raw.to_agent_cost_limits();
-        let years = parse_year_str(&agent_cost_limits_raw.years, milestone_years)?;
+        let years = parse_year_str(
+            &agent_cost_limits_raw.years,
+            milestone_years.iter().copied(),
+        )?;
 
         // Get agent ID
         let agent_id = agent_ids.get_id(&agent_cost_limits_raw.agent_id)?;
