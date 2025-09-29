@@ -243,7 +243,7 @@ impl Asset {
                 time_slice.clone(),
             ))
             .unwrap();
-        let cap2act = self.process_parameter.capacity_to_activity;
+        let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }
 
@@ -281,7 +281,7 @@ impl Asset {
 
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
-        self.capacity * self.process_parameter.capacity_to_activity
+        self.capacity * self.process.capacity_to_activity
     }
 
     /// Get a specific process flow
@@ -860,7 +860,6 @@ mod tests {
                 variable_operating_cost: Default::default(),
                 lifetime: 1,
                 discount_rate: Default::default(),
-                capacity_to_activity: ActivityPerCapacity(1.0),
             }),
         );
 
@@ -882,6 +881,7 @@ mod tests {
             primary_output: Some(commodity_id.clone()),
             years: vec![2020],
             activity_limits: Default::default(),
+            capacity_to_activity: ActivityPerCapacity(1.0),
         });
 
         // Create asset
@@ -956,7 +956,6 @@ mod tests {
             variable_operating_cost: MoneyPerActivity(1.0),
             lifetime: 5,
             discount_rate: Dimensionless(0.9),
-            capacity_to_activity: ActivityPerCapacity(1.0),
         });
         let years = RangeInclusive::new(2010, 2020).collect_vec();
         let process_parameter_map: ProcessParameterMap = years
@@ -972,6 +971,7 @@ mod tests {
             parameters: process_parameter_map,
             regions: IndexSet::from(["GBR".into()]),
             primary_output: None,
+            capacity_to_activity: ActivityPerCapacity(1.0),
         });
         let future = [2020, 2010]
             .map(|year| {
@@ -998,7 +998,6 @@ mod tests {
             variable_operating_cost: MoneyPerActivity(1.0),
             lifetime: 5,
             discount_rate: Dimensionless(0.9),
-            capacity_to_activity: ActivityPerCapacity(3.0),
         });
         let years = RangeInclusive::new(2010, 2020).collect_vec();
         let process_parameter_map: ProcessParameterMap = years
@@ -1026,6 +1025,7 @@ mod tests {
             parameters: process_parameter_map,
             regions: IndexSet::from(["GBR".into()]),
             primary_output: None,
+            capacity_to_activity: ActivityPerCapacity(3.0),
         }
     }
 

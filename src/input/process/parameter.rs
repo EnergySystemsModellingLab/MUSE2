@@ -2,9 +2,7 @@
 use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
 use crate::process::{ProcessID, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::parse_region_str;
-use crate::units::{
-    ActivityPerCapacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity, MoneyPerCapacityPerYear,
-};
+use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerCapacity, MoneyPerCapacityPerYear};
 use crate::year::parse_year_str;
 use ::log::warn;
 use anyhow::{Context, Result, ensure};
@@ -25,7 +23,6 @@ struct ProcessParameterRaw {
     variable_operating_cost: MoneyPerActivity,
     lifetime: u32,
     discount_rate: Option<Dimensionless>,
-    capacity_to_activity: Option<ActivityPerCapacity>,
 }
 
 impl ProcessParameterRaw {
@@ -38,9 +35,6 @@ impl ProcessParameterRaw {
             variable_operating_cost: self.variable_operating_cost,
             lifetime: self.lifetime,
             discount_rate: self.discount_rate.unwrap_or(Dimensionless(0.0)),
-            capacity_to_activity: self
-                .capacity_to_activity
-                .unwrap_or(ActivityPerCapacity(1.0)),
         })
     }
 }
@@ -53,7 +47,6 @@ impl ProcessParameterRaw {
     /// Returns an error if:
     /// - `lifetime` is 0.
     /// - `discount_rate` is present and less than 0.0.
-    /// - `capacity_to_activity` is present and less than 0.0.
     ///
     /// # Warnings
     ///
@@ -83,14 +76,6 @@ impl ProcessParameterRaw {
                     self.process_id
                 );
             }
-        }
-
-        if let Some(c2a) = self.capacity_to_activity {
-            ensure!(
-                c2a >= ActivityPerCapacity(0.0),
-                "Error in parameter for process {}: Cap2act must be positive",
-                self.process_id
-            );
         }
 
         Ok(())
@@ -200,7 +185,6 @@ mod tests {
     fn create_param_raw(
         lifetime: u32,
         discount_rate: Option<Dimensionless>,
-        capacity_to_activity: Option<ActivityPerCapacity>,
     ) -> ProcessParameterRaw {
         ProcessParameterRaw {
             process_id: "id".to_string(),
@@ -209,47 +193,35 @@ mod tests {
             variable_operating_cost: MoneyPerActivity(0.0),
             lifetime,
             discount_rate,
-            capacity_to_activity,
             years: "all".to_string(),
             regions: "all".to_string(),
         }
     }
 
-    fn create_param(
-        discount_rate: Dimensionless,
-        capacity_to_activity: ActivityPerCapacity,
-    ) -> ProcessParameter {
+    fn create_param(discount_rate: Dimensionless) -> ProcessParameter {
         ProcessParameter {
             capital_cost: MoneyPerCapacity(0.0),
             fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
             variable_operating_cost: MoneyPerActivity(0.0),
             lifetime: 1,
             discount_rate,
-            capacity_to_activity,
         }
     }
 
     #[test]
     fn test_param_raw_into_param_ok() {
         // No missing values
-        let raw = create_param_raw(1, Some(Dimensionless(1.0)), Some(ActivityPerCapacity(0.0)));
+        let raw = create_param_raw(1, Some(Dimensionless(1.0)));
         assert_eq!(
             raw.into_parameter().unwrap(),
-            create_param(Dimensionless(1.0), ActivityPerCapacity(0.0))
+            create_param(Dimensionless(1.0))
         );
 
         // Missing discount_rate
-        let raw = create_param_raw(1, None, Some(ActivityPerCapacity(0.0)));
+        let raw = create_param_raw(1, None);
         assert_eq!(
             raw.into_parameter().unwrap(),
-            create_param(Dimensionless(0.0), ActivityPerCapacity(0.0))
-        );
-
-        // Missing capacity_to_activity
-        let raw = create_param_raw(1, Some(Dimensionless(1.0)), None);
-        assert_eq!(
-            raw.into_parameter().unwrap(),
-            create_param(Dimensionless(1.0), ActivityPerCapacity(1.0))
+            create_param(Dimensionless(0.0))
         );
     }
 
@@ -311,7 +283,7 @@ mod tests {
     fn test_param_raw_validate_bad_lifetime() {
         // lifetime = 0
         assert!(
-            create_param_raw(0, Some(Dimensionless(1.0)), Some(ActivityPerCapacity(0.0)))
+            create_param_raw(0, Some(Dimensionless(1.0)))
                 .validate()
                 .is_err()
         );
@@ -321,17 +293,7 @@ mod tests {
     fn test_param_raw_validate_bad_discount_rate() {
         // discount rate = -1
         assert!(
-            create_param_raw(0, Some(Dimensionless(-1.0)), Some(ActivityPerCapacity(0.0)))
-                .validate()
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn test_param_raw_validate_bad_capt2act() {
-        // capt2act = -1
-        assert!(
-            create_param_raw(0, Some(Dimensionless(1.0)), Some(ActivityPerCapacity(-1.0)))
+            create_param_raw(1, Some(Dimensionless(-1.0)))
                 .validate()
                 .is_err()
         );

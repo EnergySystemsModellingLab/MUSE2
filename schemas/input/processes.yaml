@@ -26,3 +26,7 @@ fields:
     type: integer
     description: The last year when this process is available to agents
     notes: Must be >= to `start_year`
+  - name: capacity_to_activity
+    type: number
+    description: Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the maximum activity per year for one unit of capacity.
+    notes: Must be >=0. Optional (defaults to 1.0).

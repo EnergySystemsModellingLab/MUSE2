@@ -131,7 +131,6 @@ pub fn process_parameter_map(region_ids: IndexSet<RegionID>) -> ProcessParameter
         variable_operating_cost: MoneyPerActivity(0.0),
         lifetime: 1,
         discount_rate: Dimensionless(1.0),
-        capacity_to_activity: ActivityPerCapacity(0.0),
     });
 
     region_ids
@@ -155,6 +154,7 @@ pub fn process(
         parameters: process_parameter_map,
         regions: region_ids,
         primary_output: None,
+        capacity_to_activity: ActivityPerCapacity(1.0),
     }
 }
 

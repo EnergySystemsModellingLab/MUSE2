@@ -206,6 +206,7 @@ mod tests {
         ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessParameterMap,
     };
     use crate::region::RegionID;
+    use crate::units::ActivityPerCapacity;
     use indexmap::IndexSet;
     use rstest::{fixture, rstest};
     use std::iter;
@@ -224,6 +225,7 @@ mod tests {
                     parameters: ProcessParameterMap::new(),
                     regions: region_ids.clone(),
                     primary_output: None,
+                    capacity_to_activity: ActivityPerCapacity(1.0),
                 };
                 (id, process.into())
             })

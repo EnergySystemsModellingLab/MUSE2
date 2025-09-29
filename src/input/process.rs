@@ -7,6 +7,7 @@ use crate::process::{
 };
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
+use crate::units::ActivityPerCapacity;
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::IndexSet;
 use itertools::chain;
@@ -32,6 +33,7 @@ struct ProcessRaw {
     primary_output: Option<String>,
     start_year: Option<u32>,
     end_year: Option<u32>,
+    capacity_to_activity: Option<ActivityPerCapacity>,
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -133,6 +135,17 @@ where
             })
             .transpose()?;
 
+        let capacity_to_activity = process_raw
+            .capacity_to_activity
+            .unwrap_or(ActivityPerCapacity(1.0));
+
+        // Validate capacity_to_activity
+        ensure!(
+            capacity_to_activity >= ActivityPerCapacity(0.0),
+            "Error in process {}: capacity_to_activity must be >= 0",
+            process_raw.id
+        );
+
         let process = Process {
             id: process_raw.id.clone(),
             description: process_raw.description,
@@ -142,6 +155,7 @@ where
             parameters: ProcessParameterMap::new(),
             regions,
             primary_output,
+            capacity_to_activity,
         };
 
         ensure!(

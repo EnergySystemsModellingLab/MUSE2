@@ -1,10 +1,10 @@
-id,description,regions,primary_output,start_year,end_year
-GASDRV,Dry gas extraction,all,GASPRD,2020,2040
-GASPRC,Gas processing,all,GASNAT,2020,2040
-BIOPRO,Biomass production,all,BIOPRD,2020,2040
-BIOPLL,Biomass pelletiser,all,BIOPEL,2020,2040
-WNDFRM,Wind farm,all,ELCTRI,2020,2040
-GASCGT,Gas combined cycle turbine,all,ELCTRI,2020,2040
-RGASBR,Gas boiler,all,RSHEAT,2020,2040
-RELCHP,Heat pump,all,RSHEAT,2020,2040
-RBIOBL,Biomass boiler,all,RSHEAT,2020,2040
+id,description,regions,primary_output,start_year,end_year,capacity_to_activity
+GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0
+GASPRC,Gas processing,all,GASNAT,2020,2040,1.0
+BIOPRO,Biomass production,all,BIOPRD,2020,2040,1.0
+BIOPLL,Biomass pelletiser,all,BIOPEL,2020,2040,1.0
+WNDFRM,Wind farm,all,ELCTRI,2020,2040,31.54
+GASCGT,Gas combined cycle turbine,all,ELCTRI,2020,2040,31.54
+RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0
+RELCHP,Heat pump,all,RSHEAT,2020,2040,1.0
+RBIOBL,Biomass boiler,all,RSHEAT,2020,2040,1.0

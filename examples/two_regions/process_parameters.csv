@@ -1,6 +1,6 @@
-process_id,regions,years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate,capacity_to_activity
-gassupply1,R1;R2,all,0,0,2.55,60,0.1,1.0
-gasCCGT,R1;R2,all,23.78234399,0,0,60,0.1,1.0
-windturbine,R1;R2,all,36.30771182,0,0,60,0.1,1.0
-gasboiler,R1;R2,all,3.8,0,0,60,0.1,1.0
-heatpump,R1;R2,all,8.866667,0,0,60,0.1,1.0
+process_id,regions,years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate
+gassupply1,R1;R2,all,0,0,2.55,60,0.1
+gasCCGT,R1;R2,all,23.78234399,0,0,60,0.1
+windturbine,R1;R2,all,36.30771182,0,0,60,0.1
+gasboiler,R1;R2,all,3.8,0,0,60,0.1
+heatpump,R1;R2,all,8.866667,0,0,60,0.1

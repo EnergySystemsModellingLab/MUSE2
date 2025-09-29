@@ -532,29 +532,14 @@ mod tests {
         asset, process, process_parameter_map, region_id, svd_commodity, time_slice,
         time_slice_info, time_slice_info2,
     };
-    use crate::process::{FlowType, ProcessFlow, ProcessParameter};
+    use crate::process::{FlowType, ProcessFlow};
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-    use crate::units::{
-        ActivityPerCapacity, Dimensionless, Flow, FlowPerActivity, MoneyPerActivity,
-        MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow,
-    };
+    use crate::units::{Dimensionless, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use itertools::Itertools;
     use rstest::rstest;
     use std::rc::Rc;
-
-    /// Custom fixture for process parameters with non-zero capacity_to_activity
-    fn process_parameter_with_capacity_to_activity() -> Rc<ProcessParameter> {
-        Rc::new(ProcessParameter {
-            capital_cost: MoneyPerCapacity(0.0),
-            fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
-            variable_operating_cost: MoneyPerActivity(0.0),
-            lifetime: 1,
-            discount_rate: Dimensionless(1.0),
-            capacity_to_activity: ActivityPerCapacity(1.0), // Non-zero value
-        })
-    }
 
     #[rstest]
     fn test_get_demand_limiting_capacity(
@@ -591,12 +576,6 @@ mod tests {
             (region_id.clone(), 2015, time_slice.clone()),
             Dimensionless(0.0)..=Dimensionless(1.0),
         );
-
-        // Update process parameters to have non-zero capacity_to_activity
-        let updated_parameter = process_parameter_with_capacity_to_activity();
-        process
-            .parameters
-            .insert((region_id.clone(), 2015), updated_parameter);
 
         // Create asset with the configured process
         let asset = asset(process);
@@ -655,12 +634,6 @@ mod tests {
             (region_id.clone(), 2015, time_slice2.clone()),
             Dimensionless(0.0)..=Dimensionless(0.0), // Zero limit for night - should be skipped
         );
-
-        // Update process parameters to have non-zero capacity_to_activity
-        let updated_parameter = process_parameter_with_capacity_to_activity();
-        process
-            .parameters
-            .insert((region_id.clone(), 2015), updated_parameter);
 
         // Create asset with the configured process
         let asset = asset(process);

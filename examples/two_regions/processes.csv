@@ -1,6 +1,6 @@
-id,description,regions,primary_output,start_year,end_year
-gassupply1,Gas supply,all,gas,1990,2050
-gasCCGT,Gas CCGT,all,electricity,1990,2050
-windturbine,Wind turbine,all,electricity,1990,2050
-gasboiler,Gas boiler,all,heat,1990,2050
-heatpump,Heat pump,all,heat,1990,2050
+id,description,regions,primary_output,start_year,end_year,capacity_to_activity
+gassupply1,Gas supply,all,gas,1990,2050,1.0
+gasCCGT,Gas CCGT,all,electricity,1990,2050,1.0
+windturbine,Wind turbine,all,electricity,1990,2050,1.0
+gasboiler,Gas boiler,all,heat,1990,2050,1.0
+heatpump,Heat pump,all,heat,1990,2050,1.0

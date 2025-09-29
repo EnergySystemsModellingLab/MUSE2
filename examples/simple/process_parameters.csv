@@ -1,7 +1,7 @@
-process_id,regions,years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate,capacity_to_activity
-GASDRV,all,all,10.0,0.3,2.0,25,0.1,1.0
-GASPRC,all,all,7.0,0.21,0.5,25,0.1,1.0
-WNDFRM,all,all,1000.0,30.0,0.4,25,0.1,31.54
-GASCGT,all,all,700.0,21.0,0.55,30,0.1,31.54
-RGASBR,all,all,55.56,1.6668,0.16,15,0.1,1.0
-RELCHP,all,all,138.9,4.167,0.17,15,0.1,1.0
+process_id,regions,years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate
+GASDRV,all,all,10.0,0.3,2.0,25,0.1
+GASPRC,all,all,7.0,0.21,0.5,25,0.1
+WNDFRM,all,all,1000.0,30.0,0.4,25,0.1
+GASCGT,all,all,700.0,21.0,0.55,30,0.1
+RGASBR,all,all,55.56,1.6668,0.16,15,0.1
+RELCHP,all,all,138.9,4.167,0.17,15,0.1

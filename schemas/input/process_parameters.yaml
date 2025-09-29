@@ -37,7 +37,3 @@ fields:
     type: number
     description: Process-specific discount rate
     notes: Must be positive. A warning will be issued if this number is >1.
-  - name: capacity_to_activity
-    type: number
-    description: Factor for calculating the maximum consumption/production over a year.
-    notes: Must be >=0
