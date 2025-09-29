@@ -154,7 +154,8 @@ pub fn process(
     Process {
         id: "process1".into(),
         description: "Description".into(),
-        years,
+        year_range: 2010..=2020,
+        milestone_years: vec![2010, 2015, 2020],
         activity_limits,
         flows,
         parameters: process_parameter_map,

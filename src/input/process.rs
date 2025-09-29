@@ -10,7 +10,6 @@ use crate::time_slice::TimeSliceInfo;
 use crate::units::ActivityPerCapacity;
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::IndexSet;
-use itertools::chain;
 use serde::Deserialize;
 use std::path::Path;
 use std::rc::Rc;
@@ -60,7 +59,7 @@ pub fn read_processes(
     let mut processes = read_processes_file(model_dir, milestone_years, region_ids, commodities)?;
     let mut activity_limits = read_process_availabilities(model_dir, &processes, time_slice_info)?;
     let mut flows = read_process_flows(model_dir, &mut processes, commodities)?;
-    let mut parameters = read_process_parameters(model_dir, &processes, milestone_years[0])?;
+    let mut parameters = read_process_parameters(model_dir, &processes)?;
 
     // Add data to Process objects
     for (id, process) in &mut processes {
@@ -114,14 +113,11 @@ where
         // Select process years. It is possible for assets to have been commissioned before the
         // simulation's time horizon, so assume that all years >=start_year and <base year are valid
         // too.
-        let years = chain(
-            start_year..milestone_years[0],
-            milestone_years
-                .iter()
-                .copied()
-                .filter(|year| (start_year..=end_year).contains(year)),
-        )
-        .collect();
+        let process_milestone_years = milestone_years
+            .iter()
+            .copied()
+            .filter(|year| (start_year..=end_year).contains(year))
+            .collect();
 
         // Parse region ID
         let regions = parse_region_str(&process_raw.regions, region_ids)?;
@@ -149,7 +145,8 @@ where
         let process = Process {
             id: process_raw.id.clone(),
             description: process_raw.description,
-            years,
+            year_range: start_year..=end_year,
+            milestone_years: process_milestone_years,
             activity_limits: ProcessActivityLimitsMap::new(),
             flows: ProcessFlowsMap::new(),
             parameters: ProcessParameterMap::new(),

@@ -219,7 +219,8 @@ mod tests {
                 let process = Process {
                     id: id.clone(),
                     description: "Description".into(),
-                    years: vec![2010, 2020],
+                    year_range: 2010..=2020,
+                    milestone_years: vec![2010, 2020],
                     activity_limits: ProcessActivityLimitsMap::new(),
                     flows: ProcessFlowsMap::new(),
                     parameters: ProcessParameterMap::new(),

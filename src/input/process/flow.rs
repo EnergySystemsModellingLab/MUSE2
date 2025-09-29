@@ -1,15 +1,17 @@
 //! Code for reading process flows file
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap};
+use crate::input::format_items_with_cap;
 use crate::process::{FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
-use itertools::iproduct;
+use itertools::{Itertools, iproduct};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -93,9 +95,9 @@ where
             })?;
 
         // Get years
-        let process_years = &process.years;
-        let record_years = parse_year_str(&record.years, process_years.iter().copied())
-            .with_context(|| {
+        let process_years = &process.year_range;
+        let record_years =
+            parse_year_str(&record.years, process_years.clone()).with_context(|| {
                 format!("Invalid year for process {id}. Valid years are {process_years:?}")
             })?;
 
@@ -146,26 +148,43 @@ fn validate_flows_and_update_primary_output(
             .get(process_id)
             .with_context(|| format!("Missing flows map for process {process_id}"))?;
 
-        ensure!(
-            map.len() == process.years.len() * process.regions.len(),
-            "Flows map for process {process_id} does not cover all regions and years"
-        );
+        // Check whether the process is missing flows for any of the regions/milestone years it
+        // operates in
+        let missing = iproduct!(process.regions.iter(), &process.milestone_years)
+            .filter(|&(region_id, year)| !map.contains_key(&(region_id.clone(), *year)))
+            .into_group_map();
+        if !missing.is_empty()
+            && let Some(mut err_msg) = process.regions.iter().find_map(|region_id| {
+                let missing_years = missing.get(region_id)?;
+                Some(format!(
+                    "Process {} missing flows in region {} for years: {}",
+                    process_id,
+                    region_id,
+                    format_items_with_cap(missing_years)
+                ))
+            })
+        {
+            if missing.len() > 1 {
+                write!(&mut err_msg, " (and {} other regions)", missing.len() - 1).unwrap();
+            }
 
-        let mut iter = iproduct!(process.years.iter(), process.regions.iter());
+            bail!("{err_msg}");
+        }
 
+        // Try to infer the primary output, if needed
+        let mut iter = map.iter();
         let primary_output = if let Some(primary_output) = &process.primary_output {
             Some(primary_output.clone())
         } else {
-            let (year, region_id) = iter.next().unwrap();
-            infer_primary_output(&map[&(region_id.clone(), *year)]).with_context(|| {
+            // Infer from first year for which we have input data
+            let (_, flows) = iter.next().unwrap();
+            infer_primary_output(flows).with_context(|| {
                 format!("Could not infer primary_output for process {process_id}")
             })?
         };
 
-        for (&year, region_id) in iter {
-            let flows = &map[&(region_id.clone(), year)];
-
-            // Check that the process has flows for this region/year
+        // Check that primary output is present and correct for every region/year
+        for ((region_id, year), flows) in map {
             check_flows_primary_output(flows, primary_output.as_ref()).with_context(|| {
                 format!(
                     "Invalid primary output configuration for process {process_id} \
@@ -261,8 +280,8 @@ mod tests {
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
         let map: Rc<IndexMap<_, _>> = Rc::new(flows.clone().collect());
-        let flows_inner = iproduct!(&process.regions, &process.years)
-            .map(|(region_id, year)| ((region_id.clone(), *year), map.clone()))
+        let flows_inner = iproduct!(&process.regions, process.year_range.clone())
+            .map(|(region_id, year)| ((region_id.clone(), year), map.clone()))
             .collect();
         let flows = hash_map! {process.id.clone() => flows_inner};
         let processes = iter::once((process.id.clone(), process.into())).collect();

@@ -116,9 +116,9 @@ where
             })?;
 
         // Get years
-        let process_years = &process.years;
-        let record_years = parse_year_str(&record.years, process_years.iter().copied())
-            .with_context(|| {
+        let process_years = &process.year_range;
+        let record_years =
+            parse_year_str(&record.years, process_years.clone()).with_context(|| {
                 format!("Invalid year for process {id}. Valid years are {process_years:?}")
             })?;
 
@@ -159,19 +159,19 @@ fn validate_activity_limits_maps(
             .with_context(|| format!("Missing availabilities for process {process_id}"))?;
 
         let mut missing_keys = Vec::new();
-        for (region_id, year) in iproduct!(&process.regions, &process.years) {
-            if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), *year)) {
+        for (region_id, &year) in iproduct!(&process.regions, &process.milestone_years) {
+            if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), year)) {
                 // There are at least some entries for this region/year combo; check if there are
                 // any time slices not covered
                 missing_keys.extend(
                     time_slice_info
                         .iter_ids()
                         .filter(|ts| !map_for_region_year.contains_key(ts))
-                        .map(|ts| (region_id, *year, ts)),
+                        .map(|ts| (region_id, year, ts)),
                 );
             } else {
                 // No entries for this region/year combo: by definition no time slices are covered
-                missing_keys.extend(time_slice_info.iter_ids().map(|ts| (region_id, *year, ts)));
+                missing_keys.extend(time_slice_info.iter_ids().map(|ts| (region_id, year, ts)));
             }
         }
 

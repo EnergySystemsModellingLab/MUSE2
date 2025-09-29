@@ -886,7 +886,7 @@ mod tests {
 
         // Create flows map
         let flow_map = indexmap! { commodity_id.clone() => flow };
-        let flows = hash_map! {(region_id.clone(), 2020) => flow_map.into()};
+        let flows = indexmap! {(region_id.clone(), 2020) => flow_map.into()};
 
         // Create empty activity limits map
         let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(HashMap::new())};
@@ -894,12 +894,13 @@ mod tests {
         let process = Rc::new(Process {
             id: ProcessID::from("PROC1"),
             description: "Test process".to_string(),
+            year_range: 2020..=2020,
+            milestone_years: vec![2020],
+            activity_limits,
             flows,
             parameters: process_parameter_map,
             regions: indexset! {region_id.clone()},
             primary_output: Some(commodity_id.clone()),
-            years: vec![2020],
-            activity_limits,
             capacity_to_activity: ActivityPerCapacity(1.0),
         });
 
@@ -992,7 +993,8 @@ mod tests {
         let process = Rc::new(Process {
             id: "process1".into(),
             description: "Description".into(),
-            years: vec![2010, 2020],
+            year_range: 2010..=2020,
+            milestone_years: vec![2010, 2020],
             activity_limits,
             flows,
             parameters: process_parameter_map,
@@ -1047,7 +1049,8 @@ mod tests {
         Process {
             id: "process1".into(),
             description: "Description".into(),
-            years: vec![2010, 2020],
+            year_range: 2010..=2020,
+            milestone_years: vec![2010, 2020],
             activity_limits,
             flows,
             parameters: process_parameter_map,

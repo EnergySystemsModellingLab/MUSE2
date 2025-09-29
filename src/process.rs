@@ -32,7 +32,7 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
 /// A map of process flows, keyed by region and year.
 ///
 /// The value is actually a map itself, keyed by commodity ID.
-pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
+pub type ProcessFlowsMap = IndexMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
 
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug)]
@@ -42,9 +42,14 @@ pub struct Process {
     /// A human-readable description for the process (e.g. dry gas extraction)
     pub description: String,
     /// The years in which this process is available for investment.
+    pub year_range: RangeInclusive<u32>,
+    /// The milestone years in which this process is available for investment.
+    ///
+    /// The process will be available for investment in any of the years covered by `year_range`,
+    /// but the milestone years within this range are also stored for convenience.
     ///
     /// These years must be sorted and unique, else it's a logic error.
-    pub years: Vec<u32>,
+    pub milestone_years: Vec<u32>,
     /// Limits on activity for each time slice (as a fraction of maximum)
     pub activity_limits: ProcessActivityLimitsMap,
     /// Maximum annual commodity flows for this process
@@ -66,7 +71,7 @@ pub struct Process {
 impl Process {
     /// Whether the process can be commissioned in a given year
     pub fn active_for_year(&self, year: u32) -> bool {
-        self.years.binary_search(&year).is_ok()
+        self.year_range.contains(&year)
     }
 }
 
