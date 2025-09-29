@@ -7,8 +7,7 @@ use crate::agent::{
 use crate::asset::{Asset, AssetPool};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
 use crate::process::{
-    Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessMap, ProcessParameter,
-    ProcessParameterMap,
+    Process, ProcessActivityLimitsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
@@ -16,9 +15,9 @@ use crate::units::{
     ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, Year,
 };
-use indexmap::IndexSet;
 use indexmap::indexmap;
-use itertools::Itertools;
+use indexmap::{IndexMap, IndexSet};
+use itertools::{Itertools, iproduct};
 use rstest::fixture;
 use std::collections::HashMap;
 use std::iter;
@@ -145,12 +144,18 @@ pub fn process(
     region_ids: IndexSet<RegionID>,
     process_parameter_map: ProcessParameterMap,
 ) -> Process {
+    let years = vec![2010, 2015, 2020];
+
+    // Create a flows map with (empty) entries for every region/year combo
+    let flows = iproduct!(region_ids.iter(), years.iter())
+        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
+        .collect();
     Process {
         id: "process1".into(),
         description: "Description".into(),
-        years: vec![2010, 2015, 2020],
+        years,
         activity_limits: ProcessActivityLimitsMap::new(),
-        flows: ProcessFlowsMap::new(),
+        flows,
         parameters: process_parameter_map,
         regions: region_ids,
         primary_output: None,

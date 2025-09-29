@@ -84,6 +84,8 @@ pub struct Asset {
     state: AssetState,
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
+    /// The commodity flows for this asset
+    flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
     process_parameter: Rc<ProcessParameter>,
     /// The region in which the asset is located
@@ -171,13 +173,25 @@ impl Asset {
         check_region_year_valid_for_process(&process, &region_id, commission_year)?;
         ensure!(capacity >= Capacity(0.0), "Capacity must be non-negative");
 
-        // There should be process parameters for all **milestone** years, but it is possible to
-        // have assets that are commissioned before the simulation start from assets.csv. We check
-        // for the presence of the params lazily to prevent users having to supply them for all
-        // the possible valid years before the time horizon.
+        // There should be commodity flows and process parameters for all **milestone** years, but
+        // it is possible to have assets that are commissioned before the simulation start from
+        // assets.csv. We check for the presence of the params lazily to prevent users having to
+        // supply them for all the possible valid years before the time horizon.
+        let key = (region_id.clone(), commission_year);
+        let flows = process
+            .flows
+            .get(&key)
+            .with_context(|| {
+                format!(
+                    "No commodity flows supplied for process {} in region {} in year {}. \
+                    You should update process_flows.csv.",
+                    &process.id, region_id, commission_year
+                )
+            })?
+            .clone();
         let process_parameter = process
             .parameters
-            .get(&(region_id.clone(), commission_year))
+            .get(&key)
             .with_context(|| {
                 format!(
                     "No process parameters supplied for process {} in region {} in year {}. \
@@ -190,6 +204,7 @@ impl Asset {
         Ok(Self {
             state,
             process,
+            flows,
             process_parameter,
             region_id,
             capacity,
@@ -286,20 +301,12 @@ impl Asset {
 
     /// Get a specific process flow
     pub fn get_flow(&self, commodity_id: &CommodityID) -> Option<&ProcessFlow> {
-        self.get_flows_map().get(commodity_id)
-    }
-
-    /// Get the process flows map for this asset
-    fn get_flows_map(&self) -> &IndexMap<CommodityID, ProcessFlow> {
-        self.process
-            .flows
-            .get(&(self.region_id.clone(), self.commission_year))
-            .unwrap()
+        self.flows.get(commodity_id)
     }
 
     /// Iterate over the asset's flows
     pub fn iter_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
-        self.get_flows_map().values()
+        self.flows.values()
     }
 
     /// Get the primary output flow (if any) for this asset
@@ -307,7 +314,7 @@ impl Asset {
         self.process
             .primary_output
             .as_ref()
-            .map(|commodity_id| &self.get_flows_map()[commodity_id])
+            .map(|commodity_id| &self.flows[commodity_id])
     }
 
     /// Whether this asset has been commissioned
@@ -959,7 +966,7 @@ mod tests {
     }
 
     #[fixture]
-    fn asset_pool() -> AssetPool {
+    fn asset_pool(region_id: RegionID) -> AssetPool {
         let process_param = Rc::new(ProcessParameter {
             capital_cost: MoneyPerCapacity(5.0),
             fixed_operating_cost: MoneyPerCapacityPerYear(2.0),
@@ -970,14 +977,18 @@ mod tests {
         let years = RangeInclusive::new(2010, 2020).collect_vec();
         let process_parameter_map: ProcessParameterMap = years
             .iter()
-            .map(|&year| (("GBR".into(), year), process_param.clone()))
+            .map(|&year| ((region_id.clone(), year), process_param.clone()))
+            .collect();
+        let flows = years
+            .iter()
+            .map(|&year| ((region_id.clone(), year), Rc::new(IndexMap::new())))
             .collect();
         let process = Rc::new(Process {
             id: "process1".into(),
             description: "Description".into(),
             years: vec![2010, 2020],
             activity_limits: ProcessActivityLimitsMap::new(),
-            flows: ProcessFlowsMap::new(),
+            flows,
             parameters: process_parameter_map,
             regions: IndexSet::from(["GBR".into()]),
             primary_output: None,
@@ -1001,7 +1012,7 @@ mod tests {
     }
 
     #[fixture]
-    fn process_with_activity_limits() -> Process {
+    fn process_with_activity_limits(region_id: RegionID) -> Process {
         let process_param = Rc::new(ProcessParameter {
             capital_cost: MoneyPerCapacity(5.0),
             fixed_operating_cost: MoneyPerCapacityPerYear(2.0),
@@ -1012,17 +1023,20 @@ mod tests {
         let years = RangeInclusive::new(2010, 2020).collect_vec();
         let process_parameter_map: ProcessParameterMap = years
             .iter()
-            .map(|&year| (("GBR".into(), year), process_param.clone()))
+            .map(|&year| ((region_id.clone(), year), process_param.clone()))
             .collect();
         let time_slice = TimeSliceID {
             season: "winter".into(),
             time_of_day: "day".into(),
         };
         let fraction_limits = Dimensionless(1.0)..=Dimensionless(2.0);
+        let mut flows = ProcessFlowsMap::new();
         let mut activity_limits = ProcessActivityLimitsMap::new();
         for year in [2010, 2020] {
+            // empty flows map, but this is fine for our purposes
+            flows.insert((region_id.clone(), year), Rc::new(IndexMap::new()));
             activity_limits.insert(
-                ("GBR".into(), year, time_slice.clone()),
+                (region_id.clone(), year, time_slice.clone()),
                 fraction_limits.clone(),
             );
         }
@@ -1031,9 +1045,9 @@ mod tests {
             description: "Description".into(),
             years: vec![2010, 2020],
             activity_limits,
-            flows: ProcessFlowsMap::new(),
+            flows,
             parameters: process_parameter_map,
-            regions: IndexSet::from(["GBR".into()]),
+            regions: IndexSet::from([region_id]),
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(3.0),
         }
