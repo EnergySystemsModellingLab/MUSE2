@@ -6,9 +6,7 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
-use crate::process::{
-    Process, ProcessActivityLimitsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
-};
+use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
@@ -146,7 +144,10 @@ pub fn process(
 ) -> Process {
     let years = vec![2010, 2015, 2020];
 
-    // Create a flows map with (empty) entries for every region/year combo
+    // Create maps with (empty) entries for every region/year combo
+    let activity_limits = iproduct!(region_ids.iter(), years.iter())
+        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(HashMap::new())))
+        .collect();
     let flows = iproduct!(region_ids.iter(), years.iter())
         .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
         .collect();
@@ -154,7 +155,7 @@ pub fn process(
         id: "process1".into(),
         description: "Description".into(),
         years,
-        activity_limits: ProcessActivityLimitsMap::new(),
+        activity_limits,
         flows,
         parameters: process_parameter_map,
         regions: region_ids,

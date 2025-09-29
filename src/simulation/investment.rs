@@ -538,6 +538,7 @@ mod tests {
     use crate::units::{Dimensionless, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use itertools::Itertools;
+    use map_macro::hash_map;
     use rstest::rstest;
     use std::rc::Rc;
 
@@ -575,8 +576,8 @@ mod tests {
 
         // Add activity limits
         process.activity_limits.insert(
-            (region_id.clone(), 2015, time_slice.clone()),
-            Dimensionless(0.0)..=Dimensionless(1.0),
+            (region_id.clone(), 2015),
+            Rc::new(hash_map! {time_slice.clone() => Dimensionless(0.0)..=Dimensionless(1.0)}),
         );
 
         // Create asset with the configured process
@@ -630,14 +631,15 @@ mod tests {
         );
 
         // Add activity limits for both time slices with different limits
-        process.activity_limits.insert(
-            (region_id.clone(), 2015, time_slice1.clone()),
-            Dimensionless(0.0)..=Dimensionless(2.0), // Higher limit for day
-        );
-        process.activity_limits.insert(
-            (region_id.clone(), 2015, time_slice2.clone()),
-            Dimensionless(0.0)..=Dimensionless(0.0), // Zero limit for night - should be skipped
-        );
+        let limits = hash_map! {
+            // Higher limit for day
+            time_slice1.clone() => Dimensionless(0.0)..=Dimensionless(2.0),
+            // Zero limit for night - should be skipped
+            time_slice2.clone() => Dimensionless(0.0)..=Dimensionless(0.0)
+        };
+        process
+            .activity_limits
+            .insert((region_id.clone(), 2015), limits.into());
 
         // Create asset with the configured process
         let asset = asset(process);
