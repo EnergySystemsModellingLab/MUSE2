@@ -14,26 +14,29 @@ const DEFAULT_SETTINGS_FILE_HEADER: &str = "# This file contains the program set
 # \thttps://energysystemsmodellinglab.github.io/MUSE_2.0/file_formats/program_settings.html
 ";
 
-/// Default log level for program
-fn default_log_level() -> String {
-    DEFAULT_LOG_LEVEL.to_string()
-}
-
 /// Program settings from config file
 ///
 /// NOTE: If you add or change a field in this struct, you must also update the schema in
 /// `schemas/settings.yaml`.
-#[derive(Debug, DocumentedFields, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, DocumentedFields, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Settings {
     /// The default program log level
-    #[serde(default = "default_log_level")]
     pub log_level: String,
     /// Whether to overwrite output files by default
-    #[serde(default)]
     pub overwrite: bool,
     /// Whether to write additional information to CSV files
-    #[serde(default)]
     pub debug_model: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            overwrite: false,
+            debug_model: false,
+        }
+    }
 }
 
 impl Settings {
@@ -59,9 +62,8 @@ impl Settings {
 
     /// The contents of the default settings file
     pub fn default_file_contents() -> String {
-        // Settings object with default values set by serde
-        let settings: Settings =
-            toml::from_str("").expect("Cannot create settings from empty TOML file");
+        // Settings object with default values for params
+        let settings = Settings::default();
 
         // Convert to TOML
         let settings_raw = toml::to_string(&settings).expect("Could not convert settings to TOML");
