@@ -566,9 +566,11 @@ mod tests {
         // Add the flow to the process
         process.flows.insert(
             (region_id.clone(), 2015), // Using default commission year from fixture
-            [(commodity_rc.id.clone(), process_flow)]
-                .into_iter()
-                .collect(),
+            Rc::new(
+                [(commodity_rc.id.clone(), process_flow)]
+                    .into_iter()
+                    .collect(),
+            ),
         );
 
         // Add activity limits
@@ -620,9 +622,11 @@ mod tests {
         // Add the flow to the process
         process.flows.insert(
             (region_id.clone(), 2015), // Using default commission year from fixture
-            [(commodity_rc.id.clone(), process_flow)]
-                .into_iter()
-                .collect(),
+            Rc::new(
+                [(commodity_rc.id.clone(), process_flow)]
+                    .into_iter()
+                    .collect(),
+            ),
         );
 
         // Add activity limits for both time slices with different limits

@@ -32,7 +32,7 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
 /// A map of process flows, keyed by region and year.
 ///
 /// The value is actually a map itself, keyed by commodity ID.
-pub type ProcessFlowsMap = HashMap<(RegionID, u32), IndexMap<CommodityID, ProcessFlow>>;
+pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
 
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug)]

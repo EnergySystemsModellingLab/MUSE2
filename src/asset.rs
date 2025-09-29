@@ -831,8 +831,9 @@ mod tests {
         ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
         MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow,
     };
-    use indexmap::{IndexMap, IndexSet};
+    use indexmap::{IndexSet, indexmap};
     use itertools::{Itertools, assert_equal};
+    use map_macro::hash_map;
     use rstest::{fixture, rstest};
     use std::collections::HashMap;
     use std::iter;
@@ -876,11 +877,8 @@ mod tests {
         );
 
         // Create flows map
-        let mut flows: HashMap<(RegionID, u32), IndexMap<CommodityID, ProcessFlow>> =
-            Default::default();
-        let mut flow_map: IndexMap<CommodityID, ProcessFlow> = Default::default();
-        flow_map.insert(commodity_id.clone(), flow);
-        flows.insert((region_id.clone(), 2020), flow_map);
+        let flow_map = indexmap! { commodity_id.clone() => flow };
+        let flows = hash_map! {(region_id.clone(), 2020) => flow_map.into()};
 
         let mut regions = indexmap::IndexSet::new();
         regions.insert(region_id.clone());
