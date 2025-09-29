@@ -8,7 +8,7 @@ use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity, Mo
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -639,6 +639,12 @@ impl AssetPool {
         for mut asset in self.future.drain(0..count) {
             // Ignore assets that have already been decommissioned
             if asset.max_decommission_year() <= year {
+                warn!(
+                    "Asset '{}' with commission year {} was decommissioned before the start of \
+                    the simulation",
+                    asset.process_id(),
+                    asset.commission_year
+                );
                 continue;
             }
 
