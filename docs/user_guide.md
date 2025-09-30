@@ -7,7 +7,7 @@ For details of the command-line interface, [see here](./command_line_help.md).
 
 ## Modifying the program settings
 
-You can configure the behaviour of MUSE 2.0 with the `settings.toml` file. To edit this file, run:
+You can configure the behaviour of MUSE 2.0 with a `settings.toml` file. To edit this file, run:
 
 ```sh
 muse2 settings edit
