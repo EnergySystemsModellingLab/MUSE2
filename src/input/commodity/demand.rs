@@ -135,8 +135,8 @@ where
         );
 
         ensure!(
-            demand.demand.is_normal() && demand.demand > Flow(0.0),
-            "Demand must be a valid number greater than zero"
+            demand.demand.is_finite() && demand.demand >= Flow(0.0),
+            "Demand must be a valid number greater than or equal to zero"
         );
 
         ensure!(
@@ -270,6 +270,12 @@ mod tests {
                 commodity_id: "commodity1".to_string(),
                 demand: Flow(11.0),
             },
+            Demand {
+                year: 2020,
+                region_id: "Spain".to_string(),
+                commodity_id: "commodity3".to_string(),
+                demand: Flow(0.0),
+            },
         ];
         assert_error!(
             read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020]),
@@ -334,7 +340,6 @@ mod tests {
 
     #[rstest]
     #[case(-1.0)]
-    #[case(0.0)]
     #[case(f64::NAN)]
     #[case(f64::NEG_INFINITY)]
     #[case(f64::INFINITY)]
@@ -353,7 +358,7 @@ mod tests {
         }];
         assert_error!(
             read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020],),
-            "Demand must be a valid number greater than zero"
+            "Demand must be a valid number greater than or equal to zero"
         );
     }
 
