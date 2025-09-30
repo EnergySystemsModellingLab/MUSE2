@@ -1,6 +1,6 @@
 //! Code for reading process availabilities CSV file
 use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
-use crate::process::{ProcessActivityLimitsMap, ProcessID, ProcessMap};
+use crate::process::{Process, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
@@ -83,11 +83,17 @@ pub fn read_process_availabilities(
     model_dir: &Path,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
+    base_year: u32,
 ) -> Result<HashMap<ProcessID, ProcessActivityLimitsMap>> {
     let file_path = model_dir.join(PROCESS_AVAILABILITIES_FILE_NAME);
     let process_availabilities_csv = read_csv(&file_path)?;
-    read_process_availabilities_from_iter(process_availabilities_csv, processes, time_slice_info)
-        .with_context(|| input_err_msg(&file_path))
+    read_process_availabilities_from_iter(
+        process_availabilities_csv,
+        processes,
+        time_slice_info,
+        base_year,
+    )
+    .with_context(|| input_err_msg(&file_path))
 }
 
 /// Process raw process availabilities input data into [`ProcessActivityLimitsMap`]s
@@ -95,6 +101,7 @@ fn read_process_availabilities_from_iter<I>(
     iter: I,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
+    base_year: u32,
 ) -> Result<HashMap<ProcessID, ProcessActivityLimitsMap>>
 where
     I: Iterator<Item = ProcessAvailabilityRaw>,
@@ -140,7 +147,7 @@ where
         }
     }
 
-    validate_activity_limits_maps(&map, processes, time_slice_info)?;
+    validate_activity_limits_maps(&map, processes, time_slice_info, base_year)?;
 
     Ok(map)
 }
@@ -150,6 +157,7 @@ fn validate_activity_limits_maps(
     all_availabilities: &HashMap<ProcessID, ProcessActivityLimitsMap>,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
+    base_year: u32,
 ) -> Result<()> {
     for (process_id, process) in processes {
         // A map of maps: the outer map is keyed by region and year; the inner one by time slice
@@ -157,30 +165,73 @@ fn validate_activity_limits_maps(
             .get(process_id)
             .with_context(|| format!("Missing availabilities for process {process_id}"))?;
 
-        let mut missing_keys = Vec::new();
-        for (region_id, year) in iproduct!(&process.regions, &process.years) {
-            if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), *year)) {
-                // There are at least some entries for this region/year combo; check if there are
-                // any time slices not covered
-                missing_keys.extend(
-                    time_slice_info
-                        .iter_ids()
-                        .filter(|ts| !map_for_region_year.contains_key(ts))
-                        .map(|ts| (region_id, *year, ts)),
-                );
-            } else {
-                // No entries for this region/year combo: by definition no time slices are covered
-                missing_keys.extend(time_slice_info.iter_ids().map(|ts| (region_id, *year, ts)));
-            }
-        }
-
-        ensure!(
-            missing_keys.is_empty(),
-            "Process {process_id} is missing availabilities for the following regions, years and \
-            time slices: {}",
-            format_items_with_cap(&missing_keys)
-        );
+        check_missing_milestone_years(process, map_for_process, base_year)?;
+        check_missing_time_slices(process, map_for_process, time_slice_info)?;
     }
+
+    Ok(())
+}
+
+/// Check every milestone year in which the process can be commissioned has availabilities.
+///
+/// Entries for non-milestone years in which the process can be commissioned (which are only
+/// required for pre-defined assets, if at all) are not required and will be checked lazily when
+/// assets requiring them are constructed.
+fn check_missing_milestone_years(
+    process: &Process,
+    map_for_process: &ProcessActivityLimitsMap,
+    base_year: u32,
+) -> Result<()> {
+    let process_milestone_years = process
+        .years
+        .iter()
+        .copied()
+        .filter(|&year| year >= base_year);
+    let mut missing = Vec::new();
+    for (region_id, year) in iproduct!(&process.regions, process_milestone_years) {
+        if !map_for_process.contains_key(&(region_id.clone(), year)) {
+            missing.push((region_id, year));
+        }
+    }
+
+    ensure!(
+        missing.is_empty(),
+        "Process {} is missing availabilities for the following regions and milestone years: {}",
+        &process.id,
+        format_items_with_cap(&missing)
+    );
+
+    Ok(())
+}
+
+/// Check that entries for all time slices are provided for any process/region/year combo for which
+/// we have any entries at all
+fn check_missing_time_slices(
+    process: &Process,
+    map_for_process: &ProcessActivityLimitsMap,
+    time_slice_info: &TimeSliceInfo,
+) -> Result<()> {
+    let mut missing = Vec::new();
+    for (region_id, &year) in iproduct!(&process.regions, &process.years) {
+        if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), year)) {
+            // There are at least some entries for this region/year combo; check if there are
+            // any time slices not covered
+            missing.extend(
+                time_slice_info
+                    .iter_ids()
+                    .filter(|ts| !map_for_region_year.contains_key(ts))
+                    .map(|ts| (region_id, year, ts)),
+            );
+        }
+    }
+
+    ensure!(
+        missing.is_empty(),
+        "Availabilities supplied for some, but not all time slices, for process {}. The following \
+        regions, years and time slices are missing: {}",
+        &process.id,
+        format_items_with_cap(&missing)
+    );
 
     Ok(())
 }
