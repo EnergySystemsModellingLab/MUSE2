@@ -141,6 +141,7 @@ fn prepare_commodities_graph_for_validation(
 
     // Filter by process availability
     // We keep edges if the process has availability > 0 in any time slice in the selection
+    let key = (region_id.clone(), year);
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
         let GraphEdge::Process(process_id) = graph.edge_weight(edge_idx).unwrap() else {
@@ -149,13 +150,15 @@ fn prepare_commodities_graph_for_validation(
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
+
         time_slice_selection
             .iter(time_slice_info)
             .any(|(time_slice, _)| {
-                let key = (region_id.clone(), year, time_slice.clone());
-                process
-                    .activity_limits
-                    .get(&key)
+                let Some(limits_map) = process.activity_limits.get(&key) else {
+                    return false;
+                };
+                limits_map
+                    .get(time_slice)
                     .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
             })
     });

@@ -6,11 +6,13 @@ use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
+use itertools::iproduct;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::Path;
+use std::rc::Rc;
 
 const PROCESS_AVAILABILITIES_FILE_NAME: &str = "process_availabilities.csv";
 
@@ -123,20 +125,17 @@ where
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
 
         // Insert the activity limit into the map
-        let entry = map
+        let limits_map = map
             .entry(id.clone())
             .or_insert_with(ProcessActivityLimitsMap::new);
-        for (time_slice, ts_length) in ts_selection.iter(time_slice_info) {
-            let bounds = record.to_bounds(ts_length);
-
-            for region in &record_regions {
-                for year in record_years.iter().copied() {
-                    try_insert(
-                        entry,
-                        &(region.clone(), year, time_slice.clone()),
-                        bounds.clone(),
-                    )?;
-                }
+        for (region_id, year) in iproduct!(&record_regions, &record_years) {
+            let limits_map_inner = limits_map
+                .entry((region_id.clone(), *year))
+                .or_insert_with(|| Rc::new(HashMap::new()));
+            let limits_map_inner = Rc::get_mut(limits_map_inner).unwrap();
+            for (time_slice, ts_length) in ts_selection.iter(time_slice_info) {
+                let bounds = record.to_bounds(ts_length);
+                try_insert(limits_map_inner, time_slice, bounds.clone())?;
             }
         }
     }
@@ -148,31 +147,37 @@ where
 
 /// Check that the activity limits cover every time slice and all regions/years of the process
 fn validate_activity_limits_maps(
-    map: &HashMap<ProcessID, ProcessActivityLimitsMap>,
+    all_availabilities: &HashMap<ProcessID, ProcessActivityLimitsMap>,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
 ) -> Result<()> {
     for (process_id, process) in processes {
-        let map = map
+        // A map of maps: the outer map is keyed by region and year; the inner one by time slice
+        let map_for_process = all_availabilities
             .get(process_id)
             .with_context(|| format!("Missing availabilities for process {process_id}"))?;
 
-        let reference_years = &process.years.clone();
-        let reference_regions = &process.regions;
         let mut missing_keys = Vec::new();
-        for year in reference_years {
-            for region in reference_regions {
-                for time_slice in time_slice_info.iter_ids() {
-                    let key = (region.clone(), *year, time_slice.clone());
-                    if !map.contains_key(&key) {
-                        missing_keys.push(key);
-                    }
-                }
+        for (region_id, year) in iproduct!(&process.regions, &process.years) {
+            if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), *year)) {
+                // There are at least some entries for this region/year combo; check if there are
+                // any time slices not covered
+                missing_keys.extend(
+                    time_slice_info
+                        .iter_ids()
+                        .filter(|ts| !map_for_region_year.contains_key(ts))
+                        .map(|ts| (region_id, *year, ts)),
+                );
+            } else {
+                // No entries for this region/year combo: by definition no time slices are covered
+                missing_keys.extend(time_slice_info.iter_ids().map(|ts| (region_id, *year, ts)));
             }
         }
+
         ensure!(
             missing_keys.is_empty(),
-            "Process {process_id} is missing availabilities for the following regions, years and timeslice: {}",
+            "Process {process_id} is missing availabilities for the following regions, years and \
+            time slices: {}",
             format_items_with_cap(&missing_keys)
         );
     }
