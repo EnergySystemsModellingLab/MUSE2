@@ -1,8 +1,9 @@
 //! Code related to CLI interface for managing the settings file
 use crate::settings::{Settings, get_settings_file_path};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use std::fs;
+use std::io::{self, Write};
 use std::path::Path;
 
 /// Subcommands for settings
@@ -14,6 +15,8 @@ pub enum SettingsSubcommands {
     Delete,
     /// Get the path to where the settings file is read from
     Path,
+    /// Show the contents of the `settings.toml`, if present
+    Show,
     /// Show the default settings for `settings.toml`
     ShowDefault,
 }
@@ -25,6 +28,7 @@ impl SettingsSubcommands {
             Self::Edit => handle_edit_command()?,
             Self::Delete => handle_delete_command()?,
             Self::Path => handle_path_command(),
+            Self::Show => handle_show_command()?,
             Self::ShowDefault => handle_show_default_command(),
         }
 
@@ -80,6 +84,25 @@ fn handle_delete_command() -> Result<()> {
 /// Handle the `path` command
 fn handle_path_command() {
     println!("{}", get_settings_file_path().display());
+}
+
+/// Handle the `show` command
+fn handle_show_command() -> Result<()> {
+    let file_path = get_settings_file_path();
+
+    match fs::read(&file_path) {
+        // Write contents of file to stdout
+        Ok(ref contents) => io::stdout().write_all(contents)?,
+        Err(err) => {
+            if err.kind() == io::ErrorKind::NotFound {
+                bail!("Settings file not found at: {}", file_path.display())
+            }
+            // Some other kind of IO error occurred; just return it
+            Err(err)?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Handle the `show-default` command
