@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 pub mod example;
 use example::ExampleSubcommands;
 
+pub mod settings;
+use settings::SettingsSubcommands;
+
 /// The command line interface for the simulation.
 #[derive(Parser)]
 #[command(version, about)]
@@ -59,21 +62,23 @@ enum Commands {
         /// The path to the model directory.
         model_dir: PathBuf,
     },
-    /// Print default settings file.
-    DumpDefaultSettings,
+    /// Manage settings file.
+    Settings {
+        /// The subcommands for managing the settings file.
+        #[command(subcommand)]
+        subcommand: SettingsSubcommands,
+    },
 }
 
 impl Commands {
     /// Execute the supplied CLI command
     fn execute(self) -> Result<()> {
         match self {
-            Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts, None)?,
-            Self::Example { subcommand } => subcommand.execute()?,
-            Self::Validate { model_dir } => handle_validate_command(&model_dir, None)?,
-            Self::DumpDefaultSettings => handle_dump_default_settings(),
+            Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts, None),
+            Self::Example { subcommand } => subcommand.execute(),
+            Self::Validate { model_dir } => handle_validate_command(&model_dir, None),
+            Self::Settings { subcommand } => subcommand.execute(),
         }
-
-        Ok(())
     }
 }
 
@@ -172,9 +177,4 @@ pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) ->
     info!("Model validation successful!");
 
     Ok(())
-}
-
-/// Handle the `dump-default-settings` command
-fn handle_dump_default_settings() {
-    print!("{}", Settings::default_file_contents());
 }
