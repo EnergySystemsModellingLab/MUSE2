@@ -185,7 +185,7 @@ impl Asset {
             .get(&key)
             .with_context(|| {
                 format!(
-                    "No activity limits supplied for process {} in region {} in year {}. \
+                    "No process availabilities supplied for process {} in region {} in year {}. \
                     You should update process_availabilities.csv.",
                     &process.id, region_id, commission_year
                 )
