@@ -14,8 +14,8 @@ pub enum SettingsSubcommands {
     Delete,
     /// Get the path to where the settings file is read from
     Path,
-    /// Write the contents of a placeholder `settings.toml` to the console
-    DumpDefault,
+    /// Show the default settings for `settings.toml`
+    ShowDefault,
 }
 
 impl SettingsSubcommands {
@@ -25,7 +25,7 @@ impl SettingsSubcommands {
             Self::Edit => handle_edit_command()?,
             Self::Delete => handle_delete_command()?,
             Self::Path => handle_path_command(),
-            Self::DumpDefault => handle_dump_default_command(),
+            Self::ShowDefault => handle_show_default_command(),
         }
 
         Ok(())
@@ -82,7 +82,7 @@ fn handle_path_command() {
     println!("{}", get_settings_file_path().display());
 }
 
-/// Handle the `dump-default` command
-fn handle_dump_default_command() {
+/// Handle the `show-default` command
+fn handle_show_default_command() {
     print!("{}", Settings::default_file_contents());
 }
