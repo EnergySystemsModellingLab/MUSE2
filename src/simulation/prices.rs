@@ -263,7 +263,7 @@ impl CommodityPrices {
     ///
     /// Note: this assumes that all time slices are present for each commodity-region pair, and
     /// that all time slice lengths sum to 1. This is not checked by this method.
-    pub fn timeslice_weighted_averages(
+    fn timeslice_weighted_averages(
         &self,
         time_slice_info: &TimeSliceInfo,
     ) -> BTreeMap<(CommodityID, RegionID), MoneyPerFlow> {
@@ -512,5 +512,24 @@ mod tests {
             prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info),
             expected
         );
+    }
+
+    #[test]
+    fn test_timeslice_weighted_averages() {
+        let mut prices = CommodityPrices::default();
+        let commodity = CommodityID::new("test_commodity");
+        let region = RegionID::new("test_region");
+
+        // Use the default timeslice from TimeSliceInfo::default()
+        let time_slice_info = TimeSliceInfo::default();
+        let time_slice = time_slice_info.time_slices.keys().next().unwrap().clone();
+
+        // Insert a price
+        prices.insert(&commodity, &region, &time_slice, MoneyPerFlow(100.0));
+
+        let averages = prices.timeslice_weighted_averages(&time_slice_info);
+
+        // With single timeslice (duration=1.0), average should equal the price
+        assert_eq!(averages[&(commodity, region)], MoneyPerFlow(100.0));
     }
 }
