@@ -83,7 +83,12 @@ fn handle_delete_command() -> Result<()> {
 
 /// Handle the `path` command
 fn handle_path_command() {
-    println!("{}", get_settings_file_path().display());
+    let file_path = get_settings_file_path();
+    if file_path.is_file() {
+        println!("{}", file_path.display());
+    } else {
+        eprintln!("Settings file not found at: {}", file_path.display());
+    }
 }
 
 /// Handle the `show` command
