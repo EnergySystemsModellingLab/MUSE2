@@ -48,9 +48,6 @@ jobs:
           cp target/release/muse2${{ matrix.exe_suffix }} muse2
           cp LICENSE muse2/LICENCE.txt
           cp assets/readme/readme_${{ matrix.osname }}.txt muse2/README.txt
-
-          # Generate default settings file
-          muse2/muse2 dump-default-settings > muse2/settings.toml
       - uses: actions/upload-artifact@v4
         if: ${{ github.event_name != 'release' }}
         with:
