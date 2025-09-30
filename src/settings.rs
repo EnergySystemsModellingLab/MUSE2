@@ -10,10 +10,21 @@ use std::path::{Path, PathBuf};
 
 const SETTINGS_FILE_NAME: &str = "settings.toml";
 
-const DEFAULT_SETTINGS_FILE_HEADER: &str = "# This file contains the program settings for MUSE 2.0
-# For more information, visit:
+const DEFAULT_SETTINGS_FILE_HEADER: &str = concat!(
+    "# This file contains the program settings for MUSE 2.0.
+#
+# The default options for MUSE2 v",
+    env!("CARGO_PKG_VERSION"),
+    " are shown below, commented out. To change an option, uncomment it and set the value
+# appropriately.
+#
+# To show the default options for the current version of MUSE2, run:
+# \tmuse2 settings show-default
+#
+# For information about the possible settings, visit:
 # \thttps://energysystemsmodellinglab.github.io/MUSE_2.0/file_formats/program_settings.html
-";
+"
+);
 
 /// Get the path to where the settings file will be read from
 pub fn get_settings_file_path() -> PathBuf {
