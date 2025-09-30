@@ -211,7 +211,7 @@ fn check_flows_primary_output(
 ) -> Result<()> {
     if let Some(primary_output) = primary_output {
         let flow = flows_map.get(primary_output).with_context(|| {
-            format!("Primary output commodity '{primary_output}' isn't a process flow",)
+            format!("Primary output commodity '{primary_output}' isn't a process flow")
         })?;
 
         ensure!(
