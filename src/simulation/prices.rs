@@ -256,12 +256,51 @@ impl CommodityPrices {
             .copied()
     }
 
-    /// Check if prices are within relative tolerance of another price set
+    /// Calculate timeslice-weighted average prices for each commodity-region pair
     ///
-    /// Both objects must have exactly the same set of keys, otherwise it will panic.
-    pub fn within_tolerance(&self, other: &Self, tolerance: Dimensionless) -> bool {
-        for (key, &price) in &self.0 {
-            let other_price = other.0[key];
+    /// This method aggregates prices across timeslices by weighting each price
+    /// by the duration of its timeslice, providing a more representative annual average.
+    ///
+    /// Note: this assumes that all time slices are present for each commodity-region pair, and
+    /// that all time slice lengths sum to 1. This is not checked by this method.
+    pub fn timeslice_weighted_averages(
+        &self,
+        time_slice_info: &TimeSliceInfo,
+    ) -> BTreeMap<(CommodityID, RegionID), MoneyPerFlow> {
+        let mut weighted_prices = BTreeMap::new();
+
+        for ((commodity_id, region_id, time_slice_id), price) in &self.0 {
+            let weight = Dimensionless(time_slice_info.time_slices[time_slice_id].value());
+            let key = (commodity_id.clone(), region_id.clone());
+            weighted_prices
+                .entry(key)
+                .and_modify(|sum| *sum += *price * weight)
+                .or_insert(*price * weight);
+        }
+
+        weighted_prices
+    }
+
+    /// Check if time slice-weighted average prices are within relative tolerance of another price
+    /// set.
+    ///
+    /// This method calculates time slice-weighted average prices for each commodity-region pair
+    /// and compares them. Both objects must have exactly the same set of commodity-region pairs,
+    /// otherwise it will panic.
+    ///
+    /// Additionally, this method assumes that all time slices are present for each commodity-region
+    /// pair, and that all time slice lengths sum to 1. This is not checked by this method.
+    pub fn within_tolerance_weighted(
+        &self,
+        other: &Self,
+        tolerance: Dimensionless,
+        time_slice_info: &TimeSliceInfo,
+    ) -> bool {
+        let self_averages = self.timeslice_weighted_averages(time_slice_info);
+        let other_averages = other.timeslice_weighted_averages(time_slice_info);
+
+        for (key, &price) in &self_averages {
+            let other_price = other_averages[key];
             let abs_diff = (price - other_price).abs();
 
             // Special case: last price was zero
@@ -460,13 +499,18 @@ mod tests {
         let mut prices1 = CommodityPrices::default();
         let mut prices2 = CommodityPrices::default();
 
+        // Set up two price sets for a single commodity/region/timeslice
+        // This will not test weighting behaviour as there is only one time slice
         let commodity = CommodityID::new("test_commodity");
         let region = RegionID::new("test_region");
-        let time_slice: TimeSliceID = "summer.day".into();
-
+        let time_slice_info = TimeSliceInfo::default();
+        let time_slice = time_slice_info.time_slices.keys().next().unwrap();
         prices1.insert(&commodity, &region, &time_slice, price1);
         prices2.insert(&commodity, &region, &time_slice, price2);
 
-        assert_eq!(prices1.within_tolerance(&prices2, tolerance), expected);
+        assert_eq!(
+            prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info),
+            expected
+        );
     }
 }
