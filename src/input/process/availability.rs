@@ -147,28 +147,33 @@ where
 
 /// Check that the activity limits cover every time slice and all regions/years of the process
 fn validate_activity_limits_maps(
-    map: &HashMap<ProcessID, ProcessActivityLimitsMap>,
+    all_availabilities: &HashMap<ProcessID, ProcessActivityLimitsMap>,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
 ) -> Result<()> {
     for (process_id, process) in processes {
-        let map = map
+        // A map of maps: the outer map is keyed by region and year; the inner one by time slice
+        let map_for_process = all_availabilities
             .get(process_id)
             .with_context(|| format!("Missing availabilities for process {process_id}"))?;
 
         let mut missing_keys = Vec::new();
         for (region_id, year) in iproduct!(&process.regions, &process.years) {
-            if let Some(map) = map.get(&(region_id.clone(), *year)) {
+            if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), *year)) {
+                // There are at least some entries for this region/year combo; check if there are
+                // any time slices not covered
                 missing_keys.extend(
                     time_slice_info
                         .iter_ids()
-                        .filter(|ts| !map.contains_key(ts))
+                        .filter(|ts| !map_for_region_year.contains_key(ts))
                         .map(|ts| (region_id, *year, ts)),
                 );
             } else {
+                // No entries for this region/year combo: by definition no time slices are covered
                 missing_keys.extend(time_slice_info.iter_ids().map(|ts| (region_id, *year, ts)));
             }
         }
+
         ensure!(
             missing_keys.is_empty(),
             "Process {process_id} is missing availabilities for the following regions, years and \
