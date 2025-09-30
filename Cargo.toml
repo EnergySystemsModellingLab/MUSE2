@@ -19,7 +19,7 @@ float-cmp = "0.10.0"
 itertools = "0.14.0"
 serde = {version = "1.0.223", features = ["derive", "rc"]}
 serde_string_enum = "0.2.1"
-tempfile = "3.22.0"
+tempfile = "3.23.0"
 toml = "0.9.7"
 unicase = "2.8.1"
 fern = {version = "0.7.1", features = ["chrono", "colored"]}
