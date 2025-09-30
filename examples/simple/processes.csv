@@ -1,5 +1,5 @@
 id,description,regions,primary_output,start_year,end_year,capacity_to_activity
-GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0
+GASDRV,Dry gas extraction,all,GASPRD,2000,2050,1.0
 GASPRC,Gas processing,all,GASNAT,2020,2040,1.0
 WNDFRM,Wind farm,all,ELCTRI,2020,2040,31.54
 GASCGT,Gas combined cycle turbine,all,ELCTRI,2020,2040,31.54

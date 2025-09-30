@@ -1,5 +1,5 @@
 process_id,regions,years,time_slice,limit_type,value
-GASDRV,all,all,annual,up,0.9
+GASDRV,all,2020;2030;2040,annual,up,0.9
 GASPRC,all,all,annual,up,0.9
 GASCGT,all,all,annual,up,0.9
 RGASBR,all,all,annual,up,1.0

@@ -1,5 +1,5 @@
 process_id,commodity_id,regions,years,coeff,type,cost
-GASDRV,GASPRD,all,all,1.0,fixed,
+GASDRV,GASPRD,all,2010;2020;2030;2040,1.0,fixed,
 GASPRC,GASPRD,all,all,-1.05,fixed,
 GASPRC,GASNAT,all,all,1.0,fixed,
 WNDFRM,ELCTRI,all,all,1.0,fixed,

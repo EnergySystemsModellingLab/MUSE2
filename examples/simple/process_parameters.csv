@@ -1,5 +1,5 @@
 process_id,regions,years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate
-GASDRV,all,all,10.0,0.3,2.0,25,0.1
+GASDRV,all,2020;2030;2040,10.0,0.3,2.0,25,0.1
 GASPRC,all,all,7.0,0.21,0.5,25,0.1
 WNDFRM,all,all,1000.0,30.0,0.4,25,0.1
 GASCGT,all,all,700.0,21.0,0.55,30,0.1
