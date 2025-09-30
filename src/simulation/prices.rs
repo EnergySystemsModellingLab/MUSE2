@@ -266,8 +266,8 @@ impl CommodityPrices {
     fn timeslice_weighted_averages(
         &self,
         time_slice_info: &TimeSliceInfo,
-    ) -> BTreeMap<(CommodityID, RegionID), MoneyPerFlow> {
-        let mut weighted_prices = BTreeMap::new();
+    ) -> HashMap<(CommodityID, RegionID), MoneyPerFlow> {
+        let mut weighted_prices = HashMap::new();
 
         for ((commodity_id, region_id, time_slice_id), price) in &self.0 {
             let weight = Dimensionless(time_slice_info.time_slices[time_slice_id].value());
@@ -500,7 +500,6 @@ mod tests {
         let mut prices2 = CommodityPrices::default();
 
         // Set up two price sets for a single commodity/region/timeslice
-        // This will not test weighting behaviour as there is only one time slice
         let commodity = CommodityID::new("test_commodity");
         let region = RegionID::new("test_region");
         let time_slice_info = TimeSliceInfo::default();
