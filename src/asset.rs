@@ -1,5 +1,5 @@
 //! Assets are instances of a process which are owned and invested in by agents.
-use crate::agent::AgentID;
+use crate::agent::{Agent, AgentID};
 use crate::commodity::CommodityID;
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
@@ -51,27 +51,27 @@ pub enum AssetState {
     Commissioned {
         /// The ID of the asset
         id: AssetID,
-        /// The ID of the agent that owns the asset
-        agent_id: AgentID,
+        /// The agent that owns the asset
+        agent: Rc<Agent>,
     },
     /// The asset has been decommissioned
     Decommissioned {
         /// The ID of the asset
         id: AssetID,
-        /// The ID of the agent that owned the asset
-        agent_id: AgentID,
+        /// The agent that owned the asset
+        agent: Rc<Agent>,
         /// The year the asset was decommissioned
         decommission_year: u32,
     },
     /// The asset is planned for commissioning in the future
     Future {
-        /// The ID of the agent that will own the asset
-        agent_id: AgentID,
+        /// The agent that will own the asset
+        agent: Rc<Agent>,
     },
     /// The asset has been selected for investment, but not yet confirmed
     Selected {
-        /// The ID of the agent that would own the asset
-        agent_id: AgentID,
+        /// The agent that would own the asset
+        agent: Rc<Agent>,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -127,7 +127,7 @@ impl Asset {
 
     /// Create a new future asset
     pub fn new_future(
-        agent_id: AgentID,
+        agent: Rc<Agent>,
         process: Rc<Process>,
         region_id: RegionID,
         capacity: Capacity,
@@ -135,7 +135,7 @@ impl Asset {
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
         Self::new_with_state(
-            AssetState::Future { agent_id },
+            AssetState::Future { agent },
             process,
             region_id,
             capacity,
@@ -149,14 +149,14 @@ impl Asset {
     /// Candidate assets by calling `select_candidate_for_investment`.
     #[cfg(test)]
     fn new_selected(
-        agent_id: AgentID,
+        agent: Rc<Agent>,
         process: Rc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
-            AssetState::Selected { agent_id },
+            AssetState::Selected { agent },
             process,
             region_id,
             capacity,
@@ -358,6 +358,17 @@ impl Asset {
                 Some(*id)
             }
             _ => None,
+        }
+    }
+
+    /// Get the agent that owns this asset
+    pub fn agent(&self) -> Option<&Rc<Agent>> {
+        match &self.state {
+            AssetState::Commissioned { agent, .. }
+            | AssetState::Decommissioned { agent, .. }
+            | AssetState::Future { agent }
+            | AssetState::Selected { agent } => Some(agent_id),
+            AssetState::Candidate => None,
         }
     }
 
