@@ -114,7 +114,7 @@ pub fn calculate_prices_and_reduced_costs(
         .map(|(asset, time_slice, cost)| ((asset.clone(), time_slice.clone()), cost))
         .collect();
 
-    let (new_prices, reduced_costs_for_candidates) = match model.parameters.pricing_strategy {
+    let (new_prices, _reduced_costs_for_candidates) = match model.parameters.pricing_strategy {
         // Use raw shadow prices and reduced costs
         PricingStrategy::ShadowPrices => (
             shadow_prices.with_levies(model, year),
@@ -143,8 +143,9 @@ pub fn calculate_prices_and_reduced_costs(
     // Use old prices for any commodities for which price is missing
     prices.extend(new_prices);
 
-    // Add new reduced costs, using old values if not provided
-    reduced_costs.extend(reduced_costs_for_candidates);
+    // Add new reduced costs
+    // **HACK:** Use same method for candidates and existing
+    // reduced_costs.extend(reduced_costs_for_candidates);
     reduced_costs.extend(reduced_costs_for_existing(
         &model.time_slice_info,
         existing_assets,

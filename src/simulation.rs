@@ -6,6 +6,7 @@ use crate::process::ProcessMap;
 use crate::simulation::prices::{ReducedCosts, calculate_prices_and_reduced_costs};
 use crate::units::Capacity;
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use log::info;
 use std::path::Path;
 use std::rc::Rc;
@@ -208,8 +209,14 @@ fn run_dispatch_for_year(
     };
 
     // Calculate commodity prices and asset reduced costs
+    // **HACK:** Use same reduced costs method for both
+    let all_assets = assets
+        .iter()
+        .chain(candidates.iter())
+        .cloned()
+        .collect_vec();
     let (prices, reduced_costs) =
-        calculate_prices_and_reduced_costs(model, &solution, assets, year);
+        calculate_prices_and_reduced_costs(model, &solution, &all_assets, year);
 
     Ok((flow_map, prices, reduced_costs))
 }
