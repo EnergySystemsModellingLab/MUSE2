@@ -201,7 +201,7 @@ mod tests {
         let milestone_years = [2020];
         let agents = IndexMap::from([(
             AgentID::new("agent1"),
-            Agent {
+            Rc::new(Agent {
                 id: "agent1".into(),
                 description: "An agent".into(),
                 commodity_portions: AgentCommodityPortionsMap::new(),
@@ -210,7 +210,7 @@ mod tests {
                 cost_limits: AgentCostLimitsMap::new(),
                 regions: region_ids.clone(),
                 objectives: AgentObjectiveMap::new(),
-            },
+            }),
         )]);
         let mut commodities = IndexMap::from([(
             CommodityID::new("commodity1"),

@@ -15,6 +15,7 @@ use indexmap::IndexMap;
 use itertools::{chain, iproduct};
 use log::debug;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub mod appraisal;
 use appraisal::appraise_investment;
@@ -242,9 +243,9 @@ fn get_responsible_agents<'a, I>(
     commodity_id: &'a CommodityID,
     region_id: &'a RegionID,
     year: u32,
-) -> impl Iterator<Item = (&'a Agent, Dimensionless)>
+) -> impl Iterator<Item = (&'a Rc<Agent>, Dimensionless)>
 where
-    I: Iterator<Item = &'a Agent>,
+    I: Iterator<Item = &'a Rc<Agent>>,
 {
     agents.filter_map(move |agent| {
         if !agent.regions.contains(region_id) {

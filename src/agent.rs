@@ -13,7 +13,7 @@ use std::rc::Rc;
 define_id_type! {AgentID}
 
 /// A map of [`Agent`]s, keyed by agent ID
-pub type AgentMap = IndexMap<AgentID, Agent>;
+pub type AgentMap = IndexMap<AgentID, Rc<Agent>>;
 
 /// A map of cost limits for an agent, keyed by year
 pub type AgentCostLimitsMap = HashMap<u32, AgentCostLimits>;

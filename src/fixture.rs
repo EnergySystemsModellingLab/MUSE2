@@ -182,7 +182,8 @@ pub fn agents() -> AgentMap {
             cost_limits: AgentCostLimitsMap::new(),
             regions: IndexSet::new(),
             objectives: AgentObjectiveMap::new(),
-        },
+        }
+        .into(),
     ))
     .collect()
 }
