@@ -273,6 +273,17 @@ impl Asset {
         self.process_parameter.variable_operating_cost + flows_cost
     }
 
+    /// Get the total revenue from all flows for this asset.
+    ///
+    /// If a price is missing from `prices`, then it is assumed to be zero.
+    pub fn get_total_revenue_from_flows(
+        &self,
+        prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
+    }
+
     /// Get the cost of input flows using the commodity prices in `input_prices`.
     ///
     /// If a price is missing, there is assumed to be no cost.
