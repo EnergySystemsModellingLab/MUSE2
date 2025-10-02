@@ -381,6 +381,7 @@ fn select_best_assets(
     );
 
     let mut round = 0;
+    let objective_type = &agent.objectives[&year];
     while is_any_remaining_demand(&demand) {
         ensure!(
             !opt_assets.is_empty(),
@@ -402,7 +403,7 @@ fn select_best_assets(
                 asset,
                 max_capacity,
                 commodity,
-                &agent.objectives[&year],
+                objective_type,
                 reduced_costs,
                 &demand,
             )?;
