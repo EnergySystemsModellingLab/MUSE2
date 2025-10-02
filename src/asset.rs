@@ -3,10 +3,9 @@ use crate::agent::AgentID;
 use crate::commodity::CommodityID;
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
+use crate::simulation::CommodityPrices;
 use crate::time_slice::TimeSliceID;
-use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerFlow,
-};
+use crate::units::{Activity, ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -277,7 +276,7 @@ impl Asset {
     /// Get the cost of input flows using the commodity prices in `input_prices`
     pub fn get_input_cost_from_prices(
         &self,
-        input_prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+        input_prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         self.iter_flows()
@@ -285,11 +284,7 @@ impl Asset {
                 if !flow.is_input() {
                     return None;
                 }
-                let price = *input_prices.get(&(
-                    flow.commodity.id.clone(),
-                    self.region_id.clone(),
-                    time_slice.clone(),
-                ))?;
+                let price = input_prices.get(&flow.commodity.id, &self.region_id, time_slice)?;
                 Some(-flow.coeff * price)
             })
             .sum()
@@ -907,11 +902,8 @@ mod tests {
         let asset = Asset::new_candidate(process, region_id.clone(), Capacity(1.0), 2020).unwrap();
 
         // Set input prices
-        let mut input_prices = HashMap::new();
-        input_prices.insert(
-            (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-            MoneyPerFlow(3.0),
-        );
+        let mut input_prices = CommodityPrices::default();
+        input_prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(3.0));
 
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
