@@ -261,6 +261,17 @@ impl CommodityPrices {
         self.0.keys()
     }
 
+    /// Remove the specified entry from the map
+    pub fn remove(
+        &mut self,
+        commodity_id: &CommodityID,
+        region_id: &RegionID,
+        time_slice: &TimeSliceID,
+    ) -> Option<MoneyPerFlow> {
+        self.0
+            .remove(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
+    }
+
     /// Check if prices are within relative tolerance of another price set
     ///
     /// Both objects must have exactly the same set of keys, otherwise it will panic.
