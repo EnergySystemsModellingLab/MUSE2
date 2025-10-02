@@ -9,7 +9,7 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow};
 use indexmap::IndexMap;
 use itertools::iproduct;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, btree_map};
 
 /// A map of reduced costs for different assets in different time slices
 ///
@@ -254,6 +254,11 @@ impl CommodityPrices {
         self.0
             .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
             .copied()
+    }
+
+    /// Iterate over the price map's keys
+    pub fn keys(&self) -> btree_map::Keys<'_, (CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+        self.0.keys()
     }
 
     /// Check if prices are within relative tolerance of another price set
