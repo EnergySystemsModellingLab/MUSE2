@@ -273,19 +273,37 @@ impl Asset {
         self.process_parameter.variable_operating_cost + flows_cost
     }
 
-    /// Get the cost of input flows using the commodity prices in `input_prices`
+    /// Get the cost of input flows using the commodity prices in `input_prices`.
+    ///
+    /// If a price is missing, there is assumed to be no cost.
     pub fn get_input_cost_from_prices(
         &self,
         input_prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
+        -self.get_revenue_from_flows_with_filter(input_prices, time_slice, ProcessFlow::is_input)
+    }
+
+    /// Get the total revenue from a subset of flows.
+    ///
+    /// Takes a function as an argument to filter the flows. If a price is missing, it is assumed to
+    /// be zero.
+    fn get_revenue_from_flows_with_filter<F>(
+        &self,
+        prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+        mut filter_for_flows: F,
+    ) -> MoneyPerActivity
+    where
+        F: FnMut(&ProcessFlow) -> bool,
+    {
         self.iter_flows()
-            .filter_map(|flow| {
-                if !flow.is_input() {
-                    return None;
-                }
-                let price = input_prices.get(&flow.commodity.id, &self.region_id, time_slice)?;
-                Some(-flow.coeff * price)
+            .filter(|flow| filter_for_flows(flow))
+            .map(|flow| {
+                flow.coeff
+                    * prices
+                        .get(&flow.commodity.id, self.region_id(), time_slice)
+                        .unwrap_or_default()
             })
             .sum()
     }
