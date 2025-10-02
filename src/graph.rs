@@ -166,10 +166,11 @@ fn prepare_commodities_graph_for_validation(
     let demand_node_index = filtered_graph.add_node(GraphNode::Demand);
     for (commodity_id, commodity) in commodities {
         if time_slice_selection.level() == commodity.time_slice_level
-            && commodity
-                .demand
-                .get(&(region_id.clone(), year, time_slice_selection.clone()))
-                .is_some()
+            && commodity.demand.contains_key(&(
+                region_id.clone(),
+                year,
+                time_slice_selection.clone(),
+            ))
         {
             let commodity_node = GraphNode::Commodity(commodity_id.clone());
             let commodity_node_index = filtered_graph
