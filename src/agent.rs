@@ -100,3 +100,14 @@ pub enum ObjectiveType {
     #[string = "npv"]
     NetPresentValue,
 }
+
+impl ObjectiveType {
+    /// Whether to exclude the price of the primary output commodity from reduced cost calculation
+    pub fn exclude_primary_output_price_from_reduced_costs(&self) -> bool {
+        // Deliberately written as a `match` block, in case we add more objective types in future
+        match self {
+            ObjectiveType::LevelisedCostOfX => true,
+            ObjectiveType::NetPresentValue => false,
+        }
+    }
+}

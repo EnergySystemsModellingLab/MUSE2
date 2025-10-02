@@ -5,7 +5,7 @@ use crate::model::{Model, PricingStrategy};
 use crate::process::ProcessFlow;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::time_slice::TimeSliceID;
 use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow};
 use indexmap::IndexMap;
 use itertools::iproduct;
@@ -146,7 +146,7 @@ pub fn calculate_prices_and_reduced_costs(
     // Add new reduced costs, using old values if not provided
     reduced_costs.extend(reduced_costs_for_candidates);
     reduced_costs.extend(reduced_costs_for_existing(
-        &model.time_slice_info,
+        model,
         existing_assets,
         &prices,
         year,
@@ -398,14 +398,15 @@ fn get_scarcity_adjustment(
 
 /// Calculate reduced costs for existing assets
 fn reduced_costs_for_existing<'a>(
-    time_slice_info: &'a TimeSliceInfo,
+    model: &'a Model,
     assets: &'a [AssetRef],
     prices: &'a CommodityPrices,
     year: u32,
 ) -> impl Iterator<Item = ((AssetRef, TimeSliceID), MoneyPerActivity)> + 'a {
-    iproduct!(assets, time_slice_info.iter_ids()).map(move |(asset, time_slice)| {
+    iproduct!(assets, model.time_slice_info.iter_ids()).map(move |(asset, time_slice)| {
         let operating_cost = asset.get_operating_cost(year, time_slice);
-        let revenue_from_flows = asset.get_total_revenue_from_flows(prices, time_slice);
+        let revenue_from_flows =
+            asset.get_revenue_from_flows_for_objective(&model.agents, prices, year, time_slice);
         let reduced_cost = operating_cost - revenue_from_flows;
 
         ((asset.clone(), time_slice.clone()), reduced_cost)
