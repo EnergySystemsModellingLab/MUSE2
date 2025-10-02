@@ -47,15 +47,11 @@ pub fn run(
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
-    let mut candidates = next_year
-        .map(|next_year| {
-            candidate_assets_for_year(
-                &model.processes,
-                next_year,
-                model.parameters.candidate_asset_capacity,
-            )
-        })
-        .unwrap_or_default();
+    let mut candidates = candidate_assets_for_next_year(
+        &model.processes,
+        next_year,
+        model.parameters.candidate_asset_capacity,
+    );
 
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
@@ -155,15 +151,11 @@ pub fn run(
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();
-        candidates = next_year
-            .map(|next_year| {
-                candidate_assets_for_year(
-                    &model.processes,
-                    next_year,
-                    model.parameters.candidate_asset_capacity,
-                )
-            })
-            .unwrap_or_default();
+        candidates = candidate_assets_for_next_year(
+            &model.processes,
+            next_year,
+            model.parameters.candidate_asset_capacity,
+        );
 
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
@@ -215,15 +207,19 @@ fn run_dispatch_for_year(
 }
 
 /// Create candidate assets for all potential processes in a specified year
-fn candidate_assets_for_year(
+fn candidate_assets_for_next_year(
     processes: &ProcessMap,
-    year: u32,
+    next_year: Option<u32>,
     candidate_asset_capacity: Capacity,
 ) -> Vec<AssetRef> {
     let mut candidates = Vec::new();
+    let Some(next_year) = next_year else {
+        return candidates;
+    };
+
     for process in processes
         .values()
-        .filter(move |process| process.active_for_year(year))
+        .filter(move |process| process.active_for_year(next_year))
     {
         for region_id in &process.regions {
             candidates.push(
@@ -231,7 +227,7 @@ fn candidate_assets_for_year(
                     Rc::clone(process),
                     region_id.clone(),
                     candidate_asset_capacity,
-                    year,
+                    next_year,
                 )
                 .unwrap()
                 .into(),
