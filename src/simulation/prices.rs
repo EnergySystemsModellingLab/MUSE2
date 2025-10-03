@@ -273,10 +273,7 @@ impl CommodityPrices {
             // NB: Time slice fractions will sum to one
             let weight = time_slice_info.time_slices[time_slice_id] / Year(1.0);
             let key = (commodity_id.clone(), region_id.clone());
-            weighted_prices
-                .entry(key)
-                .and_modify(|sum| *sum += *price * weight)
-                .or_insert(*price * weight);
+            *weighted_prices.entry(key).or_default() += *price * weight;
         }
 
         weighted_prices
