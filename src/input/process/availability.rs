@@ -40,7 +40,7 @@ impl ProcessAvailabilityRaw {
 
     /// Calculate fraction of annual energy as availability multiplied by time slice length.
     ///
-    /// The resulting limits are max/min energy produced/consumed in each timeslice per
+    /// The resulting limits are max/min energy produced/consumed in each time slice per
     /// `capacity_to_activity` units of capacity.
     fn to_bounds(&self, ts_length: Year) -> RangeInclusive<Dimensionless> {
         // We know ts_length also represents a fraction of a year, so this is ok.
@@ -121,7 +121,7 @@ where
             format!("Invalid year for process {id}. Valid years are {process_years:?}")
         })?;
 
-        // Get timeslices
+        // Get time slices
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
 
         // Insert the activity limit into the map
