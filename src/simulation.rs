@@ -1,11 +1,14 @@
 //! Functionality for running the MUSE 2.0 simulation.
+use crate::agent::Agent;
 use crate::asset::{Asset, AssetPool, AssetRef};
+use crate::commodity::CommodityID;
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::process::ProcessMap;
+use crate::process::Process;
+use crate::region::RegionID;
 use crate::simulation::prices::{ReducedCosts, calculate_prices_and_reduced_costs};
-use crate::units::Capacity;
 use anyhow::{Context, Result};
+use itertools::iproduct;
 use log::info;
 use std::path::Path;
 use std::rc::Rc;
@@ -47,11 +50,7 @@ pub fn run(
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
-    let mut candidates = candidate_assets_for_next_year(
-        &model.processes,
-        next_year,
-        model.parameters.candidate_asset_capacity,
-    );
+    let mut candidates = candidate_assets_for_next_year(model, next_year);
 
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
@@ -151,11 +150,7 @@ pub fn run(
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();
-        candidates = candidate_assets_for_next_year(
-            &model.processes,
-            next_year,
-            model.parameters.candidate_asset_capacity,
-        );
+        candidates = candidate_assets_for_next_year(model, next_year);
 
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
@@ -206,32 +201,53 @@ fn run_dispatch_for_year(
     Ok((flow_map, prices, reduced_costs))
 }
 
+/// Get search spaces for specified agents for given region, commodity and milestone year
+fn get_search_spaces<'a, I>(
+    agents: I,
+    region_id: &'a RegionID,
+    commodity_id: &'a CommodityID,
+    year: u32,
+) -> impl Iterator<Item = (&'a Agent, &'a Rc<Process>)>
+where
+    I: Iterator<Item = &'a Agent>,
+{
+    agents
+        // Only include agents which operate in this region
+        .filter(|agent| agent.regions.contains(region_id))
+        .filter_map(move |agent| {
+            let processes = agent
+                .search_space
+                // Should be responsible for some of this commodity in this year
+                .get(&(commodity_id.clone(), year))?
+                .iter()
+                // Only interested in processes which can operate in this region
+                .filter(|process| process.regions.contains(region_id))
+                .map(move |process| (agent, process));
+            Some(processes)
+        })
+        .flatten()
+}
+
 /// Create candidate assets for all potential processes in a specified year
-fn candidate_assets_for_next_year(
-    processes: &ProcessMap,
-    next_year: Option<u32>,
-    candidate_asset_capacity: Capacity,
-) -> Vec<AssetRef> {
+fn candidate_assets_for_next_year(model: &Model, next_year: Option<u32>) -> Vec<AssetRef> {
     let mut candidates = Vec::new();
     let Some(next_year) = next_year else {
         return candidates;
     };
 
-    for process in processes
-        .values()
-        .filter(move |process| process.active_for_year(next_year))
-    {
-        for region_id in &process.regions {
-            candidates.push(
-                Asset::new_candidate(
-                    Rc::clone(process),
-                    region_id.clone(),
-                    candidate_asset_capacity,
-                    next_year,
-                )
-                .unwrap()
-                .into(),
-            );
+    for (region_id, commodity_id) in iproduct!(model.iter_regions(), model.commodities.keys()) {
+        for (agent, process) in
+            get_search_spaces(model.agents.values(), region_id, commodity_id, next_year)
+        {
+            let asset = Asset::new_candidate(
+                agent.id.clone(),
+                process.clone(),
+                region_id.clone(),
+                model.parameters.candidate_asset_capacity,
+                next_year,
+            )
+            .unwrap(); // safe: arguments should all be valid
+            candidates.push(asset.into());
         }
     }
 

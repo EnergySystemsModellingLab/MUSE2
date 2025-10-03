@@ -53,28 +53,18 @@ pub enum AssetState {
     Commissioned {
         /// The ID of the asset
         id: AssetID,
-        /// The ID of the agent that owns the asset
-        agent_id: AgentID,
     },
     /// The asset has been decommissioned
     Decommissioned {
         /// The ID of the asset
         id: AssetID,
-        /// The ID of the agent that owned the asset
-        agent_id: AgentID,
         /// The year the asset was decommissioned
         decommission_year: u32,
     },
     /// The asset is planned for commissioning in the future
-    Future {
-        /// The ID of the agent that will own the asset
-        agent_id: AgentID,
-    },
+    Future,
     /// The asset has been selected for investment, but not yet confirmed
-    Selected {
-        /// The ID of the agent that would own the asset
-        agent_id: AgentID,
-    },
+    Selected,
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
 }
@@ -84,6 +74,8 @@ pub enum AssetState {
 pub struct Asset {
     /// The status of the asset
     state: AssetState,
+    /// The ID of the agent that owns the asset
+    agent_id: AgentID,
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
     /// Activity limits for this asset
@@ -103,6 +95,7 @@ pub struct Asset {
 impl Asset {
     /// Create a new candidate asset
     pub fn new_candidate(
+        agent_id: AgentID,
         process: Rc<Process>,
         region_id: RegionID,
         capacity: Capacity,
@@ -110,6 +103,7 @@ impl Asset {
     ) -> Result<Self> {
         Self::new_with_state(
             AssetState::Candidate,
+            agent_id,
             process,
             region_id,
             capacity,
@@ -137,7 +131,8 @@ impl Asset {
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
         Self::new_with_state(
-            AssetState::Future { agent_id },
+            AssetState::Future,
+            agent_id,
             process,
             region_id,
             capacity,
@@ -158,7 +153,8 @@ impl Asset {
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
-            AssetState::Selected { agent_id },
+            AssetState::Selected,
+            agent_id,
             process,
             region_id,
             capacity,
@@ -169,6 +165,7 @@ impl Asset {
     /// Private helper to create an asset with the given state
     fn new_with_state(
         state: AssetState,
+        agent_id: AgentID,
         process: Rc<Process>,
         region_id: RegionID,
         capacity: Capacity,
@@ -219,6 +216,7 @@ impl Asset {
 
         Ok(Self {
             state,
+            agent_id,
             process,
             activity_limits,
             flows,
@@ -364,14 +362,8 @@ impl Asset {
     }
 
     /// Get the agent ID for this asset
-    pub fn agent_id(&self) -> Option<&AgentID> {
-        match &self.state {
-            AssetState::Commissioned { agent_id, .. }
-            | AssetState::Decommissioned { agent_id, .. }
-            | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id } => Some(agent_id),
-            AssetState::Candidate => None,
-        }
+    pub fn agent_id(&self) -> &AgentID {
+        &self.agent_id
     }
 
     /// Get the capacity for this asset
@@ -401,21 +393,20 @@ impl Asset {
 
     /// Decommission this asset
     fn decommission(&mut self, decommission_year: u32, reason: &str) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id } => (*id, agent_id.clone()),
+        let id = match &self.state {
+            AssetState::Commissioned { id } => *id,
             _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
         };
         debug!(
             "Decommissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            agent_id,
+            self.agent_id,
             reason
         );
 
         self.state = AssetState::Decommissioned {
             id,
-            agent_id,
             decommission_year,
         };
     }
@@ -430,31 +421,29 @@ impl Asset {
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
     fn commission(&mut self, id: AssetID, reason: &str) {
-        let agent_id = match &self.state {
-            AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
-            state => panic!("Assets with state {state} cannot be commissioned"),
-        };
+        assert!(
+            matches!(self.state, AssetState::Future | AssetState::Selected),
+            "Assets with state {} cannot be commissioned",
+            self.state
+        );
         debug!(
             "Commissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            agent_id,
+            self.agent_id,
             reason
         );
-        self.state = AssetState::Commissioned {
-            id,
-            agent_id: agent_id.clone(),
-        };
+        self.state = AssetState::Commissioned { id };
     }
 
     /// Select a Candidate asset for investment, converting it to a Selected state
-    pub fn select_candidate_for_investment(&mut self, agent_id: AgentID) {
+    pub fn select_candidate_for_investment(&mut self) {
         assert!(
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
         check_capacity_valid_for_asset(self.capacity).unwrap();
-        self.state = AssetState::Selected { agent_id };
+        self.state = AssetState::Selected;
     }
 }
 
@@ -559,8 +548,8 @@ impl Eq for AssetRef {}
 impl Hash for AssetRef {
     /// Hash an asset according to its state:
     /// - Commissioned assets are hashed based on their ID alone
-    /// - Selected assets are hashed based on `process_id`, `region_id`, `commission_year` and `agent_id`
-    /// - Candidate assets are hashed based on `process_id`, `region_id` and `commission_year`
+    /// - Candidate and Selected assets are hashed based on `state`, `process_id`, `region_id`,
+    ///   `commission_year` and `agent_id`
     /// - Future and Decommissioned assets cannot currently be hashed
     fn hash<H: Hasher>(&self, state: &mut H) {
         match &self.0.state {
@@ -569,15 +558,14 @@ impl Hash for AssetRef {
                 // asset
                 id.hash(state);
             }
-            AssetState::Candidate | AssetState::Selected { .. } => {
-                // Hashed based on process_id, region_id, commission_year and (for Selected assets)
-                // agent_id
+            AssetState::Candidate | AssetState::Selected => {
+                self.0.state.hash(state);
                 self.0.process.id.hash(state);
                 self.0.region_id.hash(state);
                 self.0.commission_year.hash(state);
-                self.0.agent_id().hash(state);
+                self.0.agent_id.hash(state);
             }
-            AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
+            AssetState::Future | AssetState::Decommissioned { .. } => {
                 // We shouldn't currently need to hash Future or Decommissioned assets
                 unimplemented!("Cannot hash Future or Decommissioned assets");
             }
@@ -761,7 +749,7 @@ impl AssetPool {
         // then commission them
         let assets = assets.into_iter().map(|mut asset| match &asset.state {
             AssetState::Commissioned { .. } => asset,
-            AssetState::Selected { .. } => {
+            AssetState::Selected => {
                 asset
                     .make_mut()
                     .commission(AssetID(self.next_id), "selected");
@@ -791,7 +779,7 @@ where
 {
     /// Filter assets by the agent that owns them
     fn filter_agent(self, agent_id: &'a AgentID) -> impl Iterator<Item = &'a AssetRef> + 'a {
-        self.filter(move |asset| asset.agent_id() == Some(agent_id))
+        self.filter(move |asset| asset.agent_id() == agent_id)
     }
 
     /// Iterate over assets that have the given commodity as a primary output
@@ -827,7 +815,8 @@ mod tests {
     use super::*;
     use crate::commodity::{Commodity, CommodityID, CommodityType};
     use crate::fixture::{
-        assert_error, asset, commodity_id, process, process_parameter_map, region_id, time_slice,
+        agent_id, assert_error, asset, commodity_id, process, process_parameter_map, region_id,
+        time_slice,
     };
     use crate::process::{
         FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessID,
@@ -849,6 +838,7 @@ mod tests {
 
     #[rstest]
     fn test_get_input_cost_from_prices(
+        agent_id: AgentID,
         region_id: RegionID,
         commodity_id: CommodityID,
         mut process_parameter_map: ProcessParameterMap,
@@ -904,7 +894,8 @@ mod tests {
         });
 
         // Create asset
-        let asset = Asset::new_candidate(process, region_id.clone(), Capacity(1.0), 2020).unwrap();
+        let asset = Asset::new_candidate(agent_id, process, region_id.clone(), Capacity(1.0), 2020)
+            .unwrap();
 
         // Set input prices
         let mut input_prices = HashMap::new();
@@ -1224,11 +1215,11 @@ mod tests {
         assert_eq!(asset_pool.active[original_count + 1].id(), Some(AssetID(3)));
         assert_eq!(
             asset_pool.active[original_count].agent_id(),
-            Some(&"agent2".into())
+            &"agent2".into()
         );
         assert_eq!(
             asset_pool.active[original_count + 1].agent_id(),
-            Some(&"agent3".into())
+            &"agent3".into()
         );
     }
 
@@ -1261,7 +1252,7 @@ mod tests {
             asset_pool
                 .active
                 .iter()
-                .any(|a| a.agent_id() == Some(&"agent_new".into()))
+                .any(|a| a.agent_id() == &"agent_new".into())
         );
     }
 
@@ -1439,13 +1430,13 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_state_transitions(process: Process) {
+    fn test_asset_state_transitions(agent_id: AgentID, process: Process, region_id: RegionID) {
         // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
+        let process = Rc::new(process);
         let mut asset1 = Asset::new_future(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
+            agent_id.clone(),
+            Rc::clone(&process),
+            region_id.clone(),
             Capacity(1.0),
             2020,
         )
@@ -1455,14 +1446,8 @@ mod tests {
         assert_eq!(asset1.id(), Some(AssetID(1)));
 
         // Test successful commissioning of Selected asset
-        let mut asset2 = Asset::new_selected(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-        )
-        .unwrap();
+        let mut asset2 =
+            Asset::new_selected(agent_id, process, region_id, Capacity(1.0), 2020).unwrap();
         asset2.commission(AssetID(2), "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
@@ -1475,17 +1460,17 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Assets with state Candidate cannot be commissioned")]
-    fn test_commission_wrong_states(process: Process) {
+    fn test_commission_wrong_states(agent_id: AgentID, process: Process, region_id: RegionID) {
         let mut asset =
-            Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
+            Asset::new_candidate(agent_id, process.into(), region_id, Capacity(1.0), 2020).unwrap();
         asset.commission(AssetID(1), "");
     }
 
     #[rstest]
     #[should_panic(expected = "Cannot decommission an asset that hasn't been commissioned")]
-    fn test_decommission_wrong_state(process: Process) {
+    fn test_decommission_wrong_state(agent_id: AgentID, process: Process, region_id: RegionID) {
         let mut asset =
-            Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
+            Asset::new_candidate(agent_id, process.into(), region_id, Capacity(1.0), 2020).unwrap();
         asset.decommission(2025, "");
     }
 }

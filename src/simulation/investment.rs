@@ -327,9 +327,14 @@ fn get_candidate_assets<'a>(
     agent
         .iter_possible_producers_of(region_id, &commodity.id, year)
         .map(move |process| {
-            let mut asset =
-                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
-                    .unwrap();
+            let mut asset = Asset::new_candidate(
+                agent.id.clone(),
+                process.clone(),
+                region_id.clone(),
+                Capacity(0.0),
+                year,
+            )
+            .unwrap();
             asset.set_capacity(get_demand_limiting_capacity(
                 time_slice_info,
                 &asset,
@@ -465,12 +470,9 @@ fn select_best_assets(
     }
 
     // Convert Candidate assets to Selected
-    // At this point we also assign the agent ID to the asset
     for asset in &mut best_assets {
-        if let AssetState::Candidate = asset.state() {
-            asset
-                .make_mut()
-                .select_candidate_for_investment(agent.id.clone());
+        if asset.state() == &AssetState::Candidate {
+            asset.make_mut().select_candidate_for_investment();
         }
     }
 
