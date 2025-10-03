@@ -448,7 +448,9 @@ fn reduced_costs_for_existing<'a>(
 mod tests {
     use super::*;
     use crate::commodity::CommodityID;
-    use crate::fixture::{asset, assets, process, time_slice};
+    use crate::fixture::{
+        asset, assets, commodity_id, process, region_id, time_slice, time_slice_info,
+    };
     use crate::process::Process;
     use crate::region::RegionID;
     use crate::time_slice::TimeSliceID;
@@ -496,6 +498,8 @@ mod tests {
         #[case] price2: MoneyPerFlow,
         #[case] tolerance: Dimensionless,
         #[case] expected: bool,
+        time_slice_info: TimeSliceInfo,
+        time_slice: TimeSliceID,
     ) {
         let mut prices1 = CommodityPrices::default();
         let mut prices2 = CommodityPrices::default();
@@ -503,8 +507,6 @@ mod tests {
         // Set up two price sets for a single commodity/region/time slice
         let commodity = CommodityID::new("test_commodity");
         let region = RegionID::new("test_region");
-        let time_slice_info = TimeSliceInfo::default();
-        let time_slice = time_slice_info.time_slices.keys().next().unwrap();
         prices1.insert(&commodity, &region, &time_slice, price1);
         prices2.insert(&commodity, &region, &time_slice, price2);
 
@@ -514,22 +516,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_time_slice_weighted_averages() {
+    #[rstest]
+    fn test_time_slice_weighted_averages(
+        commodity_id: CommodityID,
+        region_id: RegionID,
+        time_slice_info: TimeSliceInfo,
+        time_slice: TimeSliceID,
+    ) {
         let mut prices = CommodityPrices::default();
-        let commodity = CommodityID::new("test_commodity");
-        let region = RegionID::new("test_region");
-
-        // Use the default time slice from TimeSliceInfo::default()
-        let time_slice_info = TimeSliceInfo::default();
-        let time_slice = time_slice_info.time_slices.keys().next().unwrap().clone();
 
         // Insert a price
-        prices.insert(&commodity, &region, &time_slice, MoneyPerFlow(100.0));
+        prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(100.0));
 
         let averages = prices.time_slice_weighted_averages(&time_slice_info);
 
         // With single time slice (duration=1.0), average should equal the price
-        assert_eq!(averages[&(commodity, region)], MoneyPerFlow(100.0));
+        assert_eq!(averages[&(commodity_id, region_id)], MoneyPerFlow(100.0));
     }
 }
