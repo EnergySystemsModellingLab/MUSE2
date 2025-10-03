@@ -159,8 +159,8 @@ pub fn perform_agent_investment(
 /// Flatten the preset commodity demands for a given year into a map of commodity, region and
 /// time slice to demand.
 ///
-/// Since demands for some commodities may be specified at a coarser timeslice level, we need to
-/// distribute these demands over all timeslices. Note: the way that we do this distribution is
+/// Since demands for some commodities may be specified at a coarser time slice level, we need to
+/// distribute these demands over all time slices. Note: the way that we do this distribution is
 /// irrelevant, as demands will only be balanced to the appropriate level, but we still need to do
 /// this for the solver to work.
 ///
@@ -177,12 +177,12 @@ fn flatten_preset_demands_for_year(
                 continue;
             }
 
-            // We split the demand equally over all timeslices in the selection
-            // NOTE: since demands will only be balanced to the timeslice level of the commodity
+            // We split the demand equally over all time slices in the selection
+            // NOTE: since demands will only be balanced to the time slice level of the commodity
             // it doesn't matter how we do this distribution, only the total matters.
             #[allow(clippy::cast_precision_loss)]
-            let n_timeslices = time_slice_selection.iter(time_slice_info).count() as f64;
-            let demand_per_slice = *demand / Dimensionless(n_timeslices);
+            let n_time_slices = time_slice_selection.iter(time_slice_info).count() as f64;
+            let demand_per_slice = *demand / Dimensionless(n_time_slices);
             for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
                 demand_map.insert(
                     (commodity_id.clone(), region_id.clone(), time_slice.clone()),
@@ -276,8 +276,8 @@ fn get_demand_limiting_capacity(
             .sum();
 
         // Calculate max capacity required for this time slice selection
-        // For commodities with a coarse timeslice level, we have to allow the possibility that all
-        // of the demand gets served by production in a single timeslice
+        // For commodities with a coarse time slice level, we have to allow the possibility that all
+        // of the demand gets served by production in a single time slice
         for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
             let max_flow_per_cap =
                 *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;

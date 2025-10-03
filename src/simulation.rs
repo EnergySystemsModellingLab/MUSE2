@@ -116,9 +116,12 @@ pub fn run(
             let (_flow_map, new_prices, new_reduced_costs) =
                 run_dispatch_for_year(model, &selected_assets, &all_candidates, year, &mut writer)?;
 
-            // Check if prices have converged
-            let prices_stable =
-                prices.within_tolerance(&new_prices, model.parameters.price_tolerance);
+            // Check if prices have converged using time slice-weighted averages
+            let prices_stable = prices.within_tolerance_weighted(
+                &new_prices,
+                model.parameters.price_tolerance,
+                &model.time_slice_info,
+            );
 
             // Update prices and reduced costs for the next iteration
             prices = new_prices;

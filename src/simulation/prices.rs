@@ -6,7 +6,7 @@ use crate::process::ProcessFlow;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow};
+use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use indexmap::IndexMap;
 use itertools::iproduct;
 use std::collections::{BTreeMap, HashMap};
@@ -199,7 +199,7 @@ impl CommodityPrices {
     {
         let highest_duals = get_highest_activity_duals(activity_duals);
 
-        // Add the highest activity dual for each commodity/region/timeslice to each commodity
+        // Add the highest activity dual for each commodity/region/time slice to each commodity
         // balance dual
         for (key, highest) in &highest_duals {
             if let Some(price) = self.0.get_mut(key) {
@@ -256,12 +256,49 @@ impl CommodityPrices {
             .copied()
     }
 
-    /// Check if prices are within relative tolerance of another price set
+    /// Calculate time slice-weighted average prices for each commodity-region pair
     ///
-    /// Both objects must have exactly the same set of keys, otherwise it will panic.
-    pub fn within_tolerance(&self, other: &Self, tolerance: Dimensionless) -> bool {
-        for (key, &price) in &self.0 {
-            let other_price = other.0[key];
+    /// This method aggregates prices across time slices by weighting each price
+    /// by the duration of its time slice, providing a more representative annual average.
+    ///
+    /// Note: this assumes that all time slices are present for each commodity-region pair, and
+    /// that all time slice lengths sum to 1. This is not checked by this method.
+    fn time_slice_weighted_averages(
+        &self,
+        time_slice_info: &TimeSliceInfo,
+    ) -> HashMap<(CommodityID, RegionID), MoneyPerFlow> {
+        let mut weighted_prices = HashMap::new();
+
+        for ((commodity_id, region_id, time_slice_id), price) in &self.0 {
+            // NB: Time slice fractions will sum to one
+            let weight = time_slice_info.time_slices[time_slice_id] / Year(1.0);
+            let key = (commodity_id.clone(), region_id.clone());
+            *weighted_prices.entry(key).or_default() += *price * weight;
+        }
+
+        weighted_prices
+    }
+
+    /// Check if time slice-weighted average prices are within relative tolerance of another price
+    /// set.
+    ///
+    /// This method calculates time slice-weighted average prices for each commodity-region pair
+    /// and compares them. Both objects must have exactly the same set of commodity-region pairs,
+    /// otherwise it will panic.
+    ///
+    /// Additionally, this method assumes that all time slices are present for each commodity-region
+    /// pair, and that all time slice lengths sum to 1. This is not checked by this method.
+    pub fn within_tolerance_weighted(
+        &self,
+        other: &Self,
+        tolerance: Dimensionless,
+        time_slice_info: &TimeSliceInfo,
+    ) -> bool {
+        let self_averages = self.time_slice_weighted_averages(time_slice_info);
+        let other_averages = other.time_slice_weighted_averages(time_slice_info);
+
+        for (key, &price) in &self_averages {
+            let other_price = other_averages[key];
             let abs_diff = (price - other_price).abs();
 
             // Special case: last price was zero
@@ -315,12 +352,12 @@ fn get_highest_activity_duals<'a, I>(
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
 {
-    // Calculate highest activity dual for each commodity/region/timeslice
+    // Calculate highest activity dual for each commodity/region/time slice
     let mut highest_duals = HashMap::new();
     for (asset, time_slice, dual) in activity_duals {
         // Iterate over all output flows
         for flow in asset.iter_flows().filter(|flow| flow.is_output()) {
-            // Update the highest dual for this commodity/timeslice
+            // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
                     flow.commodity.id.clone(),
@@ -408,7 +445,9 @@ fn reduced_costs_for_existing<'a>(
 mod tests {
     use super::*;
     use crate::commodity::CommodityID;
-    use crate::fixture::{asset, assets, process, time_slice};
+    use crate::fixture::{
+        asset, assets, commodity_id, process, region_id, time_slice, time_slice_info,
+    };
     use crate::process::Process;
     use crate::region::RegionID;
     use crate::time_slice::TimeSliceID;
@@ -456,17 +495,39 @@ mod tests {
         #[case] price2: MoneyPerFlow,
         #[case] tolerance: Dimensionless,
         #[case] expected: bool,
+        time_slice_info: TimeSliceInfo,
+        time_slice: TimeSliceID,
     ) {
         let mut prices1 = CommodityPrices::default();
         let mut prices2 = CommodityPrices::default();
 
+        // Set up two price sets for a single commodity/region/time slice
         let commodity = CommodityID::new("test_commodity");
         let region = RegionID::new("test_region");
-        let time_slice: TimeSliceID = "summer.day".into();
-
         prices1.insert(&commodity, &region, &time_slice, price1);
         prices2.insert(&commodity, &region, &time_slice, price2);
 
-        assert_eq!(prices1.within_tolerance(&prices2, tolerance), expected);
+        assert_eq!(
+            prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info),
+            expected
+        );
+    }
+
+    #[rstest]
+    fn test_time_slice_weighted_averages(
+        commodity_id: CommodityID,
+        region_id: RegionID,
+        time_slice_info: TimeSliceInfo,
+        time_slice: TimeSliceID,
+    ) {
+        let mut prices = CommodityPrices::default();
+
+        // Insert a price
+        prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(100.0));
+
+        let averages = prices.time_slice_weighted_averages(&time_slice_info);
+
+        // With single time slice (duration=1.0), average should equal the price
+        assert_eq!(averages[&(commodity_id, region_id)], MoneyPerFlow(100.0));
     }
 }
