@@ -2,9 +2,7 @@
 use super::{input_err_msg, read_csv};
 use crate::commodity::CommodityMap;
 use crate::id::IDCollection;
-use crate::process::{
-    Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessMap, ProcessParameterMap,
-};
+use crate::process::{Process, ProcessID, ProcessMap};
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
 use crate::units::ActivityPerCapacity;
@@ -148,17 +146,14 @@ where
             process_raw.id
         );
 
-        let process = Process {
-            id: process_raw.id.clone(),
-            description: process_raw.description,
+        let process = Process::new(
+            process_raw.id.clone(),
+            process_raw.description,
             years,
-            activity_limits: ProcessActivityLimitsMap::new(),
-            flows: ProcessFlowsMap::new(),
-            parameters: ProcessParameterMap::new(),
             regions,
             primary_output,
             capacity_to_activity,
-        };
+        );
 
         ensure!(
             processes.insert(process_raw.id, process.into()).is_none(),
