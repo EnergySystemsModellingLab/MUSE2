@@ -17,9 +17,8 @@ use log::debug;
 use std::collections::HashMap;
 
 pub mod appraisal;
-pub mod coefficients;
 use appraisal::appraise_investment;
-use coefficients::calculate_coefficients_for_assets;
+use appraisal::coefficients::calculate_coefficients_for_assets;
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;

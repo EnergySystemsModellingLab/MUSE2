@@ -1,6 +1,6 @@
 //! Optimisation problem for investment tools.
-use super::super::coefficients::ObjectiveCoefficients;
 use super::DemandMap;
+use super::coefficients::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_capacity_constraint, add_demand_constraints,
 };
