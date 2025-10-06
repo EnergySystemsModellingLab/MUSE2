@@ -367,7 +367,7 @@ fn select_best_assets(
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
 
-    // Pre-compute coefficients for all asset options according to the agent's objective
+    // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
         calculate_coefficients_for_assets(model, objective_type, &opt_assets, reduced_costs);
 

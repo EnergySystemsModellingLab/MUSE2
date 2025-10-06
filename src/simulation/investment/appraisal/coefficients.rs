@@ -23,7 +23,7 @@ pub struct ObjectiveCoefficients {
     pub unmet_demand_coefficient: MoneyPerFlow,
 }
 
-/// Calculates cost coefficients for all assets for a given objective type.
+/// Calculates cost coefficients for a set of assets for a given objective type.
 pub fn calculate_coefficients_for_assets(
     model: &Model,
     objective_type: &ObjectiveType,
