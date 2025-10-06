@@ -64,6 +64,29 @@ pub struct Process {
 }
 
 impl Process {
+    /// Create a new `Process`.
+    ///
+    /// Some parameters are set to empty collections to be populated later.
+    pub fn new(
+        id: ProcessID,
+        description: String,
+        years: Vec<u32>,
+        regions: IndexSet<RegionID>,
+        primary_output: Option<CommodityID>,
+        capacity_to_activity: ActivityPerCapacity,
+    ) -> Self {
+        Self {
+            id,
+            description,
+            years,
+            activity_limits: ProcessActivityLimitsMap::new(),
+            flows: ProcessFlowsMap::new(),
+            parameters: ProcessParameterMap::new(),
+            regions,
+            primary_output,
+            capacity_to_activity,
+        }
+    }
     /// Whether the process can be commissioned in a given year
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.binary_search(&year).is_ok()

@@ -202,9 +202,7 @@ fn get_all_producers<'a>(
 mod tests {
     use super::*;
     use crate::fixture::{agents, assert_error, region_ids};
-    use crate::process::{
-        ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessParameterMap,
-    };
+    use crate::process::ProcessID;
     use crate::region::RegionID;
     use crate::units::ActivityPerCapacity;
     use indexmap::IndexSet;
@@ -216,17 +214,14 @@ mod tests {
         ["A", "B", "C"]
             .map(|id| {
                 let id: ProcessID = id.into();
-                let process = Process {
-                    id: id.clone(),
-                    description: "Description".into(),
-                    years: vec![2010, 2020],
-                    activity_limits: ProcessActivityLimitsMap::new(),
-                    flows: ProcessFlowsMap::new(),
-                    parameters: ProcessParameterMap::new(),
-                    regions: region_ids.clone(),
-                    primary_output: None,
-                    capacity_to_activity: ActivityPerCapacity(1.0),
-                };
+                let process = Process::new(
+                    id.clone(),
+                    "Description".into(),
+                    vec![2010, 2020],
+                    region_ids.clone(),
+                    None,
+                    ActivityPerCapacity(1.0),
+                );
                 (id, process.into())
             })
             .into_iter()
