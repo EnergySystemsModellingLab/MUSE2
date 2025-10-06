@@ -124,7 +124,7 @@ impl AssetRow {
             asset_id: asset.id().unwrap(),
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
-            agent_id: asset.agent_id().clone(),
+            agent_id: asset.agent_id().unwrap().clone(),
             commission_year: asset.commission_year(),
             decommission_year: asset.decommission_year(),
             capacity: asset.capacity(),
