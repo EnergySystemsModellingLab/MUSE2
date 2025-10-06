@@ -13,7 +13,6 @@ use std::collections::HashMap;
 ///
 /// These are calculated according to the objective type of the agent owning the asset.
 /// Map storing coefficients for each variable
-#[derive(Clone)]
 pub struct ObjectiveCoefficients {
     /// Cost per unit of capacity
     pub capacity_coefficient: MoneyPerCapacity,
