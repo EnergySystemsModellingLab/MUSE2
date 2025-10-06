@@ -113,7 +113,7 @@ pub fn run(
                 run_dispatch_for_year(model, &selected_assets, &all_candidates, year, &mut writer)?;
 
             // Check if prices have converged using time slice-weighted averages
-            let prices_stable = prices.within_tolerance_weighted(
+            let unstable_pairs = prices.within_tolerance_weighted(
                 &new_prices,
                 model.parameters.price_tolerance,
                 &model.time_slice_info,
@@ -127,7 +127,7 @@ pub fn run(
             writer.clear_debug_context();
 
             // Break early if prices have converged
-            if prices_stable {
+            if unstable_pairs.is_empty() {
                 info!("Prices converged after {} iterations", ironing_out_iter + 1);
                 break selected_assets;
             }

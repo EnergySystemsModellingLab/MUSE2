@@ -288,14 +288,18 @@ impl CommodityPrices {
     ///
     /// Additionally, this method assumes that all time slices are present for each commodity-region
     /// pair, and that all time slice lengths sum to 1. This is not checked by this method.
+    ///
+    /// Returns a vector of commodity-region pairs that are unstable (outside tolerance).
     pub fn within_tolerance_weighted(
         &self,
         other: &Self,
         tolerance: Dimensionless,
         time_slice_info: &TimeSliceInfo,
-    ) -> bool {
+    ) -> Vec<(CommodityID, RegionID)> {
         let self_averages = self.time_slice_weighted_averages(time_slice_info);
         let other_averages = other.time_slice_weighted_averages(time_slice_info);
+
+        let mut unstable_pairs = Vec::new();
 
         for (key, &price) in &self_averages {
             let other_price = other_averages[key];
@@ -305,14 +309,14 @@ impl CommodityPrices {
             if price == MoneyPerFlow(0.0) {
                 // Current price is zero but other price is nonzero
                 if other_price != MoneyPerFlow(0.0) {
-                    return false;
+                    unstable_pairs.push(key.clone());
                 }
             // Check if price is within tolerance
             } else if abs_diff / price.abs() > tolerance {
-                return false;
+                unstable_pairs.push(key.clone());
             }
         }
-        true
+        unstable_pairs
     }
 }
 
@@ -494,7 +498,7 @@ mod tests {
         #[case] price1: MoneyPerFlow,
         #[case] price2: MoneyPerFlow,
         #[case] tolerance: Dimensionless,
-        #[case] expected: bool,
+        #[case] expected_stable: bool,
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
@@ -507,10 +511,31 @@ mod tests {
         prices1.insert(&commodity, &region, &time_slice, price1);
         prices2.insert(&commodity, &region, &time_slice, price2);
 
-        assert_eq!(
-            prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info),
-            expected
-        );
+        let unstable_pairs =
+            prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info);
+
+        if expected_stable {
+            assert!(
+                unstable_pairs.is_empty(),
+                "Expected stable prices but got unstable pairs: {:?}",
+                unstable_pairs
+            );
+        } else {
+            assert!(
+                !unstable_pairs.is_empty(),
+                "Expected unstable prices but got empty list"
+            );
+            assert_eq!(
+                unstable_pairs.len(),
+                1,
+                "Expected exactly one unstable pair"
+            );
+            assert_eq!(
+                unstable_pairs[0],
+                (commodity.clone(), region.clone()),
+                "Expected unstable pair to be the test commodity/region"
+            );
+        }
     }
 
     #[rstest]
