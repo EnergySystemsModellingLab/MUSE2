@@ -9,7 +9,7 @@ use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity, MoneyPerFlow};
+use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use indexmap::IndexMap;
 use itertools::{chain, iproduct};
@@ -68,11 +68,7 @@ pub fn perform_agent_investment(
             // performed will, by definition, not have any producers. For these, we provide prices
             // from the previous dispatch run otherwise they will appear to be free to the model.
             for time_slice in model.time_slice_info.iter_ids() {
-                external_prices.remove(&(
-                    commodity_id.clone(),
-                    region_id.clone(),
-                    time_slice.clone(),
-                ));
+                external_prices.remove(commodity_id, region_id, time_slice);
             }
 
             // List of assets selected/retained for this region/commodity
@@ -347,14 +343,11 @@ fn get_prices_for_commodities(
     time_slice_info: &TimeSliceInfo,
     region_id: &RegionID,
     commodities: &[CommodityID],
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+) -> CommodityPrices {
     iproduct!(commodities.iter(), time_slice_info.iter_ids())
         .map(|(commodity_id, time_slice)| {
             let price = prices.get(commodity_id, region_id, time_slice).unwrap();
-            (
-                (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-                price,
-            )
+            (commodity_id, region_id, time_slice, price)
         })
         .collect()
 }

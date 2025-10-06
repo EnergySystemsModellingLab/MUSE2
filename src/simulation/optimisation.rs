@@ -6,6 +6,7 @@ use crate::commodity::CommodityID;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
+use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
 use anyhow::{Result, anyhow, ensure};
@@ -13,7 +14,7 @@ use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 use itertools::{chain, iproduct};
 use log::debug;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Range;
 
 mod constraints;
@@ -180,10 +181,7 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel> {
 ///
 /// Input prices should only be provided for commodities for which there will be no commodity
 /// balance constraint.
-fn check_input_prices(
-    input_prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
-    commodities: &[CommodityID],
-) {
+fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID]) {
     let commodities_set: HashSet<_> = commodities.iter().collect();
     let has_prices_for_commodity_subset = input_prices
         .keys()
@@ -204,7 +202,7 @@ pub struct DispatchRun<'model, 'run> {
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
     commodities: &'run [CommodityID],
-    input_prices: Option<&'run HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>>,
+    input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
 
@@ -240,10 +238,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Explicitly provide prices for certain input commodities
-    pub fn with_input_prices(
-        self,
-        input_prices: &'run HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
-    ) -> Self {
+    pub fn with_input_prices(self, input_prices: &'run CommodityPrices) -> Self {
         Self {
             input_prices: Some(input_prices),
             ..self
@@ -346,7 +341,7 @@ fn add_variables(
     problem: &mut Problem,
     variables: &mut VariableMap,
     time_slice_info: &TimeSliceInfo,
-    input_prices: Option<&HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>>,
+    input_prices: Option<&CommodityPrices>,
     assets: &[AssetRef],
     year: u32,
 ) -> Range<usize> {
@@ -384,7 +379,7 @@ fn calculate_cost_coefficient(
     asset: &Asset,
     year: u32,
     time_slice: &TimeSliceID,
-    input_prices: Option<&HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>>,
+    input_prices: Option<&CommodityPrices>,
 ) -> MoneyPerActivity {
     let opex = asset.get_operating_cost(year, time_slice);
     let input_cost = input_prices

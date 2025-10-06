@@ -328,12 +328,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "current_dir"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eef2919c1b81568a02425279ba21d61a450e76848eb1b50dff756b739529b70a"
-
-[[package]]
 name = "deranged"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -949,7 +943,6 @@ dependencies = [
  "clap",
  "clap-markdown",
  "csv",
- "current_dir",
  "derive_more",
  "dirs",
  "documented",

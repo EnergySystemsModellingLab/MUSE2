@@ -9,7 +9,7 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use indexmap::IndexMap;
 use itertools::iproduct;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, btree_map};
 
 /// A map of reduced costs for different assets in different time slices
 ///
@@ -146,7 +146,7 @@ pub fn calculate_prices_and_reduced_costs(
     // Add new reduced costs, using old values if not provided
     reduced_costs.extend(reduced_costs_for_candidates);
     reduced_costs.extend(reduced_costs_for_existing(
-        &model.time_slice_info,
+        model,
         existing_assets,
         &prices,
         year,
@@ -254,6 +254,22 @@ impl CommodityPrices {
         self.0
             .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
             .copied()
+    }
+
+    /// Iterate over the price map's keys
+    pub fn keys(&self) -> btree_map::Keys<'_, (CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+        self.0.keys()
+    }
+
+    /// Remove the specified entry from the map
+    pub fn remove(
+        &mut self,
+        commodity_id: &CommodityID,
+        region_id: &RegionID,
+        time_slice: &TimeSliceID,
+    ) -> Option<MoneyPerFlow> {
+        self.0
+            .remove(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
     }
 
     /// Calculate time slice-weighted average prices for each commodity-region pair
@@ -419,22 +435,15 @@ fn get_scarcity_adjustment(
 
 /// Calculate reduced costs for existing assets
 fn reduced_costs_for_existing<'a>(
-    time_slice_info: &'a TimeSliceInfo,
+    model: &'a Model,
     assets: &'a [AssetRef],
     prices: &'a CommodityPrices,
     year: u32,
 ) -> impl Iterator<Item = ((AssetRef, TimeSliceID), MoneyPerActivity)> + 'a {
-    iproduct!(assets, time_slice_info.iter_ids()).map(move |(asset, time_slice)| {
+    iproduct!(assets, model.time_slice_info.iter_ids()).map(move |(asset, time_slice)| {
         let operating_cost = asset.get_operating_cost(year, time_slice);
-        let revenue_from_flows = asset
-            .iter_flows()
-            .map(|flow| {
-                flow.coeff
-                    * prices
-                        .get(&flow.commodity.id, asset.region_id(), time_slice)
-                        .unwrap()
-            })
-            .sum();
+        let revenue_from_flows =
+            asset.get_revenue_from_flows_for_objective(&model.agents, prices, year, time_slice);
         let reduced_cost = operating_cost - revenue_from_flows;
 
         ((asset.clone(), time_slice.clone()), reduced_cost)
