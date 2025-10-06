@@ -6,7 +6,7 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
-use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
+use crate::process::{Process, ProcessID, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
@@ -118,6 +118,82 @@ pub fn assets(asset: Asset) -> AssetPool {
     let mut assets = AssetPool::new(iter::once(asset).collect());
     assets.update_for_year(year);
     assets
+}
+
+/// Builder for creating Process instances with custom parameters
+pub struct ProcessBuilder {
+    region_ids: IndexSet<RegionID>,
+    lifetime: u32,
+    capital_cost: MoneyPerCapacity,
+    fixed_operating_cost: MoneyPerCapacityPerYear,
+    variable_operating_cost: MoneyPerActivity,
+    discount_rate: Dimensionless,
+    process_id: ProcessID,
+    description: String,
+    years: Vec<u32>,
+    capacity_to_activity: ActivityPerCapacity,
+}
+
+impl ProcessBuilder {
+    /// Create a new ProcessBuilder with default values
+    pub fn new(region_ids: IndexSet<RegionID>) -> Self {
+        Self {
+            region_ids,
+            lifetime: 1,
+            capital_cost: MoneyPerCapacity(0.0),
+            fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
+            variable_operating_cost: MoneyPerActivity(0.0),
+            discount_rate: Dimensionless(1.0),
+            process_id: "process1".into(),
+            description: "Description".into(),
+            years: vec![2010, 2015, 2020],
+            capacity_to_activity: ActivityPerCapacity(1.0),
+        }
+    }
+
+    /// Set the lifetime for the process
+    pub fn with_lifetime(mut self, lifetime: u32) -> Self {
+        self.lifetime = lifetime;
+        self
+    }
+
+    /// Build the Process
+    pub fn build(self) -> Process {
+        let parameter = Rc::new(ProcessParameter {
+            capital_cost: self.capital_cost,
+            fixed_operating_cost: self.fixed_operating_cost,
+            variable_operating_cost: self.variable_operating_cost,
+            lifetime: self.lifetime,
+            discount_rate: self.discount_rate,
+        });
+
+        let process_parameter_map: ProcessParameterMap = self
+            .region_ids
+            .iter()
+            .cartesian_product(self.years.iter())
+            .map(|(region_id, year)| ((region_id.clone(), *year), parameter.clone()))
+            .collect();
+
+        let activity_limits = iproduct!(self.region_ids.iter(), self.years.iter())
+            .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(HashMap::new())))
+            .collect();
+
+        let flows = iproduct!(self.region_ids.iter(), self.years.iter())
+            .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
+            .collect();
+
+        Process {
+            id: self.process_id,
+            description: self.description,
+            years: self.years,
+            activity_limits,
+            flows,
+            parameters: process_parameter_map,
+            regions: self.region_ids,
+            primary_output: None,
+            capacity_to_activity: self.capacity_to_activity,
+        }
+    }
 }
 
 #[fixture]

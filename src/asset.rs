@@ -416,7 +416,7 @@ impl Asset {
         self.state = AssetState::Decommissioned {
             id,
             agent_id,
-            decommission_year,
+            decommission_year: decommission_year.min(self.max_decommission_year()),
         };
     }
 
@@ -827,7 +827,8 @@ mod tests {
     use super::*;
     use crate::commodity::{Commodity, CommodityID, CommodityType};
     use crate::fixture::{
-        assert_error, asset, commodity_id, process, process_parameter_map, region_id, time_slice,
+        ProcessBuilder, assert_error, asset, commodity_id, process, process_parameter_map,
+        region_id, time_slice,
     };
     use crate::process::{
         FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessID,
@@ -1439,7 +1440,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_state_transitions(process: Process) {
+    fn test_asset_commission(process: Process) {
         // Test successful commissioning of Future asset
         let process_rc = Rc::new(process);
         let mut asset1 = Asset::new_future(
@@ -1466,11 +1467,40 @@ mod tests {
         asset2.commission(AssetID(2), "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
+    }
 
-        // Test successful decommissioning
-        asset1.decommission(2025, "");
-        assert!(!asset1.is_commissioned());
-        assert_eq!(asset1.decommission_year(), Some(2025));
+    #[rstest]
+    fn test_asset_decommission() {
+        fn test_with(
+            commission_year: u32,
+            process_lifetime: u32,
+            decommission_year: u32,
+            expected_decommission_year: u32,
+        ) {
+            let region_ids: IndexSet<RegionID> = ["GBR".into()].into_iter().collect();
+            let process1 = Rc::new(
+                ProcessBuilder::new(region_ids)
+                    .with_lifetime(process_lifetime)
+                    .build(),
+            );
+            let mut asset1 = Asset::new_future(
+                "agent1".into(),
+                process1,
+                "GBR".into(),
+                Capacity(1.0),
+                commission_year,
+            )
+            .unwrap();
+
+            asset1.commission(AssetID(1), "");
+            asset1.decommission(decommission_year, "");
+
+            assert!(!asset1.is_commissioned());
+            assert_eq!(asset1.decommission_year(), Some(expected_decommission_year));
+        }
+
+        test_with(2020, 4, 2025, 2024);
+        test_with(2020, 10, 2025, 2025);
     }
 
     #[rstest]
