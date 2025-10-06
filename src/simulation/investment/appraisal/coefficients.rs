@@ -1,13 +1,17 @@
 //! Calculation of cost coefficients for investment tools.
 use super::costs::{activity_cost, activity_surplus, annual_fixed_cost};
+use crate::agent::ObjectiveType;
 use crate::asset::AssetRef;
+use crate::model::Model;
 use crate::simulation::prices::ReducedCosts;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow};
 use indexmap::IndexMap;
+use std::collections::HashMap;
 
 /// Map storing coefficients for each variable
-pub struct CoefficientsMap {
+#[derive(Clone)]
+pub struct ObjectiveCoefficients {
     /// Cost per unit of capacity
     pub capacity_coefficient: MoneyPerCapacity,
     /// Cost per unit of activity in each time slice
@@ -16,13 +20,38 @@ pub struct CoefficientsMap {
     pub unmet_demand_coefficient: MoneyPerFlow,
 }
 
+pub fn calculate_coefficients_for_assets(
+    model: &Model,
+    objective_type: &ObjectiveType,
+    assets: &[AssetRef],
+    reduced_costs: &ReducedCosts,
+) -> HashMap<AssetRef, ObjectiveCoefficients> {
+    assets
+        .iter()
+        .map(|asset| {
+            let coefficient = match objective_type {
+                ObjectiveType::LevelisedCostOfX => calculate_coefficients_for_lcox(
+                    asset,
+                    &model.time_slice_info,
+                    reduced_costs,
+                    model.parameters.value_of_lost_load,
+                ),
+                ObjectiveType::NetPresentValue => {
+                    calculate_coefficients_for_npv(asset, &model.time_slice_info, reduced_costs)
+                }
+            };
+            (asset.clone(), coefficient)
+        })
+        .collect()
+}
+
 /// Calculates the cost coefficients for LCOX.
 pub fn calculate_coefficients_for_lcox(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
     reduced_costs: &ReducedCosts,
     value_of_lost_load: MoneyPerFlow,
-) -> CoefficientsMap {
+) -> ObjectiveCoefficients {
     // Capacity coefficient
     let capacity_coefficient = annual_fixed_cost(asset);
 
@@ -36,7 +65,7 @@ pub fn calculate_coefficients_for_lcox(
     // Unmet demand coefficient
     let unmet_demand_coefficient = value_of_lost_load;
 
-    CoefficientsMap {
+    ObjectiveCoefficients {
         capacity_coefficient,
         activity_coefficients,
         unmet_demand_coefficient,
@@ -48,7 +77,7 @@ pub fn calculate_coefficients_for_npv(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
     reduced_costs: &ReducedCosts,
-) -> CoefficientsMap {
+) -> ObjectiveCoefficients {
     // Capacity coefficient
     let capacity_coefficient = -annual_fixed_cost(asset);
 
@@ -62,7 +91,7 @@ pub fn calculate_coefficients_for_npv(
     // Unmet demand coefficient (we don't apply a cost to unmet demand, so we set this to zero)
     let unmet_demand_coefficient = MoneyPerFlow(0.0);
 
-    CoefficientsMap {
+    ObjectiveCoefficients {
         capacity_coefficient,
         activity_coefficients,
         unmet_demand_coefficient,
