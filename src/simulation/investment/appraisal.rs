@@ -1,5 +1,6 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
+use super::coefficients::ObjectiveCoefficients;
 use crate::agent::ObjectiveType;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
@@ -8,11 +9,8 @@ use crate::model::Model;
 use crate::units::Capacity;
 use anyhow::Result;
 
-pub mod coefficients;
 mod constraints;
-mod costs;
 mod optimisation;
-use coefficients::ObjectiveCoefficients;
 use optimisation::perform_optimisation;
 
 /// The output of investment appraisal required to compare potential investment decisions

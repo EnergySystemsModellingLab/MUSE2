@@ -1,5 +1,4 @@
 //! Calculation of cost coefficients for investment tools.
-use super::costs::{activity_cost, activity_surplus, annual_fixed_cost};
 use crate::agent::ObjectiveType;
 use crate::asset::AssetRef;
 use crate::model::Model;
@@ -8,6 +7,9 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow};
 use indexmap::IndexMap;
 use std::collections::HashMap;
+
+mod costs;
+use costs::{activity_cost, activity_surplus, annual_fixed_cost};
 
 /// Map storing coefficients for each variable
 #[derive(Clone)]
@@ -46,7 +48,7 @@ pub fn calculate_coefficients_for_assets(
 }
 
 /// Calculates the cost coefficients for LCOX.
-pub fn calculate_coefficients_for_lcox(
+fn calculate_coefficients_for_lcox(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
     reduced_costs: &ReducedCosts,
@@ -73,7 +75,7 @@ pub fn calculate_coefficients_for_lcox(
 }
 
 /// Calculates the cost coefficients for NPV.
-pub fn calculate_coefficients_for_npv(
+fn calculate_coefficients_for_npv(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
     reduced_costs: &ReducedCosts,
