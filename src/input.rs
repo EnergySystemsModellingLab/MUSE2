@@ -217,7 +217,6 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         &processes,
         &commodities,
         &region_ids,
-        years,
         &time_slice_info,
     )?;
 

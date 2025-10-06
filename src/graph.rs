@@ -1,6 +1,6 @@
 //! Module for creating and analysing commodity graphs
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
-use crate::process::{ProcessID, ProcessMap};
+use crate::process::{Process, ProcessID, ProcessMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
@@ -12,6 +12,7 @@ use petgraph::algo::toposort;
 use petgraph::graph::Graph;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::rc::Rc;
 use strum::IntoEnumIterator;
 
 /// A graph of commodity flows for a given region and year
@@ -323,7 +324,6 @@ fn topo_sort_commodities(
 /// * `processes` - All processes in the model with their flows and activity limits
 /// * `commodities` - All commodities with their types and demand specifications
 /// * `region_ids` - Collection of regions to model
-/// * `years` - Years to analyse
 /// * `time_slice_info` - Time slice configuration (seasons, day/night periods)
 ///
 /// # Returns
@@ -341,9 +341,10 @@ pub fn build_and_validate_commodity_graphs_for_model(
     processes: &ProcessMap,
     commodities: &CommodityMap,
     region_ids: &IndexSet<RegionID>,
-    years: &[u32],
     time_slice_info: &TimeSliceInfo,
 ) -> Result<HashMap<(RegionID, u32), Vec<CommodityID>>> {
+    let years = get_years_for_all_processes(processes.values());
+
     // Build base commodity graphs for each region and year
     // These do not take into account demand and process availability
     let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
@@ -390,6 +391,22 @@ pub fn build_and_validate_commodity_graphs_for_model(
 
     // If all the validation passes, return the commodity ordering
     Ok(commodity_order)
+}
+
+/// Get the years in which any process operates, with the result deduplicated and sorted.
+///
+/// Note that this may include years before the time horizon.
+fn get_years_for_all_processes<'a, I>(processes: I) -> Vec<u32>
+where
+    I: Iterator<Item = &'a Rc<Process>>,
+{
+    let mut years = processes
+        .flat_map(|process| &process.years)
+        .copied()
+        .unique()
+        .collect_vec();
+    years.sort_unstable();
+    years
 }
 
 #[cfg(test)]
