@@ -42,7 +42,7 @@ fn calculate_lcox(
         asset,
         max_capacity,
         commodity,
-        &coefficients,
+        coefficients,
         demand,
         &model.time_slice_info,
         highs::Sense::Minimise,
@@ -55,7 +55,7 @@ fn calculate_lcox(
         results.capacity,
         annual_fixed_cost,
         &results.activity,
-        &activity_costs,
+        activity_costs,
     );
 
     // Return appraisal output
@@ -81,7 +81,7 @@ fn calculate_npv(
         asset,
         max_capacity,
         commodity,
-        &coefficients,
+        coefficients,
         demand,
         &model.time_slice_info,
         highs::Sense::Maximise,
@@ -94,7 +94,7 @@ fn calculate_npv(
         results.capacity,
         annual_fixed_cost,
         &results.activity,
-        &activity_surpluses,
+        activity_surpluses,
     );
 
     // Return appraisal output

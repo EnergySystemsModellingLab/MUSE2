@@ -11,17 +11,20 @@ use std::collections::HashMap;
 mod costs;
 use costs::{activity_cost, activity_surplus, annual_fixed_cost};
 
-/// Map storing coefficients for each variable
+/// Map storing cost coefficients for an asset.
+///
+/// These are calculated according to the objective type of the agent owning the asset.
 #[derive(Clone)]
 pub struct ObjectiveCoefficients {
     /// Cost per unit of capacity
     pub capacity_coefficient: MoneyPerCapacity,
     /// Cost per unit of activity in each time slice
     pub activity_coefficients: IndexMap<TimeSliceID, MoneyPerActivity>,
-    // Unmet demand coefficient
+    /// Unmet demand coefficient
     pub unmet_demand_coefficient: MoneyPerFlow,
 }
 
+/// Calculates cost coefficients for all assets for a given objective type.
 pub fn calculate_coefficients_for_assets(
     model: &Model,
     objective_type: &ObjectiveType,
