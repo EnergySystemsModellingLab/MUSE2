@@ -121,8 +121,8 @@ impl Solution<'_> {
         &self,
     ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, MoneyPerFlow)> {
         // Each commodity balance constraint applies to a particular time slice
-        // selection (depending on time slice level). Where this covers multiple timeslices,
-        // we return the same dual for each individual timeslice.
+        // selection (depending on time slice level). Where this covers multiple time slices,
+        // we return the same dual for each individual time slice.
         self.constraint_keys
             .commodity_balance_keys
             .zip_duals(self.solution.dual_rows())

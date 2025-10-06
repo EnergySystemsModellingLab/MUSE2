@@ -44,9 +44,7 @@ pub struct AssetID(u32);
 /// `commission_future` or `commission_candidate` respectively.
 ///
 /// `Commissioned` assets can be decommissioned by calling `decommission`.
-#[derive(
-    Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize, strum::Display,
-)]
+#[derive(Clone, Debug, PartialEq, strum::Display)]
 pub enum AssetState {
     /// The asset has been commissioned
     Commissioned {
