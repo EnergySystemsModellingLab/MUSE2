@@ -116,17 +116,13 @@ pub fn calculate_prices_and_reduced_costs(
 
     let (new_prices, reduced_costs_for_candidates) = match model.parameters.pricing_strategy {
         // Use raw shadow prices and reduced costs
-        PricingStrategy::ShadowPrices => (
-            shadow_prices.with_levies(model, year),
-            reduced_costs_for_candidates,
-        ),
+        PricingStrategy::ShadowPrices => (shadow_prices, reduced_costs_for_candidates),
         // Adjust prices for scarcity and then remove this adjustment from reduced costs
         PricingStrategy::ScarcityAdjusted => {
             let adjusted_prices = shadow_prices
                 .clone()
-                .with_scarcity_adjustment(solution.iter_activity_duals())
-                .with_levies(model, year);
-            let unadjusted_prices = shadow_prices.with_levies(model, year);
+                .with_scarcity_adjustment(solution.iter_activity_duals());
+            let unadjusted_prices = shadow_prices;
             let mut reduced_costs_for_candidates = reduced_costs_for_candidates;
 
             // Remove adjustment
@@ -160,34 +156,6 @@ pub fn calculate_prices_and_reduced_costs(
 pub struct CommodityPrices(BTreeMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
 impl CommodityPrices {
-    /// Add prices based on levies/incentives.
-    ///
-    /// If a commodity already has a price based on the previous dual-based calculation, we choose
-    /// the higher of the two.
-    ///
-    /// # Arguments
-    ///
-    /// * `model` - The model
-    /// * `year` - The milestone year of interest
-    fn with_levies(mut self, model: &Model, year: u32) -> Self {
-        for (region_id, time_slice) in
-            iproduct!(model.iter_regions(), model.time_slice_info.iter_ids())
-        {
-            let levy_key = (region_id.clone(), year, time_slice.clone());
-            for commodity in model.commodities.values() {
-                if let Some(levy) = commodity.levies.get(&levy_key) {
-                    let key = (commodity.id.clone(), region_id.clone(), time_slice.clone());
-                    self.0
-                        .entry(key)
-                        .and_modify(|price| *price = price.max(levy.value))
-                        .or_insert(levy.value);
-                }
-            }
-        }
-
-        self
-    }
-
     /// Remove the impact of scarcity on prices.
     ///
     /// # Arguments
