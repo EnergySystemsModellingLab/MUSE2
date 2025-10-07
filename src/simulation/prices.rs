@@ -17,8 +17,6 @@ use std::collections::{BTreeMap, HashMap, btree_map};
 ///
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
-/// * `existing_assets` - Existing assets
-/// * `year` - Current milestone year
 pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
     let mut prices = CommodityPrices::default();
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());

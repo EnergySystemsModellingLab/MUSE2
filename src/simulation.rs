@@ -99,8 +99,7 @@ pub fn run(
                     }),
             );
 
-            // Run dispatch optimisation to get updated prices for the next
-            // iteration
+            // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
             let (_flow_map, new_prices) =
                 run_dispatch_for_year(model, &selected_assets, &all_candidates, year, &mut writer)?;

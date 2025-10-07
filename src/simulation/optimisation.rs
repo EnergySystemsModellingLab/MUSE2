@@ -269,7 +269,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.existing_assets,
             self.year,
         );
-        let _candidate_asset_var_idx = add_variables(
+        add_variables(
             &mut problem,
             &mut variables,
             &self.model.time_slice_info,

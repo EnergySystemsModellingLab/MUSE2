@@ -112,6 +112,8 @@ fn calculate_activity_coefficient_for_lcox(
     prices: &CommodityPrices,
     year: u32,
 ) -> MoneyPerActivity {
+    // Get the operating cost of the asset. This includes the variable operating cost, levies and
+    // flow costs, but excludes costs/revenues from commodity consumption/production.
     let operating_cost = asset.get_operating_cost(year, time_slice);
 
     // Revenue from flows excluding the primary output
@@ -128,9 +130,11 @@ fn calculate_activity_coefficient_for_npv(
     prices: &CommodityPrices,
     year: u32,
 ) -> MoneyPerActivity {
+    // Get the operating cost of the asset. This includes the variable operating cost, levies and
+    // flow costs, but excludes costs/revenues from commodity consumption/production.
     let operating_cost = asset.get_operating_cost(year, time_slice);
 
-    // Revenue from flows
+    // Revenue from flows including the primary output
     let revenue_from_flows = asset.get_revenue_from_flows(prices, time_slice, false);
 
     // The activity coefficient is the revenue from flows minus the operating cost

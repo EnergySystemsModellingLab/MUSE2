@@ -278,14 +278,14 @@ impl Asset {
         &self,
         prices: &CommodityPrices,
         time_slice: &TimeSliceID,
-        exclude_coi: bool,
+        exclude_primary_commodity: bool,
     ) -> MoneyPerActivity {
-        let exclude_commodity = self
+        let excluded_commodity = self
             .primary_output()
-            .and_then(|flow| exclude_coi.then_some(&flow.commodity.id));
+            .and_then(|flow| exclude_primary_commodity.then_some(&flow.commodity.id));
 
         self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
-            exclude_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
+            excluded_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
         })
     }
 
