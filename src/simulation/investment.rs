@@ -16,8 +16,8 @@ use log::debug;
 use std::collections::HashMap;
 
 pub mod appraisal;
-use appraisal::appraise_investment;
 use appraisal::coefficients::calculate_coefficients_for_assets;
+use appraisal::{AppraisalOutput, appraise_investment};
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -435,7 +435,7 @@ fn select_best_assets(
         // Select the best investment option
         let best_output = outputs_for_opts
             .into_iter()
-            .min_by(|a, b| a.metric.partial_cmp(&b.metric).unwrap())
+            .min_by(AppraisalOutput::compare_metric)
             .unwrap();
 
         // Log the selected asset
