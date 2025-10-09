@@ -827,11 +827,10 @@ mod tests {
     use super::*;
     use crate::commodity::{Commodity, CommodityID, CommodityType};
     use crate::fixture::{
-        ProcessBuilder, assert_error, asset, commodity_id, process, process_parameter_map,
-        region_id, time_slice,
+        assert_error, asset, commodity_id, process, process_parameter_map, region_id, time_slice,
     };
     use crate::process::{
-        FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessID,
+        FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
         ProcessParameter, ProcessParameterMap,
     };
     use crate::region::RegionID;
@@ -1470,35 +1469,56 @@ mod tests {
     }
 
     #[rstest]
-    #[case::early_decommission_within_lifetime(2020, 4, 2025, 2024)]
-    #[case::decommission_at_natural_end(2020, 10, 2025, 2025)]
+    #[case::early_decommission_within_lifetime(2024, 2024)]
+    #[case::decommission_at_maximum_year(2026, 2025)]
     fn test_asset_decommission(
-        #[case] commission_year: u32,
-        #[case] process_lifetime: u32,
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
+        process: Process,
     ) {
-        let region_ids: IndexSet<RegionID> = ["GBR".into()].into_iter().collect();
-        let process = Rc::new(
-            ProcessBuilder::new(region_ids)
-                .with_lifetime(process_lifetime)
-                .build(),
-        );
-
+        // Test successful commissioning of Future asset
+        let process_rc = Rc::new(process);
         let mut asset = Asset::new_future(
             "agent1".into(),
-            process,
+            Rc::clone(&process_rc),
             "GBR".into(),
             Capacity(1.0),
-            commission_year,
+            2020,
         )
         .unwrap();
-
         asset.commission(AssetID(1), "");
-        asset.decommission(requested_decommission_year, "");
+        assert!(asset.is_commissioned());
+        assert_eq!(asset.id(), Some(AssetID(1)));
 
+        // Test successful decommissioning
+        asset.decommission(requested_decommission_year, "");
         assert!(!asset.is_commissioned());
         assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
+    }
+
+    #[rstest]
+    fn test_asset_decommission2(process: Process) {
+        // Test successful commissioning of Future asset
+        let process_rc = Rc::new(process);
+        let mut asset1 = Asset::new_future(
+            "agent1".into(),
+            Rc::clone(&process_rc),
+            "GBR".into(),
+            Capacity(1.0),
+            2020,
+        )
+        .unwrap();
+        asset1.commission(AssetID(1), "");
+        assert!(asset1.is_commissioned());
+        assert_eq!(asset1.id(), Some(AssetID(1)));
+
+        // Test successful decommissioning
+        asset1.decommission(4000, "");
+        assert!(!asset1.is_commissioned());
+        assert_eq!(
+            asset1.decommission_year(),
+            Some(asset1.max_decommission_year())
+        );
     }
 
     #[rstest]
