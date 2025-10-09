@@ -188,23 +188,35 @@ fn run_dispatch_for_year(
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<(FlowMap, CommodityPrices, ReducedCosts)> {
-    // Dispatch optimisation with existing assets only
-    let solution_existing =
-        DispatchRun::new(model, assets, year).run("final without candidates", writer)?;
-    let flow_map = solution_existing.create_flow_map();
+    // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
+    // flows (i.e. all are zero)
+    let (solution_existing, flow_map) = (!assets.is_empty())
+        .then(|| -> Result<_> {
+            let solution =
+                DispatchRun::new(model, assets, year).run("final without candidates", writer)?;
+            let flow_map = solution.create_flow_map();
 
-    // Perform a separate dispatch run with existing assets and candidates (if there are any)
-    let solution = if candidates.is_empty() {
-        solution_existing
-    } else {
-        DispatchRun::new(model, assets, year)
-            .with_candidates(candidates)
-            .run("final with candidates", writer)?
-    };
+            Ok((Some(solution), flow_map))
+        })
+        .transpose()?
+        .unwrap_or_default();
 
-    // Calculate commodity prices and asset reduced costs
-    let (prices, reduced_costs) =
-        calculate_prices_and_reduced_costs(model, &solution, assets, year);
+    // Perform a separate dispatch run with both existing assets and candidates to get prices and
+    // reduced costs, if there are any. If not, use the previous solution.
+    let solution_for_prices = (!candidates.is_empty())
+        .then(|| {
+            DispatchRun::new(model, assets, year)
+                .with_candidates(candidates)
+                .run("final with candidates", writer)
+        })
+        .transpose()?
+        .or(solution_existing);
+
+    // If there were either existing or candidate assets, we can calculate prices and reduced costs.
+    // If not, return empty maps.
+    let (prices, reduced_costs) = solution_for_prices
+        .map(|solution| calculate_prices_and_reduced_costs(model, &solution, assets, year))
+        .unwrap_or_default();
 
     Ok((flow_map, prices, reduced_costs))
 }
