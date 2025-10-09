@@ -12,6 +12,7 @@ use serde_string_enum::DeserializeLabeledStringEnum;
 use std::path::Path;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
+const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
 
 macro_rules! define_unit_param_default {
     ($name:ident, $type: ty, $value: expr) => {
@@ -43,6 +44,9 @@ define_param_default!(default_max_ironing_out_iterations, u32, 10);
 pub struct ModelParameters {
     /// Milestone years
     pub milestone_years: Vec<u32>,
+    /// Allow known-broken options to be enabled.
+    #[serde(default, rename = "please_give_me_broken_results")] // Can't use constant here :-(
+    pub allow_broken_options: bool,
     /// The (small) value of capacity given to candidate assets.
     ///
     /// Don't change unless you know what you're doing.
@@ -144,6 +148,15 @@ impl ModelParameters {
 
     /// Validate parameters after reading in file
     fn validate(&self) -> Result<()> {
+        if self.allow_broken_options {
+            warn!(
+                "!!! You've enabled the {ALLOW_BROKEN_OPTION_NAME} option. !!!\n\
+                I see you like to live dangerously 😈. This option should ONLY be used by \
+                developers as it can cause peculiar behaviour that breaks things. NEVER enable it \
+                for results you actually care about or want to publish. You have been warned!"
+            );
+        }
+
         // milestone_years
         check_milestone_years(&self.milestone_years)?;
 
