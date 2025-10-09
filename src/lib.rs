@@ -1,4 +1,4 @@
-//! Common functionality for MUSE 2.0.
+//! Common functionality for MUSE2.
 #![warn(missing_docs)]
 
 use dirs::config_dir;

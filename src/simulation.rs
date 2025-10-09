@@ -1,4 +1,4 @@
-//! Functionality for running the MUSE 2.0 simulation.
+//! Functionality for running the MUSE2 simulation.
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;

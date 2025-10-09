@@ -1,6 +1,6 @@
 $schema: https://json-schema.org/draft/2020-12/schema
 title: Metadata
-description: Metadata about the program run, the MUSE 2.0 build and the user's platform.
+description: Metadata about the program run, the MUSE2 build and the user's platform.
 type: object
 properties:
   run:
@@ -17,7 +17,7 @@ properties:
     additionalProperties: false
   program:
     type: object
-    description: Information about MUSE 2.0
+    description: Information about MUSE2
     properties:
       name:
         type: string
@@ -27,19 +27,19 @@ properties:
         description: Program version (e.g. 2.0.0)
       target:
         type: string
-        description: The target triple MUSE 2.0 was built for
+        description: The target triple MUSE2 was built for
       is_debug:
         type: boolean
         description: Whether the current build is a debug or release build
       rustc_version:
         type: string
-        description: The version of `rustc` used to compile MUSE 2.0
+        description: The version of `rustc` used to compile MUSE2
       build_time_utc:
         type: string
-        description: The UTC time and date at which MUSE 2.0 was built
+        description: The UTC time and date at which MUSE2 was built
       git_commit_hash:
         type: string
-        description: The short hash of the git commit from which MUSE 2.0 was built
+        description: The short hash of the git commit from which MUSE2 was built
         notes: If the git working tree was dirty, `-dirty` is appended to the hash
     additionalProperties: false
   platform:

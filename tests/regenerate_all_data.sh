@@ -6,7 +6,7 @@ cd "$mydir"
 echo Cleaning output folder
 rm -rf data/*
 
-echo Building MUSE 2.0
+echo Building MUSE2
 examples=$(cargo run example list 2> /dev/null)
 
 for example in $examples; do

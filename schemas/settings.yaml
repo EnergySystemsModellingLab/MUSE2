@@ -1,7 +1,7 @@
 $schema: https://json-schema.org/draft/2020-12/schema
 title: Program settings
 description: |
-  User settings for MUSE 2.0. Note that these settings do **not** include model parameters, which
+  User settings for MUSE2. Note that these settings do **not** include model parameters, which
   are found in `model.toml` instead.
 
   All settings are optional. If the `settings.toml` file does not exist, the default settings will

@@ -1,3 +1,3 @@
-# Readme files for MUSE 2.0
+# Readme files for MUSE2
 
-This folder contains readme files to be included with MUSE 2.0 releases.
+This folder contains readme files to be included with MUSE2 releases.

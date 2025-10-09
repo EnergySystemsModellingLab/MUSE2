@@ -37,7 +37,7 @@ impl ProcessFlowRaw {
             self.coeff
         );
 
-        // **TODO**: https://github.com/EnergySystemsModellingLab/MUSE_2.0/issues/300
+        // **TODO**: https://github.com/EnergySystemsModellingLab/MUSE2/issues/300
         ensure!(
             self.kind == FlowType::Fixed,
             "Commodity flexible assets are not currently supported"

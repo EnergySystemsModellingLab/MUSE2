@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 const SETTINGS_FILE_NAME: &str = "settings.toml";
 
 const DEFAULT_SETTINGS_FILE_HEADER: &str = concat!(
-    "# This file contains the program settings for MUSE 2.0.
+    "# This file contains the program settings for MUSE2.
 #
 # The default options for MUSE2 v",
     env!("CARGO_PKG_VERSION"),
@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS_FILE_HEADER: &str = concat!(
 # \tmuse2 settings show-default
 #
 # For information about the possible settings, visit:
-# \thttps://energysystemsmodellinglab.github.io/MUSE_2.0/file_formats/program_settings.html
+# \thttps://energysystemsmodellinglab.github.io/MUSE2/file_formats/program_settings.html
 "
 );
 
