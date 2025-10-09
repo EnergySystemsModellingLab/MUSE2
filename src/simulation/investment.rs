@@ -10,9 +10,11 @@ use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
+use float_cmp::approx_eq;
 use indexmap::IndexMap;
 use itertools::{chain, iproduct};
 use log::debug;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 pub mod appraisal;
@@ -435,7 +437,13 @@ fn select_best_assets(
         // Select the best investment option
         let best_output = outputs_for_opts
             .into_iter()
-            .min_by(|a, b| a.metric.partial_cmp(&b.metric).unwrap())
+            .min_by(|a, b| {
+                if approx_eq!(f64, a.metric, b.metric) {
+                    Ordering::Equal
+                } else {
+                    a.metric.partial_cmp(&b.metric).unwrap()
+                }
+            })
             .unwrap();
 
         // Log the selected asset
