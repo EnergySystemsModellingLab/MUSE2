@@ -142,9 +142,9 @@ where
                     continue;
                 }
 
-                // Add constraint. For SED commodities, the RHS is zero and for SVD commodities it
-                // is the exogenous demand supplied by the user.
-                let rhs = if commodity.kind == CommodityType::ServiceDemand {
+                // For SED commodities, the LHS must be >=0 and for SVD commodities, it must be >=
+                // the exogenous demand supplied by the user
+                let min = if commodity.kind == CommodityType::ServiceDemand {
                     commodity
                         .demand
                         .get(&(region_id.clone(), year, ts_selection.clone()))
@@ -153,7 +153,7 @@ where
                 } else {
                     0.0
                 };
-                problem.add_row(rhs..=rhs, terms.drain(..));
+                problem.add_row(min.., terms.drain(..));
                 keys.push((
                     commodity_id.clone(),
                     region_id.clone(),
