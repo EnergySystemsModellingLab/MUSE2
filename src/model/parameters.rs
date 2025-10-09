@@ -162,6 +162,13 @@ impl ModelParameters {
 
         // pricing_strategy
         if self.pricing_strategy == PricingStrategy::ScarcityAdjusted {
+            ensure!(
+                self.allow_broken_options,
+                "The pricing strategy is set to 'scarcity_adjusted', which is known to be broken. \
+                If you are sure that you want to enable it anyway, you need to set the \
+                {ALLOW_BROKEN_OPTION_NAME} option to true."
+            );
+
             warn!(
                 "The pricing strategy is set to 'scarcity_adjusted'. Commodity prices may be \
                 incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677"
