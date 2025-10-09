@@ -43,24 +43,27 @@ fn run_regression_test_debug_opt(example_name: &str, debug_model: bool) {
     let opts = RunOpts {
         output_dir: Some(output_dir.clone()),
         overwrite: false,
-        debug_model,
+        debug_model: true, // NB: Always enable this as it helps to have the files for debugging
     };
     handle_example_run_command(example_name, &opts, Some(Settings::default())).unwrap();
 
     let test_data_dir = PathBuf::from(format!("tests/data/{example_name}"));
-    compare_output_dirs(&output_dir, &test_data_dir);
+    compare_output_dirs(&output_dir, &test_data_dir, debug_model);
 }
 
-fn compare_output_dirs(output_dir1: &Path, output_dir2: &Path) {
-    let file_names1 = get_csv_file_names(output_dir1);
-    let file_names2 = get_csv_file_names(output_dir2);
+fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model: bool) {
+    let mut file_names1 = get_csv_file_names(cur_output_dir1);
+    if !debug_model {
+        file_names1.retain(|name| !name.starts_with("debug_"));
+    }
+    let file_names2 = get_csv_file_names(test_data_dir);
 
     // Check that output files haven't been added/removed
     assert!(file_names1 == file_names2);
 
     let mut errors = Vec::new();
     for file_name in file_names1 {
-        compare_lines(output_dir1, output_dir2, &file_name, &mut errors);
+        compare_lines(cur_output_dir1, test_data_dir, &file_name, &mut errors);
     }
 
     assert!(
