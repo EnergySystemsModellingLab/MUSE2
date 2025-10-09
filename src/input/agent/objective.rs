@@ -1,5 +1,6 @@
 //! Code for reading the agent objectives CSV file.
 use super::super::{input_err_msg, read_csv, try_insert};
+use crate::ISSUES_URL;
 use crate::agent::{AgentID, AgentMap, AgentObjectiveMap, DecisionRule, ObjectiveType};
 use crate::units::Dimensionless;
 use crate::year::parse_year_str;
@@ -98,7 +99,7 @@ where
         if !npv_years.is_empty() {
             warn!(
                 "Agent {agent_id} is using NPV in years {npv_years:?}. \
-                Support for NPV is currently experimental and may give bad results."
+                The NPV option is BROKEN and should not be used. See: {ISSUES_URL}/716."
             );
         }
     }
