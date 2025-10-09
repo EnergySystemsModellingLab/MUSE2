@@ -1497,31 +1497,6 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_decommission2(process: Process) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset1 = Asset::new_future(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-        )
-        .unwrap();
-        asset1.commission(AssetID(1), "");
-        assert!(asset1.is_commissioned());
-        assert_eq!(asset1.id(), Some(AssetID(1)));
-
-        // Test successful decommissioning
-        asset1.decommission(4000, "");
-        assert!(!asset1.is_commissioned());
-        assert_eq!(
-            asset1.decommission_year(),
-            Some(asset1.max_decommission_year())
-        );
-    }
-
-    #[rstest]
     #[should_panic(expected = "Assets with state Candidate cannot be commissioned")]
     fn test_commission_wrong_states(process: Process) {
         let mut asset =
