@@ -1,4 +1,4 @@
-//! Agents drive the economy of the MUSE 2.0 simulation, through relative investment in different
+//! Agents drive the economy of the MUSE2 simulation, through relative investment in different
 //! assets.
 use crate::commodity::CommodityID;
 use crate::id::define_id_type;

@@ -1,11 +1,11 @@
-This folder contains the MUSE 2.0 executable for Windows, called `muse2`.
+This folder contains the MUSE2 executable for Windows, called `muse2`.
 
-For more information on how to use MUSE 2.0, you can consult the program help:
+For more information on how to use MUSE2, you can consult the program help:
 
     ./muse2 help
 
 Documentation is also available on the web:
-    https://energysystemsmodellinglab.github.io/MUSE_2.0/
+    https://energysystemsmodellinglab.github.io/MUSE2/
 
 Please report bugs on our GitHub issue tracker:
-    https://github.com/EnergySystemsModellingLab/MUSE_2.0/issues
+    https://github.com/EnergySystemsModellingLab/MUSE2/issues
