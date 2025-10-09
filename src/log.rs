@@ -127,7 +127,8 @@ pub fn init(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Resu
             Dispatch::new()
                 .filter(|metadata| metadata.level() > LevelFilter::Warn)
                 .format(write_log_plain)
-                .level(log_level.max(LevelFilter::Info))
+                // HACK: Log everything. Don't merge!
+                .level(log_level.max(LevelFilter::Debug))
                 .chain(info_log_file),
         );
     }
