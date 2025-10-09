@@ -154,7 +154,7 @@ operational constraints (e.g., minimum load levels) and the balance level of the
   - A demand constraint, where output cannot exceed demand in the tranche, which adapts based on the
     commodity’s balance level (time slice, season, annual).
 
-  - Capacity is constrained \\( CapMaxBuild \\) for candidates, and to known capacity for
+  - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
 - **Calculate a profitability index:** This is the total annualised surplus (\\( - \sum_t
@@ -192,7 +192,7 @@ For each asset option:
     each timeslice of the tranche, which adapts based on the commodity’s balance level (time slice,
     season, annual).
 
-  - Capacity is constrained \\( CapMaxBuild \\) for candidates, and to known capacity for
+  - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
   - VoLL variables are active to ensure a feasible solution alongside maximum operation of the

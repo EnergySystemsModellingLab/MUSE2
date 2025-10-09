@@ -18,20 +18,15 @@ use std::collections::{BTreeMap, HashMap, btree_map};
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
 pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
-    let mut prices = CommodityPrices::default();
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
-    let new_prices = match model.parameters.pricing_strategy {
+    match model.parameters.pricing_strategy {
         // Use raw shadow prices
         PricingStrategy::ShadowPrices => shadow_prices,
         // Adjust prices for scarcity
         PricingStrategy::ScarcityAdjusted => shadow_prices
             .clone()
             .with_scarcity_adjustment(solution.iter_activity_duals()),
-    };
-
-    // Use old prices for any commodities for which price is missing
-    prices.extend(new_prices);
-    prices
+    }
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)

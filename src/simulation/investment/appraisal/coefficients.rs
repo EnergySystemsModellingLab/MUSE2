@@ -117,7 +117,7 @@ fn calculate_activity_coefficient_for_lcox(
     let operating_cost = asset.get_operating_cost(year, time_slice);
 
     // Revenue from flows excluding the primary output
-    let revenue_from_flows = asset.get_revenue_from_flows(prices, time_slice, true);
+    let revenue_from_flows = asset.get_revenue_from_flows_excluding_primary(prices, time_slice);
 
     // The activity coefficient is the operating cost minus the revenue from flows
     operating_cost - revenue_from_flows
@@ -135,7 +135,7 @@ fn calculate_activity_coefficient_for_npv(
     let operating_cost = asset.get_operating_cost(year, time_slice);
 
     // Revenue from flows including the primary output
-    let revenue_from_flows = asset.get_revenue_from_flows(prices, time_slice, false);
+    let revenue_from_flows = asset.get_revenue_from_flows(prices, time_slice);
 
     // The activity coefficient is the revenue from flows minus the operating cost
     revenue_from_flows - operating_cost

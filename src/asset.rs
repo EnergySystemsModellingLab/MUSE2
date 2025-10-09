@@ -273,16 +273,24 @@ impl Asset {
 
     /// Get the total revenue from all flows for this asset.
     ///
-    /// This can either include or exclude the primary output from the calculation.
+    /// If a price is missing, it is assumed to be zero.
     pub fn get_revenue_from_flows(
         &self,
         prices: &CommodityPrices,
         time_slice: &TimeSliceID,
-        exclude_primary_commodity: bool,
     ) -> MoneyPerActivity {
-        let excluded_commodity = self
-            .primary_output()
-            .and_then(|flow| exclude_primary_commodity.then_some(&flow.commodity.id));
+        self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
+    }
+
+    /// Get the total revenue from all flows excluding the primary output.
+    ///
+    /// If a price is missing, it is assumed to be zero.
+    pub fn get_revenue_from_flows_excluding_primary(
+        &self,
+        prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        let excluded_commodity = self.primary_output().map(|flow| &flow.commodity.id);
 
         self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
             excluded_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
