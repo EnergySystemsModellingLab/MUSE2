@@ -27,7 +27,7 @@ jobs:
           MUSE2_TEST_OUTPUT_DIR: test_results
         run: |
           mkdir $MUSE2_TEST_OUTPUT_DIR
-          cargo test --verbose
+          cargo test --verbose --no-fail-fast
 
       # Upload regression test results for analysis
       - uses: actions/upload-artifact@v4
