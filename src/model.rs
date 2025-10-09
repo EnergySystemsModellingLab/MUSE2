@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub mod parameters;
-pub use parameters::{ModelParameters, PricingStrategy};
+pub use parameters::{ALLOW_BROKEN_OPTION_NAME, ModelParameters, PricingStrategy};
 
 /// Model definition
 pub struct Model {

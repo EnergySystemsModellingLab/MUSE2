@@ -12,7 +12,9 @@ use serde_string_enum::DeserializeLabeledStringEnum;
 use std::path::Path;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
-const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
+
+/// The name of the option used to gate other, broken options.
+pub const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
 
 macro_rules! define_unit_param_default {
     ($name:ident, $type: ty, $value: expr) => {
