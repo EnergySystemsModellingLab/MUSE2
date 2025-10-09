@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 pub mod appraisal;
 use appraisal::appraise_investment;
+use appraisal::coefficients::calculate_coefficients_for_assets;
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -364,7 +365,11 @@ fn select_best_assets(
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let mut best_assets: Vec<AssetRef> = Vec::new();
+    let objective_type = &agent.objectives[&year];
+
+    // Calculate coefficients for all asset options according to the agent's objective
+    let coefficients =
+        calculate_coefficients_for_assets(model, objective_type, &opt_assets, reduced_costs);
 
     let mut remaining_candidate_capacity = HashMap::from_iter(
         opt_assets
@@ -374,7 +379,7 @@ fn select_best_assets(
     );
 
     let mut round = 0;
-    let objective_type = &agent.objectives[&year];
+    let mut best_assets: Vec<AssetRef> = Vec::new();
     while is_any_remaining_demand(&demand) {
         ensure!(
             !opt_assets.is_empty(),
@@ -397,7 +402,7 @@ fn select_best_assets(
                 max_capacity,
                 commodity,
                 objective_type,
-                reduced_costs,
+                &coefficients[asset],
                 &demand,
             )?;
 
