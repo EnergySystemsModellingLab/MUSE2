@@ -7,12 +7,14 @@ use crate::finance::{lcox, profitability_index};
 use crate::model::Model;
 use crate::units::Capacity;
 use anyhow::Result;
+use std::cmp::Ordering;
 
 pub mod coefficients;
 mod constraints;
 mod costs;
 mod optimisation;
 use coefficients::ObjectiveCoefficients;
+use float_cmp::approx_eq;
 use optimisation::perform_optimisation;
 
 /// The output of investment appraisal required to compare potential investment decisions
@@ -25,6 +27,29 @@ pub struct AppraisalOutput {
     pub unmet_demand: DemandMap,
     /// The comparison metric to compare investment decisions (lower is better)
     pub metric: f64,
+}
+
+impl AppraisalOutput {
+    /// Compare this appraisal to another on the basis of the comparison metric.
+    ///
+    /// Note that if the metrics are approximately equal (as determined by the [`approx_eq!`] macro)
+    /// then [`Ordering::Equal`] is returned. The reason for this is because different CPU
+    /// architectures may lead to subtly different values for the comparison metrics and if the
+    /// value is very similar to another, then it can lead to different decisions being made,
+    /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
+    /// possible, which is why we use a more approximate comparison.
+    pub fn compare_metric(&self, other: &Self) -> Ordering {
+        assert!(
+            !(self.metric.is_nan() || other.metric.is_nan()),
+            "Appraisal metric cannot be NaN"
+        );
+
+        if approx_eq!(f64, self.metric, other.metric) {
+            Ordering::Equal
+        } else {
+            self.metric.partial_cmp(&other.metric).unwrap()
+        }
+    }
 }
 
 /// Calculate LCOX for a hypothetical investment in the given asset.
