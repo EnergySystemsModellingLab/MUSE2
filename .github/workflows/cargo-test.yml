@@ -31,6 +31,7 @@ jobs:
 
       # Upload regression test results for analysis
       - uses: actions/upload-artifact@v4
+        if: "!cancelled()"
         with:
           name: muse2_test_results_${{ matrix.os }}
           path: test_results
