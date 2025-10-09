@@ -1,12 +1,12 @@
 use human_panic::{metadata, setup_panic};
 use log::error;
+use muse2::ISSUES_URL;
 use muse2::cli::run_cli;
 use muse2::log::is_logger_initialised;
 
 fn main() {
     setup_panic!(metadata!().support(format!(
-        "Open an issue on Github: {}/issues/new?template=bug_report.md",
-        env!("CARGO_PKG_REPOSITORY")
+        "Open an issue on Github: {ISSUES_URL}/new?template=bug_report.md"
     )));
 
     if let Err(err) = run_cli() {

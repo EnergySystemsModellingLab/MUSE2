@@ -1,4 +1,5 @@
 //! Defines the `ModelParameters` struct, which represents the contents of `model.toml`.
+use crate::ISSUES_URL;
 use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
@@ -150,8 +151,7 @@ impl ModelParameters {
         if self.pricing_strategy == PricingStrategy::ScarcityAdjusted {
             warn!(
                 "The pricing strategy is set to 'scarcity_adjusted'. Commodity prices may be \
-                incorrect if assets have more than one output commodity. See: {}/issues/677",
-                env!("CARGO_PKG_REPOSITORY")
+                incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677"
             );
         }
 
