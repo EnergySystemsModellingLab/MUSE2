@@ -1,4 +1,5 @@
 #!/bin/sh
+set -euf
 
 mydir=$(dirname "$0")
 cd "$mydir"
