@@ -1,7 +1,7 @@
 //! The command line interface for the simulation.
-use crate::graph::save_commodity_graphs_for_model;
-use crate::input::load_model;
+use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
+use crate::output::graph::save_commodity_graphs_for_model;
 use crate::output::{create_output_directory, get_output_dir};
 use crate::settings::Settings;
 use ::log::{info, warn};
@@ -207,12 +207,9 @@ pub fn handle_build_commodity_graphs_command(
     // Initialise program logger (we won't save log files when running the validate command)
     log::init(&settings.log_level, None).context("Failed to initialise logging.")?;
 
-    // Load/validate the model
-    let (model, _) = load_model(model_path).context("Failed to load model.")?;
-    info!("Loaded model from {}", model_path.display());
-
-    // Save commodity flow graphs to file
-    save_commodity_graphs_for_model(&model.commodity_graphs, output_path)?;
+    // Load commodity flow graphs and save to file
+    let commodity_graphs = load_commodity_graphs(model_path)?;
+    save_commodity_graphs_for_model(&commodity_graphs, output_path)?;
     info!("Commodity flow graphs saved to file");
 
     Ok(())

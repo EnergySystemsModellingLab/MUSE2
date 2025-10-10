@@ -1,8 +1,11 @@
 //! Common routines for handling input data.
 use crate::asset::AssetPool;
-use crate::graph::{build_commodity_graphs_for_model, validate_commodity_graphs_for_model};
+use crate::graph::{
+    CommoditiesGraph, build_commodity_graphs_for_model, validate_commodity_graphs_for_model,
+};
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
+use crate::region::RegionID;
 use crate::units::UnitType;
 use anyhow::{Context, Result, bail, ensure};
 use float_cmp::approx_eq;
@@ -233,10 +236,44 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         processes,
         time_slice_info,
         regions,
-        commodity_graphs,
         commodity_order,
     };
     Ok((model, AssetPool::new(assets)))
+}
+
+/// Load commodity flow graphs for a model.
+///
+/// This begins by reading time slice, region, year, commodity and process data which is necessary
+/// to build the graphs. Other model data (agents and assets) that is not necessary for graph
+/// building is not read.
+///
+/// Once data is loaded (and assuming the validation checks for this data pass), this will create a
+/// graph of commodity flows for each region and year, where nodes are commodities and edges are
+/// processes.
+///
+/// Graphs validation is NOT performed. This ensures that graphs can be generated even when
+/// validation would fail, which may be helpful for debugging.
+pub fn load_commodity_graphs<P: AsRef<Path>>(
+    model_dir: P,
+) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
+    let model_params = ModelParameters::from_path(&model_dir)?;
+
+    let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
+    let regions = read_regions(model_dir.as_ref())?;
+    let region_ids = regions.keys().cloned().collect();
+    let years = &model_params.milestone_years;
+
+    let commodities = read_commodities(model_dir.as_ref(), &region_ids, &time_slice_info, years)?;
+    let processes = read_processes(
+        model_dir.as_ref(),
+        &commodities,
+        &region_ids,
+        &time_slice_info,
+        years,
+    )?;
+
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
+    Ok(commodity_graphs)
 }
 
 #[cfg(test)]
