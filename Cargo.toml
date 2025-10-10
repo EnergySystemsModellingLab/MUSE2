@@ -1,6 +1,6 @@
 [package]
 name = "muse2"
-version = "2.0.0-dev1"
+version = "2.0.0"
 authors = ["Hawkes Research Group @ Chemical Engineering, Imperial College London <a.hawkes@imperial.ac.uk>", "Imperial College London RSE Team <ict-rse-team@imperial.ac.uk>"]
 edition = "2024"
 description = "A tool for running simulations of energy systems"

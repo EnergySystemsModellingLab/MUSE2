@@ -927,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "muse2"
-version = "2.0.0-dev1"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "built",
