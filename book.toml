@@ -3,7 +3,7 @@ authors = ["Alex Dewar"]
 language = "en"
 multilingual = false
 src = "docs"
-title = "MUSE 2.0"
+title = "MUSE2"
 
 [output.html]
 mathjax-support = true

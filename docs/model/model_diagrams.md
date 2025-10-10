@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD033 -->
 # Model diagrams
 
-This document contains diagrams showing the algorithm used by MUSE 2.0. It is likely to contain
+This document contains diagrams showing the algorithm used by MUSE2. It is likely to contain
 errors and omissions and will change as the code is developed. It is principally aimed at MUSE
 developers.
 
@@ -13,8 +13,8 @@ Functions are described with the following terms:
 
 <p>
 <figure>
-    <img alt="Overview of MUSE 2.0" src="../images/model_overview.drawio.svg" />
-    <figcaption>Figure 1: Overview of MUSE 2.0 algorithm</figcaption>
+    <img alt="Overview of MUSE2" src="../images/model_overview.drawio.svg" />
+    <figcaption>Figure 1: Overview of MUSE2 algorithm</figcaption>
 </figure>
 </p>
 

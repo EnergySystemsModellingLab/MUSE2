@@ -1,13 +1,13 @@
 # Developer Guide
 
-This is a guide for those who wish to contribute to the MUSE 2.0 project or make local changes to
+This is a guide for those who wish to contribute to the MUSE2 project or make local changes to
 the code.
 
 [The API documentation is available here.](./api/muse2)
 
 ## Background: The Rust programming language
 
-MUSE 2.0 is written using [Rust], which is a high-performance, compiled language. If you have used
+MUSE2 is written using [Rust], which is a high-performance, compiled language. If you have used
 other compiled languages, such as C++, many of the concepts will be familiar. One feature which
 distinguishes it from other languages like C and C++, however, is that [undefined behaviour], such
 as [memory safety] bugs, are not possible, provided you keep to the [safe subset] of the language.
@@ -25,7 +25,7 @@ start with [The Rust Programming Language book], which is freely available onlin
 
 ## Installing developer tools
 
-To develop MUSE 2.0 locally you will need the following components:
+To develop MUSE2 locally you will need the following components:
 
 - [Git]
 - Rust development tools
@@ -100,21 +100,21 @@ wish to install the recommended extensions and you should choose "yes".
 [the documentation]: https://code.visualstudio.com/docs/devcontainers/containers
 [GitHub's guide]: https://docs.github.com/en/codespaces/developing-in-a-codespace/developing-in-a-codespace
 
-## Downloading the MUSE 2.0 source code
+## Downloading the MUSE2 source code
 
-Unless you are developing in a GitHub Codespace (see above), you will need to download the MUSE 2.0
-source code to your local machine before you can develop it. Like many projects, MUSE 2.0 is stored
+Unless you are developing in a GitHub Codespace (see above), you will need to download the MUSE2
+source code to your local machine before you can develop it. Like many projects, MUSE2 is stored
 in a Git repository [hosted on GitHub]. Many IDEs, such as Visual Studio Code, provide an interface
 to clone Git repositories, but you can also use the Git command-line tool ([see installation
 instructions]), like so:
 
 ```sh
-git clone https://github.com/EnergySystemsModellingLab/MUSE_2.0
+git clone https://github.com/EnergySystemsModellingLab/MUSE2
 ```
 
-The source code will now be available in a folder named `MUSE_2.0`.
+The source code will now be available in a folder named `MUSE2`.
 
-[hosted on GitHub]: https://github.com/EnergySystemsModellingLab/MUSE_2.0
+[hosted on GitHub]: https://github.com/EnergySystemsModellingLab/MUSE2
 [see installation instructions]: https://git-scm.com/downloads
 
 ## Working with the project
@@ -128,7 +128,7 @@ cargo build
 Note that if you just want to build-test the project (i.e. check for errors and warnings) without
 building an executable, you can use the `cargo check` command, which is much faster.
 
-To run MUSE 2.0 with the "simple" example, you can run:
+To run MUSE2 with the "simple" example, you can run:
 
 ```sh
 cargo run run examples/simple
@@ -225,9 +225,9 @@ mdbook serve -o
 
 ### Documenting file formats
 
-Documentation for file formats of different input and output files used by MUSE 2.0 is automatically
+Documentation for file formats of different input and output files used by MUSE2 is automatically
 generated from schemas, stored in the
-[`schemas/`](https://github.com/EnergySystemsModellingLab/MUSE_2.0/tree/main/schemas) folder.
+[`schemas/`](https://github.com/EnergySystemsModellingLab/MUSE2/tree/main/schemas) folder.
 
 Files are either in [TOML](https://toml.io/en/) or
 [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) format. For TOML files, we use [JSON
@@ -235,7 +235,7 @@ schemas](https://json-schema.org/) and for CSV files we use [table
 schemas](https://specs.frictionlessdata.io//table-schema/) (a similar format).
 
 The documentation is generated with the
-[`docs/file_formats/generate_docs.py`](https://github.com/EnergySystemsModellingLab/MUSE_2.0/tree/main/docs/file_formats/generate_docs.py)
+[`docs/file_formats/generate_docs.py`](https://github.com/EnergySystemsModellingLab/MUSE2/tree/main/docs/file_formats/generate_docs.py)
 script. To generate all file format docs, run:
 
 ```sh
@@ -277,4 +277,4 @@ automatically fix them by running `cargo clipfix` (which we have defined as an a
 [`.cargo/config.toml`]).
 
 [`clippy`]: https://doc.rust-lang.org/clippy
-[`.cargo/config.toml`]: https://github.com/EnergySystemsModellingLab/MUSE_2.0/blob/main/.cargo/config.toml
+[`.cargo/config.toml`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/.cargo/config.toml

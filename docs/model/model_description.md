@@ -5,19 +5,19 @@
 
 # Model Description
 
-The purpose of MUSE 2.0 (**M**od**U**lar energy systems **S**imulation **E**nvironment) is to
+The purpose of MUSE2 (**M**od**U**lar energy systems **S**imulation **E**nvironment) is to
 provide users with a framework to simulate pathways of energy system transition, usually in the
 context of climate change mitigation.
 
 ## Model Concept
 
-MUSE 2.0 is a bottom-up engineering-economic modelling framework that computes a price-induced
+MUSE2 is a bottom-up engineering-economic modelling framework that computes a price-induced
 supply-demand equilibrium on a set of user-defined commodities.
 It does this for each milestone time period within a user-defined time horizon.
 This is a "partial equilibrium" in the sense that the framework equilibrates only the user-defined
 commodities, as opposed to a whole economy.
 
-MUSE 2.0 is data-driven in the sense that model processing and data are entirely independent, and
+MUSE2 is data-driven in the sense that model processing and data are entirely independent, and
 user-defined data is at the heart of how the model behaves. It is also "bottom-up" in nature, which
 means that it requires users to characterise each individual process that produces or consumes each
 commodity, along with a range of other physical, economic and agent parameters.
@@ -62,7 +62,7 @@ The workflow is structured as follows:
 1. **Dispatch is executed for a calibrated base year.** Dispatch is executed using the formulation
    shown in [Dispatch Optimisation Formulation]. All existing assets are included, and all candidate
    assets for the \\( MSY_{next} \\) are included with capacities set to zero. This ensures that all
-   commodity shadow prices and reduced costs for candidate asset are generated for use in the \\(
+   commodity shadow prices are generated for use in the \\(
    MSY_{next} \\). \\( VoLL \\) load shedding variables should be zero after completion, and if they
    are non-zero then throw an error as the model is not properly calibrated.
 
@@ -117,7 +117,7 @@ The workflow is structured as follows:
 
       1. Execute dispatch as per [Dispatch Optimisation Formulation] with the complete system, with
          all candidate assets for the \\( MSY_{next} \\) included with capacities set to zero to
-         generate prices and reduced costs for the \\( MSY_{next} \\).
+         generate prices for the \\( MSY_{next} \\).
 
       2. Check if load-weighted average prices for any SED commodity has changed (or changed more
          than a tolerance) since the last loop (also, possibly check if the 95th percentile of price

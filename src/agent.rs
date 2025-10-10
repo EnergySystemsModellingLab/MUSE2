@@ -1,4 +1,4 @@
-//! Agents drive the economy of the MUSE 2.0 simulation, through relative investment in different
+//! Agents drive the economy of the MUSE2 simulation, through relative investment in different
 //! assets.
 use crate::commodity::CommodityID;
 use crate::id::define_id_type;
@@ -99,15 +99,4 @@ pub enum ObjectiveType {
     /// Net present value
     #[string = "npv"]
     NetPresentValue,
-}
-
-impl ObjectiveType {
-    /// Whether to exclude the price of the primary output commodity from reduced cost calculation
-    pub fn exclude_primary_output_price_from_reduced_costs(&self) -> bool {
-        // Deliberately written as a `match` block, in case we add more objective types in future
-        match self {
-            ObjectiveType::LevelisedCostOfX => true,
-            ObjectiveType::NetPresentValue => false,
-        }
-    }
 }

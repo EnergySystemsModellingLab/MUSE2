@@ -1,94 +1,14 @@
 //! Code for updating the simulation state.
-use crate::asset::{Asset, AssetRef};
+use crate::asset::AssetRef;
 use crate::commodity::CommodityID;
 use crate::model::{Model, PricingStrategy};
-use crate::process::ProcessFlow;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
-use indexmap::IndexMap;
-use itertools::iproduct;
 use std::collections::{BTreeMap, HashMap, btree_map};
 
-/// A map of reduced costs for different assets in different time slices
-///
-/// This is the system cost associated with one unit of activity (`MoneyPerActivity`) for each asset
-/// in each time slice.
-///
-/// For candidate assets this is calculated directly from the activity variable duals.
-///
-/// For existing assets this is calculated from the operating cost and the revenue from flows.
-///
-/// These may be used in the investment algorithm, depending on the appraisal method, to compare the
-/// cost effectiveness of different potential investment decisions.
-#[derive(Default, Clone)]
-pub struct ReducedCosts(IndexMap<(AssetRef, TimeSliceID), MoneyPerActivity>);
-
-impl ReducedCosts {
-    /// Get the reduced cost for the specified asset and time slice
-    ///
-    /// If no reduced cost is found for the asset, the reduced cost is returned for the relevant
-    /// candidate asset. This can occur the first year an asset is commissioned, or if an asset
-    /// was not selected in an earlier iteration of the ironing out loop.
-    pub fn get(&self, asset: &AssetRef, time_slice: &TimeSliceID) -> MoneyPerActivity {
-        *self
-            .0
-            .get(&(asset.clone(), time_slice.clone()))
-            .unwrap_or_else(|| {
-                &self.0[&(
-                    Asset::new_candidate_from_commissioned(asset).into(),
-                    time_slice.clone(),
-                )]
-            })
-    }
-
-    /// Extend the reduced costs map
-    pub fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = ((AssetRef, TimeSliceID), MoneyPerActivity)>,
-    {
-        self.0.extend(iter);
-    }
-
-    /// Iterate over the map
-    pub fn iter(&self) -> impl Iterator<Item = (&(AssetRef, TimeSliceID), &MoneyPerActivity)> {
-        self.0.iter()
-    }
-
-    /// Iterate mutably over the map
-    pub fn iter_mut(
-        &mut self,
-    ) -> impl Iterator<Item = (&(AssetRef, TimeSliceID), &mut MoneyPerActivity)> {
-        self.0.iter_mut()
-    }
-}
-
-impl FromIterator<((AssetRef, TimeSliceID), MoneyPerActivity)> for ReducedCosts {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = ((AssetRef, TimeSliceID), MoneyPerActivity)>,
-    {
-        ReducedCosts(iter.into_iter().collect())
-    }
-}
-
-impl IntoIterator for ReducedCosts {
-    type Item = ((AssetRef, TimeSliceID), MoneyPerActivity);
-    type IntoIter = indexmap::map::IntoIter<(AssetRef, TimeSliceID), MoneyPerActivity>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl From<IndexMap<(AssetRef, TimeSliceID), MoneyPerActivity>> for ReducedCosts {
-    fn from(map: IndexMap<(AssetRef, TimeSliceID), MoneyPerActivity>) -> Self {
-        ReducedCosts(map)
-    }
-}
-
-/// Calculate commodity prices and reduced costs for assets.
+/// Calculate commodity prices.
 ///
 /// Note that the behaviour will be different depending on the [`PricingStrategy`] the user has
 /// selected.
@@ -97,58 +17,16 @@ impl From<IndexMap<(AssetRef, TimeSliceID), MoneyPerActivity>> for ReducedCosts 
 ///
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
-/// * `existing_assets` - Existing assets
-/// * `year` - Current milestone year
-pub fn calculate_prices_and_reduced_costs(
-    model: &Model,
-    solution: &Solution,
-    existing_assets: &[AssetRef],
-    year: u32,
-) -> (CommodityPrices, ReducedCosts) {
-    let mut prices = CommodityPrices::default();
-    let mut reduced_costs = ReducedCosts::default();
-
+pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
-    let reduced_costs_for_candidates: ReducedCosts = solution
-        .iter_reduced_costs_for_candidates()
-        .map(|(asset, time_slice, cost)| ((asset.clone(), time_slice.clone()), cost))
-        .collect();
-
-    let (new_prices, reduced_costs_for_candidates) = match model.parameters.pricing_strategy {
-        // Use raw shadow prices and reduced costs
-        PricingStrategy::ShadowPrices => (shadow_prices, reduced_costs_for_candidates),
-        // Adjust prices for scarcity and then remove this adjustment from reduced costs
-        PricingStrategy::ScarcityAdjusted => {
-            let adjusted_prices = shadow_prices
-                .clone()
-                .with_scarcity_adjustment(solution.iter_activity_duals());
-            let unadjusted_prices = shadow_prices;
-            let mut reduced_costs_for_candidates = reduced_costs_for_candidates;
-
-            // Remove adjustment
-            remove_scarcity_influence_from_candidate_reduced_costs(
-                &mut reduced_costs_for_candidates,
-                &adjusted_prices,
-                &unadjusted_prices,
-            );
-
-            (adjusted_prices, reduced_costs_for_candidates)
-        }
-    };
-
-    // Use old prices for any commodities for which price is missing
-    prices.extend(new_prices);
-
-    // Add new reduced costs, using old values if not provided
-    reduced_costs.extend(reduced_costs_for_candidates);
-    reduced_costs.extend(reduced_costs_for_existing(
-        model,
-        existing_assets,
-        &prices,
-        year,
-    ));
-
-    (prices, reduced_costs)
+    match model.parameters.pricing_strategy {
+        // Use raw shadow prices
+        PricingStrategy::ShadowPrices => shadow_prices,
+        // Adjust prices for scarcity
+        PricingStrategy::ScarcityAdjusted => shadow_prices
+            .clone()
+            .with_scarcity_adjustment(solution.iter_activity_duals()),
+    }
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
@@ -360,101 +238,14 @@ where
     highest_duals
 }
 
-/// Remove the effect of scarcity on candidate assets' reduced costs
-fn remove_scarcity_influence_from_candidate_reduced_costs(
-    reduced_costs: &mut ReducedCosts,
-    adjusted_prices: &CommodityPrices,
-    unadjusted_prices: &CommodityPrices,
-) {
-    for ((asset, time_slice), cost) in reduced_costs.iter_mut() {
-        *cost += asset
-            .iter_flows()
-            .map(|flow| {
-                get_scarcity_adjustment(
-                    flow,
-                    asset.region_id(),
-                    time_slice,
-                    adjusted_prices,
-                    unadjusted_prices,
-                )
-            })
-            .sum();
-    }
-}
-
-/// Get the scarcity adjustment for the given flow/region/time slice combination.
-///
-/// The return value may be negative.
-fn get_scarcity_adjustment(
-    flow: &ProcessFlow,
-    region_id: &RegionID,
-    time_slice: &TimeSliceID,
-    adjusted_prices: &CommodityPrices,
-    unadjusted_prices: &CommodityPrices,
-) -> MoneyPerActivity {
-    let adjusted = adjusted_prices
-        .get(&flow.commodity.id, region_id, time_slice)
-        .expect("No adjusted price found");
-    let unadjusted = unadjusted_prices
-        .get(&flow.commodity.id, region_id, time_slice)
-        .expect("No unadjusted price found");
-    flow.coeff * (unadjusted - adjusted)
-}
-
-/// Calculate reduced costs for existing assets
-fn reduced_costs_for_existing<'a>(
-    model: &'a Model,
-    assets: &'a [AssetRef],
-    prices: &'a CommodityPrices,
-    year: u32,
-) -> impl Iterator<Item = ((AssetRef, TimeSliceID), MoneyPerActivity)> + 'a {
-    iproduct!(assets, model.time_slice_info.iter_ids()).map(move |(asset, time_slice)| {
-        let operating_cost = asset.get_operating_cost(year, time_slice);
-        let revenue_from_flows =
-            asset.get_revenue_from_flows_for_objective(&model.agents, prices, year, time_slice);
-        let reduced_cost = operating_cost - revenue_from_flows;
-
-        ((asset.clone(), time_slice.clone()), reduced_cost)
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commodity::CommodityID;
-    use crate::fixture::{
-        asset, assets, commodity_id, process, region_id, time_slice, time_slice_info,
-    };
-    use crate::process::Process;
+    use crate::fixture::{commodity_id, region_id, time_slice, time_slice_info};
     use crate::region::RegionID;
     use crate::time_slice::TimeSliceID;
-    use indexmap::indexmap;
     use rstest::rstest;
-
-    #[rstest]
-    fn test_get_reduced_cost(process: Process, time_slice: TimeSliceID) {
-        let asset_pool = assets(asset(process));
-        let asset = asset_pool.as_slice().first().unwrap();
-
-        // Create reduced costs with only the candidate version
-        let candidate = Asset::new_candidate_from_commissioned(asset);
-        let mut reduced_costs = ReducedCosts::from(indexmap! {
-            (candidate.into(), time_slice.clone()) => MoneyPerActivity(42.0)
-        });
-
-        // Should fallback to candidate when asset not found
-        let result = reduced_costs.get(asset, &time_slice);
-        assert_eq!(result, MoneyPerActivity(42.0));
-
-        // Add a reduced cost for the asset
-        reduced_costs.extend(indexmap! {
-            (asset.clone(), time_slice.clone()) => MoneyPerActivity(100.0)
-        });
-
-        // Now should return the asset's reduced cost
-        let result = reduced_costs.get(asset, &time_slice);
-        assert_eq!(result, MoneyPerActivity(100.0));
-    }
 
     #[rstest]
     #[case(MoneyPerFlow(100.0), MoneyPerFlow(100.0), Dimensionless(0.0), true)] // exactly equal

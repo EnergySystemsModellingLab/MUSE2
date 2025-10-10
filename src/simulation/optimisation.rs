@@ -66,7 +66,6 @@ pub struct Solution<'a> {
     solution: highs::Solution,
     variables: VariableMap,
     active_asset_var_idx: Range<usize>,
-    candidate_asset_var_idx: Range<usize>,
     time_slice_info: &'a TimeSliceInfo,
     constraint_keys: ConstraintKeys,
     /// The objective value for the solution
@@ -107,13 +106,6 @@ impl Solution<'_> {
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         self.zip_var_keys_with_output(&self.active_asset_var_idx, self.solution.columns())
-    }
-
-    /// Reduced costs for candidate assets
-    pub fn iter_reduced_costs_for_candidates(
-        &self,
-    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
-        self.zip_var_keys_with_output(&self.candidate_asset_var_idx, self.solution.dual_columns())
     }
 
     /// Keys and dual values for commodity balance constraints.
@@ -196,7 +188,7 @@ fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID
 ///
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE_2.0/model/dispatch_optimisation.html
+/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
@@ -277,7 +269,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.existing_assets,
             self.year,
         );
-        let candidate_asset_var_idx = add_variables(
+        add_variables(
             &mut problem,
             &mut variables,
             &self.model.time_slice_info,
@@ -319,7 +311,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             solution: solution.get_solution(),
             variables,
             active_asset_var_idx,
-            candidate_asset_var_idx,
             time_slice_info: &self.model.time_slice_info,
             constraint_keys,
             objective_value,
