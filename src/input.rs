@@ -243,13 +243,8 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 
 /// Load commodity flow graphs for a model.
 ///
-/// This begins by reading time slice, region, year, commodity and process data which is necessary
-/// to build the graphs. Other model data (agents and assets) that is not necessary for graph
-/// building is not read.
-///
-/// Once data is loaded (and assuming the validation checks for this data pass), this will create a
-/// graph of commodity flows for each region and year, where nodes are commodities and edges are
-/// processes.
+/// Loads necessary input data and creates a graph of commodity flows for each region and year,
+/// where nodes are commodities and edges are processes.
 ///
 /// Graphs validation is NOT performed. This ensures that graphs can be generated even when
 /// validation would fail, which may be helpful for debugging.

@@ -71,19 +71,14 @@ pub fn get_output_dir(model_dir: &Path) -> Result<PathBuf> {
 
 /// Get the default output directory for commodity flow graphs for the model
 pub fn get_graphs_dir(model_dir: &Path) -> Result<PathBuf> {
-    // Get the model name from the dir path. This ends up being convoluted because we need to check
-    // for all possible errors. Ugh.
     let model_dir = model_dir
         .canonicalize() // canonicalise in case the user has specified "."
         .context("Could not resolve path to model")?;
-
     let model_name = model_dir
         .file_name()
         .context("Model cannot be in root folder")?
         .to_str()
         .context("Invalid chars in model dir name")?;
-
-    // Construct path
     Ok([GRAPHS_DIRECTORY_ROOT, model_name].iter().collect())
 }
 
