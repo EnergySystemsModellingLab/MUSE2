@@ -46,7 +46,6 @@ struct AgentRaw {
 /// * `commodities` - Commodities for the model
 /// * `process_ids` - The possible valid process IDs
 /// * `region_ids` - The possible valid region IDs
-/// * `allow_broken_options` - Whether to enable options that are known to be broken
 ///
 /// # Returns
 ///
@@ -57,7 +56,6 @@ pub fn read_agents(
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
     milestone_years: &[u32],
-    allow_broken_options: bool,
 ) -> Result<AgentMap> {
     let mut agents = read_agents_file(model_dir, region_ids)?;
     let agent_ids = agents.keys().cloned().collect();
@@ -76,8 +74,7 @@ pub fn read_agents(
             .with_context(|| format!("Missing commodity portions for agent {id}"))?;
     }
 
-    let mut objectives =
-        read_agent_objectives(model_dir, &agents, milestone_years, allow_broken_options)?;
+    let mut objectives = read_agent_objectives(model_dir, &agents, milestone_years)?;
     let commodity_ids = commodities.keys().cloned().collect();
     let mut search_spaces = read_agent_search_space(
         model_dir,

@@ -2,7 +2,7 @@
 use super::super::{input_err_msg, read_csv, try_insert};
 use crate::ISSUES_URL;
 use crate::agent::{AgentID, AgentMap, AgentObjectiveMap, DecisionRule, ObjectiveType};
-use crate::model::ALLOW_BROKEN_OPTION_NAME;
+use crate::model::{ALLOW_BROKEN_OPTION_NAME, broken_model_options_allowed};
 use crate::units::Dimensionless;
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
@@ -36,7 +36,6 @@ struct AgentObjectiveRaw {
 /// * `model_dir` - Folder containing model configuration files
 /// * `agents` - Map of agents
 /// * `milestone_years` - Milestone years for the simulation
-/// * `allow_broken_options` - Whether to allow broken model options
 ///
 /// # Returns
 ///
@@ -45,24 +44,17 @@ pub fn read_agent_objectives(
     model_dir: &Path,
     agents: &AgentMap,
     milestone_years: &[u32],
-    allow_broken_options: bool,
 ) -> Result<HashMap<AgentID, AgentObjectiveMap>> {
     let file_path = model_dir.join(AGENT_OBJECTIVES_FILE_NAME);
     let agent_objectives_csv = read_csv(&file_path)?;
-    read_agent_objectives_from_iter(
-        agent_objectives_csv,
-        agents,
-        milestone_years,
-        allow_broken_options,
-    )
-    .with_context(|| input_err_msg(&file_path))
+    read_agent_objectives_from_iter(agent_objectives_csv, agents, milestone_years)
+        .with_context(|| input_err_msg(&file_path))
 }
 
 fn read_agent_objectives_from_iter<I>(
     iter: I,
     agents: &AgentMap,
     milestone_years: &[u32],
-    allow_broken_options: bool,
 ) -> Result<HashMap<AgentID, AgentObjectiveMap>>
 where
     I: Iterator<Item = AgentObjectiveRaw>,
@@ -109,7 +101,7 @@ where
             .collect_vec();
         if !npv_years.is_empty() {
             ensure!(
-                allow_broken_options,
+                broken_model_options_allowed(),
                 "The NPV option is BROKEN and should not be used. See: {ISSUES_URL}/716.\n\
                 If you are sure that you want to enable it anyway, you need to set the \
                 {ALLOW_BROKEN_OPTION_NAME} option to true."
@@ -251,7 +243,6 @@ mod tests {
             iter::once(objective_raw.clone()),
             &agents,
             &milestone_years,
-            false,
         )
         .unwrap();
         assert_eq!(actual, expected);
@@ -261,7 +252,7 @@ mod tests {
     fn test_read_agent_objectives_from_iter_invalid_no_objective_for_agent(agents: AgentMap) {
         // Missing objective for agent
         assert_error!(
-            read_agent_objectives_from_iter(iter::empty(), &agents, &[2020], false),
+            read_agent_objectives_from_iter(iter::empty(), &agents, &[2020]),
             "Agent agent1 has no objectives"
         );
     }
@@ -273,12 +264,7 @@ mod tests {
     ) {
         // Missing objective for milestone year
         assert_error!(
-            read_agent_objectives_from_iter(
-                iter::once(objective_raw),
-                &agents,
-                &[2020, 2030],
-                false
-            ),
+            read_agent_objectives_from_iter(iter::once(objective_raw), &agents, &[2020, 2030]),
             "Agent agent1 is missing objectives for the following milestone years: [2030]"
         );
     }
@@ -294,7 +280,7 @@ mod tests {
             decision_lexico_order: None,
         };
         assert_error!(
-            read_agent_objectives_from_iter([bad_objective].into_iter(), &agents, &[2020], false),
+            read_agent_objectives_from_iter([bad_objective].into_iter(), &agents, &[2020]),
             "Field decision_weight should be empty for this decision rule"
         );
     }
