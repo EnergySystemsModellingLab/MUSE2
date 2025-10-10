@@ -10,11 +10,22 @@ use log::warn;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::path::Path;
+use std::sync::OnceLock;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
 
 /// The name of the option used to gate other, broken options.
 pub const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
+
+/// Whether broken options have been enabled by an option in the model config file
+static BROKEN_OPTIONS_ALLOWED: OnceLock<bool> = OnceLock::new();
+
+/// Whether broken model options have been enabled in the config file or not
+pub fn broken_model_options_allowed() -> bool {
+    *BROKEN_OPTIONS_ALLOWED
+        .get()
+        .expect("Broken options flag not set")
+}
 
 macro_rules! define_unit_param_default {
     ($name:ident, $type: ty, $value: expr) => {
@@ -140,6 +151,11 @@ impl ModelParameters {
     pub fn from_path<P: AsRef<Path>>(model_dir: P) -> Result<ModelParameters> {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
         let model_params: ModelParameters = read_toml(&file_path)?;
+
+        // Set flag signalling whether broken model options are allowed or not
+        BROKEN_OPTIONS_ALLOWED
+            .set(model_params.allow_broken_options)
+            .unwrap(); // Will only fail if there is a race condition, which shouldn't happen
 
         model_params
             .validate()
