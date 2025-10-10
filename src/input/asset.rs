@@ -35,7 +35,7 @@ struct AssetRaw {
 ///
 /// # Returns
 ///
-/// A `HashMap` containing assets grouped by agent ID.
+/// A `Vec` of [`Asset`]s or an error.
 pub fn read_assets(
     model_dir: &Path,
     agent_ids: &IndexSet<AgentID>,
