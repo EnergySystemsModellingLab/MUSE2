@@ -1,6 +1,7 @@
 //! The model represents the static input data provided by the user.
 use crate::agent::AgentMap;
 use crate::commodity::{CommodityID, CommodityMap};
+use crate::graph::CommoditiesGraph;
 use crate::process::ProcessMap;
 use crate::region::{RegionID, RegionMap};
 use crate::time_slice::TimeSliceInfo;
@@ -26,6 +27,8 @@ pub struct Model {
     pub time_slice_info: TimeSliceInfo,
     /// Regions for the simulation
     pub regions: RegionMap,
+    /// Commodity flow graphs for each region and year
+    pub commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph>,
     /// Commodity ordering for each region and year
     pub commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>>,
 }

@@ -1,4 +1,5 @@
 //! The command line interface for the simulation.
+use crate::graph::save_commodity_graphs_for_model;
 use crate::input::load_model;
 use crate::log;
 use crate::output::{create_output_directory, get_output_dir};
@@ -62,6 +63,13 @@ enum Commands {
         /// The path to the model directory.
         model_dir: PathBuf,
     },
+    /// Build and output commodity flow graphs for a model.
+    BuildCommodityGraphs {
+        /// The path to the model directory.
+        model_dir: PathBuf,
+        /// Output path
+        output_dir: PathBuf,
+    },
     /// Manage settings file.
     Settings {
         /// The subcommands for managing the settings file.
@@ -77,6 +85,10 @@ impl Commands {
             Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts, None),
             Self::Example { subcommand } => subcommand.execute(),
             Self::Validate { model_dir } => handle_validate_command(&model_dir, None),
+            Self::BuildCommodityGraphs {
+                model_dir,
+                output_dir,
+            } => handle_build_commodity_graphs_command(&model_dir, &output_dir, None),
             Self::Settings { subcommand } => subcommand.execute(),
         }
     }
@@ -175,6 +187,33 @@ pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) ->
     // Load/validate the model
     load_model(model_path).context("Failed to validate model.")?;
     info!("Model validation successful!");
+
+    Ok(())
+}
+
+/// Handle the `build-commodity-graphs` command.
+pub fn handle_build_commodity_graphs_command(
+    model_path: &Path,
+    output_path: &Path,
+    settings: Option<Settings>,
+) -> Result<()> {
+    // Load program settings, if not provided
+    let settings = if let Some(settings) = settings {
+        settings
+    } else {
+        Settings::load().context("Failed to load settings.")?
+    };
+
+    // Initialise program logger (we won't save log files when running the validate command)
+    log::init(&settings.log_level, None).context("Failed to initialise logging.")?;
+
+    // Load/validate the model
+    let (model, _) = load_model(model_path).context("Failed to load model.")?;
+    info!("Loaded model from {}", model_path.display());
+
+    // Save commodity flow graphs to file
+    save_commodity_graphs_for_model(&model.commodity_graphs, output_path)?;
+    info!("Commodity flow graphs saved to file");
 
     Ok(())
 }

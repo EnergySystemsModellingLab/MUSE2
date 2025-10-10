@@ -12,6 +12,7 @@ use petgraph::algo::toposort;
 use petgraph::graph::Graph;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::path::Path;
 use strum::IntoEnumIterator;
 
 /// A graph of commodity flows for a given region and year
@@ -398,6 +399,19 @@ pub fn validate_commodity_graphs_for_model(
 
     // If all the validation passes, return the commodity ordering
     Ok(commodity_order)
+}
+
+/// Saves commodity graphs to file
+///
+/// The graphs are saved as DOT files to the specified output path
+pub fn save_commodity_graphs_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    _output_path: &Path,
+) -> Result<()> {
+    for ((_region_id, _year), _graph) in commodity_graphs {
+        todo!()
+    }
+    Ok(())
 }
 
 #[cfg(test)]

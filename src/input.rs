@@ -233,6 +233,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         processes,
         time_slice_info,
         regions,
+        commodity_graphs,
         commodity_order,
     };
     Ok((model, AssetPool::new(assets)))
