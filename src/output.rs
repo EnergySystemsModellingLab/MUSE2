@@ -7,7 +7,6 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
-use crate::simulation::prices::ReducedCosts;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
@@ -47,9 +46,6 @@ const SOLVER_VALUES_FILE_NAME: &str = "debug_solver.csv";
 
 /// The output file name for appraisal results
 const APPRAISAL_RESULTS_FILE_NAME: &str = "debug_appraisal_results.csv";
-
-/// The output file name for reduced costs
-const REDUCED_COSTS_FILE_NAME: &str = "debug_reduced_costs.csv";
 
 /// Get the model name from the specified directory path
 pub fn get_output_dir(model_dir: &Path) -> Result<PathBuf> {
@@ -208,17 +204,6 @@ struct AppraisalResultsRow {
     metric: f64,
 }
 
-/// Represents the reduced costs in a row of the reduced costs CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct ReducedCostsRow {
-    milestone_year: u32,
-    asset_id: Option<AssetID>,
-    process_id: ProcessID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    reduced_cost: MoneyPerActivity,
-}
-
 /// For writing extra debug information about the model
 struct DebugDataWriter {
     context: Option<String>,
@@ -227,7 +212,6 @@ struct DebugDataWriter {
     activity_duals_writer: csv::Writer<File>,
     solver_values_writer: csv::Writer<File>,
     appraisal_results_writer: csv::Writer<File>,
-    reduced_costs_writer: csv::Writer<File>,
 }
 
 impl DebugDataWriter {
@@ -249,7 +233,6 @@ impl DebugDataWriter {
             activity_duals_writer: new_writer(ACTIVITY_DUALS_FILE_NAME)?,
             solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
             appraisal_results_writer: new_writer(APPRAISAL_RESULTS_FILE_NAME)?,
-            reduced_costs_writer: new_writer(REDUCED_COSTS_FILE_NAME)?,
         })
     }
 
@@ -403,27 +386,6 @@ impl DebugDataWriter {
         Ok(())
     }
 
-    /// Write reduced costs to file
-    fn write_reduced_costs(
-        &mut self,
-        milestone_year: u32,
-        reduced_costs: &ReducedCosts,
-    ) -> Result<()> {
-        for ((asset, time_slice), reduced_cost) in reduced_costs.iter() {
-            let row = ReducedCostsRow {
-                milestone_year,
-                asset_id: asset.id(),
-                process_id: asset.process_id().clone(),
-                region_id: asset.region_id().clone(),
-                time_slice: time_slice.clone(),
-                reduced_cost: *reduced_cost,
-            };
-            self.reduced_costs_writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
         self.activity_writer.flush()?;
@@ -431,7 +393,6 @@ impl DebugDataWriter {
         self.activity_duals_writer.flush()?;
         self.solver_values_writer.flush()?;
         self.appraisal_results_writer.flush()?;
-        self.reduced_costs_writer.flush()?;
 
         Ok(())
     }
@@ -558,18 +519,6 @@ impl DataWriter {
             self.prices_writer.serialize(row)?;
         }
 
-        Ok(())
-    }
-
-    /// Write reduced costs to a CSV file
-    pub fn write_debug_reduced_costs(
-        &mut self,
-        milestone_year: u32,
-        reduced_costs: &ReducedCosts,
-    ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug_writer {
-            wtr.write_reduced_costs(milestone_year, reduced_costs)?;
-        }
         Ok(())
     }
 
@@ -886,43 +835,6 @@ mod tests {
         };
         let records: Vec<AppraisalResultsRow> =
             csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn test_write_reduced_costs(assets: AssetPool, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let dir = tempdir().unwrap();
-        let asset = assets.iter_active().next().unwrap();
-
-        // Write reduced costs
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            let reduced_costs = indexmap! {
-                (asset.clone(), time_slice.clone()) => MoneyPerActivity(0.5)
-            }
-            .into();
-            writer
-                .write_reduced_costs(milestone_year, &reduced_costs)
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = ReducedCostsRow {
-            milestone_year,
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            time_slice,
-            reduced_cost: MoneyPerActivity(0.5),
-        };
-        let records: Vec<ReducedCostsRow> =
-            csv::Reader::from_path(dir.path().join(REDUCED_COSTS_FILE_NAME))
                 .unwrap()
                 .into_deserialize()
                 .try_collect()

@@ -1,6 +1,5 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use super::prices::ReducedCosts;
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
@@ -17,8 +16,8 @@ use log::debug;
 use std::collections::HashMap;
 
 pub mod appraisal;
-use appraisal::appraise_investment;
 use appraisal::coefficients::calculate_coefficients_for_assets;
+use appraisal::{AppraisalOutput, appraise_investment};
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -34,14 +33,12 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 /// * `year` - Current milestone year
 /// * `assets` - The asset pool
 /// * `prices` - Commodity prices
-/// * `reduced_costs` - Reduced costs for assets
 /// * `writer` - Data writer
 pub fn perform_agent_investment(
     model: &Model,
     year: u32,
     existing_assets: &[AssetRef],
     prices: &CommodityPrices,
-    reduced_costs: &ReducedCosts,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise demand map
@@ -110,7 +107,7 @@ pub fn perform_agent_investment(
                     opt_assets,
                     commodity,
                     agent,
-                    reduced_costs,
+                    prices,
                     demand_portion_for_commodity,
                     year,
                     writer,
@@ -360,7 +357,7 @@ fn select_best_assets(
     mut opt_assets: Vec<AssetRef>,
     commodity: &Commodity,
     agent: &Agent,
-    reduced_costs: &ReducedCosts,
+    prices: &CommodityPrices,
     mut demand: DemandMap,
     year: u32,
     writer: &mut DataWriter,
@@ -369,7 +366,7 @@ fn select_best_assets(
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
-        calculate_coefficients_for_assets(model, objective_type, &opt_assets, reduced_costs);
+        calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
 
     let mut remaining_candidate_capacity = HashMap::from_iter(
         opt_assets
@@ -438,7 +435,7 @@ fn select_best_assets(
         // Select the best investment option
         let best_output = outputs_for_opts
             .into_iter()
-            .min_by(|a, b| a.metric.partial_cmp(&b.metric).unwrap())
+            .min_by(AppraisalOutput::compare_metric)
             .unwrap();
 
         // Log the selected asset

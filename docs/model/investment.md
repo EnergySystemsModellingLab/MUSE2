@@ -8,28 +8,24 @@ which existing assets to retain to meet system needs over time. In the overall w
 optimisation is used to identify *physical needs* by quantifying demand profiles for commodities of
 interest.
 
-The economic evaluation and selection of all supply options—new candidate assets (\\( ca \\)) and
-contributions from existing assets (\\( ex \\))—consistently use prices formed in the *previous*
-milestone year (\\( \pi_{prevMSY} \\)). This approach models investment and retention decisions as
-being based on recent, known economic conditions while responding to immediate commodity demands. A
-core assumption is that all commodities, except specific user-identified SVD commodities, have
-reliable \\( \pi_{prevMSY} \\) values for these economic evaluations.
+## Commodity prices
 
-## Data for economic evaluation of supply options
+The economic evaluation and selection of all supply options — new candidate assets and
+contributions from existing assets — consistently use prices formed in the *previous*
+milestone year (\\( \lambda\_{c,r,t} \\)). This approach models investment and retention
+decisions as being based on recent, known economic conditions while responding to immediate
+commodity demands. A core assumption is that all commodities, except specific user-identified SVD
+commodities, have reliable \\( \lambda\_{c,r,t} \\) values for these economic evaluations.
 
-This data provides the primary economic context for appraisal calculations, drawn from the settled
-state of the preceding milestone year.
+When `pricing_strategy` is `shadow_prices`, these are the shadow prices for each commodity
+\\( c \\), in each region \\( r \\), for each time slice \\( t \\), taken from the final dispatch of
+the preceding MSY. When the `pricing_strategy` option is set to `scarcity_adjusted`, these are the
+shadow prices for each commodity adjusted to remove the impact of binding capacity constraints.
 
-- Previous MSY prices: \\( \pi_{prevMSY}[c,r,t] \\). When `pricing_strategy` is `shadow_prices`,
-  these are the shadow prices for each commodity \\( c \\), in each region \\( r \\), for each time
-  slice \\( t \\), taken from the final dispatch of the preceding MSY. When the `pricing_strategy`
-  option is set to `scarcity_adjusted`, these are the shadow prices for each commodity adjusted to
-  remove the impact of binding capacity constraints.
-
-- Previous MSY reduced costs for new candidates: \\( rc_{prevMSY}[ca,r,t] \\). If candidate assets
-  \\( ca \\) were included (at zero capacity) in the \\( \text{MSY}\_{prev} \\)’s final dispatch run,
-  their reduced costs were generated and can be used as a measure of their profitability in \\(
-  \text{MSY}\_{next} \\).
+Note: there is an option to iterate over each year so that investment decisions are based on
+equilibrium prices in the _current year_, in what's referred to as the "[ironing-out loop]".
+In this case, \\( \lambda\_{c,r,t} \\) will reflect prices from previous iteration of the
+ironing-out loop.
 
 ## Candidate and existing asset data
 
@@ -78,54 +74,28 @@ providing investment and dynamic decommissioning decisions.
 - Annualised fixed costs per unit of capacity (\\( AFC_{opt,r} \\)): For new candidates, this is
   their annualised CAPEX plus FOM. For existing assets, the relevant fixed cost is its FOM.
 
-- **Determine candidate asset reduced cost or equivalent for existing assets:** For candidate
-  assets, if `pricing_strategy` is `scarcity_adjusted`, candidate asset reduced costs are as
-  provided by the solver. If `pricing_strategy` is `shadow_prices`, candidate asset reduced costs
-  must be calculated as follows:
+- Costs per unit of activity in each time slice, calculated as follows:
 
   \\[
     \begin{aligned}
-          RC^*\_{ca,r,t} = RC\_{ca,r,t}
-            &- \sum\_{c} \Big( input\_{\text{coeff}}[ca,c] - output\_{\text{coeff}}[ca,c] \Big)
+          AC_t = & \quad cost\_{\text{var}}[t] \\\\
+            &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]
+              + cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+            &+ \sum\_{c} \Big( input\_{\text{coeff}}[c] - output\_{\text{coeff}}[c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
-            &+ \sum\_{c} \Big( input\_{\text{coeff}}[ca,c] - output\_{\text{coeff}}[ca,c] \Big)
-              \cdot \lambda^\*\_{c,r,t}
-    \end{aligned}
-  \\]
-
-  Where \\( RC^\*\_{ca,r,t} \\) is the adjusted reduced cost, \\( RC\_{ca,r,t} \\) is the
-  solver-provided reduced cost, \\( \lambda\_{c,r,t} \\) is the solver-provided commodity shadow
-  price, and \\( \lambda^\*\_{c,r,t} \\) is the adjusted commodity price (which removes the impact
-  of scarcity pricing).
-
-  For existing assets, an equivalent to reduced cost is calculated as follows:
-
-  \\[
-    \begin{aligned}
-          RC^\*\_{ex,r,t} = & \quad cost\_{\text{var}}[ex,r,t] \\\\
-            &+ \sum\_{c} \Big( cost\_{\text{input}}[ex,c] \cdot input\_{\text{coeff}}[ex,c]
-              + cost\_{\text{output}}[ex,c] \cdot output\_{\text{coeff}}[ex,c] \Big) \\\\
-            &+ \sum\_{c} \Big( input\_{\text{coeff}}[ex,c] - output\_{\text{coeff}}[ex,c] \Big)
-              \cdot \lambda^\*\_{c,r,t} \\\\
             &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
             &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
-              \cdot output\_{\text{coeff}}[ex,c] \\\\
+              \cdot output\_{\text{coeff}}[c] \\\\
             &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
-              \cdot input\_{\text{coeff}}[ex,c] \\\\
+              \cdot input\_{\text{coeff}}[c] \\\\
             &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
-              \cdot (output\_{\text{coeff}}[ex,c] - input\_{\text{coeff}}[ex,c]) \\\\
+              \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
             &\Big\\}
     \end{aligned}
   \\]
 
-  Where \\( RC^\*\_{ex,r,t} \\) is the marginal surplus, \\( \lambda^\*\_{c,r,t} \\) is the adjusted
-  commodity price (which removes the impact of scarcity pricing) or the solver-provided shadow price
-  (including scarcity pricing) as appropriate.
-
-  For the case of LCOX objective, \\( RC^\*\_{ex,r,t} \\) must also be adjusted to remove the prices
-  of non-priced commodities, and the price of the commodity of interest. For these commodities \\(
-  \lambda^\*\_{c,r,t} \\) and \\( \lambda\_{c,r,t} \\) are set to zero, and \\( RC^\*\_{ex,r,t} \\)
-  adjusted as a result.
+  When using the LCOX objective, the calculation is adjusted to exclude the commodity of interest
+  (\\( \lambda\_{c,r,t} \\) are set to zero).
 
 ### Initialise demand profiles for commodity of interest
 
@@ -165,35 +135,31 @@ agents’ serving commodity \\( c \\). This method iteratively builds a supply p
 options that offer the highest annualised profit for serving the current commodity demand. The
 economic evaluation uses \\( \pi_{prevMSY} \\) prices and takes account of asset-specific
 operational constraints (e.g., minimum load levels) and the balance level of the target commodity
-(time slice profile, seasonal or annual).
+(time slice profile, seasonal or annual). For each asset option:
 
-- **Choose capacity and dispatch to maximise annualised profit:** Solve a small optimisation
+- **Optimise capacity and dispatch to maximise annualised profit:** Solve a small optimisation
   sub-problem to maximise the asset’s surplus, subject to its operational rules and the specific
-  demand tranche it is being asked to serve. Define \\( SurplusPerAct_{opt,t} = - RC^*_{opt,r,t}
-  \\).
+  demand tranche it is being asked to serve.
 
   \\[
-    maximise \Big\\{ -AFC\_{opt,r}\*cap_{opt,r} + \sum\_{t} act\_{opt,t}\*SurplusPerAct_{opt,t}
+    maximise \Big\\{ -AFC \* cap - \sum_t act_t \* AC_t
     \Big\\}
   \\]
 
-  Where \\( cap_{opt,r} \\) and \\( act_{opt,t} \\) are decision variables, and subject to:
+  Where \\( cap \\) and \\( act_t \\) are decision variables, and subject to:
 
   - The asset operational constraints (e.g., \\( avail_{LB}, avail_{EQ} \\), etc.), activity less
-    than capacity, applied to its activity profile \\( act_{opt,t} \\).
+    than capacity, applied to its activity profile \\( act_t \\).
 
   - A demand constraint, where output cannot exceed demand in the tranche, which adapts based on the
     commodity’s balance level (time slice, season, annual).
 
-  - Capacity is constrained \\( <CapMaxBuild_{opt,r} \\) for candidates, and to known capacity for
+  - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
-- **Calculate a profitability index:** This is the total annualised surplus (\\( \sum_{t}
-  act_{opt,t}*SurplusPerAct_{opt,t} \\)) divided by the annualised capital cost (\\(
-  AFC_{opt,r}*cap_{opt,r} \\)).
-
-- **Save information:** Save \\( opt \\) information. If this is the last \\( opt \\) then exit this
-  loop.
+- **Calculate a profitability index:** This is the total annualised surplus (\\( - \sum_t
+  act_t \* AC \\)) divided by the annualised fixed cost (\\(
+  AFC \* cap \\)).
 
 #### Tool B: LCOX
 
@@ -205,38 +171,37 @@ explicitly accounts for its own operational constraints and adapts based on the 
 \\) of \\( c \\). Inputs and outputs for all options are valued using prices from the previous
 milestone year (\\( \pi_{prevMSY} \\)), for priced commodities. Inputs and outputs for unpriced
 commodities are set to zero, and the commodity of interest is assumed to have zero value.
+For each asset option:
 
-- **Choose capacity and dispatch to minimise annualised cost:** Solve a small optimisation
+- **Optimise capacity and dispatch to minimise annualised cost:** Solve a small optimisation
   sub-problem to maximise the asset’s surplus, subject to its operational rules and the specific
-  demand tranche it is being asked to serve. Define \\( CostPerAct_{opt,t} = RC^*_{opt,r,t} \\).
+  demand tranche it is being asked to serve.
 
   \\[
     minimise \Big\\{
-      AFC\_{opt,r}\*cap\_{opt,r} + \sum\_{t} act\_{opt,t}\*CostPerAct\_{opt,t} + VoLL*UnmetD\_{r,c,t}
+      AF \* cap + \sum_t act_t \* AC_t + VoLL \* UnmetD_t
     \Big\\}
   \\]
 
-  Where \\( cap_{opt,r} \\) and \\( act_{opt,t} \\) are decision variables, and subject to:
+  Where \\( cap \\) and \\( act_t \\) are decision variables, and subject to:
 
   - The asset operational constraints (e.g., \\( avail_{LB}, avail_{EQ} \\), etc.), activity less
-    than capacity, applied to its activity profile \\( act_{opt,t} \\).
+    than capacity, applied to its activity profile \\( act_t \\).
 
   - A demand constraint, where output from the asset plus VoLL-related outputs must equal demand in
     each timeslice of the tranche, which adapts based on the commodity’s balance level (time slice,
     season, annual).
 
-  - Capacity is constrained \\( <CapMaxBuild_{opt,r} \\) for candidates, and to known capacity for
+  - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
   - VoLL variables are active to ensure a feasible solution alongside maximum operation of the
     asset.
 
 - **Calculate a cost index:** This is the total annualised cost (\\(
-  AFC_{opt,r}*cap_{opt,r}+\sum_{t} act_{opt,t}*CostPerAct_{opt,t} \\)), divided by the annual output
-  \\( \sum_{t} act_{opt,t} \\).
-
-- **Save information:** Save \\( opt \\) information. If this is the last \\( opt \\) then exit this
-  loop.
+  AFC \* cap_r + \sum_{t} act_t \* AC_t \\)), divided by the annual output
+  \\( \sum_t act_t \\).
 
 [overall MUSE2 workflow]: ./model_description.md#framework-overview
 [Dispatch Optimisation Formulation]: ./dispatch_optimisation.md
+[ironing-out loop]: ./model_description.md#framework-overview

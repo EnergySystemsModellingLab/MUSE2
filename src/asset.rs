@@ -1,5 +1,5 @@
 //! Assets are instances of a process which are owned and invested in by agents.
-use crate::agent::{AgentID, AgentMap};
+use crate::agent::AgentID;
 use crate::commodity::CommodityID;
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
@@ -271,33 +271,29 @@ impl Asset {
         self.process_parameter.variable_operating_cost + flows_cost
     }
 
-    /// Get the total revenue from all flows for this asset, accounting for the parent agent's
-    /// objective.
+    /// Get the total revenue from all flows for this asset.
     ///
-    /// We need to account for the agent's objective when calculating reduced costs, because if it
-    /// is LCOX then we should exclude the primary output from the calculation.
-    ///
-    /// If a price is missing from `prices`, then it is assumed to be zero.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this asset has no parent agent (i.e. it's a candidate).
-    pub fn get_revenue_from_flows_for_objective(
+    /// If a price is missing, it is assumed to be zero.
+    pub fn get_revenue_from_flows(
         &self,
-        agents: &AgentMap,
         prices: &CommodityPrices,
-        year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        let exclude_commodity = self.primary_output().and_then(|flow| {
-            let agent = &agents[self.agent_id().unwrap()];
-            let exclude_coi =
-                agent.objectives[&year].exclude_primary_output_price_from_reduced_costs();
-            exclude_coi.then_some(&flow.commodity.id)
-        });
+        self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
+    }
+
+    /// Get the total revenue from all flows excluding the primary output.
+    ///
+    /// If a price is missing, it is assumed to be zero.
+    pub fn get_revenue_from_flows_excluding_primary(
+        &self,
+        prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        let excluded_commodity = self.primary_output().map(|flow| &flow.commodity.id);
 
         self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
-            exclude_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
+            excluded_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
         })
     }
 

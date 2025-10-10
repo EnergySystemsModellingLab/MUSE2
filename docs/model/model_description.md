@@ -62,7 +62,7 @@ The workflow is structured as follows:
 1. **Dispatch is executed for a calibrated base year.** Dispatch is executed using the formulation
    shown in [Dispatch Optimisation Formulation]. All existing assets are included, and all candidate
    assets for the \\( MSY_{next} \\) are included with capacities set to zero. This ensures that all
-   commodity shadow prices and reduced costs for candidate asset are generated for use in the \\(
+   commodity shadow prices are generated for use in the \\(
    MSY_{next} \\). \\( VoLL \\) load shedding variables should be zero after completion, and if they
    are non-zero then throw an error as the model is not properly calibrated.
 
@@ -117,7 +117,7 @@ The workflow is structured as follows:
 
       1. Execute dispatch as per [Dispatch Optimisation Formulation] with the complete system, with
          all candidate assets for the \\( MSY_{next} \\) included with capacities set to zero to
-         generate prices and reduced costs for the \\( MSY_{next} \\).
+         generate prices for the \\( MSY_{next} \\).
 
       2. Check if load-weighted average prices for any SED commodity has changed (or changed more
          than a tolerance) since the last loop (also, possibly check if the 95th percentile of price
