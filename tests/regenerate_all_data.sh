@@ -14,6 +14,8 @@ for example in $examples; do
     extra_args=--overwrite
     if [ $example = simple ]; then
         extra_args+=" --debug-model"
+    else
+        extra_args+=" --debug-model=false"
     fi
 
     env MUSE2_LOG_LEVEL=off cargo run example run $extra_args -o "data/$example" "$example" 2> /dev/null
