@@ -1,0 +1,11 @@
+agent_id,commodity_id,years,commodity_portion
+A0_OAG,OILCRD,all,1
+A0_OAG,GASPRD,all,1
+A0_OAG,GASNAT,all,1
+A0_REF,GASOLI,all,1
+A0_REF,DIESEL,all,1
+A0_BPD,BIOPRD,all,1
+A0_BPL,BIOPEL,all,1
+A0_ELC,ELCTRI,all,1
+A0_RES,RSHEAT,all,1
+A0_TRA,TPASKM,all,1
