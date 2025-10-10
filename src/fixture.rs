@@ -126,7 +126,7 @@ pub fn process_parameter_map(region_ids: IndexSet<RegionID>) -> ProcessParameter
         capital_cost: MoneyPerCapacity(0.0),
         fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
         variable_operating_cost: MoneyPerActivity(0.0),
-        lifetime: 1,
+        lifetime: 5,
         discount_rate: Dimensionless(1.0),
     });
 

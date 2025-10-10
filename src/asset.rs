@@ -453,7 +453,7 @@ impl Asset {
         self.state = AssetState::Decommissioned {
             id,
             agent_id,
-            decommission_year,
+            decommission_year: decommission_year.min(self.max_decommission_year()),
         };
     }
 
@@ -867,7 +867,7 @@ mod tests {
         assert_error, asset, commodity_id, process, process_parameter_map, region_id, time_slice,
     };
     use crate::process::{
-        FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessID,
+        FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
         ProcessParameter, ProcessParameterMap,
     };
     use crate::region::RegionID;
@@ -1473,7 +1473,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_state_transitions(process: Process) {
+    fn test_asset_commission(process: Process) {
         // Test successful commissioning of Future asset
         let process_rc = Rc::new(process);
         let mut asset1 = Asset::new_future(
@@ -1500,11 +1500,34 @@ mod tests {
         asset2.commission(AssetID(2), "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
+    }
+
+    #[rstest]
+    #[case::early_decommission_within_lifetime(2024, 2024)]
+    #[case::decommission_at_maximum_year(2026, 2025)]
+    fn test_asset_decommission(
+        #[case] requested_decommission_year: u32,
+        #[case] expected_decommission_year: u32,
+        process: Process,
+    ) {
+        // Test successful commissioning of Future asset
+        let process_rc = Rc::new(process);
+        let mut asset = Asset::new_future(
+            "agent1".into(),
+            Rc::clone(&process_rc),
+            "GBR".into(),
+            Capacity(1.0),
+            2020,
+        )
+        .unwrap();
+        asset.commission(AssetID(1), "");
+        assert!(asset.is_commissioned());
+        assert_eq!(asset.id(), Some(AssetID(1)));
 
         // Test successful decommissioning
-        asset1.decommission(2025, "");
-        assert!(!asset1.is_commissioned());
-        assert_eq!(asset1.decommission_year(), Some(2025));
+        asset.decommission(requested_decommission_year, "");
+        assert!(!asset.is_commissioned());
+        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
     }
 
     #[rstest]
