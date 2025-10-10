@@ -45,7 +45,7 @@ options to invest in. Examples include single objective, weighted sum between mu
 or epsilon constraint where a secondary objective is considered if two options with similar primary
 objectives are identified.
 
-**Dispatch:** The way in which *Assets* are operated to serve demand. MUSE 2.0 uses merit order
+**Dispatch:** The way in which *Assets* are operated to serve demand. MUSE2 uses merit order
 dispatch, subject to *Availability* and other constraints that can be defined by the user.
 
 **End Year:** The final year in the model time horizon.

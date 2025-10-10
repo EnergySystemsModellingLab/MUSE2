@@ -188,7 +188,7 @@ fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID
 ///
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE_2.0/model/dispatch_optimisation.html
+/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],

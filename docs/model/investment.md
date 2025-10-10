@@ -3,7 +3,7 @@
 <!-- markdownlint-disable MD049 -->
 
 This section details the investment and asset retention decision process, which is applied within
-step 2 of the [overall MUSE 2.0 workflow]. This process determines which new assets to build and
+step 2 of the [overall MUSE2 workflow]. This process determines which new assets to build and
 which existing assets to retain to meet system needs over time. In the overall workflow, dispatch
 optimisation is used to identify *physical needs* by quantifying demand profiles for commodities of
 interest.
@@ -63,7 +63,7 @@ investments.
 
 ## Investment Appraisal
 
-The main MUSE 2.0 workflow invokes the portfolio construction methods detailed in tools A and B
+The main MUSE2 workflow invokes the portfolio construction methods detailed in tools A and B
 below. These tools select the best asset from the pool of candidate and existing assets, thereby
 providing investment and dynamic decommissioning decisions.
 
@@ -107,7 +107,7 @@ providing investment and dynamic decommissioning decisions.
 
 ### Iteratively construct asset portfolio to meet target \\( U_c \\)
 
-> Note: The current implementation of MUSE 2.0 doesn't use tranches
+> Note: The current implementation of MUSE2 doesn't use tranches
 
 1. Start with the first tranche of the demand.
 
@@ -202,6 +202,6 @@ For each asset option:
   AFC \* cap_r + \sum_{t} act_t \* AC_t \\)), divided by the annual output
   \\( \sum_t act_t \\).
 
-[overall MUSE 2.0 workflow]: ./model_description.md#framework-overview
+[overall MUSE2 workflow]: ./model_description.md#framework-overview
 [Dispatch Optimisation Formulation]: ./dispatch_optimisation.md
 [ironing-out loop]: ./model_description.md#framework-overview
