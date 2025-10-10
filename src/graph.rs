@@ -15,11 +15,11 @@ use std::fmt::Display;
 use strum::IntoEnumIterator;
 
 /// A graph of commodity flows for a given region and year
-type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
+pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
 
 #[derive(Eq, PartialEq, Clone, Hash)]
 /// A node in the commodity graph
-enum GraphNode {
+pub enum GraphNode {
     /// A node representing a commodity
     Commodity(CommodityID),
     /// A source node for processes that have no inputs
@@ -43,7 +43,7 @@ impl Display for GraphNode {
 
 #[derive(Eq, PartialEq, Clone, Hash)]
 /// An edge in the commodity graph
-enum GraphEdge {
+pub enum GraphEdge {
     /// An edge representing a process
     Process(ProcessID),
     /// An edge representing a service demand
@@ -196,7 +196,7 @@ fn prepare_commodities_graph_for_validation(
 /// The validation is only performed for commodities with the specified time slice level. For full
 /// validation of all commodities in the model, we therefore need to run this function for all time
 /// slice selections at all time slice levels. This is handled by
-/// `build_and_validate_commodity_graphs_for_model`.
+/// `validate_commodity_graphs_for_model`.
 fn validate_commodities_graph(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
@@ -307,7 +307,26 @@ fn topo_sort_commodities(
     Ok(order)
 }
 
-/// Builds and validates commodity graphs for the entire model.
+/// Builds base commodity graphs for each region and year
+///
+/// These do not take into account demand and process availability
+pub fn build_commodity_graphs_for_model(
+    processes: &ProcessMap,
+    region_ids: &IndexSet<RegionID>,
+    years: &[u32],
+) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
+    let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
+        iproduct!(region_ids, years.iter())
+            .map(|(region_id, year)| {
+                let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
+                ((region_id.clone(), *year), graph)
+            })
+            .collect();
+
+    Ok(commodity_graphs)
+}
+
+/// Validates commodity graphs for the entire model.
 ///
 /// This function creates commodity flow graphs for each region/year combination in the model,
 /// validates the graph structure against commodity type rules, and determines the optimal
@@ -337,23 +356,12 @@ fn topo_sort_commodities(
 /// - Any commodity graph contains cycles
 /// - Commodity type rules are violated (e.g., SVD commodities being consumed)
 /// - Demand cannot be satisfied
-pub fn build_and_validate_commodity_graphs_for_model(
+pub fn validate_commodity_graphs_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
     processes: &ProcessMap,
     commodities: &CommodityMap,
-    region_ids: &IndexSet<RegionID>,
-    years: &[u32],
     time_slice_info: &TimeSliceInfo,
 ) -> Result<HashMap<(RegionID, u32), Vec<CommodityID>>> {
-    // Build base commodity graphs for each region and year
-    // These do not take into account demand and process availability
-    let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
-        iproduct!(region_ids, years.iter())
-            .map(|(region_id, year)| {
-                let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
-                ((region_id.clone(), *year), graph)
-            })
-            .collect();
-
     // Determine commodity ordering for each region and year
     let commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>> = commodity_graphs
         .iter()
@@ -366,7 +374,7 @@ pub fn build_and_validate_commodity_graphs_for_model(
         .try_collect()?;
 
     // Validate graphs at all time slice levels (taking into account process availability and demand)
-    for ((region_id, year), base_graph) in &commodity_graphs {
+    for ((region_id, year), base_graph) in commodity_graphs {
         for ts_level in TimeSliceLevel::iter() {
             for ts_selection in time_slice_info.iter_selections_at_level(ts_level) {
                 let graph = prepare_commodities_graph_for_validation(

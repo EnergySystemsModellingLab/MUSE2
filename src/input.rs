@@ -1,6 +1,6 @@
 //! Common routines for handling input data.
 use crate::asset::AssetPool;
-use crate::graph::build_and_validate_commodity_graphs_for_model;
+use crate::graph::{build_commodity_graphs_for_model, validate_commodity_graphs_for_model};
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
 use crate::units::UnitType;
@@ -213,11 +213,11 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 
     // Build and validate commodity graphs for all regions and years
     // This gives us the commodity order for each region/year which is passed to the model
-    let commodity_order = build_and_validate_commodity_graphs_for_model(
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
+    let commodity_order = validate_commodity_graphs_for_model(
+        &commodity_graphs,
         &processes,
         &commodities,
-        &region_ids,
-        years,
         &time_slice_info,
     )?;
 
