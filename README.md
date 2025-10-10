@@ -16,8 +16,13 @@ It is the successor to [MUSE], which is written in Python. It was developed foll
 MUSE to address a range of legacy issues that are challenging to address via upgrades to the
 existing MUSE framework, and to implement the framework in the high-performance Rust language.
 
-:construction: **Please note that this code is under heavy development and is not yet suitable for
-end users. Watch this space!** :construction:
+Please note that MUSE2 currently only works with simple models and is not yet suitable for use in
+research.
+
+To download the latest version of MUSE2 for your platform, please visit [the releases page].
+
+[MUSE]: https://github.com/EnergySystemsModellingLab/MUSE_OS
+[the releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases
 
 ## Model Overview
 
@@ -34,7 +39,6 @@ foresight, reacting only to information available in the current time period. Th
 intertemporal optimisation modelling frameworks (such as [TIMES] and [MESSAGEix]) which have perfect
 foresight over the whole modelled time horizon.
 
-[MUSE]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 [Integrated Assessment Modelling]: https://unfccc.int/topics/mitigation/workstreams/response-measures/modelling-tools-to-assess-the-impact-of-the-implementation-of-response-measures/integrated-assessment-models-iams-and-energy-environment-economy-e3-models
 [TIMES]: https://iea-etsap.org/index.php/etsap-tools/model-generators/times
 [MESSAGEix]: https://docs.messageix.org/en/latest
