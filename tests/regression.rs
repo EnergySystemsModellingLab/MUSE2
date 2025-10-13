@@ -43,7 +43,7 @@ fn run_regression_test_debug_opt(example_name: &str, debug_model: bool) {
     let opts = RunOpts {
         output_dir: Some(output_dir.clone()),
         overwrite: false,
-        debug_model: true, // NB: Always enable this as it helps to have the files for debugging
+        debug_model: Some(true), // NB: Always enable this as it helps to have the files for debugging
     };
     handle_example_run_command(example_name, &opts, Some(Settings::default())).unwrap();
 
