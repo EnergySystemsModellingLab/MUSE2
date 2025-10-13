@@ -1,7 +1,7 @@
 //! The command line interface for the simulation.
+use crate::graph::save_commodity_graphs_for_model;
 use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
-use crate::output::graph::save_commodity_graphs_for_model;
 use crate::output::{create_output_directory, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
 use ::log::{info, warn};
@@ -207,16 +207,11 @@ pub fn handle_graph_command(
     settings: Option<Settings>,
 ) -> Result<()> {
     // Load program settings, if not provided
-    let mut settings = if let Some(settings) = settings {
+    let settings = if let Some(settings) = settings {
         settings
     } else {
         Settings::load().context("Failed to load settings.")?
     };
-
-    // These settings can be overridden by command-line arguments
-    if opts.overwrite {
-        settings.overwrite = true;
-    }
 
     // Get path to output folder
     let pathbuf: PathBuf;
@@ -246,7 +241,7 @@ pub fn handle_graph_command(
     // Load commodity flow graphs and save to file
     let commodity_graphs = load_commodity_graphs(model_path).context("Failed to build graphs.")?;
     save_commodity_graphs_for_model(&commodity_graphs, output_path)?;
-    info!("Graphs saved to file");
+    info!("Graphs saved to: {}", output_path.display());
 
     Ok(())
 }

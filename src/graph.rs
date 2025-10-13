@@ -9,9 +9,13 @@ use indexmap::IndexSet;
 use itertools::{Itertools, iproduct};
 use petgraph::Directed;
 use petgraph::algo::toposort;
+use petgraph::dot::Dot;
 use petgraph::graph::Graph;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::fs::File;
+use std::io::Write as IoWrite;
+use std::path::Path;
 use strum::IntoEnumIterator;
 
 /// A graph of commodity flows for a given region and year
@@ -127,7 +131,7 @@ fn create_commodities_graph_for_region_year(
     graph
 }
 
-/// Prepares a graph for validation with `validate_commodities_graph`.
+/// Prepares a graph for validation with [`validate_commodities_graph`].
 ///
 /// It takes a base graph produced by `create_commodities_graph_for_region_year`, and modifies it to
 /// account for process availabilities and commodity demands within the given time slice selection,
@@ -205,7 +209,7 @@ fn prepare_commodities_graph_for_validation(
 /// The validation is only performed for commodities with the specified time slice level. For full
 /// validation of all commodities in the model, we therefore need to run this function for all time
 /// slice selections at all time slice levels. This is handled by
-/// `validate_commodity_graphs_for_model`.
+/// [`validate_commodity_graphs_for_model`].
 fn validate_commodities_graph(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
@@ -407,6 +411,21 @@ pub fn validate_commodity_graphs_for_model(
 
     // If all the validation passes, return the commodity ordering
     Ok(commodity_order)
+}
+
+/// Saves commodity graphs to file
+///
+/// The graphs are saved as DOT files to the specified output path
+pub fn save_commodity_graphs_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    output_path: &Path,
+) -> Result<()> {
+    for ((region_id, year), graph) in commodity_graphs {
+        let dot = Dot::new(&graph);
+        let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
+        write!(file, "{dot}")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

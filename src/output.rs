@@ -17,7 +17,6 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-pub mod graph;
 pub mod metadata;
 use metadata::write_metadata;
 

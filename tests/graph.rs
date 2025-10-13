@@ -21,12 +21,14 @@ fn test_handle_graph_command() {
 
     // Save results to non-existent directory to check that directory creation works
     let tempdir = tempdir().unwrap();
-    let output_dir = tempdir.path().join("results");
+    let output_dir = tempdir.path().join("graphs");
     let opts = GraphOpts {
-        output_dir: Some(output_dir),
+        output_dir: Some(output_dir.clone()),
         overwrite: false,
     };
     handle_graph_command(&get_model_dir(), &opts, Some(Settings::default())).unwrap();
-
     assert!(is_logger_initialised());
+
+    // Check that at least one DOT file was created
+    assert!(output_dir.join("GBR_2020.dot").exists());
 }
