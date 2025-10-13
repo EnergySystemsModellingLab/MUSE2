@@ -162,6 +162,11 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel> {
 
     let status = solved.status();
     ensure!(
+        status != HighsModelStatus::Infeasible,
+        "The solver has indicated that the problem is infeasible. It may be because the assets in \
+        this year cannot meet the required demand."
+    );
+    ensure!(
         status == HighsModelStatus::Optimal,
         "Could not find optimal result for model: {status:?}"
     );
