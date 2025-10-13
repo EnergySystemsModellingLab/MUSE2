@@ -75,7 +75,7 @@ enum Commands {
         model_dir: PathBuf,
     },
     /// Build and output commodity flow graphs for a model.
-    Graph {
+    SaveGraphs {
         /// The path to the model directory.
         model_dir: PathBuf,
         /// Other options
@@ -97,7 +97,9 @@ impl Commands {
             Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts, None),
             Self::Example { subcommand } => subcommand.execute(),
             Self::Validate { model_dir } => handle_validate_command(&model_dir, None),
-            Self::Graph { model_dir, opts } => handle_graph_command(&model_dir, &opts, None),
+            Self::SaveGraphs { model_dir, opts } => {
+                handle_save_graphs_command(&model_dir, &opts, None)
+            }
             Self::Settings { subcommand } => subcommand.execute(),
         }
     }
@@ -200,8 +202,8 @@ pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) ->
     Ok(())
 }
 
-/// Handle the `graph` command.
-pub fn handle_graph_command(
+/// Handle the `save-graphs` command.
+pub fn handle_save_graphs_command(
     model_path: &Path,
     opts: &GraphOpts,
     settings: Option<Settings>,

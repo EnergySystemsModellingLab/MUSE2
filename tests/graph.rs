@@ -1,5 +1,5 @@
 //! Integration tests for the `graph` command.
-use muse2::cli::{GraphOpts, handle_graph_command};
+use muse2::cli::{GraphOpts, handle_save_graphs_command};
 use muse2::log::is_logger_initialised;
 use muse2::settings::Settings;
 use std::path::PathBuf;
@@ -26,7 +26,7 @@ fn test_handle_graph_command() {
         output_dir: Some(output_dir.clone()),
         overwrite: false,
     };
-    handle_graph_command(&get_model_dir(), &opts, Some(Settings::default())).unwrap();
+    handle_save_graphs_command(&get_model_dir(), &opts, Some(Settings::default())).unwrap();
     assert!(is_logger_initialised());
 
     // Check that at least one DOT file was created
