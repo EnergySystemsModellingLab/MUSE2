@@ -47,5 +47,9 @@ properties:
     type: number
     description: The relative tolerance for price convergence in the ironing out loop
     default: 1e-6
+  please_give_me_broken_results:
+    type: boolean
+    description: |
+      Allows other options that are known to be broken to be used. Please don't ever enable this.
 
 required: [milestone_years]

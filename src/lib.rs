@@ -1,6 +1,9 @@
 //! Common functionality for MUSE2.
 #![warn(missing_docs)]
 
+/// The main GitHub issues page for MUSE2
+pub const ISSUES_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues");
+
 use dirs::config_dir;
 use std::path::PathBuf;
 
