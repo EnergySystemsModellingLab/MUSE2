@@ -5,6 +5,20 @@
 Once you have installed MUSE2, you should be able to run it via the `muse2` command-line program.
 For details of the command-line interface, [see here](./command_line_help.md).
 
+### Visualising commodity graphs
+
+To visualise the structure of your model, you can use the [the `muse2 save-graphs` command] to
+create graphs of commodity/process relationships.
+This command will output a graph for each region/year in the simulation, where nodes are commodities
+and edges are processes.
+Graphs will be saved in [DOT format], which can be visualised locally with [Graphviz], or online
+with [Graphviz online].
+
+[the `muse2 save-graphs` command]: https://energysystemsmodellinglab.github.io/MUSE2/command_line_help.html#muse2-save-graphs
+[DOT format]: https://graphviz.org/doc/info/lang.html
+[Graphviz]: https://graphviz.org/
+[Graphviz online]: https://dreampuf.github.io/GraphvizOnline
+
 ## Modifying the program settings
 
 You can configure the behaviour of MUSE2 with a `settings.toml` file. To edit this file, run:
