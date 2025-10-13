@@ -123,7 +123,7 @@ pub fn perform_agent_investment(
             }
 
             // Add the selected assets to the list of all selected assets
-            all_selected_assets.extend(selected_assets.clone());
+            all_selected_assets.extend(selected_assets.iter().cloned());
 
             // Perform dispatch optimisation with assets that have been selected so far
             // **TODO**: presumably we only need to do this for selected_assets, as assets added in
