@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD041 -->
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-9-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-10-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 [![Build and test](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml/badge.svg)](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml)
 [![codecov](https://codecov.io/github/EnergySystemsModellingLab/MUSE2/graph/badge.svg?token=nV8gp1NCh8)](https://codecov.io/github/EnergySystemsModellingLab/MUSE2)
@@ -68,6 +68,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/HarmonicReflux"><img src="https://avatars.githubusercontent.com/u/16504600?v=4?s=100" width="100px;" alt="Benjamin Scharpf"/><br /><sub><b>Benjamin Scharpf</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=HarmonicReflux" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/ahawkes"><img src="https://avatars.githubusercontent.com/u/12055725?v=4?s=100" width="100px;" alt="Adam Hawkes"/><br /><sub><b>Adam Hawkes</b></sub></a><br /><a href="#ideas-ahawkes" title="Ideas, Planning, & Feedback">🤔</a> <a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=ahawkes" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Aurashk"><img src="https://avatars.githubusercontent.com/u/9390150?v=4?s=100" width="100px;" alt="Aurash Karimi"/><br /><sub><b>Aurash Karimi</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=Aurashk" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>
