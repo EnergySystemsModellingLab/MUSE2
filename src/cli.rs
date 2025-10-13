@@ -166,6 +166,8 @@ pub fn handle_run_command(
     // Initialise program logger
     log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
 
+    info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
+
     // Load the model to run
     let (model, assets) = load_model(model_path).context("Failed to load model.")?;
     info!("Loaded model from {}", model_path.display());
