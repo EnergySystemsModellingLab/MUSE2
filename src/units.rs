@@ -53,7 +53,6 @@ macro_rules! base_unit_struct {
             PartialOrd,
             Default,
             Serialize,
-            Deserialize,
             derive_more::Add,
             derive_more::Sub,
         )]
@@ -129,6 +128,19 @@ macro_rules! base_unit_struct {
             /// Returns ordering between self and other
             pub fn total_cmp(&self, other: &Self) -> std::cmp::Ordering {
                 self.0.total_cmp(&other.0)
+            }
+        }
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = f64::deserialize(deserializer)?;
+                if !value.is_finite() {
+                    Err(serde::de::Error::custom("Value cannot be NaN or infinite"))?;
+                }
+
+                Ok($name(value))
             }
         }
         impl UnitType for $name {
