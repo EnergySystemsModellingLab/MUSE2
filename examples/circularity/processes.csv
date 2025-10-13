@@ -2,7 +2,7 @@ id,description,regions,primary_output,start_year,end_year,capacity_to_activity
 GASDRV,Dry gas extraction,GBR,GASPRD,2020,,1.0
 OAGRSV,Oil and associated gas extraction,GBR,OILCRD,2020,,1.0
 GASPRC,Gas processing,GBR,GASNAT,2020,,1.0
-OILREF,Oil refinery,GBR,GASOLI,2020,,1.0
+OILREF,Oil refinery,GBR,DIESEL,2020,,1.0
 OILRF2,O2G refinery,GBR,GASOLI,2020,,1.0
 WNDFRM,Wind farm,GBR,ELCTRI,2020,,31.54
 GASCGT,Gas combined cycle turbine,GBR,ELCTRI,2020,,31.54
