@@ -1,7 +1,8 @@
 //! The command line interface for the simulation.
-use crate::input::load_model;
+use crate::graph::save_commodity_graphs_for_model;
+use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
-use crate::output::{create_output_directory, get_output_dir};
+use crate::output::{create_output_directory, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
 use ::log::{info, warn};
 use anyhow::{Context, Result};
@@ -26,7 +27,7 @@ struct Cli {
     markdown_help: bool,
 }
 
-/// Options for the run command
+/// Options for the `run` command
 #[derive(Args)]
 pub struct RunOpts {
     /// Directory for output files
@@ -38,6 +39,17 @@ pub struct RunOpts {
     /// Whether to write additional information to CSV files
     #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
     pub debug_model: Option<bool>,
+}
+
+/// Options for the `graph` command
+#[derive(Args)]
+pub struct GraphOpts {
+    /// Directory for graph files
+    #[arg(short, long)]
+    pub output_dir: Option<PathBuf>,
+    /// Whether to overwrite the output directory if it already exists
+    #[arg(long)]
+    pub overwrite: bool,
 }
 
 /// The available commands.
@@ -62,6 +74,14 @@ enum Commands {
         /// The path to the model directory.
         model_dir: PathBuf,
     },
+    /// Build and output commodity flow graphs for a model.
+    SaveGraphs {
+        /// The path to the model directory.
+        model_dir: PathBuf,
+        /// Other options
+        #[command(flatten)]
+        opts: GraphOpts,
+    },
     /// Manage settings file.
     Settings {
         /// The subcommands for managing the settings file.
@@ -77,6 +97,9 @@ impl Commands {
             Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts, None),
             Self::Example { subcommand } => subcommand.execute(),
             Self::Validate { model_dir } => handle_validate_command(&model_dir, None),
+            Self::SaveGraphs { model_dir, opts } => {
+                handle_save_graphs_command(&model_dir, &opts, None)
+            }
             Self::Settings { subcommand } => subcommand.execute(),
         }
     }
@@ -175,6 +198,52 @@ pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) ->
     // Load/validate the model
     load_model(model_path).context("Failed to validate model.")?;
     info!("Model validation successful!");
+
+    Ok(())
+}
+
+/// Handle the `save-graphs` command.
+pub fn handle_save_graphs_command(
+    model_path: &Path,
+    opts: &GraphOpts,
+    settings: Option<Settings>,
+) -> Result<()> {
+    // Load program settings, if not provided
+    let settings = if let Some(settings) = settings {
+        settings
+    } else {
+        Settings::load().context("Failed to load settings.")?
+    };
+
+    // Get path to output folder
+    let pathbuf: PathBuf;
+    let output_path = if let Some(p) = opts.output_dir.as_deref() {
+        p
+    } else {
+        pathbuf = get_graphs_dir(model_path)?;
+        &pathbuf
+    };
+
+    let overwrite =
+        create_output_directory(output_path, settings.overwrite).with_context(|| {
+            format!(
+                "Failed to create graphs directory: {}",
+                output_path.display()
+            )
+        })?;
+
+    // Initialise program logger (we won't save log files when running this command)
+    log::init(&settings.log_level, None).context("Failed to initialise logging.")?;
+
+    // NB: We have to wait until the logger is initialised to display this warning
+    if overwrite {
+        warn!("Graphs directory will be overwritten");
+    }
+
+    // Load commodity flow graphs and save to file
+    let commodity_graphs = load_commodity_graphs(model_path).context("Failed to build graphs.")?;
+    save_commodity_graphs_for_model(&commodity_graphs, output_path)?;
+    info!("Graphs saved to: {}", output_path.display());
 
     Ok(())
 }
