@@ -34,13 +34,75 @@ You can run examples like so:
 muse2 example run simple
 ```
 
-To see the input files for an example (e.g. to use as a template for your own model), run:
+[example models]: ./examples.md
+
+## Building and running your own model
+
+> 🚧 Note that this section is under construction! 🚧
+>
+> In the longer term, we [plan to have a tutorial][tutorial-issue] describing how to build a model
+> in more detail.
+
+Models in MUSE2 are defined with one [TOML] file (`model.toml`) and many CSV files. For a
+description of each of the files and the different fields, see [the documentation for input files].
+
+[TOML]: https://toml.io/en/
+[input-files-docs]: file_formats/input_files.md
+
+### Creating a new model from an example
+
+We recommend you use one of the examples as starting point for your own model, as there are many
+required files.
+
+To create a new model based on the `simple` example, run:
 
 ```sh
-muse2 example extract simple
+muse2 example extract simple new_model
 ```
 
-[example models]: ./examples.md
+This will create a new subdirectory called `new_model` in the current folder.
+
+### Running this model
+
+First, let's run this model so you can see the output for a working model. You can do this by
+running:
+
+```sh
+muse2 run new_model
+```
+
+If everything works as expected, you should see output on your terminal indicating the progress of
+the simulation (which should finish very quickly).
+
+The first few lines should look something like:
+
+```txt
+[12:24:20 INFO muse2::cli] Starting MUSE2 v2.0.0
+[12:24:20 INFO muse2::cli] Loaded model from new_model/
+[12:24:20 INFO muse2::cli] Output folder: muse2_results/new_model
+...
+```
+
+You should see that a new `muse2_results` folder has been created. This folder will contain the
+output for your model in a subfolder called `new_model`. For information about how to interpret
+these files, see [the documentation for output files]. We also have some [example Jupyter
+notebooks].
+
+[example Jupyter notebooks]: https://github.com/EnergySystemsModellingLab/MUSE2/tree/main/docs/notebooks
+
+### Next steps
+
+You will now want to configure the model for your own use case. You should start by looking at [the
+documentation for the input files][input-files-docs] for details of the different data types and
+parameters for MUSE2.
+
+Unfortunately, this may not be easy, especially if you are not already familiar with [MUSE1]. In the
+longer term, [we will have tutorials][tutorial-issue], so watch this space! In the meantime, if you
+have a question, feel free to [open an issue].
+
+[MUSE1]: https://github.com/EnergySystemsModellingLab/MUSE_OS
+[tutorial-issue]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/921
+[open an issue]: https://github.com/EnergySystemsModellingLab/MUSE2/issues
 
 ## Visualising commodity graphs
 
