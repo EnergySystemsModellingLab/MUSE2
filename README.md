@@ -47,11 +47,18 @@ foresight over the whole modelled time horizon.
 
 ## Getting started
 
-To start using MUSE2, please refer to [the documentation]. If you wish to develop MUSE2 or
-build it from source, please see [the developer guide].
+The easiest way to install MUSE2 is to download the latest version for your platform on [our
+releases page]. For information on getting started, please consult [the documentation].
 
+If you wish to develop MUSE2 or build it from source, please see [the developer guide].
+
+You can also install the [`muse2` crate from crates.io][muse2-crate], though this installation
+method is only recommended for developers.
+
+[our releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases
 [the documentation]: https://energysystemsmodellinglab.github.io/MUSE2/introduction.html
 [the developer guide]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide.html
+[muse2-crate]: https://crates.io/crates/muse2
 
 ## Citing this repository
 
