@@ -52,6 +52,13 @@ build it from source, please see [the developer guide].
 [the documentation]: https://energysystemsmodellinglab.github.io/MUSE2/introduction.html
 [the developer guide]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide.html
 
+## Citing this repository
+
+If you use MUSE2 in your work, please cite us. For information on how to cite this repository, see
+[the Zenodo page for the latest release][zenodo-page].
+
+[zenodo-page]: https://doi.org/10.5281/zenodo.17350372
+
 ## Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
