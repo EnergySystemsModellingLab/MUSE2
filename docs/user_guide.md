@@ -1,11 +1,48 @@
 # User Guide
 
-## Running MUSE2
-
 Once you have installed MUSE2, you should be able to run it via the `muse2` command-line program.
-For details of the command-line interface, [see here](./command_line_help.md).
+For details of the command-line interface, [see here](./command_line_help.md) or run `muse2 help`.
 
-### Visualising commodity graphs
+## Example models
+
+MUSE2 comes with a number of [example models], partly to demonstrate the various program features as
+well as to be used as templates for new models. To see the list of available examples, you can run:
+
+```sh
+muse2 example list
+```
+
+It should print something like the following:
+
+```sh
+missing_commodity
+muse1_default
+simple
+two_outputs
+two_regions
+```
+
+To view information about a particular example, you can run, e.g.:
+
+```sh
+muse2 example info simple
+```
+
+You can run examples like so:
+
+```sh
+muse2 example run simple
+```
+
+To see the input files for an example (e.g. to use as a template for your own model), run:
+
+```sh
+muse2 example extract simple
+```
+
+[example models]: ./examples.md
+
+## Visualising commodity graphs
 
 To visualise the structure of your model, you can use the [the `muse2 save-graphs` command] to
 create graphs of commodity/process relationships.
