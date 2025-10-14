@@ -47,7 +47,7 @@ Models in MUSE2 are defined with one [TOML] file (`model.toml`) and many CSV fil
 description of each of the files and the different fields, see [the documentation for input files].
 
 [TOML]: https://toml.io/en/
-[input-files-docs]: file_formats/input_files.md
+[the documentation for input files]: file_formats/input_files.md
 
 ### Creating a new model from an example
 
@@ -88,13 +88,13 @@ output for your model in a subfolder called `new_model`. For information about h
 these files, see [the documentation for output files]. We also have some [example Jupyter
 notebooks].
 
+[the documentation for output files]: file_formats/output_files.md
 [example Jupyter notebooks]: https://github.com/EnergySystemsModellingLab/MUSE2/tree/main/docs/notebooks
 
 ### Next steps
 
 You will now want to configure the model for your own use case. You should start by looking at [the
-documentation for the input files][input-files-docs] for details of the different data types and
-parameters for MUSE2.
+documentation for input files] for details of the different data types and parameters for MUSE2.
 
 Unfortunately, this may not be easy, especially if you are not already familiar with [MUSE1]. In the
 longer term, [we will have tutorials][tutorial-issue], so watch this space! In the meantime, if you
