@@ -1,6 +1,6 @@
 [package]
 name = "muse2"
-version = "2.0.0-dev1"
+version = "2.0.0"
 authors = ["Hawkes Research Group @ Chemical Engineering, Imperial College London <a.hawkes@imperial.ac.uk>", "Imperial College London RSE Team <ict-rse-team@imperial.ac.uk>"]
 edition = "2024"
 description = "A tool for running simulations of energy systems"
@@ -41,6 +41,7 @@ edit = "0.1.5"
 [dev-dependencies]
 map-macro = "0.3.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
+yaml-rust2 = {version = "0.10.4", default-features = false}
 
 [build-dependencies]
 built = {version = "0.8.0", features = ["chrono", "git2"]}

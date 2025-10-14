@@ -91,6 +91,15 @@
         "ideas",
         "doc"
       ]
+    },
+    {
+      "login": "Aurashk",
+      "name": "Aurash Karimi",
+      "avatar_url": "https://avatars.githubusercontent.com/u/9390150?v=4",
+      "profile": "https://github.com/Aurashk",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
