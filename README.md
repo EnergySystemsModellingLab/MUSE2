@@ -4,6 +4,7 @@
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 [![Build and test](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml/badge.svg)](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml)
 [![codecov](https://codecov.io/github/EnergySystemsModellingLab/MUSE2/graph/badge.svg?token=nV8gp1NCh8)](https://codecov.io/github/EnergySystemsModellingLab/MUSE2)
+[![Crates.io Version](https://img.shields.io/crates/v/muse2)](https://crates.io/crates/muse2)
 [![DOI](https://zenodo.org/badge/790809493.svg)](https://doi.org/10.5281/zenodo.17350372)
 [![GitHub](https://img.shields.io/github/license/EnergySystemsModellingLab/MUSE2)](https://raw.githubusercontent.com/EnergySystemsModellingLab/MUSE2/main/LICENSE)
 
