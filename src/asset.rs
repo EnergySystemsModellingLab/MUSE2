@@ -923,7 +923,7 @@ mod tests {
 
         // Create flows map
         let flow_map = indexmap! { commodity_id.clone() => flow };
-        let flows = hash_map! {(region_id.clone(), 2020) => flow_map.into()};
+        let flows = indexmap! {(region_id.clone(), 2020) => flow_map.into()};
 
         // Create empty activity limits map
         let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(HashMap::new())};
