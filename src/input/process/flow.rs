@@ -6,7 +6,7 @@ use crate::region::parse_region_str;
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::iproduct;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -131,12 +131,12 @@ where
         }
     }
 
-    validate_flows_and_update_primary_output(processes, &flows_map)?;
+    validate_flows_and_update_process(processes, &flows_map)?;
 
     Ok(flows_map)
 }
 
-fn validate_flows_and_update_primary_output(
+fn validate_flows_and_update_process(
     processes: &mut ProcessMap,
     flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
 ) -> Result<()> {
@@ -156,9 +156,9 @@ fn validate_flows_and_update_primary_output(
             Some(primary_output.clone())
         } else {
             let (year, region_id) = iter.next().unwrap();
-            infer_primary_output(&map[&(region_id.clone(), *year)]).with_context(|| {
-                format!("Could not infer primary_output for process {process_id}")
-            })?
+            // infer_flows(&map[&(region_id.clone(), *year)]).with_context(|| {
+            //     format!("Could not infer primary_output for process {process_id}")
+            // })?
         };
 
         for (&year, region_id) in iter {
@@ -185,8 +185,32 @@ fn validate_flows_and_update_primary_output(
 
 /// Infer the primary output.
 ///
+/// TODO!!!! UPDATEME
+///
 /// This is only possible if there is only one output flow for the process.
-fn infer_primary_output(map: &IndexMap<CommodityID, ProcessFlow>) -> Result<Option<CommodityID>> {
+fn infer_flows_and_primary_output(
+    map: &IndexMap<CommodityID, ProcessFlow>,
+    primary_output: &Option<CommodityID>,
+) -> Result<(
+    Option<CommodityID>,
+    IndexSet<CommodityID>,
+    IndexSet<CommodityID>,
+)> {
+    let explicit_primary_output = primary_output.is_some();
+    let mut inferred_primary_output = None;
+    let mut input_flows = IndexSet::new();
+    let mut output_flows = IndexSet::new();
+    for (commodity_id, flow) in map.iter() {
+        if flow.is_input() {
+            input_flows.insert(commodity_id.clone());
+        } else {
+            output_flows.insert(commodity_id.clone());
+            if inferred_primary_output.is_none() {
+                inferred_primary_output = Some(commodity_id.clone());
+            }
+        }
+    }
+
     let mut iter = map
         .iter()
         .filter_map(|(commodity_id, flow)| flow.is_output().then_some(commodity_id));
@@ -276,7 +300,7 @@ mod tests {
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
         );
-        assert!(validate_flows_and_update_primary_output(&mut processes, &flows_map).is_ok());
+        assert!(validate_flows_and_update_process(&mut processes, &flows_map).is_ok());
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity.id.clone())
@@ -299,7 +323,7 @@ mod tests {
             ]
             .into_iter(),
         );
-        let res = validate_flows_and_update_primary_output(&mut processes, &flows_map);
+        let res = validate_flows_and_update_process(&mut processes, &flows_map);
         assert_error!(res, "Could not infer primary_output for process process1");
     }
 
@@ -321,7 +345,7 @@ mod tests {
             ]
             .into_iter(),
         );
-        assert!(validate_flows_and_update_primary_output(&mut processes, &flows_map).is_ok());
+        assert!(validate_flows_and_update_process(&mut processes, &flows_map).is_ok());
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity2.id.clone())
@@ -344,7 +368,7 @@ mod tests {
             ]
             .into_iter(),
         );
-        assert!(validate_flows_and_update_primary_output(&mut processes, &flows_map).is_ok());
+        assert!(validate_flows_and_update_process(&mut processes, &flows_map).is_ok());
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             None

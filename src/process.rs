@@ -49,6 +49,10 @@ pub struct Process {
     pub activity_limits: ProcessActivityLimitsMap,
     /// Maximum annual commodity flows for this process
     pub flows: ProcessFlowsMap,
+    /// The input commodities for this process
+    pub input_flows: IndexSet<CommodityID>,
+    /// The output commodities for this process
+    pub output_flows: IndexSet<CommodityID>,
     /// Additional parameters for this process
     pub parameters: ProcessParameterMap,
     /// The regions in which this process can operate
