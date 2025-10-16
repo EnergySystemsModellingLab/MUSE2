@@ -1,0 +1,7 @@
+id,description,type,time_slice_level
++ GASOLI,Gasoline,sed,season
++ BIOPRD,Biomass produced,sed,season
++ TPASKM,Passenger kms,svd,daynight
++ DIESEL,Diesel,sed,season
++ BIOPEL,Biomass pellets,sed,season
++ OILCRD,Crude oil,sed,season

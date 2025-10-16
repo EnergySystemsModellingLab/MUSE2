@@ -1,0 +1,17 @@
+commodity_id,region_id,time_slice,fraction
++ TPASKM,GBR,winter.peak,0.042372881
++ TPASKM,GBR,summer.evening,0.056497175
++ TPASKM,GBR,winter.night,0.009887006
++ TPASKM,GBR,autumn.peak,0.042372881
++ TPASKM,GBR,summer.peak,0.042372881
++ TPASKM,GBR,summer.day,0.141242938
++ TPASKM,GBR,winter.day,0.141242938
++ TPASKM,GBR,peak.night,0.009887006
++ TPASKM,GBR,peak.peak,0.042372881
++ TPASKM,GBR,autumn.night,0.009887006
++ TPASKM,GBR,peak.day,0.141242938
++ TPASKM,GBR,autumn.day,0.141242938
++ TPASKM,GBR,peak.evening,0.056497175
++ TPASKM,GBR,autumn.evening,0.056497175
++ TPASKM,GBR,summer.night,0.009887006
++ TPASKM,GBR,winter.evening,0.056497175

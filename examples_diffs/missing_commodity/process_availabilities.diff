@@ -1,0 +1,4 @@
+process_id,regions,years,time_slice,limit_type,value
++ RBIOBL,all,all,annual,up,1.0
++ BIOPRO,all,all,annual,up,1.0
++ BIOPLL,all,all,annual,up,0.95

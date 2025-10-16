@@ -1,0 +1,15 @@
+process_id,regions,years,time_slice,limit_type,value
+- RELCHP,all,all,annual,up,1.0
+- RGASBR,all,all,annual,up,1.0
++ OILRF2,all,all,annual,up,0.9
++ OILREF,all,all,annual,up,0.9
++ BIOPLL,all,all,annual,up,0.95
++ RGASBR,all,all,annual,up,1
++ OAGRSV,all,all,annual,up,0.9
++ TDIECR,all,all,annual,up,1
++ THYBCR,all,all,annual,up,1
++ BIOPRO,all,all,annual,up,1.0
++ RBIOBL,all,all,annual,up,1.0
++ TPETCR,all,all,annual,up,1
++ TELCCR,all,all,annual,up,1
++ RELCHP,all,all,annual,up,1
