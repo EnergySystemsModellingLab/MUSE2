@@ -74,6 +74,7 @@ enum LimitType {
 /// * `model_dir` - Folder containing model configuration files
 /// * `processes` - Map of processes
 /// * `time_slice_info` - Information about seasons and times of day
+/// * `base_year` - First milestone year of simulation
 ///
 /// # Returns
 ///
@@ -96,7 +97,19 @@ pub fn read_process_availabilities(
     .with_context(|| input_err_msg(&file_path))
 }
 
-/// Process raw process availabilities input data into [`ProcessActivityLimitsMap`]s
+/// Process raw process availabilities input data into [`ProcessActivityLimitsMap`]s.
+///
+/// # Arguments
+///
+/// * `iter` - Iterator of raw process availability records
+/// * `processes` - Map of processes
+/// * `time_slice_info` - Information about seasons and times of day
+/// * `base_year` - First milestone year of simulation
+///
+/// # Returns
+///
+/// A [`HashMap`] with process IDs as the keys and [`ProcessActivityLimitsMap`]s as the values or an
+/// error.
 fn read_process_availabilities_from_iter<I>(
     iter: I,
     processes: &ProcessMap,
