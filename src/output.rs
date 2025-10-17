@@ -41,6 +41,9 @@ const COMMODITY_BALANCE_DUALS_FILE_NAME: &str = "debug_commodity_balance_duals.c
 /// The output file name for activity duals
 const ACTIVITY_DUALS_FILE_NAME: &str = "debug_activity_duals.csv";
 
+/// The output file name for column duals
+const COLUMN_DUALS_FILE_NAME: &str = "debug_column_duals.csv";
+
 /// The output file name for extra solver output values
 const SOLVER_VALUES_FILE_NAME: &str = "debug_solver.csv";
 
@@ -199,6 +202,17 @@ struct CommodityBalanceDualsRow {
     value: MoneyPerFlow,
 }
 
+/// Represents the column duals data in a row of the column duals CSV file
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct ColumnDualsRow {
+    milestone_year: u32,
+    run_description: String,
+    asset_id: Option<AssetID>,
+    process_id: ProcessID,
+    region_id: RegionID,
+    time_slice: TimeSliceID,
+    value: MoneyPerActivity,
+}
 /// Represents solver output values
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SolverValuesRow {
@@ -226,6 +240,7 @@ struct DebugDataWriter {
     activity_writer: csv::Writer<File>,
     commodity_balance_duals_writer: csv::Writer<File>,
     activity_duals_writer: csv::Writer<File>,
+    column_duals_writer: csv::Writer<File>,
     solver_values_writer: csv::Writer<File>,
     appraisal_results_writer: csv::Writer<File>,
 }
@@ -247,6 +262,7 @@ impl DebugDataWriter {
             activity_writer: new_writer(ACTIVITY_FILE_NAME)?,
             commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
             activity_duals_writer: new_writer(ACTIVITY_DUALS_FILE_NAME)?,
+            column_duals_writer: new_writer(COLUMN_DUALS_FILE_NAME)?,
             solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
             appraisal_results_writer: new_writer(APPRAISAL_RESULTS_FILE_NAME)?,
         })
@@ -278,6 +294,11 @@ impl DebugDataWriter {
             milestone_year,
             run_description,
             solution.iter_commodity_balance_duals(),
+        )?;
+        self.write_column_duals(
+            milestone_year,
+            run_description,
+            solution.iter_column_duals(),
         )?;
         self.write_solver_values(milestone_year, run_description, solution.objective_value)?;
         Ok(())
@@ -330,6 +351,32 @@ impl DebugDataWriter {
                 value,
             };
             self.activity_duals_writer.serialize(row)?;
+        }
+
+        Ok(())
+    }
+
+    /// Write column duals to file
+    fn write_column_duals<'a, I>(
+        &mut self,
+        milestone_year: u32,
+        run_description: &str,
+        iter: I,
+    ) -> Result<()>
+    where
+        I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
+    {
+        for (asset, time_slice, value) in iter {
+            let row = ColumnDualsRow {
+                milestone_year,
+                run_description: self.with_context(run_description),
+                asset_id: asset.id(),
+                process_id: asset.process_id().clone(),
+                region_id: asset.region_id().clone(),
+                time_slice: time_slice.clone(),
+                value,
+            };
+            self.column_duals_writer.serialize(row)?;
         }
 
         Ok(())
@@ -738,6 +785,46 @@ mod tests {
             value,
         };
         let records: Vec<ActivityDualsRow> =
+            csv::Reader::from_path(dir.path().join(ACTIVITY_DUALS_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn test_write_column_duals(assets: AssetPool, time_slice: TimeSliceID) {
+        let milestone_year = 2020;
+        let run_description = "test_run".to_string();
+        let value = MoneyPerActivity(0.5);
+        let dir = tempdir().unwrap();
+        let asset = assets.iter_active().next().unwrap();
+
+        // Write column dual
+        {
+            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            writer
+                .write_column_duals(
+                    milestone_year,
+                    &run_description,
+                    iter::once((asset, &time_slice, value)),
+                )
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let expected = ColumnDualsRow {
+            milestone_year,
+            run_description,
+            asset_id: asset.id(),
+            process_id: asset.process_id().clone(),
+            region_id: asset.region_id().clone(),
+            time_slice,
+            value,
+        };
+        let records: Vec<ColumnDualsRow> =
             csv::Reader::from_path(dir.path().join(ACTIVITY_DUALS_FILE_NAME))
                 .unwrap()
                 .into_deserialize()
