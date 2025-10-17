@@ -135,6 +135,17 @@ impl Solution<'_> {
             .map(|((asset, time_slice), dual)| (asset, time_slice, dual))
     }
 
+    /// Keys and values for column duals.
+    pub fn iter_column_duals(
+        &self,
+    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
+        self.variables
+            .0
+            .keys()
+            .zip(self.solution.dual_columns())
+            .map(|((asset, time_slice), dual)| (asset, time_slice, MoneyPerActivity(*dual)))
+    }
+
     /// Zip a subset of keys in the variable map with a subset of the given output variable.
     ///
     /// # Arguments
