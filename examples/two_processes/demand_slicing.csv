@@ -1,0 +1,7 @@
+commodity_id,region_id,time_slice,fraction
+heat,R1,all-year.night,0.1
+heat,R1,all-year.morning,0.15
+heat,R1,all-year.afternoon,0.1
+heat,R1,all-year.early-peak,0.15
+heat,R1,all-year.late-peak,0.3
+heat,R1,all-year.evening,0.2

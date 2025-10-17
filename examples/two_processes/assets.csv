@@ -1,0 +1,3 @@
+process_id,region_id,agent_id,capacity,commission_year
+gassupply1,R1,A1_GAS,24,2020
+gasboiler,R1,A1_RES,19,2020

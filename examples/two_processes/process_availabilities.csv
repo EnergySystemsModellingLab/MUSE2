@@ -1,0 +1,7 @@
+process_id,regions,years,time_slice,limit_type,value
+gassupply1,R1,all,annual,up,0.9
+gasCCGT,R1,all,annual,up,0.9
+windturbine,R1,all,annual,up,0.4
+gasboiler,R1,all,annual,up,1.0
+heatpump,R1,all,annual,up,1.0
+e-refinery,R1,all,annual,up,0.9

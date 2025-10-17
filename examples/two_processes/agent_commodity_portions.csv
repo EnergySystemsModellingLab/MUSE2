@@ -1,0 +1,4 @@
+agent_id,commodity_id,years,commodity_portion
+A1_RES,heat,all,1.0
+A1_PWR,electricity,all,1.0
+A1_GAS,gas,all,1.0

@@ -1,0 +1,4 @@
+agent_id,years,objective_type,decision_weight,decision_lexico_order
+A1_RES,all,lcox,,
+A1_PWR,all,lcox,,
+A1_GAS,all,lcox,,

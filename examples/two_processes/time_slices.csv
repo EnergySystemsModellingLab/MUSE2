@@ -1,0 +1,7 @@
+season,time_of_day,fraction
+all-year,night,0.166667
+all-year,morning,0.166667
+all-year,afternoon,0.166667
+all-year,early-peak,0.166667
+all-year,late-peak,0.166667
+all-year,evening,0.166667
