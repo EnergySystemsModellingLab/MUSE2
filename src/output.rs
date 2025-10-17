@@ -825,7 +825,7 @@ mod tests {
             value,
         };
         let records: Vec<ColumnDualsRow> =
-            csv::Reader::from_path(dir.path().join(ACTIVITY_DUALS_FILE_NAME))
+            csv::Reader::from_path(dir.path().join(COLUMN_DUALS_FILE_NAME))
                 .unwrap()
                 .into_deserialize()
                 .try_collect()
