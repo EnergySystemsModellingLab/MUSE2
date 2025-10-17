@@ -4,6 +4,8 @@
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 [![Build and test](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml/badge.svg)](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml)
 [![codecov](https://codecov.io/github/EnergySystemsModellingLab/MUSE2/graph/badge.svg?token=nV8gp1NCh8)](https://codecov.io/github/EnergySystemsModellingLab/MUSE2)
+[![Crates.io Version](https://img.shields.io/crates/v/muse2)](https://crates.io/crates/muse2)
+[![DOI](https://zenodo.org/badge/790809493.svg)](https://doi.org/10.5281/zenodo.17350372)
 [![GitHub](https://img.shields.io/github/license/EnergySystemsModellingLab/MUSE2)](https://raw.githubusercontent.com/EnergySystemsModellingLab/MUSE2/main/LICENSE)
 
 # MUSE2
@@ -45,11 +47,25 @@ foresight over the whole modelled time horizon.
 
 ## Getting started
 
-To start using MUSE2, please refer to [the documentation]. If you wish to develop MUSE2 or
-build it from source, please see [the developer guide].
+The easiest way to install MUSE2 is to download the latest version for your platform on [our
+releases page]. For information on getting started, please consult [the documentation].
 
+If you wish to develop MUSE2 or build it from source, please see [the developer guide].
+
+You can also install the [`muse2` crate from crates.io][muse2-crate], though this installation
+method is only recommended for developers.
+
+[our releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases
 [the documentation]: https://energysystemsmodellinglab.github.io/MUSE2/introduction.html
 [the developer guide]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide.html
+[muse2-crate]: https://crates.io/crates/muse2
+
+## Citing this repository
+
+If you use MUSE2 in your work, please cite us. For information on how to cite this repository, see
+[the Zenodo page for the latest release][zenodo-page].
+
+[zenodo-page]: https://doi.org/10.5281/zenodo.17350372
 
 ## Contributors ✨
 
