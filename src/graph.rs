@@ -446,7 +446,21 @@ pub fn save_commodity_graphs_for_model(
     output_path: &Path,
 ) -> Result<()> {
     for ((region_id, year), graph) in commodity_graphs {
-        let dot = Dot::new(&graph);
+        let dot = Dot::with_attr_getters(
+            &graph,
+            &[],
+            &|_, edge_ref| match edge_ref.weight() {
+                GraphEdge::Process { is_primary, .. } => {
+                    if *is_primary {
+                        String::new()
+                    } else {
+                        "style=dashed".to_string()
+                    }
+                }
+                GraphEdge::Demand => String::new(),
+            },
+            &|_, _| String::new(),
+        );
         let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
         write!(file, "{dot}")?;
     }
