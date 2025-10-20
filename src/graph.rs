@@ -117,7 +117,7 @@ fn create_commodities_graph_for_region_year(
         }
 
         // Get primary output for the process
-        let primary_output = process.primary_output.clone();
+        let primary_output = &process.primary_output;
 
         // Create edges from all inputs to all outputs
         // We also create nodes the first time they are encountered
@@ -129,7 +129,7 @@ fn create_commodities_graph_for_region_year(
                 .entry(output.clone())
                 .or_insert_with(|| graph.add_node(output.clone()));
             let is_primary = match &output {
-                GraphNode::Commodity(commodity_id) => primary_output == Some(commodity_id.clone()),
+                GraphNode::Commodity(commodity_id) => primary_output.as_ref() == Some(commodity_id),
                 _ => false,
             };
 
