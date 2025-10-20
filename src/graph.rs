@@ -1,17 +1,16 @@
 //! Module for creating and analysing commodity graphs
-use crate::commodity::{CommodityID, CommodityMap, CommodityType};
+use crate::commodity::{CommodityID, CommodityMap, CommodityType, InvestmentSet};
 use crate::process::{ProcessID, ProcessMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexSet;
 use itertools::{Itertools, iproduct};
 use petgraph::Directed;
-use petgraph::algo::toposort;
+use petgraph::algo::{condensation, toposort};
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
-use petgraph::visit::EdgeFiltered;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -304,41 +303,70 @@ fn validate_commodities_graph(
 /// The returned Vec only includes SVD and SED commodities.
 fn topo_sort_commodities(
     graph: &CommoditiesGraph,
-    commodities: &CommodityMap,
-) -> Result<Vec<CommodityID>> {
-    // We only consider primary edges
-    let primary_graph =
-        EdgeFiltered::from_fn(graph, |edge| matches!(edge.weight(), GraphEdge::Primary(_)));
+    _commodities: &CommodityMap,
+) -> Vec<InvestmentSet> {
+    // // We only consider primary edges
+    // let primary_graph =
+    //     EdgeFiltered::from_fn(graph, |edge| matches!(edge.weight(), GraphEdge::Primary(_)));
 
-    // Perform a topological sort on the graph
-    let order = toposort(&primary_graph, None).map_err(|cycle| {
-        let cycle_commodity = graph.node_weight(cycle.node_id()).unwrap().clone();
-        anyhow!("Cycle detected in commodity graph for commodity {cycle_commodity}")
-    })?;
+    // Condense strongly connected components
+    let condensed_graph = condensation(graph.clone(), true);
 
-    // We return the order in reverse so that leaf-node commodities are solved first
-    // We also filter to only include SVD and SED commodities
-    let order = order
+    // Perform a topological sort on the condensed graph
+    let order = toposort(&condensed_graph, None).unwrap();
+
+    // Create investment sets (reverse topological order)
+    order
         .iter()
         .rev()
         .filter_map(|node_idx| {
-            // Get the commodity for the node
-            let GraphNode::Commodity(commodity_id) = graph.node_weight(*node_idx).unwrap() else {
-                // Skip special nodes
-                return None;
-            };
-            let commodity = &commodities[commodity_id];
+            // Get set of commodity IDs for the node
+            let commodities: Vec<CommodityID> = condensed_graph
+                .node_weight(*node_idx)
+                .unwrap()
+                .iter()
+                .filter_map(|node| match node {
+                    GraphNode::Commodity(id) => Some(id.clone()),
+                    _ => None,
+                })
+                .collect();
 
-            // Only include SVD and SED commodities
-            matches!(
-                commodity.kind,
-                CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
-            )
-            .then(|| commodity_id.clone())
+            // Create investment set
+            // If a single commodity in the node this is `InvestmentSet::Single`, if multiple
+            // commodities this is `InvestmentSet::Cycle`
+            match commodities.as_slice() {
+                [] => None,
+                [only] => Some(InvestmentSet::Single(only.clone())),
+                _ => Some(InvestmentSet::Cycle(commodities)),
+            }
         })
-        .collect();
+        .collect()
 
-    Ok(order)
+    // TODO: filter to only include SVD/SED commodities and primary flows
+
+    // // We return the order in reverse so that leaf-node commodities are solved first
+    // // We also filter to only include SVD and SED commodities
+    // let order = order
+    //     .iter()
+    //     .rev()
+    //     .filter_map(|node_idx| {
+    //         // Get the commodity for the node
+    //         let GraphNode::Commodity(commodity_id) = graph.node_weight(*node_idx).unwrap() else {
+    //             // Skip special nodes
+    //             return None;
+    //         };
+    //         let commodity = &commodities[commodity_id];
+
+    //         // Only include SVD and SED commodities
+    //         matches!(
+    //             commodity.kind,
+    //             CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
+    //         )
+    //         .then(|| commodity_id.clone())
+    //     })
+    //     .collect();
+
+    // Ok(order)
 }
 
 /// Builds base commodity graphs for each region and year
@@ -395,14 +423,12 @@ pub fn validate_commodity_graphs_for_model(
     processes: &ProcessMap,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> Result<HashMap<(RegionID, u32), Vec<CommodityID>>> {
+) -> Result<HashMap<(RegionID, u32), Vec<InvestmentSet>>> {
     // Determine commodity ordering for each region and year
-    let commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>> = commodity_graphs
+    let commodity_order: HashMap<(RegionID, u32), Vec<InvestmentSet>> = commodity_graphs
         .iter()
         .map(|((region_id, year), graph)| -> Result<_> {
-            let order = topo_sort_commodities(graph, commodities).with_context(|| {
-                format!("Error validating commodity graph for {region_id} in {year}")
-            })?;
+            let order = topo_sort_commodities(graph, commodities);
             Ok(((region_id.clone(), *year), order))
         })
         .try_collect()?;

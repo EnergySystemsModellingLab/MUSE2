@@ -2,7 +2,7 @@
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
-use crate::commodity::{Commodity, CommodityID, CommodityMap};
+use crate::commodity::{Commodity, CommodityID, CommodityMap, InvestmentSet};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
@@ -11,7 +11,7 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use indexmap::IndexMap;
-use itertools::{chain, iproduct};
+use itertools::chain;
 use log::debug;
 use std::collections::HashMap;
 
@@ -49,16 +49,26 @@ pub fn perform_agent_investment(
     // This includes Commissioned assets that are selected for retention, and new Selected assets
     let mut all_selected_assets = Vec::new();
 
-    for region_id in model.iter_regions() {
-        let cur_commodities = &model.commodity_order[&(region_id.clone(), year)];
+    // External prices from the previous full-system dispatch run
+    // As investments are performed for each commodity/region combination, these prices will be
+    // gradually removed to become fully reliant on endogenous prices.
+    let mut external_prices = prices.clone();
 
-        // Prices to be used for input flows for commodities not produced in dispatch run
-        let mut external_prices =
-            get_prices_for_commodities(prices, &model.time_slice_info, region_id, cur_commodities);
+    for region_id in model.iter_regions() {
+        let investment_order = &model.investment_order[&(region_id.clone(), year)];
+
+        // Iterate over investment sets in the investment order
         let mut seen_commodities = Vec::new();
-        for commodity_id in cur_commodities {
+        for investment_set in investment_order {
+            let commodity_id = match investment_set {
+                InvestmentSet::Single(commodity_id) => commodity_id.clone(),
+                InvestmentSet::Cycle(commodities) => anyhow::bail!(
+                    "Investment cycles are not yet supported. Found cycle for commodities: {commodities:?}"
+                ),
+            };
+
             seen_commodities.push(commodity_id.clone());
-            let commodity = &model.commodities[commodity_id];
+            let commodity = &model.commodities[&commodity_id];
 
             // Remove prices for already-seen commodities. Commodities which are produced by at
             // least one asset in the dispatch run will have prices produced endogenously (via the
@@ -66,14 +76,14 @@ pub fn perform_agent_investment(
             // performed will, by definition, not have any producers. For these, we provide prices
             // from the previous dispatch run otherwise they will appear to be free to the model.
             for time_slice in model.time_slice_info.iter_ids() {
-                external_prices.remove(commodity_id, region_id, time_slice);
+                external_prices.remove(&commodity_id, region_id, time_slice);
             }
 
             // List of assets selected/retained for this region/commodity
             let mut selected_assets = Vec::new();
 
             for (agent, commodity_portion) in
-                get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
+                get_responsible_agents(model.agents.values(), &commodity_id, region_id, year)
             {
                 debug!(
                     "Running investment for agent '{}' with commodity '{}' in region '{}'",
@@ -84,7 +94,7 @@ pub fn perform_agent_investment(
                 let demand_portion_for_commodity = get_demand_portion_for_commodity(
                     &model.time_slice_info,
                     &demand,
-                    commodity_id,
+                    &commodity_id,
                     region_id,
                     commodity_portion,
                 );
@@ -350,21 +360,6 @@ fn get_candidate_assets<'a>(
 
             asset.into()
         })
-}
-
-/// Get a map of prices for a subset of commodities
-fn get_prices_for_commodities(
-    prices: &CommodityPrices,
-    time_slice_info: &TimeSliceInfo,
-    region_id: &RegionID,
-    commodities: &[CommodityID],
-) -> CommodityPrices {
-    iproduct!(commodities.iter(), time_slice_info.iter_ids())
-        .map(|(commodity_id, time_slice)| {
-            let price = prices.get(commodity_id, region_id, time_slice).unwrap();
-            (commodity_id, region_id, time_slice, price)
-        })
-        .collect()
 }
 
 /// Get the best assets for meeting demand for the given commodity

@@ -52,6 +52,14 @@ pub struct Commodity {
 }
 define_id_getter! {Commodity, CommodityID}
 
+/// A set of commodities that can be invested in together
+pub enum InvestmentSet {
+    /// Single commodity
+    Single(CommodityID),
+    /// A set of commodities that form a cycle
+    Cycle(Vec<CommodityID>),
+}
+
 /// Type of balance for application of cost
 #[derive(PartialEq, Clone, Debug, DeserializeLabeledStringEnum)]
 pub enum BalanceType {

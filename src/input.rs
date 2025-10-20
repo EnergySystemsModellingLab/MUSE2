@@ -230,7 +230,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     // Build and validate commodity graphs for all regions and years
     // This gives us the commodity order for each region/year which is passed to the model
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
-    let commodity_order = validate_commodity_graphs_for_model(
+    let investment_order = validate_commodity_graphs_for_model(
         &commodity_graphs,
         &processes,
         &commodities,
@@ -249,7 +249,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         processes,
         time_slice_info,
         regions,
-        commodity_order,
+        investment_order,
     };
     Ok((model, AssetPool::new(assets)))
 }
