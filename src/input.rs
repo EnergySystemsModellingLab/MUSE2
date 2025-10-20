@@ -179,11 +179,8 @@ where
     let total_count = items.len();
 
     // Format items with fmt::Debug::fmt() and separate with commas
-    let chunks = items.chunks(MAX_DISPLAY);
-    let formatted_chunks = chunks
-        .into_iter()
-        .next()
-        .unwrap()
+    let formatted_chunks = items
+        .take(MAX_DISPLAY)
         .format_with(", ", |items, f| f(&format_args!("{items:?}")));
     let mut out = format!("[{formatted_chunks}]");
 
