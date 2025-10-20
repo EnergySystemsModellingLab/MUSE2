@@ -132,7 +132,7 @@ impl Solution<'_> {
         // The decision variables represent assets' activity levels, not commodity flows. We
         // multiply this value by the flow coeffs to get commodity flows.
         let mut flows = FlowMap::new();
-        for (asset, time_slice, activity) in self.iter_activity_for_active() {
+        for (asset, time_slice, activity) in self.iter_activity_for_existing() {
             for flow in asset.iter_flows() {
                 let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
                 let flow_value = activity * flow.coeff;
@@ -143,7 +143,7 @@ impl Solution<'_> {
         flows
     }
 
-    /// Activity for each active asset
+    /// Activity for each existing asset
     pub fn iter_activity(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         self.variables
             .keys()
@@ -151,8 +151,8 @@ impl Solution<'_> {
             .map(|((asset, time_slice), activity)| (asset, time_slice, Activity(*activity)))
     }
 
-    /// Activity for each active asset
-    fn iter_activity_for_active(
+    /// Activity for each existing asset
+    fn iter_activity_for_existing(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         self.zip_var_keys_with_output(
