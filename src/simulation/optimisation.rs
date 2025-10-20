@@ -9,12 +9,14 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
-use anyhow::{Result, anyhow, ensure};
-use highs::{HighsModelStatus, RowProblem as Problem, Sense};
+use anyhow::Result;
+use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 use itertools::{chain, iproduct};
 use log::debug;
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt;
 use std::ops::Range;
 
 mod constraints;
@@ -217,24 +219,48 @@ impl Solution<'_> {
     }
 }
 
+/// Defines the possible errors that can occur when running the solver
+#[derive(Debug, Clone)]
+pub enum ModelError {
+    /// The model definition is incoherent.
+    ///
+    /// Users should not be able to trigger this error.
+    Incoherent(HighsStatus),
+    /// The model is infeasible, probably because demand could not be met by supplied assets
+    Infeasible,
+    /// An optimal solution could not be found for some other reason
+    NonOptimal(HighsModelStatus),
+}
+
+impl fmt::Display for ModelError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ModelError::Incoherent(status) => write!(f, "Incoherent model: {status:?}"),
+            ModelError::Infeasible => {
+                write!(
+                    f,
+                    "The solver has indicated that the problem is infeasible. It may be because \
+                    the assets in this year cannot meet the required demand."
+                )
+            }
+            ModelError::NonOptimal(status) => {
+                write!(f, "Could not find optimal result: {status:?}")
+            }
+        }
+    }
+}
+
+impl Error for ModelError {}
+
 /// Try to solve the model, returning an error if the model is incoherent or result is non-optimal
-pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel> {
-    let solved = model
-        .try_solve()
-        .map_err(|err| anyhow!("Incoherent model: {err:?}"))?;
+pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelError> {
+    let solved = model.try_solve().map_err(ModelError::Incoherent)?;
 
-    let status = solved.status();
-    ensure!(
-        status != HighsModelStatus::Infeasible,
-        "The solver has indicated that the problem is infeasible. It may be because the assets in \
-        this year cannot meet the required demand."
-    );
-    ensure!(
-        status == HighsModelStatus::Optimal,
-        "Could not find optimal result for model: {status:?}"
-    );
-
-    Ok(solved)
+    match solved.status() {
+        HighsModelStatus::Optimal => Ok(solved),
+        HighsModelStatus::Infeasible => Err(ModelError::Infeasible),
+        status => Err(ModelError::NonOptimal(status)),
+    }
 }
 
 /// Sanity check for input prices.
