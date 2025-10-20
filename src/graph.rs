@@ -11,6 +11,7 @@ use petgraph::Directed;
 use petgraph::algo::toposort;
 use petgraph::dot::Dot;
 use petgraph::graph::Graph;
+use petgraph::visit::EdgeFiltered;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -49,7 +50,12 @@ impl Display for GraphNode {
 /// An edge in the commodity graph
 pub enum GraphEdge {
     /// An edge representing a process
-    Process(ProcessID),
+    Process {
+        /// The ID of the process
+        process_id: ProcessID,
+        /// Whether this flow is a primary flow of the process
+        is_primary: bool,
+    },
     /// An edge representing a service demand
     Demand,
 }
@@ -57,7 +63,7 @@ pub enum GraphEdge {
 impl Display for GraphEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GraphEdge::Process(id) => write!(f, "{id}"),
+            GraphEdge::Process { process_id, .. } => write!(f, "{process_id}"),
             GraphEdge::Demand => write!(f, "DEMAND"),
         }
     }
@@ -111,6 +117,9 @@ fn create_commodities_graph_for_region_year(
             outputs.push(GraphNode::Sink);
         }
 
+        // Get primary output for the process
+        let primary_output = process.primary_output.clone();
+
         // Create edges from all inputs to all outputs
         // We also create nodes the first time they are encountered
         for (input, output) in iproduct!(inputs, outputs) {
@@ -120,10 +129,18 @@ fn create_commodities_graph_for_region_year(
             let target_node_index = *commodity_to_node_index
                 .entry(output.clone())
                 .or_insert_with(|| graph.add_node(output.clone()));
+            let is_primary = match &output {
+                GraphNode::Commodity(commodity_id) => primary_output == Some(commodity_id.clone()),
+                _ => false,
+            };
+
             graph.add_edge(
                 source_node_index,
                 target_node_index,
-                GraphEdge::Process(process.id.clone()),
+                GraphEdge::Process {
+                    process_id: process.id.clone(),
+                    is_primary,
+                },
             );
         }
     }
@@ -157,7 +174,7 @@ fn prepare_commodities_graph_for_validation(
     let key = (region_id.clone(), year);
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
-        let GraphEdge::Process(process_id) = graph.edge_weight(edge_idx).unwrap() else {
+        let GraphEdge::Process { process_id, .. } = graph.edge_weight(edge_idx).unwrap() else {
             panic!("Demand edges should not be present in the base graph");
         };
         let process = &processes[process_id];
@@ -289,15 +306,23 @@ fn topo_sort_commodities(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
 ) -> Result<Vec<CommodityID>> {
+    // We only consider primary edges
+    let primary_graph = EdgeFiltered::from_fn(graph, |edge| {
+        let GraphEdge::Process { is_primary, .. } = edge.weight() else {
+            panic!("Demand edges should not be present in the base graph");
+        };
+        *is_primary
+    });
+
     // Perform a topological sort on the graph
-    let order = toposort(graph, None).map_err(|cycle| {
+    let order = toposort(&primary_graph, None).map_err(|cycle| {
         let cycle_commodity = graph.node_weight(cycle.node_id()).unwrap().clone();
         anyhow!("Cycle detected in commodity graph for commodity {cycle_commodity}")
     })?;
 
     // We return the order in reverse so that leaf-node commodities are solved first
     // We also filter to only include SVD and SED commodities
-    let order = order
+    let order: Vec<CommodityID> = order
         .iter()
         .rev()
         .filter_map(|node_idx| {
