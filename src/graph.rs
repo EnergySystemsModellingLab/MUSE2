@@ -10,7 +10,7 @@ use itertools::{Itertools, iproduct};
 use petgraph::Directed;
 use petgraph::algo::toposort;
 use petgraph::dot::Dot;
-use petgraph::graph::Graph;
+use petgraph::graph::{EdgeReference, Graph};
 use petgraph::visit::EdgeFiltered;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -438,6 +438,20 @@ pub fn validate_commodity_graphs_for_model(
     Ok(commodity_order)
 }
 
+/// Gets DOT attributes for graph edges
+fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
+    match edge_ref.weight() {
+        GraphEdge::Process { is_primary, .. } => {
+            if *is_primary {
+                String::new()
+            } else {
+                "style=dashed".to_string()
+            }
+        }
+        GraphEdge::Demand => String::new(),
+    }
+}
+
 /// Saves commodity graphs to file
 ///
 /// The graphs are saved as DOT files to the specified output path
@@ -446,21 +460,7 @@ pub fn save_commodity_graphs_for_model(
     output_path: &Path,
 ) -> Result<()> {
     for ((region_id, year), graph) in commodity_graphs {
-        let dot = Dot::with_attr_getters(
-            &graph,
-            &[],
-            &|_, edge_ref| match edge_ref.weight() {
-                GraphEdge::Process { is_primary, .. } => {
-                    if *is_primary {
-                        String::new()
-                    } else {
-                        "style=dashed".to_string()
-                    }
-                }
-                GraphEdge::Demand => String::new(),
-            },
-            &|_, _| String::new(),
-        );
+        let dot = Dot::with_attr_getters(graph, &[], &get_edge_attributes, &|_, _| String::new());
         let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
         write!(file, "{dot}")?;
     }
