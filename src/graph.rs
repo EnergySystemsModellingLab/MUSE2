@@ -51,7 +51,7 @@ impl Display for GraphNode {
 pub enum GraphEdge {
     /// An edge representing a primary flow of a process
     Primary(ProcessID),
-    /// An edge representing a secondary flow of a process
+    /// An edge representing a secondary (non-primary) flow of a process
     Secondary(ProcessID),
     /// An edge representing a service demand
     Demand,
@@ -318,7 +318,7 @@ fn topo_sort_commodities(
 
     // We return the order in reverse so that leaf-node commodities are solved first
     // We also filter to only include SVD and SED commodities
-    let order: Vec<CommodityID> = order
+    let order = order
         .iter()
         .rev()
         .filter_map(|node_idx| {
@@ -434,11 +434,13 @@ pub fn validate_commodity_graphs_for_model(
     Ok(commodity_order)
 }
 
-/// Gets DOT attributes for graph edges
+/// Gets custom DOT attributes for edges in a commodity graph
 fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
     match edge_ref.weight() {
-        GraphEdge::Primary(_) | GraphEdge::Demand => String::new(),
+        // Use dashed lines for secondary flows
         GraphEdge::Secondary(_) => "style=dashed".to_string(),
+        // Other edges use default attributes
+        _ => String::new(),
     }
 }
 
@@ -450,7 +452,12 @@ pub fn save_commodity_graphs_for_model(
     output_path: &Path,
 ) -> Result<()> {
     for ((region_id, year), graph) in commodity_graphs {
-        let dot = Dot::with_attr_getters(graph, &[], &get_edge_attributes, &|_, _| String::new());
+        let dot = Dot::with_attr_getters(
+            graph,
+            &[],
+            &get_edge_attributes,  // Custom attributes for edges
+            &|_, _| String::new(), // Use default attributes for nodes
+        );
         let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
         write!(file, "{dot}")?;
     }
