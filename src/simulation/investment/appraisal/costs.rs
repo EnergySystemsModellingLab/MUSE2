@@ -1,27 +1,7 @@
 //! Costs for the optimisation problem.
 use crate::asset::{AssetRef, AssetState};
 use crate::finance::annual_capital_cost;
-use crate::simulation::prices::ReducedCosts;
-use crate::time_slice::TimeSliceID;
-use crate::units::{MoneyPerActivity, MoneyPerCapacity, Year};
-
-/// Calculates the cost per unit of activity for an asset.
-pub fn activity_cost(
-    asset: &AssetRef,
-    reduced_costs: &ReducedCosts,
-    time_slice: &TimeSliceID,
-) -> MoneyPerActivity {
-    reduced_costs.get(asset, time_slice)
-}
-
-/// Calculates the surplus per unit of activity for an asset.
-pub fn activity_surplus(
-    asset: &AssetRef,
-    reduced_costs: &ReducedCosts,
-    time_slice: &TimeSliceID,
-) -> MoneyPerActivity {
-    -reduced_costs.get(asset, time_slice)
-}
+use crate::units::{MoneyPerCapacity, Year};
 
 /// Calculates the annual fixed costs per unit of capacity for an asset.
 ///

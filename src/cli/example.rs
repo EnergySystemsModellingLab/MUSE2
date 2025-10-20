@@ -71,7 +71,7 @@ fn handle_example_info_command(name: &str) -> Result<()> {
         .contents_utf8()
         .expect("README.txt is not UTF-8 encoded");
 
-    println!("{readme}");
+    print!("{readme}");
 
     Ok(())
 }

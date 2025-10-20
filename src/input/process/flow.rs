@@ -37,7 +37,7 @@ impl ProcessFlowRaw {
             self.coeff
         );
 
-        // **TODO**: https://github.com/EnergySystemsModellingLab/MUSE_2.0/issues/300
+        // **TODO**: https://github.com/EnergySystemsModellingLab/MUSE2/issues/300
         ensure!(
             self.kind == FlowType::Fixed,
             "Commodity flexible assets are not currently supported"
@@ -117,7 +117,8 @@ where
             let flows_map = region_year_map
                 .entry((region_id.clone(), year))
                 .or_default();
-            let existing = flows_map
+            let existing = Rc::get_mut(flows_map)
+                .unwrap() // safe: there will only be one copy
                 .insert(commodity.id.clone(), process_flow.clone())
                 .is_some();
             ensure!(
@@ -210,7 +211,7 @@ fn check_flows_primary_output(
 ) -> Result<()> {
     if let Some(primary_output) = primary_output {
         let flow = flows_map.get(primary_output).with_context(|| {
-            format!("Primary output commodity '{primary_output}' isn't a process flow",)
+            format!("Primary output commodity '{primary_output}' isn't a process flow")
         })?;
 
         ensure!(
@@ -258,7 +259,7 @@ mod tests {
     where
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
-        let map: IndexMap<CommodityID, ProcessFlow> = flows.clone().collect();
+        let map: Rc<IndexMap<_, _>> = Rc::new(flows.clone().collect());
         let flows_inner = iproduct!(&process.regions, &process.years)
             .map(|(region_id, year)| ((region_id.clone(), *year), map.clone()))
             .collect();

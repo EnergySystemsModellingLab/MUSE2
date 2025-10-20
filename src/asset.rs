@@ -3,8 +3,9 @@ use crate::agent::AgentID;
 use crate::commodity::CommodityID;
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
+use crate::simulation::CommodityPrices;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity, MoneyPerFlow};
+use crate::units::{Activity, ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -43,9 +44,7 @@ pub struct AssetID(u32);
 /// `commission_future` or `commission_candidate` respectively.
 ///
 /// `Commissioned` assets can be decommissioned by calling `decommission`.
-#[derive(
-    Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize, strum::Display,
-)]
+#[derive(Clone, Debug, PartialEq, strum::Display)]
 pub enum AssetState {
     /// The asset has been commissioned
     Commissioned {
@@ -84,6 +83,10 @@ pub struct Asset {
     state: AssetState,
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
+    /// Activity limits for this asset
+    activity_limits: Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>,
+    /// The commodity flows for this asset
+    flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
     process_parameter: Rc<ProcessParameter>,
     /// The region in which the asset is located
@@ -171,13 +174,37 @@ impl Asset {
         check_region_year_valid_for_process(&process, &region_id, commission_year)?;
         ensure!(capacity >= Capacity(0.0), "Capacity must be non-negative");
 
-        // There should be process parameters for all **milestone** years, but it is possible to
-        // have assets that are commissioned before the simulation start from assets.csv. We check
-        // for the presence of the params lazily to prevent users having to supply them for all
-        // the possible valid years before the time horizon.
+        // There should be activity limits, commodity flows and process parameters for all
+        // **milestone** years, but it is possible to have assets that are commissioned before the
+        // simulation start from assets.csv. We check for the presence of the params lazily to
+        // prevent users having to supply them for all the possible valid years before the time
+        // horizon.
+        let key = (region_id.clone(), commission_year);
+        let activity_limits = process
+            .activity_limits
+            .get(&key)
+            .with_context(|| {
+                format!(
+                    "No process availabilities supplied for process {} in region {} in year {}. \
+                    You should update process_availabilities.csv.",
+                    &process.id, region_id, commission_year
+                )
+            })?
+            .clone();
+        let flows = process
+            .flows
+            .get(&key)
+            .with_context(|| {
+                format!(
+                    "No commodity flows supplied for process {} in region {} in year {}. \
+                    You should update process_flows.csv.",
+                    &process.id, region_id, commission_year
+                )
+            })?
+            .clone();
         let process_parameter = process
             .parameters
-            .get(&(region_id.clone(), commission_year))
+            .get(&key)
             .with_context(|| {
                 format!(
                     "No process parameters supplied for process {} in region {} in year {}. \
@@ -190,6 +217,8 @@ impl Asset {
         Ok(Self {
             state,
             process,
+            activity_limits,
+            flows,
             process_parameter,
             region_id,
             capacity,
@@ -214,15 +243,7 @@ impl Asset {
 
     /// Get the activity limits for this asset in a particular time slice
     pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<Activity> {
-        let limits = self
-            .process
-            .activity_limits
-            .get(&(
-                self.region_id.clone(),
-                self.commission_year,
-                time_slice.clone(),
-            ))
-            .unwrap();
+        let limits = &self.activity_limits[time_slice];
         let max_act = self.max_activity();
 
         // limits in real units (which are user defined)
@@ -234,15 +255,7 @@ impl Asset {
         &self,
         time_slice: &TimeSliceID,
     ) -> RangeInclusive<ActivityPerCapacity> {
-        let limits = self
-            .process
-            .activity_limits
-            .get(&(
-                self.region_id.clone(),
-                self.commission_year,
-                time_slice.clone(),
-            ))
-            .unwrap();
+        let limits = &self.activity_limits[time_slice];
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }
@@ -258,23 +271,63 @@ impl Asset {
         self.process_parameter.variable_operating_cost + flows_cost
     }
 
-    /// Get the cost of input flows using the commodity prices in `input_prices`
-    pub fn get_input_cost_from_prices(
+    /// Get the total revenue from all flows for this asset.
+    ///
+    /// If a price is missing, it is assumed to be zero.
+    pub fn get_revenue_from_flows(
         &self,
-        input_prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+        prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
+        self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
+    }
+
+    /// Get the total revenue from all flows excluding the primary output.
+    ///
+    /// If a price is missing, it is assumed to be zero.
+    pub fn get_revenue_from_flows_excluding_primary(
+        &self,
+        prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        let excluded_commodity = self.primary_output().map(|flow| &flow.commodity.id);
+
+        self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
+            excluded_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
+        })
+    }
+
+    /// Get the cost of input flows using the commodity prices in `input_prices`.
+    ///
+    /// If a price is missing, there is assumed to be no cost.
+    pub fn get_input_cost_from_prices(
+        &self,
+        input_prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        -self.get_revenue_from_flows_with_filter(input_prices, time_slice, ProcessFlow::is_input)
+    }
+
+    /// Get the total revenue from a subset of flows.
+    ///
+    /// Takes a function as an argument to filter the flows. If a price is missing, it is assumed to
+    /// be zero.
+    fn get_revenue_from_flows_with_filter<F>(
+        &self,
+        prices: &CommodityPrices,
+        time_slice: &TimeSliceID,
+        mut filter_for_flows: F,
+    ) -> MoneyPerActivity
+    where
+        F: FnMut(&ProcessFlow) -> bool,
+    {
         self.iter_flows()
-            .filter_map(|flow| {
-                if !flow.is_input() {
-                    return None;
-                }
-                let price = *input_prices.get(&(
-                    flow.commodity.id.clone(),
-                    self.region_id.clone(),
-                    time_slice.clone(),
-                ))?;
-                Some(-flow.coeff * price)
+            .filter(|flow| filter_for_flows(flow))
+            .map(|flow| {
+                flow.coeff
+                    * prices
+                        .get(&flow.commodity.id, self.region_id(), time_slice)
+                        .unwrap_or_default()
             })
             .sum()
     }
@@ -286,20 +339,12 @@ impl Asset {
 
     /// Get a specific process flow
     pub fn get_flow(&self, commodity_id: &CommodityID) -> Option<&ProcessFlow> {
-        self.get_flows_map().get(commodity_id)
-    }
-
-    /// Get the process flows map for this asset
-    fn get_flows_map(&self) -> &IndexMap<CommodityID, ProcessFlow> {
-        self.process
-            .flows
-            .get(&(self.region_id.clone(), self.commission_year))
-            .unwrap()
+        self.flows.get(commodity_id)
     }
 
     /// Iterate over the asset's flows
     pub fn iter_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
-        self.get_flows_map().values()
+        self.flows.values()
     }
 
     /// Get the primary output flow (if any) for this asset
@@ -307,7 +352,7 @@ impl Asset {
         self.process
             .primary_output
             .as_ref()
-            .map(|commodity_id| &self.get_flows_map()[commodity_id])
+            .map(|commodity_id| &self.flows[commodity_id])
     }
 
     /// Whether this asset has been commissioned
@@ -408,7 +453,7 @@ impl Asset {
         self.state = AssetState::Decommissioned {
             id,
             agent_id,
-            decommission_year,
+            decommission_year: decommission_year.min(self.max_decommission_year()),
         };
     }
 
@@ -822,7 +867,7 @@ mod tests {
         assert_error, asset, commodity_id, process, process_parameter_map, region_id, time_slice,
     };
     use crate::process::{
-        FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessID,
+        FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
         ProcessParameter, ProcessParameterMap,
     };
     use crate::region::RegionID;
@@ -831,8 +876,9 @@ mod tests {
         ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
         MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow,
     };
-    use indexmap::{IndexMap, IndexSet};
+    use indexmap::{IndexSet, indexmap, indexset};
     use itertools::{Itertools, assert_equal};
+    use map_macro::hash_map;
     use rstest::{fixture, rstest};
     use std::collections::HashMap;
     use std::iter;
@@ -876,23 +922,21 @@ mod tests {
         );
 
         // Create flows map
-        let mut flows: HashMap<(RegionID, u32), IndexMap<CommodityID, ProcessFlow>> =
-            Default::default();
-        let mut flow_map: IndexMap<CommodityID, ProcessFlow> = Default::default();
-        flow_map.insert(commodity_id.clone(), flow);
-        flows.insert((region_id.clone(), 2020), flow_map);
+        let flow_map = indexmap! { commodity_id.clone() => flow };
+        let flows = hash_map! {(region_id.clone(), 2020) => flow_map.into()};
 
-        let mut regions = indexmap::IndexSet::new();
-        regions.insert(region_id.clone());
+        // Create empty activity limits map
+        let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(HashMap::new())};
+
         let process = Rc::new(Process {
             id: ProcessID::from("PROC1"),
             description: "Test process".to_string(),
             flows,
             parameters: process_parameter_map,
-            regions,
+            regions: indexset! {region_id.clone()},
             primary_output: Some(commodity_id.clone()),
             years: vec![2020],
-            activity_limits: Default::default(),
+            activity_limits,
             capacity_to_activity: ActivityPerCapacity(1.0),
         });
 
@@ -900,11 +944,8 @@ mod tests {
         let asset = Asset::new_candidate(process, region_id.clone(), Capacity(1.0), 2020).unwrap();
 
         // Set input prices
-        let mut input_prices = HashMap::new();
-        input_prices.insert(
-            (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-            MoneyPerFlow(3.0),
-        );
+        let mut input_prices = CommodityPrices::default();
+        input_prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(3.0));
 
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
@@ -961,7 +1002,7 @@ mod tests {
     }
 
     #[fixture]
-    fn asset_pool() -> AssetPool {
+    fn asset_pool(region_id: RegionID) -> AssetPool {
         let process_param = Rc::new(ProcessParameter {
             capital_cost: MoneyPerCapacity(5.0),
             fixed_operating_cost: MoneyPerCapacityPerYear(2.0),
@@ -972,14 +1013,22 @@ mod tests {
         let years = RangeInclusive::new(2010, 2020).collect_vec();
         let process_parameter_map: ProcessParameterMap = years
             .iter()
-            .map(|&year| (("GBR".into(), year), process_param.clone()))
+            .map(|&year| ((region_id.clone(), year), process_param.clone()))
+            .collect();
+        let activity_limits = years
+            .iter()
+            .map(|&year| ((region_id.clone(), year), Rc::new(HashMap::new())))
+            .collect();
+        let flows = years
+            .iter()
+            .map(|&year| ((region_id.clone(), year), Rc::new(IndexMap::new())))
             .collect();
         let process = Rc::new(Process {
             id: "process1".into(),
             description: "Description".into(),
             years: vec![2010, 2020],
-            activity_limits: ProcessActivityLimitsMap::new(),
-            flows: ProcessFlowsMap::new(),
+            activity_limits,
+            flows,
             parameters: process_parameter_map,
             regions: IndexSet::from(["GBR".into()]),
             primary_output: None,
@@ -1003,7 +1052,7 @@ mod tests {
     }
 
     #[fixture]
-    fn process_with_activity_limits() -> Process {
+    fn process_with_activity_limits(region_id: RegionID) -> Process {
         let process_param = Rc::new(ProcessParameter {
             capital_cost: MoneyPerCapacity(5.0),
             fixed_operating_cost: MoneyPerCapacityPerYear(2.0),
@@ -1014,28 +1063,29 @@ mod tests {
         let years = RangeInclusive::new(2010, 2020).collect_vec();
         let process_parameter_map: ProcessParameterMap = years
             .iter()
-            .map(|&year| (("GBR".into(), year), process_param.clone()))
+            .map(|&year| ((region_id.clone(), year), process_param.clone()))
             .collect();
         let time_slice = TimeSliceID {
             season: "winter".into(),
             time_of_day: "day".into(),
         };
         let fraction_limits = Dimensionless(1.0)..=Dimensionless(2.0);
+        let mut flows = ProcessFlowsMap::new();
         let mut activity_limits = ProcessActivityLimitsMap::new();
+        let limit_map = Rc::new(hash_map! {time_slice => fraction_limits});
         for year in [2010, 2020] {
-            activity_limits.insert(
-                ("GBR".into(), year, time_slice.clone()),
-                fraction_limits.clone(),
-            );
+            // empty flows map, but this is fine for our purposes
+            flows.insert((region_id.clone(), year), Rc::new(IndexMap::new()));
+            activity_limits.insert((region_id.clone(), year), limit_map.clone());
         }
         Process {
             id: "process1".into(),
             description: "Description".into(),
             years: vec![2010, 2020],
             activity_limits,
-            flows: ProcessFlowsMap::new(),
+            flows,
             parameters: process_parameter_map,
-            regions: IndexSet::from(["GBR".into()]),
+            regions: IndexSet::from([region_id]),
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(3.0),
         }
@@ -1194,7 +1244,7 @@ mod tests {
                 Rc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(2.5),
-                2018,
+                2020,
             )
             .unwrap()
             .into(),
@@ -1227,7 +1277,7 @@ mod tests {
             process.into(),
             "GBR".into(),
             Capacity(3.0),
-            2019,
+            2015,
         )
         .unwrap()
         .into();
@@ -1262,7 +1312,7 @@ mod tests {
                 Rc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
-                2016,
+                2010,
             )
             .unwrap()
             .into(),
@@ -1271,7 +1321,7 @@ mod tests {
                 Rc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
-                2017,
+                2015,
             )
             .unwrap()
             .into(),
@@ -1328,7 +1378,7 @@ mod tests {
                 Rc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
-                2016,
+                2020,
             )
             .unwrap()
             .into(),
@@ -1423,7 +1473,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_state_transitions(process: Process) {
+    fn test_asset_commission(process: Process) {
         // Test successful commissioning of Future asset
         let process_rc = Rc::new(process);
         let mut asset1 = Asset::new_future(
@@ -1450,11 +1500,34 @@ mod tests {
         asset2.commission(AssetID(2), "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
+    }
+
+    #[rstest]
+    #[case::early_decommission_within_lifetime(2024, 2024)]
+    #[case::decommission_at_maximum_year(2026, 2025)]
+    fn test_asset_decommission(
+        #[case] requested_decommission_year: u32,
+        #[case] expected_decommission_year: u32,
+        process: Process,
+    ) {
+        // Test successful commissioning of Future asset
+        let process_rc = Rc::new(process);
+        let mut asset = Asset::new_future(
+            "agent1".into(),
+            Rc::clone(&process_rc),
+            "GBR".into(),
+            Capacity(1.0),
+            2020,
+        )
+        .unwrap();
+        asset.commission(AssetID(1), "");
+        assert!(asset.is_commissioned());
+        assert_eq!(asset.id(), Some(AssetID(1)));
 
         // Test successful decommissioning
-        asset1.decommission(2025, "");
-        assert!(!asset1.is_commissioned());
-        assert_eq!(asset1.decommission_year(), Some(2025));
+        asset.decommission(requested_decommission_year, "");
+        assert!(!asset.is_commissioned());
+        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
     }
 
     #[rstest]

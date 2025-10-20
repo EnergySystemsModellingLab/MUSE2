@@ -1,6 +1,6 @@
 # Introduction
 
-MUSE 2.0 is a tool for running simulations of energy systems, written in Rust. It is a slimmer and
+MUSE2 is a tool for running simulations of energy systems, written in Rust. It is a slimmer and
 faster version of [the older MUSE tool]. To get started, please look at the [user guide]
 and the [command line help].
 

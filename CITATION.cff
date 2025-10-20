@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: |
+  If you cite this software, please cite it as below.
+
+  This work was supported via the Climate Compatible Growth (CCG) programme and the EPSRC-funded
+  HI-ACT project (EP/X038823/2). CCG is funded by UK Aid from the UK government. However, the views
+  expressed herein do not necessarily reflect the UK government’s official policies.
+title: MUSE2
+version: 2.0.0
+date-released: 2025-10-14
+authors:
+  - family-names: Dewar
+    given-names: Alex
+    orcid: https://orcid.org/0000-0002-2432-5964
+  - family-names: Bland
+    given-names: Tom
+    orcid: https://orcid.org/0000-0001-6677-8817
+  - family-names: Raja
+    given-names: Sahil
+  - family-names: Alonso Álvarez
+    given-names: Diego
+    orcid: https://orcid.org/0000-0002-0060-9495
+  - family-names: D'Alessandro
+    given-names: Adrian
+    orcid: https://orcid.org/0009-0002-9503-5777
+  - family-names: Smith
+    given-names: Ryan
+    orcid: https://orcid.org/0009-0007-7270-6853
+  - family-names: Scharpf
+    given-names: Benjamin
+  - family-names: Karimi
+    given-names: Aurash
+  - family-names: Hawkes
+    given-names: Adam
+    orcid: https://orcid.org/0000-0001-9720-332X
+license: GPL-3.0-only
+repository-code: https://github.com/EnergySystemsModellingLab/MUSE2

@@ -1,6 +1,8 @@
 //! Code for reading the agent objectives CSV file.
 use super::super::{input_err_msg, read_csv, try_insert};
+use crate::ISSUES_URL;
 use crate::agent::{AgentID, AgentMap, AgentObjectiveMap, DecisionRule, ObjectiveType};
+use crate::model::{ALLOW_BROKEN_OPTION_NAME, broken_model_options_allowed};
 use crate::units::Dimensionless;
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
@@ -32,6 +34,8 @@ struct AgentObjectiveRaw {
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
+/// * `agents` - Map of agents
+/// * `milestone_years` - Milestone years for the simulation
 ///
 /// # Returns
 ///
@@ -96,9 +100,15 @@ where
             .filter(|year| agent_objectives[year] == ObjectiveType::NetPresentValue)
             .collect_vec();
         if !npv_years.is_empty() {
+            ensure!(
+                broken_model_options_allowed(),
+                "The NPV option is BROKEN and should not be used. See: {ISSUES_URL}/716.\n\
+                If you are sure that you want to enable it anyway, you need to set the \
+                {ALLOW_BROKEN_OPTION_NAME} option to true."
+            );
             warn!(
                 "Agent {agent_id} is using NPV in years {npv_years:?}. \
-                Support for NPV is currently experimental and may give bad results."
+                The NPV option is BROKEN and should not be used. See: {ISSUES_URL}/716."
             );
         }
     }

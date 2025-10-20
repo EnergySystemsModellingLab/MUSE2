@@ -1,5 +1,5 @@
 //! Code for reading in the commodity levies CSV file.
-use super::super::{input_err_msg, read_csv, try_insert};
+use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::commodity::{BalanceType, CommodityID, CommodityLevy, CommodityLevyMap};
 use crate::id::IDCollection;
 use crate::region::{RegionID, parse_region_str};
@@ -44,7 +44,7 @@ struct CommodityLevyRaw {
 ///
 /// # Returns
 ///
-/// A map containing levies, grouped by commodity ID.
+/// A map containing levies, grouped by commodity ID or an error.
 pub fn read_commodity_levies(
     model_dir: &Path,
     commodity_ids: &IndexSet<CommodityID>,
@@ -53,7 +53,7 @@ pub fn read_commodity_levies(
     milestone_years: &[u32],
 ) -> Result<HashMap<CommodityID, CommodityLevyMap>> {
     let file_path = model_dir.join(COMMODITY_LEVIES_FILE_NAME);
-    let commodity_levies_csv = read_csv::<CommodityLevyRaw>(&file_path)?;
+    let commodity_levies_csv = read_csv_optional(&file_path)?;
     read_commodity_levies_iter(
         commodity_levies_csv,
         commodity_ids,

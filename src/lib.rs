@@ -1,5 +1,12 @@
-//! Common functionality for MUSE 2.0.
+//! Common functionality for MUSE2.
 #![warn(missing_docs)]
+
+/// The main GitHub issues page for MUSE2
+pub const ISSUES_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues");
+
+use dirs::config_dir;
+use std::path::PathBuf;
+
 pub mod agent;
 pub mod asset;
 pub mod cli;
@@ -21,3 +28,15 @@ pub mod year;
 
 #[cfg(test)]
 mod fixture;
+
+/// Get config dir for program.
+///
+/// In the unlikely event this path cannot be retrieved, the CWD will be returned.
+pub fn get_muse2_config_dir() -> PathBuf {
+    let Some(mut config_dir) = config_dir() else {
+        return PathBuf::default();
+    };
+
+    config_dir.push("muse2");
+    config_dir
+}

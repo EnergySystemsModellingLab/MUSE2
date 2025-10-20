@@ -1,4 +1,4 @@
-//! A regression test for the "muse1_default" example
+//! A regression test for the "two_regions" example
 mod regression;
 use regression::run_regression_test;
 

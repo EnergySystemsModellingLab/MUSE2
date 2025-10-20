@@ -9,17 +9,21 @@ use indexmap::IndexSet;
 use itertools::{Itertools, iproduct};
 use petgraph::Directed;
 use petgraph::algo::toposort;
+use petgraph::dot::Dot;
 use petgraph::graph::Graph;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::fs::File;
+use std::io::Write as IoWrite;
+use std::path::Path;
 use strum::IntoEnumIterator;
 
 /// A graph of commodity flows for a given region and year
-type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
+pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
 
 #[derive(Eq, PartialEq, Clone, Hash)]
 /// A node in the commodity graph
-enum GraphNode {
+pub enum GraphNode {
     /// A node representing a commodity
     Commodity(CommodityID),
     /// A source node for processes that have no inputs
@@ -43,11 +47,20 @@ impl Display for GraphNode {
 
 #[derive(Eq, PartialEq, Clone, Hash)]
 /// An edge in the commodity graph
-enum GraphEdge {
+pub enum GraphEdge {
     /// An edge representing a process
     Process(ProcessID),
     /// An edge representing a service demand
     Demand,
+}
+
+impl Display for GraphEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GraphEdge::Process(id) => write!(f, "{id}"),
+            GraphEdge::Demand => write!(f, "DEMAND"),
+        }
+    }
 }
 
 /// Creates a directed graph of commodity flows for a given region and year.
@@ -118,7 +131,7 @@ fn create_commodities_graph_for_region_year(
     graph
 }
 
-/// Prepares a graph for validation with `validate_commodities_graph`.
+/// Prepares a graph for validation with [`validate_commodities_graph`].
 ///
 /// It takes a base graph produced by `create_commodities_graph_for_region_year`, and modifies it to
 /// account for process availabilities and commodity demands within the given time slice selection,
@@ -141,6 +154,7 @@ fn prepare_commodities_graph_for_validation(
 
     // Filter by process availability
     // We keep edges if the process has availability > 0 in any time slice in the selection
+    let key = (region_id.clone(), year);
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
         let GraphEdge::Process(process_id) = graph.edge_weight(edge_idx).unwrap() else {
@@ -149,13 +163,15 @@ fn prepare_commodities_graph_for_validation(
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
+
         time_slice_selection
             .iter(time_slice_info)
             .any(|(time_slice, _)| {
-                let key = (region_id.clone(), year, time_slice.clone());
-                process
-                    .activity_limits
-                    .get(&key)
+                let Some(limits_map) = process.activity_limits.get(&key) else {
+                    return false;
+                };
+                limits_map
+                    .get(time_slice)
                     .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
             })
     });
@@ -194,7 +210,7 @@ fn prepare_commodities_graph_for_validation(
 /// The validation is only performed for commodities with the specified time slice level. For full
 /// validation of all commodities in the model, we therefore need to run this function for all time
 /// slice selections at all time slice levels. This is handled by
-/// `build_and_validate_commodity_graphs_for_model`.
+/// [`validate_commodity_graphs_for_model`].
 fn validate_commodities_graph(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
@@ -305,7 +321,26 @@ fn topo_sort_commodities(
     Ok(order)
 }
 
-/// Builds and validates commodity graphs for the entire model.
+/// Builds base commodity graphs for each region and year
+///
+/// These do not take into account demand and process availability
+pub fn build_commodity_graphs_for_model(
+    processes: &ProcessMap,
+    region_ids: &IndexSet<RegionID>,
+    years: &[u32],
+) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
+    let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
+        iproduct!(region_ids, years.iter())
+            .map(|(region_id, year)| {
+                let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
+                ((region_id.clone(), *year), graph)
+            })
+            .collect();
+
+    Ok(commodity_graphs)
+}
+
+/// Validates commodity graphs for the entire model.
 ///
 /// This function creates commodity flow graphs for each region/year combination in the model,
 /// validates the graph structure against commodity type rules, and determines the optimal
@@ -335,23 +370,12 @@ fn topo_sort_commodities(
 /// - Any commodity graph contains cycles
 /// - Commodity type rules are violated (e.g., SVD commodities being consumed)
 /// - Demand cannot be satisfied
-pub fn build_and_validate_commodity_graphs_for_model(
+pub fn validate_commodity_graphs_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
     processes: &ProcessMap,
     commodities: &CommodityMap,
-    region_ids: &IndexSet<RegionID>,
-    years: &[u32],
     time_slice_info: &TimeSliceInfo,
 ) -> Result<HashMap<(RegionID, u32), Vec<CommodityID>>> {
-    // Build base commodity graphs for each region and year
-    // These do not take into account demand and process availability
-    let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
-        iproduct!(region_ids, years.iter())
-            .map(|(region_id, year)| {
-                let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
-                ((region_id.clone(), *year), graph)
-            })
-            .collect();
-
     // Determine commodity ordering for each region and year
     let commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>> = commodity_graphs
         .iter()
@@ -364,7 +388,7 @@ pub fn build_and_validate_commodity_graphs_for_model(
         .try_collect()?;
 
     // Validate graphs at all time slice levels (taking into account process availability and demand)
-    for ((region_id, year), base_graph) in &commodity_graphs {
+    for ((region_id, year), base_graph) in commodity_graphs {
         for ts_level in TimeSliceLevel::iter() {
             for ts_selection in time_slice_info.iter_selections_at_level(ts_level) {
                 let graph = prepare_commodities_graph_for_validation(
@@ -388,6 +412,21 @@ pub fn build_and_validate_commodity_graphs_for_model(
 
     // If all the validation passes, return the commodity ordering
     Ok(commodity_order)
+}
+
+/// Saves commodity graphs to file
+///
+/// The graphs are saved as DOT files to the specified output path
+pub fn save_commodity_graphs_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    output_path: &Path,
+) -> Result<()> {
+    for ((region_id, year), graph) in commodity_graphs {
+        let dot = Dot::new(&graph);
+        let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
+        write!(file, "{dot}")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

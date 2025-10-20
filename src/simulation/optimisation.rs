@@ -6,6 +6,7 @@ use crate::commodity::CommodityID;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
+use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
 use anyhow::{Result, anyhow, ensure};
@@ -13,7 +14,7 @@ use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 use itertools::{chain, iproduct};
 use log::debug;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Range;
 
 mod constraints;
@@ -65,7 +66,6 @@ pub struct Solution<'a> {
     solution: highs::Solution,
     variables: VariableMap,
     active_asset_var_idx: Range<usize>,
-    candidate_asset_var_idx: Range<usize>,
     time_slice_info: &'a TimeSliceInfo,
     constraint_keys: ConstraintKeys,
     /// The objective value for the solution
@@ -108,20 +108,13 @@ impl Solution<'_> {
         self.zip_var_keys_with_output(&self.active_asset_var_idx, self.solution.columns())
     }
 
-    /// Reduced costs for candidate assets
-    pub fn iter_reduced_costs_for_candidates(
-        &self,
-    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
-        self.zip_var_keys_with_output(&self.candidate_asset_var_idx, self.solution.dual_columns())
-    }
-
     /// Keys and dual values for commodity balance constraints.
     pub fn iter_commodity_balance_duals(
         &self,
     ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, MoneyPerFlow)> {
         // Each commodity balance constraint applies to a particular time slice
-        // selection (depending on time slice level). Where this covers multiple timeslices,
-        // we return the same dual for each individual timeslice.
+        // selection (depending on time slice level). Where this covers multiple time slices,
+        // we return the same dual for each individual time slice.
         self.constraint_keys
             .commodity_balance_keys
             .zip_duals(self.solution.dual_rows())
@@ -169,6 +162,11 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel> {
 
     let status = solved.status();
     ensure!(
+        status != HighsModelStatus::Infeasible,
+        "The solver has indicated that the problem is infeasible. It may be because the assets in \
+        this year cannot meet the required demand."
+    );
+    ensure!(
         status == HighsModelStatus::Optimal,
         "Could not find optimal result for model: {status:?}"
     );
@@ -180,10 +178,7 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel> {
 ///
 /// Input prices should only be provided for commodities for which there will be no commodity
 /// balance constraint.
-fn check_input_prices(
-    input_prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
-    commodities: &[CommodityID],
-) {
+fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID]) {
     let commodities_set: HashSet<_> = commodities.iter().collect();
     let has_prices_for_commodity_subset = input_prices
         .keys()
@@ -198,13 +193,13 @@ fn check_input_prices(
 ///
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE_2.0/model/dispatch_optimisation.html
+/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
     commodities: &'run [CommodityID],
-    input_prices: Option<&'run HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>>,
+    input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
 
@@ -240,10 +235,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Explicitly provide prices for certain input commodities
-    pub fn with_input_prices(
-        self,
-        input_prices: &'run HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
-    ) -> Self {
+    pub fn with_input_prices(self, input_prices: &'run CommodityPrices) -> Self {
         Self {
             input_prices: Some(input_prices),
             ..self
@@ -282,7 +274,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.existing_assets,
             self.year,
         );
-        let candidate_asset_var_idx = add_variables(
+        add_variables(
             &mut problem,
             &mut variables,
             &self.model.time_slice_info,
@@ -324,7 +316,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             solution: solution.get_solution(),
             variables,
             active_asset_var_idx,
-            candidate_asset_var_idx,
             time_slice_info: &self.model.time_slice_info,
             constraint_keys,
             objective_value,
@@ -346,7 +337,7 @@ fn add_variables(
     problem: &mut Problem,
     variables: &mut VariableMap,
     time_slice_info: &TimeSliceInfo,
-    input_prices: Option<&HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>>,
+    input_prices: Option<&CommodityPrices>,
     assets: &[AssetRef],
     year: u32,
 ) -> Range<usize> {
@@ -384,7 +375,7 @@ fn calculate_cost_coefficient(
     asset: &Asset,
     year: u32,
     time_slice: &TimeSliceID,
-    input_prices: Option<&HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>>,
+    input_prices: Option<&CommodityPrices>,
 ) -> MoneyPerActivity {
     let opex = asset.get_operating_cost(year, time_slice);
     let input_cost = input_prices

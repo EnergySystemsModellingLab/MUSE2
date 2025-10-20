@@ -4,10 +4,11 @@ use itertools::Itertools;
 use muse2::cli::RunOpts;
 use muse2::cli::example::handle_example_run_command;
 use muse2::settings::Settings;
+use std::env;
 use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use tempfile::tempdir;
+use tempfile::{TempDir, tempdir};
 
 const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 
@@ -27,31 +28,42 @@ pub fn run_regression_test_with_debug_files(example_name: &str) {
 }
 
 fn run_regression_test_debug_opt(example_name: &str, debug_model: bool) {
-    unsafe { std::env::set_var("MUSE2_LOG_LEVEL", "off") };
+    unsafe { env::set_var("MUSE2_LOG_LEVEL", "off") };
 
-    let tempdir = tempdir().unwrap();
-    let opts = RunOpts {
-        output_dir: Some(tempdir.path().to_path_buf()),
-        overwrite: false,
-        debug_model,
+    // Allow user to set output dir for regression tests so they can examine results. This is
+    // principally intended for use by CI.
+    let tmp: TempDir;
+    let output_dir = if let Ok(dir) = env::var("MUSE2_TEST_OUTPUT_DIR") {
+        [&dir, example_name].iter().collect()
+    } else {
+        tmp = tempdir().unwrap();
+        tmp.path().to_path_buf()
     };
-    let output_dir = tempdir.path();
+
+    let opts = RunOpts {
+        output_dir: Some(output_dir.clone()),
+        overwrite: false,
+        debug_model: Some(true), // NB: Always enable this as it helps to have the files for debugging
+    };
     handle_example_run_command(example_name, &opts, Some(Settings::default())).unwrap();
 
     let test_data_dir = PathBuf::from(format!("tests/data/{example_name}"));
-    compare_output_dirs(output_dir, &test_data_dir);
+    compare_output_dirs(&output_dir, &test_data_dir, debug_model);
 }
 
-fn compare_output_dirs(output_dir1: &Path, output_dir2: &Path) {
-    let file_names1 = get_csv_file_names(output_dir1);
-    let file_names2 = get_csv_file_names(output_dir2);
+fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model: bool) {
+    let mut file_names1 = get_csv_file_names(cur_output_dir1);
+    if !debug_model {
+        file_names1.retain(|name| !name.starts_with("debug_"));
+    }
+    let file_names2 = get_csv_file_names(test_data_dir);
 
     // Check that output files haven't been added/removed
     assert!(file_names1 == file_names2);
 
     let mut errors = Vec::new();
     for file_name in file_names1 {
-        compare_lines(output_dir1, output_dir2, &file_name, &mut errors);
+        compare_lines(cur_output_dir1, test_data_dir, &file_name, &mut errors);
     }
 
     assert!(

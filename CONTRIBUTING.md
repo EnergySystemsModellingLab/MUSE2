@@ -44,7 +44,7 @@ This section guides you through submitting a bug report for MUSE. Following thes
 maintainers and the community understand your report :pencil:, reproduce the behavior :computer:
 :computer:, and find related reports :mag_right:.
 
-Before creating bug reports, please check [this list](https://github.com/EnergySystemsModellingLab/MUSE_2.0/issues)
+Before creating bug reports, please check [this list](https://github.com/EnergySystemsModellingLab/MUSE2/issues)
 (including the closed issues) as you might find out that you don't need to create one. When you are
 creating a bug report, please [include as many details as possible](#how-do-i-submit-a-good-bug-report).
 
@@ -73,7 +73,7 @@ Provide more context by answering these questions:
   this always a problem?
 - If the problem started happening recently, **can you reproduce the problem in an older version of
   MUSE?** What's the most recent version in which the problem doesn't happen? You can download older
-  versions of MUSE from [the releases page](https://github.com/EnergySystemsModellingLab/MUSE_2.0/releases).
+  versions of MUSE from [the releases page](https://github.com/EnergySystemsModellingLab/MUSE2/releases).
 - **Can you reliably reproduce the issue?** If not, provide details about how often the problem
   happens and under which conditions it normally happens.
 
@@ -90,7 +90,7 @@ This section guides you through submitting an enhancement suggestion for MUSE, i
 new features and minor improvements to existing functionality. Following these guidelines helps
 maintainers and the community understand your suggestion :pencil: and find related suggestions :mag_right:.
 
-Before creating enhancement suggestions, please check [this list](https://github.com/EnergySystemsModellingLab/MUSE_2.0/issues)
+Before creating enhancement suggestions, please check [this list](https://github.com/EnergySystemsModellingLab/MUSE2/issues)
 (including closed issues) as you might find out that you don't need to create one. When you are
 creating an enhancement suggestion, please [include as many details as possible](#how-do-i-submit-a-good-enhancement-suggestion).
 
@@ -112,10 +112,10 @@ Create an issue on that repository and provide the following information:
 Unsure where to begin contributing to MUSE? You can start by looking through these `beginner` and
 `help-wanted` issues:
 
-- [Beginner issues](https://github.com/EnergySystemsModellingLab/MUSE_2.0/labels/good%20first%20issue),
+- [Beginner issues](https://github.com/EnergySystemsModellingLab/MUSE2/labels/good%20first%20issue),
   issues which should only require a few lines
   of code, and a test or two.
-- [Help wanted issues](https://github.com/EnergySystemsModellingLab/MUSE_2.0/labels/help%20wanted),
+- [Help wanted issues](https://github.com/EnergySystemsModellingLab/MUSE2/labels/help%20wanted),
   issues which should be a bit more involved than `beginner` issues.
 
 ### Pull Requests

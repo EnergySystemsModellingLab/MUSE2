@@ -24,7 +24,7 @@ static LOGGER_INIT: OnceLock<()> = OnceLock::new();
 /// environment variable or the settings.toml file.
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 
-/// The file name for the log file containing messages about the ordinary operation of MUSE 2.0
+/// The file name for the log file containing messages about the ordinary operation of MUSE2
 const LOG_INFO_FILE_NAME: &str = "muse2_info.log";
 
 /// The file name for the log file containing warnings and error messages
@@ -151,7 +151,7 @@ pub fn init(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Resu
     Ok(())
 }
 
-/// Write to the log in the format we want for MUSE 2.0
+/// Write to the log in the format we want for MUSE2
 fn write_log<T: Display>(out: FormatCallback, level: T, target: &str, message: &Arguments) {
     let timestamp = Local::now().format("%H:%M:%S");
 

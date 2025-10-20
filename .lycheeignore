@@ -1,5 +1,5 @@
 # For some reason these spurious links appear in some cargo doc-generated files
-^file://.+/MUSE_2.0/book/api/index\.html$
+^file://.+/MUSE2/book/api/index\.html$
 
 # Times out on GitHub runner
 ^http://www.adobe.com

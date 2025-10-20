@@ -1,5 +1,5 @@
 //! Code for reading [Asset]s from a CSV file.
-use super::{input_err_msg, read_csv};
+use super::{input_err_msg, read_csv_optional};
 use crate::agent::AgentID;
 use crate::asset::Asset;
 use crate::id::IDCollection;
@@ -35,7 +35,7 @@ struct AssetRaw {
 ///
 /// # Returns
 ///
-/// A `HashMap` containing assets grouped by agent ID.
+/// A `Vec` of [`Asset`]s or an error.
 pub fn read_assets(
     model_dir: &Path,
     agent_ids: &IndexSet<AgentID>,
@@ -43,7 +43,7 @@ pub fn read_assets(
     region_ids: &IndexSet<RegionID>,
 ) -> Result<Vec<Asset>> {
     let file_path = model_dir.join(ASSETS_FILE_NAME);
-    let assets_csv = read_csv(&file_path)?;
+    let assets_csv = read_csv_optional(&file_path)?;
     read_assets_from_iter(assets_csv, agent_ids, processes, region_ids)
         .with_context(|| input_err_msg(&file_path))
 }

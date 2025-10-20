@@ -1,0 +1,116 @@
+//! Code related to CLI interface for managing the settings file
+use crate::settings::{Settings, get_settings_file_path};
+use anyhow::{Context, Result, bail};
+use clap::Subcommand;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
+
+/// Subcommands for settings
+#[derive(Subcommand)]
+pub enum SettingsSubcommands {
+    /// Edit the program settings file
+    Edit,
+    /// Delete the settings file, if any
+    Delete,
+    /// Get the path to where the settings file is read from
+    Path,
+    /// Show the contents of the `settings.toml`, if present
+    Show,
+    /// Show the default settings for `settings.toml`
+    ShowDefault,
+}
+
+impl SettingsSubcommands {
+    /// Execute the supplied settings subcommand
+    pub fn execute(self) -> Result<()> {
+        match self {
+            Self::Edit => handle_edit_command()?,
+            Self::Delete => handle_delete_command()?,
+            Self::Path => handle_path_command(),
+            Self::Show => handle_show_command()?,
+            Self::ShowDefault => handle_show_default_command(),
+        }
+
+        Ok(())
+    }
+}
+
+/// Get the path to the settings file, creating it if it doesn't exist
+fn ensure_settings_file_exists(file_path: &Path) -> Result<()> {
+    if file_path.is_file() {
+        // File already exists
+        return Ok(());
+    }
+
+    if let Some(dir_path) = file_path.parent() {
+        // Create parent directory
+        fs::create_dir_all(dir_path)
+            .with_context(|| format!("Failed to create directory: {}", dir_path.display()))?;
+    }
+
+    // Create placeholder settings file
+    fs::write(file_path, Settings::default_file_contents())?;
+
+    Ok(())
+}
+
+/// Handle the `edit` command
+fn handle_edit_command() -> Result<()> {
+    let file_path = get_settings_file_path();
+    ensure_settings_file_exists(&file_path)?;
+
+    // Allow user to edit in text editor
+    println!("Opening settings file for editing: {}", file_path.display());
+    edit::edit_file(&file_path)?;
+
+    Ok(())
+}
+
+/// Handle the `delete` command
+fn handle_delete_command() -> Result<()> {
+    let file_path = get_settings_file_path();
+    if file_path.exists() {
+        fs::remove_file(&file_path)
+            .with_context(|| format!("Error deleting file: {}", file_path.display()))?;
+        println!("Deleted settings file: {}", file_path.display());
+    } else {
+        eprintln!("No settings file to delete");
+    }
+
+    Ok(())
+}
+
+/// Handle the `path` command
+fn handle_path_command() {
+    let file_path = get_settings_file_path();
+    if file_path.is_file() {
+        println!("{}", file_path.display());
+    } else {
+        eprintln!("Settings file not found at: {}", file_path.display());
+    }
+}
+
+/// Handle the `show` command
+fn handle_show_command() -> Result<()> {
+    let file_path = get_settings_file_path();
+
+    match fs::read(&file_path) {
+        // Write contents of file to stdout
+        Ok(ref contents) => io::stdout().write_all(contents)?,
+        Err(err) => {
+            if err.kind() == io::ErrorKind::NotFound {
+                bail!("Settings file not found at: {}", file_path.display())
+            }
+            // Some other kind of IO error occurred; just return it
+            Err(err)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle the `show-default` command
+fn handle_show_default_command() {
+    print!("{}", Settings::default_file_contents());
+}

@@ -1,6 +1,5 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use super::prices::ReducedCosts;
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
@@ -9,7 +8,7 @@ use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity, MoneyPerFlow};
+use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use indexmap::IndexMap;
 use itertools::{chain, iproduct};
@@ -17,7 +16,8 @@ use log::debug;
 use std::collections::HashMap;
 
 pub mod appraisal;
-use appraisal::appraise_investment;
+use appraisal::coefficients::calculate_coefficients_for_assets;
+use appraisal::{AppraisalOutput, appraise_investment};
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -33,14 +33,12 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 /// * `year` - Current milestone year
 /// * `assets` - The asset pool
 /// * `prices` - Commodity prices
-/// * `reduced_costs` - Reduced costs for assets
 /// * `writer` - Data writer
 pub fn perform_agent_investment(
     model: &Model,
     year: u32,
     existing_assets: &[AssetRef],
     prices: &CommodityPrices,
-    reduced_costs: &ReducedCosts,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise demand map
@@ -68,11 +66,7 @@ pub fn perform_agent_investment(
             // performed will, by definition, not have any producers. For these, we provide prices
             // from the previous dispatch run otherwise they will appear to be free to the model.
             for time_slice in model.time_slice_info.iter_ids() {
-                external_prices.remove(&(
-                    commodity_id.clone(),
-                    region_id.clone(),
-                    time_slice.clone(),
-                ));
+                external_prices.remove(commodity_id, region_id, time_slice);
             }
 
             // List of assets selected/retained for this region/commodity
@@ -113,7 +107,7 @@ pub fn perform_agent_investment(
                     opt_assets,
                     commodity,
                     agent,
-                    reduced_costs,
+                    prices,
                     demand_portion_for_commodity,
                     year,
                     writer,
@@ -129,7 +123,7 @@ pub fn perform_agent_investment(
             }
 
             // Add the selected assets to the list of all selected assets
-            all_selected_assets.extend(selected_assets.clone());
+            all_selected_assets.extend(selected_assets.iter().cloned());
 
             // Perform dispatch optimisation with assets that have been selected so far
             // **TODO**: presumably we only need to do this for selected_assets, as assets added in
@@ -159,8 +153,8 @@ pub fn perform_agent_investment(
 /// Flatten the preset commodity demands for a given year into a map of commodity, region and
 /// time slice to demand.
 ///
-/// Since demands for some commodities may be specified at a coarser timeslice level, we need to
-/// distribute these demands over all timeslices. Note: the way that we do this distribution is
+/// Since demands for some commodities may be specified at a coarser time slice level, we need to
+/// distribute these demands over all time slices. Note: the way that we do this distribution is
 /// irrelevant, as demands will only be balanced to the appropriate level, but we still need to do
 /// this for the solver to work.
 ///
@@ -177,12 +171,12 @@ fn flatten_preset_demands_for_year(
                 continue;
             }
 
-            // We split the demand equally over all timeslices in the selection
-            // NOTE: since demands will only be balanced to the timeslice level of the commodity
+            // We split the demand equally over all time slices in the selection
+            // NOTE: since demands will only be balanced to the time slice level of the commodity
             // it doesn't matter how we do this distribution, only the total matters.
             #[allow(clippy::cast_precision_loss)]
-            let n_timeslices = time_slice_selection.iter(time_slice_info).count() as f64;
-            let demand_per_slice = *demand / Dimensionless(n_timeslices);
+            let n_time_slices = time_slice_selection.iter(time_slice_info).count() as f64;
+            let demand_per_slice = *demand / Dimensionless(n_time_slices);
             for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
                 demand_map.insert(
                     (commodity_id.clone(), region_id.clone(), time_slice.clone()),
@@ -276,8 +270,8 @@ fn get_demand_limiting_capacity(
             .sum();
 
         // Calculate max capacity required for this time slice selection
-        // For commodities with a coarse timeslice level, we have to allow the possibility that all
-        // of the demand gets served by production in a single timeslice
+        // For commodities with a coarse time slice level, we have to allow the possibility that all
+        // of the demand gets served by production in a single time slice
         for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
             let max_flow_per_cap =
                 *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
@@ -347,14 +341,11 @@ fn get_prices_for_commodities(
     time_slice_info: &TimeSliceInfo,
     region_id: &RegionID,
     commodities: &[CommodityID],
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+) -> CommodityPrices {
     iproduct!(commodities.iter(), time_slice_info.iter_ids())
         .map(|(commodity_id, time_slice)| {
             let price = prices.get(commodity_id, region_id, time_slice).unwrap();
-            (
-                (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-                price,
-            )
+            (commodity_id, region_id, time_slice, price)
         })
         .collect()
 }
@@ -366,12 +357,16 @@ fn select_best_assets(
     mut opt_assets: Vec<AssetRef>,
     commodity: &Commodity,
     agent: &Agent,
-    reduced_costs: &ReducedCosts,
+    prices: &CommodityPrices,
     mut demand: DemandMap,
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let mut best_assets: Vec<AssetRef> = Vec::new();
+    let objective_type = &agent.objectives[&year];
+
+    // Calculate coefficients for all asset options according to the agent's objective
+    let coefficients =
+        calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
 
     let mut remaining_candidate_capacity = HashMap::from_iter(
         opt_assets
@@ -381,6 +376,7 @@ fn select_best_assets(
     );
 
     let mut round = 0;
+    let mut best_assets: Vec<AssetRef> = Vec::new();
     while is_any_remaining_demand(&demand) {
         ensure!(
             !opt_assets.is_empty(),
@@ -402,8 +398,8 @@ fn select_best_assets(
                 asset,
                 max_capacity,
                 commodity,
-                &agent.objectives[&year],
-                reduced_costs,
+                objective_type,
+                &coefficients[asset],
                 &demand,
             )?;
 
@@ -411,7 +407,7 @@ fn select_best_assets(
             // this means the asset is infeasible for investment. This can happen if the asset has
             // zero activity limits for all time slices with demand. This can also happen due to a
             // known issue with the NPV objective, for which we do not currently have a solution
-            // (see https://github.com/EnergySystemsModellingLab/MUSE_2.0/issues/716).
+            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
             if output.capacity > Capacity(0.0) {
                 outputs_for_opts.push(output);
             } else {
@@ -439,7 +435,7 @@ fn select_best_assets(
         // Select the best investment option
         let best_output = outputs_for_opts
             .into_iter()
-            .min_by(|a, b| a.metric.partial_cmp(&b.metric).unwrap())
+            .min_by(AppraisalOutput::compare_metric)
             .unwrap();
 
         // Log the selected asset
@@ -538,6 +534,7 @@ mod tests {
     use crate::units::{Dimensionless, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use itertools::Itertools;
+    use map_macro::hash_map;
     use rstest::rstest;
     use std::rc::Rc;
 
@@ -566,15 +563,17 @@ mod tests {
         // Add the flow to the process
         process.flows.insert(
             (region_id.clone(), 2015), // Using default commission year from fixture
-            [(commodity_rc.id.clone(), process_flow)]
-                .into_iter()
-                .collect(),
+            Rc::new(
+                [(commodity_rc.id.clone(), process_flow)]
+                    .into_iter()
+                    .collect(),
+            ),
         );
 
         // Add activity limits
         process.activity_limits.insert(
-            (region_id.clone(), 2015, time_slice.clone()),
-            Dimensionless(0.0)..=Dimensionless(1.0),
+            (region_id.clone(), 2015),
+            Rc::new(hash_map! {time_slice.clone() => Dimensionless(0.0)..=Dimensionless(1.0)}),
         );
 
         // Create asset with the configured process
@@ -620,20 +619,23 @@ mod tests {
         // Add the flow to the process
         process.flows.insert(
             (region_id.clone(), 2015), // Using default commission year from fixture
-            [(commodity_rc.id.clone(), process_flow)]
-                .into_iter()
-                .collect(),
+            Rc::new(
+                [(commodity_rc.id.clone(), process_flow)]
+                    .into_iter()
+                    .collect(),
+            ),
         );
 
         // Add activity limits for both time slices with different limits
-        process.activity_limits.insert(
-            (region_id.clone(), 2015, time_slice1.clone()),
-            Dimensionless(0.0)..=Dimensionless(2.0), // Higher limit for day
-        );
-        process.activity_limits.insert(
-            (region_id.clone(), 2015, time_slice2.clone()),
-            Dimensionless(0.0)..=Dimensionless(0.0), // Zero limit for night - should be skipped
-        );
+        let limits = hash_map! {
+            // Higher limit for day
+            time_slice1.clone() => Dimensionless(0.0)..=Dimensionless(2.0),
+            // Zero limit for night - should be skipped
+            time_slice2.clone() => Dimensionless(0.0)..=Dimensionless(0.0)
+        };
+        process
+            .activity_limits
+            .insert((region_id.clone(), 2015), limits.into());
 
         // Create asset with the configured process
         let asset = asset(process);

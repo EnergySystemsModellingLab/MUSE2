@@ -5,7 +5,7 @@
 
 This dispatch optimisation model calculates the least-cost operation of the energy system for a
 given configuration of assets and capacities, subject to demands and constraints. It is the core
-engine used for each dispatch run referenced in the overall MUSE 2.0 workflow. A key general
+engine used for each dispatch run referenced in the overall MUSE2 workflow. A key general
 assumption is that SVD commodities represent final demands only and are not consumed as inputs by
 any asset.
 
@@ -153,7 +153,7 @@ time-varying availability limits. For all \\( a \in \mathbf{A}^{std}, r, t \\):
 
 > Note: This section includes references to many features that are not described elsewhere in this
 > document or implemented yet (e.g. region-to-region trade), but these are included for
-> completeness. This represents the roadmap for future MUSE 2.0 development.
+> completeness. This represents the roadmap for future MUSE2 development.
 
 This section describes how all preceding components are integrated to form the complete dispatch
 optimisation problem. 1. **Sets, Parameters, Decision Variables:** The union of all previously

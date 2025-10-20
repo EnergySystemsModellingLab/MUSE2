@@ -1,14 +1,16 @@
 <!-- markdownlint-disable MD041 -->
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-9-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-10-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
-[![Build and test](https://github.com/EnergySystemsModellingLab/MUSE_2.0/actions/workflows/cargo-test.yml/badge.svg)](https://github.com/EnergySystemsModellingLab/MUSE_2.0/actions/workflows/cargo-test.yml)
-[![codecov](https://codecov.io/github/EnergySystemsModellingLab/MUSE_2.0/graph/badge.svg?token=nV8gp1NCh8)](https://codecov.io/github/EnergySystemsModellingLab/MUSE_2.0)
-[![GitHub](https://img.shields.io/github/license/EnergySystemsModellingLab/MUSE_2.0)](https://raw.githubusercontent.com/EnergySystemsModellingLab/MUSE_2.0/main/LICENSE)
+[![Build and test](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml/badge.svg)](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml)
+[![codecov](https://codecov.io/github/EnergySystemsModellingLab/MUSE2/graph/badge.svg?token=nV8gp1NCh8)](https://codecov.io/github/EnergySystemsModellingLab/MUSE2)
+[![Crates.io Version](https://img.shields.io/crates/v/muse2)](https://crates.io/crates/muse2)
+[![DOI](https://zenodo.org/badge/790809493.svg)](https://doi.org/10.5281/zenodo.17350372)
+[![GitHub](https://img.shields.io/github/license/EnergySystemsModellingLab/MUSE2)](https://raw.githubusercontent.com/EnergySystemsModellingLab/MUSE2/main/LICENSE)
 
-# MUSE 2.0
+# MUSE2
 
-MUSE 2.0 (**M**od**U**lar energy systems **S**imulation **E**nvironment) is a tool for running
+MUSE2 (**M**od**U**lar energy systems **S**imulation **E**nvironment) is a tool for running
 simulations of energy systems, written in Rust. Its purpose is to provide users with a framework to
 simulate pathways of energy system transition, usually in the context of climate change mitigation.
 
@@ -16,8 +18,13 @@ It is the successor to [MUSE], which is written in Python. It was developed foll
 MUSE to address a range of legacy issues that are challenging to address via upgrades to the
 existing MUSE framework, and to implement the framework in the high-performance Rust language.
 
-:construction: **Please note that this code is under heavy development and is not yet suitable for
-end users. Watch this space!** :construction:
+Please note that MUSE2 currently only works with simple models and is not yet suitable for use in
+research.
+
+To download the latest version of MUSE2 for your platform, please visit [the releases page].
+
+[MUSE]: https://github.com/EnergySystemsModellingLab/MUSE_OS
+[the releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases
 
 ## Model Overview
 
@@ -34,18 +41,31 @@ foresight, reacting only to information available in the current time period. Th
 intertemporal optimisation modelling frameworks (such as [TIMES] and [MESSAGEix]) which have perfect
 foresight over the whole modelled time horizon.
 
-[MUSE]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 [Integrated Assessment Modelling]: https://unfccc.int/topics/mitigation/workstreams/response-measures/modelling-tools-to-assess-the-impact-of-the-implementation-of-response-measures/integrated-assessment-models-iams-and-energy-environment-economy-e3-models
 [TIMES]: https://iea-etsap.org/index.php/etsap-tools/model-generators/times
 [MESSAGEix]: https://docs.messageix.org/en/latest
 
 ## Getting started
 
-To start using MUSE 2.0, please refer to [the documentation]. If you wish to develop MUSE 2.0 or
-build it from source, please see [the developer guide].
+The easiest way to install MUSE2 is to download the latest version for your platform on [our
+releases page]. For information on getting started, please consult [the documentation].
 
-[the documentation]: https://energysystemsmodellinglab.github.io/MUSE_2.0/introduction.html
-[the developer guide]: https://energysystemsmodellinglab.github.io/MUSE_2.0/developer_guide.html
+If you wish to develop MUSE2 or build it from source, please see [the developer guide].
+
+You can also install the [`muse2` crate from crates.io][muse2-crate], though this installation
+method is only recommended for developers.
+
+[our releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases
+[the documentation]: https://energysystemsmodellinglab.github.io/MUSE2/introduction.html
+[the developer guide]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide.html
+[muse2-crate]: https://crates.io/crates/muse2
+
+## Citing this repository
+
+If you use MUSE2 in your work, please cite us. For information on how to cite this repository, see
+[the Zenodo page for the latest release][zenodo-page].
+
+[zenodo-page]: https://doi.org/10.5281/zenodo.17350372
 
 ## Contributors ✨
 
@@ -57,17 +77,18 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://www.imperial.ac.uk/admin-services/ict/self-service/research-support/rcs/service-offering/research-software-engineering/"><img src="https://avatars.githubusercontent.com/u/23149834?v=4?s=100" width="100px;" alt="Alex Dewar"/><br /><sub><b>Alex Dewar</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=alexdewar" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/tsmbland"><img src="https://avatars.githubusercontent.com/u/23723407?v=4?s=100" width="100px;" alt="Tom Bland"/><br /><sub><b>Tom Bland</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=tsmbland" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Sahil590"><img src="https://avatars.githubusercontent.com/u/56438860?v=4?s=100" width="100px;" alt="Sahil Raja"/><br /><sub><b>Sahil Raja</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=Sahil590" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Ashmit8583"><img src="https://avatars.githubusercontent.com/u/137117727?v=4?s=100" width="100px;" alt="Ashmit Sikdar"/><br /><sub><b>Ashmit Sikdar</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=Ashmit8583" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://www.imperial.ac.uk/admin-services/ict/self-service/research-support/rcs/service-offering/research-software-engineering/"><img src="https://avatars.githubusercontent.com/u/6095790?v=4?s=100" width="100px;" alt="Diego Alonso Álvarez"/><br /><sub><b>Diego Alonso Álvarez</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=dalonsoa" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/AdrianDAlessandro"><img src="https://avatars.githubusercontent.com/u/40875798?v=4?s=100" width="100px;" alt="Adrian D'Alessandro"/><br /><sub><b>Adrian D'Alessandro</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=AdrianDAlessandro" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/TinyMarsh"><img src="https://avatars.githubusercontent.com/u/13540127?v=4?s=100" width="100px;" alt="Ryan Smith"/><br /><sub><b>Ryan Smith</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=TinyMarsh" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://www.imperial.ac.uk/admin-services/ict/self-service/research-support/rcs/service-offering/research-software-engineering/"><img src="https://avatars.githubusercontent.com/u/23149834?v=4?s=100" width="100px;" alt="Alex Dewar"/><br /><sub><b>Alex Dewar</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=alexdewar" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/tsmbland"><img src="https://avatars.githubusercontent.com/u/23723407?v=4?s=100" width="100px;" alt="Tom Bland"/><br /><sub><b>Tom Bland</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=tsmbland" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Sahil590"><img src="https://avatars.githubusercontent.com/u/56438860?v=4?s=100" width="100px;" alt="Sahil Raja"/><br /><sub><b>Sahil Raja</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=Sahil590" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Ashmit8583"><img src="https://avatars.githubusercontent.com/u/137117727?v=4?s=100" width="100px;" alt="Ashmit Sikdar"/><br /><sub><b>Ashmit Sikdar</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=Ashmit8583" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://www.imperial.ac.uk/admin-services/ict/self-service/research-support/rcs/service-offering/research-software-engineering/"><img src="https://avatars.githubusercontent.com/u/6095790?v=4?s=100" width="100px;" alt="Diego Alonso Álvarez"/><br /><sub><b>Diego Alonso Álvarez</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=dalonsoa" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/AdrianDAlessandro"><img src="https://avatars.githubusercontent.com/u/40875798?v=4?s=100" width="100px;" alt="Adrian D'Alessandro"/><br /><sub><b>Adrian D'Alessandro</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=AdrianDAlessandro" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/TinyMarsh"><img src="https://avatars.githubusercontent.com/u/13540127?v=4?s=100" width="100px;" alt="Ryan Smith"/><br /><sub><b>Ryan Smith</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=TinyMarsh" title="Code">💻</a></td>
     </tr>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/HarmonicReflux"><img src="https://avatars.githubusercontent.com/u/16504600?v=4?s=100" width="100px;" alt="Benjamin Scharpf"/><br /><sub><b>Benjamin Scharpf</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=HarmonicReflux" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ahawkes"><img src="https://avatars.githubusercontent.com/u/12055725?v=4?s=100" width="100px;" alt="Adam Hawkes"/><br /><sub><b>Adam Hawkes</b></sub></a><br /><a href="#ideas-ahawkes" title="Ideas, Planning, & Feedback">🤔</a> <a href="https://github.com/EnergySystemsModellingLab/MUSE_2.0/commits?author=ahawkes" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/HarmonicReflux"><img src="https://avatars.githubusercontent.com/u/16504600?v=4?s=100" width="100px;" alt="Benjamin Scharpf"/><br /><sub><b>Benjamin Scharpf</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=HarmonicReflux" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ahawkes"><img src="https://avatars.githubusercontent.com/u/12055725?v=4?s=100" width="100px;" alt="Adam Hawkes"/><br /><sub><b>Adam Hawkes</b></sub></a><br /><a href="#ideas-ahawkes" title="Ideas, Planning, & Feedback">🤔</a> <a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=ahawkes" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Aurashk"><img src="https://avatars.githubusercontent.com/u/9390150?v=4?s=100" width="100px;" alt="Aurash Karimi"/><br /><sub><b>Aurash Karimi</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=Aurashk" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>

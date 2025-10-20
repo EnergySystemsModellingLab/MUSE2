@@ -6,19 +6,16 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
-use crate::process::{
-    Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessMap, ProcessParameter,
-    ProcessParameterMap,
-};
+use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
     ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, Year,
 };
-use indexmap::IndexSet;
 use indexmap::indexmap;
-use itertools::Itertools;
+use indexmap::{IndexMap, IndexSet};
+use itertools::{Itertools, iproduct};
 use rstest::fixture;
 use std::collections::HashMap;
 use std::iter;
@@ -129,7 +126,7 @@ pub fn process_parameter_map(region_ids: IndexSet<RegionID>) -> ProcessParameter
         capital_cost: MoneyPerCapacity(0.0),
         fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
         variable_operating_cost: MoneyPerActivity(0.0),
-        lifetime: 1,
+        lifetime: 5,
         discount_rate: Dimensionless(1.0),
     });
 
@@ -145,12 +142,21 @@ pub fn process(
     region_ids: IndexSet<RegionID>,
     process_parameter_map: ProcessParameterMap,
 ) -> Process {
+    let years = vec![2010, 2015, 2020];
+
+    // Create maps with (empty) entries for every region/year combo
+    let activity_limits = iproduct!(region_ids.iter(), years.iter())
+        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(HashMap::new())))
+        .collect();
+    let flows = iproduct!(region_ids.iter(), years.iter())
+        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
+        .collect();
     Process {
         id: "process1".into(),
         description: "Description".into(),
-        years: (2010..=2020).collect(),
-        activity_limits: ProcessActivityLimitsMap::new(),
-        flows: ProcessFlowsMap::new(),
+        years,
+        activity_limits,
+        flows,
         parameters: process_parameter_map,
         regions: region_ids,
         primary_output: None,

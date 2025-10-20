@@ -23,7 +23,8 @@ fields:
     description: The type of objective
     notes: |
       Must be `npv` (net present value) or `lcox` (levelised cost of X). Note that support for NPV
-      is experimental and may give bad results.
+      is [currently broken](https://github.com/EnergySystemsModellingLab/MUSE2/issues/716), so don't
+      enable this option unless you know what you're doing.
   - name: decision_weight
     type: number
     description: Weight for weighted sum decision rule

@@ -1,4 +1,5 @@
 //! Defines the `ModelParameters` struct, which represents the contents of `model.toml`.
+use crate::ISSUES_URL;
 use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
@@ -9,8 +10,22 @@ use log::warn;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::path::Path;
+use std::sync::OnceLock;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
+
+/// The name of the option used to gate other, broken options.
+pub const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
+
+/// Whether broken options have been enabled by an option in the model config file
+static BROKEN_OPTIONS_ALLOWED: OnceLock<bool> = OnceLock::new();
+
+/// Whether broken model options have been enabled in the config file or not
+pub fn broken_model_options_allowed() -> bool {
+    *BROKEN_OPTIONS_ALLOWED
+        .get()
+        .expect("Broken options flag not set")
+}
 
 macro_rules! define_unit_param_default {
     ($name:ident, $type: ty, $value: expr) => {
@@ -42,6 +57,9 @@ define_param_default!(default_max_ironing_out_iterations, u32, 10);
 pub struct ModelParameters {
     /// Milestone years
     pub milestone_years: Vec<u32>,
+    /// Allow known-broken options to be enabled.
+    #[serde(default, rename = "please_give_me_broken_results")] // Can't use constant here :-(
+    pub allow_broken_options: bool,
     /// The (small) value of capacity given to candidate assets.
     ///
     /// Don't change unless you know what you're doing.
@@ -134,6 +152,11 @@ impl ModelParameters {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
         let model_params: ModelParameters = read_toml(&file_path)?;
 
+        // Set flag signalling whether broken model options are allowed or not
+        BROKEN_OPTIONS_ALLOWED
+            .set(model_params.allow_broken_options)
+            .unwrap(); // Will only fail if there is a race condition, which shouldn't happen
+
         model_params
             .validate()
             .with_context(|| input_err_msg(file_path))?;
@@ -143,15 +166,30 @@ impl ModelParameters {
 
     /// Validate parameters after reading in file
     fn validate(&self) -> Result<()> {
+        if self.allow_broken_options {
+            warn!(
+                "!!! You've enabled the {ALLOW_BROKEN_OPTION_NAME} option. !!!\n\
+                I see you like to live dangerously 😈. This option should ONLY be used by \
+                developers as it can cause peculiar behaviour that breaks things. NEVER enable it \
+                for results you actually care about or want to publish. You have been warned!"
+            );
+        }
+
         // milestone_years
         check_milestone_years(&self.milestone_years)?;
 
         // pricing_strategy
         if self.pricing_strategy == PricingStrategy::ScarcityAdjusted {
+            ensure!(
+                self.allow_broken_options,
+                "The pricing strategy is set to 'scarcity_adjusted', which is known to be broken. \
+                If you are sure that you want to enable it anyway, you need to set the \
+                {ALLOW_BROKEN_OPTION_NAME} option to true."
+            );
+
             warn!(
                 "The pricing strategy is set to 'scarcity_adjusted'. Commodity prices may be \
-                incorrect if assets have more than one output commodity. See: {}/issues/677",
-                env!("CARGO_PKG_REPOSITORY")
+                incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677"
             );
         }
 
