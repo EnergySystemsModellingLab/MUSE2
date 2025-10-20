@@ -173,6 +173,9 @@ commodities:
   \end{aligned}
 \\]
 
+Note that the unmet demand variables (\\( UnmetD[c,r,t] \\)) are normally not included in the
+optimisation and are currently only used to diagnose the source of errors when running the model.
+
 ### Constraints
 
 The complete set of constraints that the optimisation must satisfy includes:
