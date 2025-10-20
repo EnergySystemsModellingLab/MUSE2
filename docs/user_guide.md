@@ -112,6 +112,8 @@ This command will output a graph for each region/year in the simulation, where n
 and edges are processes.
 Graphs will be saved in [DOT format], which can be visualised locally with [Graphviz], or online
 with [Graphviz online].
+Dashed lines are used to indicate flows for non-primary outputs of a process (as defined in the
+`processes.csv` input file).
 
 [the `muse2 save-graphs` command]: https://energysystemsmodellinglab.github.io/MUSE2/command_line_help.html#muse2-save-graphs
 [DOT format]: https://graphviz.org/doc/info/lang.html
