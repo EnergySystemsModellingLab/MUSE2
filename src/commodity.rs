@@ -4,9 +4,11 @@ use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
+use itertools::Itertools;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::rc::Rc;
 
 define_id_type! {CommodityID}
@@ -58,6 +60,25 @@ pub enum InvestmentSet {
     Single(CommodityID),
     /// A set of commodities that form a cycle
     Cycle(Vec<CommodityID>),
+}
+
+impl InvestmentSet {
+    /// Returns an iterator over the commodity IDs in this investment set
+    pub fn iter(&self) -> impl Iterator<Item = &CommodityID> {
+        match self {
+            InvestmentSet::Single(id) => std::slice::from_ref(id).iter(),
+            InvestmentSet::Cycle(ids) => ids.iter(),
+        }
+    }
+}
+
+impl Display for InvestmentSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvestmentSet::Single(id) => write!(f, "{id}"),
+            InvestmentSet::Cycle(ids) => write!(f, "[{}]", ids.iter().join(", ")),
+        }
+    }
 }
 
 /// Type of balance for application of cost
