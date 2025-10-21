@@ -10,7 +10,8 @@ use itertools::{Itertools, iproduct};
 use petgraph::Directed;
 use petgraph::algo::toposort;
 use petgraph::dot::Dot;
-use petgraph::graph::Graph;
+use petgraph::graph::{EdgeReference, Graph};
+use petgraph::visit::EdgeFiltered;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -48,8 +49,10 @@ impl Display for GraphNode {
 #[derive(Eq, PartialEq, Clone, Hash)]
 /// An edge in the commodity graph
 pub enum GraphEdge {
-    /// An edge representing a process
-    Process(ProcessID),
+    /// An edge representing a primary flow of a process
+    Primary(ProcessID),
+    /// An edge representing a secondary (non-primary) flow of a process
+    Secondary(ProcessID),
     /// An edge representing a service demand
     Demand,
 }
@@ -57,7 +60,9 @@ pub enum GraphEdge {
 impl Display for GraphEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GraphEdge::Process(id) => write!(f, "{id}"),
+            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => {
+                write!(f, "{process_id}")
+            }
             GraphEdge::Demand => write!(f, "DEMAND"),
         }
     }
@@ -111,6 +116,9 @@ fn create_commodities_graph_for_region_year(
             outputs.push(GraphNode::Sink);
         }
 
+        // Get primary output for the process
+        let primary_output = &process.primary_output;
+
         // Create edges from all inputs to all outputs
         // We also create nodes the first time they are encountered
         for (input, output) in iproduct!(inputs, outputs) {
@@ -120,10 +128,19 @@ fn create_commodities_graph_for_region_year(
             let target_node_index = *commodity_to_node_index
                 .entry(output.clone())
                 .or_insert_with(|| graph.add_node(output.clone()));
+            let is_primary = match &output {
+                GraphNode::Commodity(commodity_id) => primary_output.as_ref() == Some(commodity_id),
+                _ => false,
+            };
+
             graph.add_edge(
                 source_node_index,
                 target_node_index,
-                GraphEdge::Process(process.id.clone()),
+                if is_primary {
+                    GraphEdge::Primary(process.id.clone())
+                } else {
+                    GraphEdge::Secondary(process.id.clone())
+                },
             );
         }
     }
@@ -157,13 +174,13 @@ fn prepare_commodities_graph_for_validation(
     let key = (region_id.clone(), year);
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
-        let GraphEdge::Process(process_id) = graph.edge_weight(edge_idx).unwrap() else {
-            panic!("Demand edges should not be present in the base graph");
+        let process_id = match graph.edge_weight(edge_idx).unwrap() {
+            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => process_id,
+            GraphEdge::Demand => panic!("Demand edges should not be present in the base graph"),
         };
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
-
         time_slice_selection
             .iter(time_slice_info)
             .any(|(time_slice, _)| {
@@ -243,7 +260,7 @@ fn validate_commodities_graph(
         // Match validation rules to commodity type
         match commodity.kind {
             CommodityType::ServiceDemand => {
-                // Cannot have outgoing `Process` (non-`Demand`) edges
+                // Cannot have outgoing `Primary`/`Secondary` (non-`Demand`) edges
                 let has_non_demand_outgoing = graph
                     .edges_directed(node_idx, petgraph::Direction::Outgoing)
                     .any(|edge| edge.weight() != &GraphEdge::Demand);
@@ -290,8 +307,12 @@ fn topo_sort_commodities(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
 ) -> Result<Vec<CommodityID>> {
+    // We only consider primary edges
+    let primary_graph =
+        EdgeFiltered::from_fn(graph, |edge| matches!(edge.weight(), GraphEdge::Primary(_)));
+
     // Perform a topological sort on the graph
-    let order = toposort(graph, None).map_err(|cycle| {
+    let order = toposort(&primary_graph, None).map_err(|cycle| {
         let cycle_commodity = graph.node_weight(cycle.node_id()).unwrap().clone();
         anyhow!("Cycle detected in commodity graph for commodity {cycle_commodity}")
     })?;
@@ -414,6 +435,16 @@ pub fn validate_commodity_graphs_for_model(
     Ok(commodity_order)
 }
 
+/// Gets custom DOT attributes for edges in a commodity graph
+fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
+    match edge_ref.weight() {
+        // Use dashed lines for secondary flows
+        GraphEdge::Secondary(_) => "style=dashed".to_string(),
+        // Other edges use default attributes
+        _ => String::new(),
+    }
+}
+
 /// Saves commodity graphs to file
 ///
 /// The graphs are saved as DOT files to the specified output path
@@ -422,7 +453,12 @@ pub fn save_commodity_graphs_for_model(
     output_path: &Path,
 ) -> Result<()> {
     for ((region_id, year), graph) in commodity_graphs {
-        let dot = Dot::new(&graph);
+        let dot = Dot::with_attr_getters(
+            graph,
+            &[],
+            &get_edge_attributes,  // Custom attributes for edges
+            &|_, _| String::new(), // Use default attributes for nodes
+        );
         let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
         write!(file, "{dot}")?;
     }
@@ -448,8 +484,8 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
 
         // Add edges: A -> B -> C
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
@@ -475,8 +511,8 @@ mod tests {
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
 
         // Add edges creating a cycle: A -> B -> A
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_a, GraphEdge::Primary("process2".into()));
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
@@ -509,8 +545,8 @@ mod tests {
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
         let node_d = graph.add_node(GraphNode::Demand);
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
         graph.add_edge(node_c, node_d, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
@@ -536,8 +572,8 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
-        graph.add_edge(node_c, node_a, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_c, node_a, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process2".into()));
 
         // Validate the graph at DayNight level
         let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
@@ -574,7 +610,7 @@ mod tests {
         // Build invalid graph: B(SED) -> A(SED)
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Process("process1".into()));
+        graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
 
         // Validate the graph at DayNight level
         let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
@@ -601,8 +637,8 @@ mod tests {
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_a, node_c, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_a, node_c, GraphEdge::Primary("process2".into()));
 
         // Validate the graph at DayNight level
         let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
