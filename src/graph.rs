@@ -301,18 +301,36 @@ fn validate_commodities_graph(
 /// Performs topological sort on the commodity graph to get the ordering for investments
 ///
 /// The returned Vec only includes SVD and SED commodities.
-fn topo_sort_commodities(
+fn solve_investment_order(
     graph: &CommoditiesGraph,
-    _commodities: &CommodityMap,
+    commodities: &CommodityMap,
 ) -> Vec<InvestmentSet> {
-    // // We only consider primary edges
-    // let primary_graph =
-    //     EdgeFiltered::from_fn(graph, |edge| matches!(edge.weight(), GraphEdge::Primary(_)));
+    // Filter the graph to only include SVD/SED commodities and primary edges
+    let graph_filtered = graph.filter_map(
+        // Consider only SVD/SED commodities
+        |_, node_weight| {
+            // Get the commodity for the node
+            let GraphNode::Commodity(commodity_id) = node_weight else {
+                // Skip special nodes
+                return None;
+            };
+            let commodity = &commodities[commodity_id];
+            matches!(
+                commodity.kind,
+                CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
+            )
+            .then_some(node_weight)
+        },
+        // Consider only primary edges
+        |_, edge_weight| matches!(edge_weight, GraphEdge::Primary(_)).then_some(edge_weight),
+    );
 
     // Condense strongly connected components
-    let condensed_graph = condensation(graph.clone(), true);
+    let condensed_graph = condensation(graph_filtered, true);
 
     // Perform a topological sort on the condensed graph
+    // We can safely unwrap because `toposort` will only return an error in case of cycles, which
+    // should have been detected and compressed with `condensation`
     let order = toposort(&condensed_graph, None).unwrap();
 
     // Create investment sets (reverse topological order)
@@ -341,32 +359,6 @@ fn topo_sort_commodities(
             }
         })
         .collect()
-
-    // TODO: filter to only include SVD/SED commodities and primary flows
-
-    // // We return the order in reverse so that leaf-node commodities are solved first
-    // // We also filter to only include SVD and SED commodities
-    // let order = order
-    //     .iter()
-    //     .rev()
-    //     .filter_map(|node_idx| {
-    //         // Get the commodity for the node
-    //         let GraphNode::Commodity(commodity_id) = graph.node_weight(*node_idx).unwrap() else {
-    //             // Skip special nodes
-    //             return None;
-    //         };
-    //         let commodity = &commodities[commodity_id];
-
-    //         // Only include SVD and SED commodities
-    //         matches!(
-    //             commodity.kind,
-    //             CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
-    //         )
-    //         .then(|| commodity_id.clone())
-    //     })
-    //     .collect();
-
-    // Ok(order)
 }
 
 /// Builds base commodity graphs for each region and year
@@ -428,7 +420,7 @@ pub fn validate_commodity_graphs_for_model(
     let commodity_order: HashMap<(RegionID, u32), Vec<InvestmentSet>> = commodity_graphs
         .iter()
         .map(|((region_id, year), graph)| -> Result<_> {
-            let order = topo_sort_commodities(graph, commodities);
+            let order = solve_investment_order(graph, commodities);
             Ok(((region_id.clone(), *year), order))
         })
         .try_collect()?;
@@ -518,7 +510,7 @@ mod tests {
         commodities.insert("B".into(), Rc::new(sed_commodity));
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
-        let result = topo_sort_commodities(&graph, &commodities).unwrap();
+        let result = solve_investment_order(&graph, &commodities).unwrap();
 
         // Expected order: C, B, A (leaf nodes first)
         assert_eq!(result.len(), 3);
@@ -547,7 +539,7 @@ mod tests {
         // This should return an error due to the cycle
         // The error message should flag commodity B
         // Note: A is also involved in the cycle, but B is flagged as it is encountered first
-        let result = topo_sort_commodities(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities);
         assert_error!(result, "Cycle detected in commodity graph for commodity B");
     }
 

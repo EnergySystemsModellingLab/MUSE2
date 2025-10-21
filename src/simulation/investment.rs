@@ -49,9 +49,9 @@ pub fn perform_agent_investment(
     // This includes Commissioned assets that are selected for retention, and new Selected assets
     let mut all_selected_assets = Vec::new();
 
-    // External prices from the previous full-system dispatch run
-    // As investments are performed for each commodity/region combination, these prices will be
-    // gradually removed to become fully reliant on endogenous prices.
+    // External prices to be used in dispatch optimisation
+    // As investments are performed for each commodity/region combination, the system will become
+    // able to produce its own prices endogenously, so we'll gradually remove these external prices.
     let mut external_prices = prices.clone();
 
     for region_id in model.iter_regions() {
