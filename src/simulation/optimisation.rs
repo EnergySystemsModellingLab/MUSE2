@@ -299,9 +299,7 @@ pub enum ModelError {
     ///
     /// Users should not be able to trigger this error.
     Incoherent(HighsStatus),
-    /// The model is infeasible, probably because demand could not be met by supplied assets
-    Infeasible,
-    /// An optimal solution could not be found for some other reason
+    /// An optimal solution could not be found
     NonOptimal(HighsModelStatus),
 }
 
@@ -309,13 +307,6 @@ impl fmt::Display for ModelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModelError::Incoherent(status) => write!(f, "Incoherent model: {status:?}"),
-            ModelError::Infeasible => {
-                write!(
-                    f,
-                    "The solver has indicated that the problem is infeasible. It may be because \
-                    the assets in this year cannot meet the required demand."
-                )
-            }
             ModelError::NonOptimal(status) => {
                 write!(f, "Could not find optimal result: {status:?}")
             }
@@ -331,7 +322,6 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 
     match solved.status() {
         HighsModelStatus::Optimal => Ok(solved),
-        HighsModelStatus::Infeasible => Err(ModelError::Infeasible),
         status => Err(ModelError::NonOptimal(status)),
     }
 }
@@ -445,7 +435,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // track the unmet demand so we can report the offending regions/commodities to users
         match self.run_without_unmet_demand(commodities) {
             Ok(solution) => Ok(solution),
-            Err(ModelError::Infeasible) => {
+            Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let pairs = self
                     .get_regions_and_commodities_with_unmet_demand(commodities)
                     .expect("Failed to run dispatch to calculate unmet demand");
@@ -456,7 +446,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 );
 
                 bail!(
-                    "Demand was not met for the following region and commodity pairs: {}",
+                    "The solver has indicated that the problem is infeasible, probably because \
+                    the supplied assets could not meet the required demand. Demand was not met \
+                    for the following region and commodity pairs: {}",
                     format_items_with_cap(pairs)
                 )
             }
