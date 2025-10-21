@@ -44,9 +44,10 @@ impl ProcessAvailabilityRaw {
     /// `capacity_to_activity` units of capacity.
     fn to_bounds(&self, ts_length: Year) -> RangeInclusive<Dimensionless> {
         // We know ts_length also represents a fraction of a year, so this is ok.
-        let value = self.value * ts_length / Year(1.0);
+        let ts_frac = ts_length / Year(1.0);
+        let value = self.value * ts_frac;
         match self.limit_type {
-            LimitType::LowerBound => value..=Dimensionless(f64::INFINITY),
+            LimitType::LowerBound => value..=ts_frac,
             LimitType::UpperBound => Dimensionless(0.0)..=value,
             LimitType::Equality => value..=value,
         }
@@ -310,7 +311,7 @@ mod tests {
         // Lower bound
         let raw = create_process_availability_raw(LimitType::LowerBound, Dimensionless(0.5));
         let bounds = raw.to_bounds(ts_length);
-        assert_eq!(bounds, Dimensionless(0.05)..=Dimensionless(f64::INFINITY));
+        assert_eq!(bounds, Dimensionless(0.05)..=Dimensionless(0.1));
 
         // Upper bound
         let raw = create_process_availability_raw(LimitType::UpperBound, Dimensionless(0.5));
