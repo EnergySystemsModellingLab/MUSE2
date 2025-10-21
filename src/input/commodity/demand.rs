@@ -136,7 +136,7 @@ where
 
         ensure!(
             demand.demand.is_finite() && demand.demand >= Flow(0.0),
-            "Demand must be a valid number greater than or equal to zero"
+            "Demand must be a finite number greater than or equal to zero"
         );
 
         ensure!(
