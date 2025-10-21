@@ -85,7 +85,7 @@ pub fn perform_agent_investment(
 
     for region_id in model.iter_regions() {
         // Keep track of the commodities that have been seen so far. This will be used to apply
-        // balance constraints in the dispatch optimisation - e only apply balance constraints for
+        // balance constraints in the dispatch optimisation - we only apply balance constraints for
         // commodities that have been seen so far.
         let mut seen_commodities = Vec::new();
 
