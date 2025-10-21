@@ -358,7 +358,7 @@ mod tests {
         }];
         assert_error!(
             read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020],),
-            "Demand must be a valid number greater than or equal to zero"
+            "Demand must be a finite number greater than or equal to zero"
         );
     }
 
