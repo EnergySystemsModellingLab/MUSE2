@@ -179,10 +179,10 @@ where
     let total_count = items.len();
 
     // Format items with fmt::Debug::fmt() and separate with commas
-    let formatted_chunks = items
+    let formatted_items = items
         .take(MAX_DISPLAY)
         .format_with(", ", |items, f| f(&format_args!("{items:?}")));
-    let mut out = format!("[{formatted_chunks}]");
+    let mut out = format!("[{formatted_items}]");
 
     // If there are remaining items, include the count
     if total_count > MAX_DISPLAY {
