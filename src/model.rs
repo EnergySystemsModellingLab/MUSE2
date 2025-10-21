@@ -1,8 +1,9 @@
 //! The model represents the static input data provided by the user.
 use crate::agent::AgentMap;
-use crate::commodity::{CommodityMap, InvestmentSet};
+use crate::commodity::CommodityMap;
 use crate::process::ProcessMap;
 use crate::region::{Region, RegionID, RegionMap};
+use crate::simulation::investment::InvestmentSet;
 use crate::time_slice::TimeSliceInfo;
 use std::collections::HashMap;
 use std::path::PathBuf;

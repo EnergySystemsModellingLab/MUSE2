@@ -2,7 +2,7 @@
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
-use crate::commodity::{Commodity, CommodityID, CommodityMap, InvestmentSet};
+use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
@@ -11,9 +11,10 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, bail, ensure};
 use indexmap::IndexMap;
-use itertools::{chain, iproduct};
+use itertools::{Itertools, chain, iproduct};
 use log::debug;
 use std::collections::HashMap;
+use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -24,6 +25,34 @@ type DemandMap = IndexMap<TimeSliceID, Flow>;
 
 /// Demand for a given combination of commodity, region and time slice
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
+
+/// Represents a set of commodities which are invested in together.
+#[derive(PartialEq, Debug)]
+pub enum InvestmentSet {
+    /// Assets are selected for a single commodity using `select_assets_for_commodity`
+    Single(CommodityID),
+    /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
+    Cycle(Vec<CommodityID>),
+}
+
+impl InvestmentSet {
+    /// Returns an iterator over the commodity IDs in this investment set
+    pub fn iter(&self) -> impl Iterator<Item = &CommodityID> {
+        match self {
+            InvestmentSet::Single(id) => std::slice::from_ref(id).iter(),
+            InvestmentSet::Cycle(ids) => ids.iter(),
+        }
+    }
+}
+
+impl Display for InvestmentSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvestmentSet::Single(id) => write!(f, "{id}"),
+            InvestmentSet::Cycle(ids) => write!(f, "[{}]", ids.iter().join(", ")),
+        }
+    }
+}
 
 /// Perform agent investment to determine capacity investment of new assets for next milestone year.
 ///
@@ -50,15 +79,18 @@ pub fn perform_agent_investment(
     let mut all_selected_assets = Vec::new();
 
     // External prices to be used in dispatch optimisation
-    // As investments are performed for each commodity/region combination, the system will become
-    // able to produce its own prices endogenously, so we'll gradually remove these external prices.
+    // Once investments are performed for a commodity, the dispatch system will be able to produce
+    // endogenous prices for that commodity, so we'll gradually remove these external prices.
     let mut external_prices = prices.clone();
 
     for region_id in model.iter_regions() {
-        let investment_order = &model.investment_order[&(region_id.clone(), year)];
-
-        // Iterate over investment sets in the investment order
+        // Keep track of the commodities that have been seen so far. This will be used to apply
+        // balance constraints in the dispatch optimisation - e only apply balance constraints for
+        // commodities that have been seen so far.
         let mut seen_commodities = Vec::new();
+
+        // Iterate over investment sets in the investment order for this region/year
+        let investment_order = &model.investment_order[&(region_id.clone(), year)];
         for investment_set in investment_order {
             // Select assets for the commodity(/ies) of interest
             let selected_assets = match investment_set {
@@ -98,7 +130,7 @@ pub fn perform_agent_investment(
                 external_prices.remove(commodity_id, region_id, time_slice);
             }
 
-            // If no assets have been selected for this region/commodity, skip dispatch optimisation
+            // If no assets have been selected, skip dispatch optimisation
             // **TODO**: this probably means there's no demand for the commodity, which we could
             // presumably preempt
             if selected_assets.is_empty() {

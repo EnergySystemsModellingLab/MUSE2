@@ -1,7 +1,8 @@
 //! Module for creating and analysing commodity graphs
-use crate::commodity::{CommodityID, CommodityMap, CommodityType, InvestmentSet};
+use crate::commodity::{CommodityID, CommodityMap, CommodityType};
 use crate::process::{ProcessID, ProcessMap};
 use crate::region::RegionID;
+use crate::simulation::investment::InvestmentSet;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
@@ -338,7 +339,7 @@ fn solve_investment_order(
         .iter()
         .rev()
         .filter_map(|node_idx| {
-            // Get set of commodity IDs for the node
+            // Get set of commodity ID(s) for the node, referring back to `condensed_graph`
             let commodities: Vec<CommodityID> = condensed_graph
                 .node_weight(*node_idx)
                 .unwrap()
@@ -495,7 +496,10 @@ mod tests {
     use std::rc::Rc;
 
     #[rstest]
-    fn test_topo_sort_linear_graph(sed_commodity: Commodity, svd_commodity: Commodity) {
+    fn test_solve_investment_order_linear_graph(
+        sed_commodity: Commodity,
+        svd_commodity: Commodity,
+    ) {
         // Create a simple linear graph: A -> B -> C
         let mut graph = Graph::new();
 
@@ -513,17 +517,18 @@ mod tests {
         commodities.insert("B".into(), Rc::new(sed_commodity));
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
-        let result = solve_investment_order(&graph, &commodities).unwrap();
+        let result = solve_investment_order(&graph, &commodities);
 
         // Expected order: C, B, A (leaf nodes first)
+        // No cycles, so all investment sets should be `Single`
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], "C".into());
-        assert_eq!(result[1], "B".into());
-        assert_eq!(result[2], "A".into());
+        assert_eq!(result[0], InvestmentSet::Single("C".into()));
+        assert_eq!(result[1], InvestmentSet::Single("B".into()));
+        assert_eq!(result[2], InvestmentSet::Single("A".into()));
     }
 
     #[rstest]
-    fn test_topo_sort_cyclic_graph(sed_commodity: Commodity) {
+    fn test_solve_investment_order_cyclic_graph(sed_commodity: Commodity) {
         // Create a simple cyclic graph: A -> B -> A
         let mut graph = Graph::new();
 
@@ -539,11 +544,14 @@ mod tests {
         commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
         commodities.insert("B".into(), Rc::new(sed_commodity));
 
-        // This should return an error due to the cycle
-        // The error message should flag commodity B
-        // Note: A is also involved in the cycle, but B is flagged as it is encountered first
         let result = solve_investment_order(&graph, &commodities);
-        assert_error!(result, "Cycle detected in commodity graph for commodity B");
+
+        // Should be a single `Cycle` investment set containing both commodities
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0],
+            InvestmentSet::Cycle(vec!["A".into(), "B".into()])
+        );
     }
 
     #[rstest]
@@ -570,8 +578,7 @@ mod tests {
         graph.add_edge(node_c, node_d, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::Annual);
-        assert!(result.is_ok());
+        assert!(validate_commodities_graph(&graph, &commodities, TimeSliceLevel::Annual).is_ok());
     }
 
     #[rstest]
@@ -596,8 +603,10 @@ mod tests {
         graph.add_edge(node_a, node_b, GraphEdge::Primary("process2".into()));
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
-        assert_error!(result, "SVD commodity A cannot be an input to a process");
+        assert_error!(
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
+            "SVD commodity A cannot be an input to a process"
+        );
     }
 
     #[rstest]
@@ -614,8 +623,10 @@ mod tests {
         graph.add_edge(node_a, node_b, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
-        assert_error!(result, "SVD commodity A is demanded but has no producers");
+        assert_error!(
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
+            "SVD commodity A is demanded but has no producers"
+        );
     }
 
     #[rstest]
@@ -633,9 +644,8 @@ mod tests {
         graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
         assert_error!(
-            result,
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
             "SED commodity B may be consumed but has no producers"
         );
     }
@@ -661,9 +671,8 @@ mod tests {
         graph.add_edge(node_a, node_c, GraphEdge::Primary("process2".into()));
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
         assert_error!(
-            result,
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
             "OTH commodity A cannot have both producers and consumers"
         );
     }
