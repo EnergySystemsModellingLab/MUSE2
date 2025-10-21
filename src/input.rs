@@ -1,7 +1,8 @@
 //! Common routines for handling input data.
 use crate::asset::AssetPool;
 use crate::graph::{
-    CommoditiesGraph, build_commodity_graphs_for_model, validate_commodity_graphs_for_model,
+    CommoditiesGraph, build_commodity_graphs_for_model, solve_investment_order_for_model,
+    validate_commodity_graphs_for_model,
 };
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
@@ -228,14 +229,16 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 
     // Build and validate commodity graphs for all regions and years
-    // This gives us the commodity order for each region/year which is passed to the model
-    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
-    let investment_order = validate_commodity_graphs_for_model(
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
+    validate_commodity_graphs_for_model(
         &commodity_graphs,
         &processes,
         &commodities,
         &time_slice_info,
     )?;
+
+    // Solve investment order for each region/year
+    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities);
 
     let model_path = model_dir
         .as_ref()
@@ -280,7 +283,7 @@ pub fn load_commodity_graphs<P: AsRef<Path>>(
         years,
     )?;
 
-    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
     Ok(commodity_graphs)
 }
 

@@ -6,7 +6,7 @@ use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexSet;
-use itertools::{Itertools, iproduct};
+use itertools::iproduct;
 use petgraph::Directed;
 use petgraph::algo::{condensation, toposort};
 use petgraph::dot::Dot;
@@ -368,23 +368,16 @@ pub fn build_commodity_graphs_for_model(
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
     years: &[u32],
-) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
-    let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
-        iproduct!(region_ids, years.iter())
-            .map(|(region_id, year)| {
-                let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
-                ((region_id.clone(), *year), graph)
-            })
-            .collect();
-
-    Ok(commodity_graphs)
+) -> HashMap<(RegionID, u32), CommoditiesGraph> {
+    iproduct!(region_ids, years.iter())
+        .map(|(region_id, year)| {
+            let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
+            ((region_id.clone(), *year), graph)
+        })
+        .collect()
 }
 
 /// Validates commodity graphs for the entire model.
-///
-/// This function creates commodity flow graphs for each region/year combination in the model,
-/// validates the graph structure against commodity type rules, and determines the optimal
-/// investment order for commodities.
 ///
 /// The validation process checks three time slice levels:
 /// - **Annual**: Validates annual-level commodities and processes
@@ -393,21 +386,16 @@ pub fn build_commodity_graphs_for_model(
 ///
 /// # Arguments
 ///
+/// * `commodity_graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
 /// * `processes` - All processes in the model with their flows and activity limits
 /// * `commodities` - All commodities with their types and demand specifications
 /// * `region_ids` - Collection of regions to model
 /// * `years` - Years to analyse
 /// * `time_slice_info` - Time slice configuration (seasons, day/night periods)
 ///
-/// # Returns
-///
-/// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
-/// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
-///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Any commodity graph contains cycles
 /// - Commodity type rules are violated (e.g., SVD commodities being consumed)
 /// - Demand cannot be satisfied
 pub fn validate_commodity_graphs_for_model(
@@ -415,16 +403,7 @@ pub fn validate_commodity_graphs_for_model(
     processes: &ProcessMap,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> Result<HashMap<(RegionID, u32), Vec<InvestmentSet>>> {
-    // Determine commodity ordering for each region and year
-    let commodity_order: HashMap<(RegionID, u32), Vec<InvestmentSet>> = commodity_graphs
-        .iter()
-        .map(|((region_id, year), graph)| -> Result<_> {
-            let order = solve_investment_order(graph, commodities);
-            Ok(((region_id.clone(), *year), order))
-        })
-        .try_collect()?;
-
+) -> Result<()> {
     // Validate graphs at all time slice levels (taking into account process availability and demand)
     for ((region_id, year), base_graph) in commodity_graphs {
         for ts_level in TimeSliceLevel::iter() {
@@ -447,9 +426,33 @@ pub fn validate_commodity_graphs_for_model(
             }
         }
     }
+    Ok(())
+}
 
-    // If all the validation passes, return the commodity ordering
-    Ok(commodity_order)
+/// Determine commodity ordering for each region and year
+///
+/// # Arguments
+///
+/// * `commodity_graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
+/// * `commodities` - All commodities with their types and demand specifications
+///
+/// # Returns
+///
+/// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
+/// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
+pub fn solve_investment_order_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    commodities: &CommodityMap,
+) -> HashMap<(RegionID, u32), Vec<InvestmentSet>> {
+    commodity_graphs
+        .iter()
+        .map(|((region_id, year), graph)| {
+            (
+                (region_id.clone(), *year),
+                solve_investment_order(graph, commodities),
+            )
+        })
+        .collect()
 }
 
 /// Gets custom DOT attributes for edges in a commodity graph
