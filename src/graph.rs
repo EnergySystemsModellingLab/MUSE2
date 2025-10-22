@@ -3,7 +3,7 @@ use crate::commodity::{CommodityID, CommodityMap, CommodityType};
 use crate::process::{ProcessID, ProcessMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
-use crate::units::Dimensionless;
+use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, anyhow, ensure};
 use indexmap::IndexSet;
 use itertools::{Itertools, iproduct};
@@ -198,12 +198,10 @@ fn prepare_commodities_graph_for_validation(
     // NOTE: we only do this for commodities with the same time_slice_level as the selection
     let demand_node_index = filtered_graph.add_node(GraphNode::Demand);
     for (commodity_id, commodity) in commodities {
-        if time_slice_selection.level() == commodity.time_slice_level
-            && commodity.demand.contains_key(&(
-                region_id.clone(),
-                year,
-                time_slice_selection.clone(),
-            ))
+        if commodity
+            .demand
+            .get(&(region_id.clone(), year, time_slice_selection.clone()))
+            .is_some_and(|&v| v > Flow(0.0))
         {
             let commodity_node = GraphNode::Commodity(commodity_id.clone());
             let commodity_node_index = filtered_graph
