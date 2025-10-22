@@ -189,6 +189,14 @@ fn flatten_preset_demands_for_year(
 }
 
 /// Update demand map with flows from a set of assets
+///
+/// Non-primary output flows are ignored. This way, demand profiles aren't affected by production
+/// of side-products from other assets. The result is that all commodity demands must be met by
+/// assets with that commodity as their primary output. Effectively, agents do not see production of
+/// side-products from other assets when making investment decisions.
+///
+/// TODO: this is a very flawed approach. The proper solution might be for agents to consider
+/// multiple commodities simultaneously, but that would require substantial work to implement.
 fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
     for ((asset, commodity_id, time_slice), flow) in flows {
         if assets.contains(asset) {
@@ -197,6 +205,15 @@ fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[Asset
                 asset.region_id().clone(),
                 time_slice.clone(),
             );
+
+            // Only consider output flows from the primary commodity
+            if flow > &Flow(0.0)
+                && asset
+                    .primary_output()
+                    .is_some_and(|p| &p.commodity.id != commodity_id)
+            {
+                continue;
+            }
 
             // Note: we use the negative of the flow as input flows are negative in the flow map.
             demand
