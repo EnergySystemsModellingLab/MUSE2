@@ -254,13 +254,13 @@ fn validate_secondary_io_flows(
                 });
 
             for (key, value) in flow {
-                flows.entry(key).or_insert_with(Vec::new).push(value);
+                flows.entry(key).or_default().push(value);
             }
         }
 
         // Finally we check that the flows for a given commodity and region are defined for all
         // years and that they are all inputs or all outputs
-        for ((commodity_id, region_id), value) in flows.iter() {
+        for ((commodity_id, region_id), value) in &flows {
             ensure!(
                 value.len() == process.years.len(),
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
