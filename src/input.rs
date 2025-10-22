@@ -361,8 +361,7 @@ mod tests {
         assert!(
             read_csv_optional::<Record>(&file_path)
                 .unwrap()
-                .peekable()
-                .peek()
+                .next()
                 .is_none()
         );
     }
