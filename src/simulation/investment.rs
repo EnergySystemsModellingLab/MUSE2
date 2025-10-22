@@ -43,6 +43,14 @@ impl InvestmentSet {
             InvestmentSet::Cycle(ids) => ids.iter(),
         }
     }
+
+    /// Converts the investment set to a vector of commodity IDs
+    pub fn to_vec(&self) -> Vec<CommodityID> {
+        match self {
+            InvestmentSet::Single(id) => vec![id.clone()],
+            InvestmentSet::Cycle(ids) => ids.clone(),
+        }
+    }
 }
 
 impl Display for InvestmentSet {
@@ -78,35 +86,39 @@ pub fn perform_agent_investment(
     // This includes Commissioned assets that are selected for retention, and new Selected assets
     let mut all_selected_assets = Vec::new();
 
-    // External prices to be used in dispatch optimisation
-    // Once investments are performed for a commodity, the dispatch system will be able to produce
-    // endogenous prices for that commodity, so we'll gradually remove these external prices.
-    let mut external_prices = prices.clone();
-
     for region_id in model.iter_regions() {
+        let investment_order = &model.investment_order[&(region_id.clone(), year)];
+
+        // External prices to be used in dispatch optimisation
+        // Once investments are performed for a commodity, the dispatch system will be able to produce
+        // endogenous prices for that commodity, so we'll gradually remove these external prices.
+        let cur_commodities: &Vec<_> = &investment_order
+            .iter()
+            .flat_map(InvestmentSet::iter)
+            .cloned()
+            .collect();
+        let mut external_prices =
+            get_prices_for_commodities(prices, &model.time_slice_info, region_id, cur_commodities);
+
         // Keep track of the commodities that have been seen so far. This will be used to apply
         // balance constraints in the dispatch optimisation - we only apply balance constraints for
         // commodities that have been seen so far.
         let mut seen_commodities = Vec::new();
 
         // Iterate over investment sets in the investment order for this region/year
-        let investment_order = &model.investment_order[&(region_id.clone(), year)];
         for investment_set in investment_order {
             // Select assets for the commodity(/ies) of interest
             let selected_assets = match investment_set {
-                InvestmentSet::Single(commodity_id) => {
-                    let commodity = &model.commodities[commodity_id];
-                    select_assets_for_commodity(
-                        model,
-                        commodity,
-                        region_id,
-                        year,
-                        &demand,
-                        existing_assets,
-                        prices,
-                        writer,
-                    )?
-                }
+                InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
+                    model,
+                    commodity_id,
+                    region_id,
+                    year,
+                    &demand,
+                    existing_assets,
+                    prices,
+                    writer,
+                )?,
                 InvestmentSet::Cycle(_) => {
                     bail!(
                         "Investment cycles are not yet supported. Found cycle for commodities: {investment_set}"
@@ -172,7 +184,7 @@ pub fn perform_agent_investment(
 #[allow(clippy::too_many_arguments)]
 fn select_assets_for_commodity(
     model: &Model,
-    commodity: &Commodity,
+    commodity_id: &CommodityID,
     region_id: &RegionID,
     year: u32,
     demand: &AllDemandMap,
@@ -180,6 +192,8 @@ fn select_assets_for_commodity(
     prices: &CommodityPrices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
+    let commodity = &model.commodities[commodity_id];
+
     let mut selected_assets = Vec::new();
     for (agent, commodity_portion) in
         get_responsible_agents(model.agents.values(), &commodity.id, region_id, year)
@@ -427,6 +441,21 @@ fn get_candidate_assets<'a>(
 
             asset.into()
         })
+}
+
+/// Get a map of prices for a subset of commodities
+fn get_prices_for_commodities(
+    prices: &CommodityPrices,
+    time_slice_info: &TimeSliceInfo,
+    region_id: &RegionID,
+    commodities: &[CommodityID],
+) -> CommodityPrices {
+    iproduct!(commodities.iter(), time_slice_info.iter_ids())
+        .map(|(commodity_id, time_slice)| {
+            let price = prices.get(commodity_id, region_id, time_slice).unwrap();
+            (commodity_id, region_id, time_slice, price)
+        })
+        .collect()
 }
 
 /// Get the best assets for meeting demand for the given commodity
