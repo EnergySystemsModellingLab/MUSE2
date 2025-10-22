@@ -13,6 +13,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::de::{Deserialize, DeserializeOwned, Deserializer};
 use std::collections::HashMap;
+use std::fmt::{self, Write};
 use std::fs;
 use std::hash::Hash;
 use std::path::Path;
@@ -158,7 +159,7 @@ where
 /// If the key already exists, it returns an error with a message indicating the key's existence.
 pub fn try_insert<K, V>(map: &mut HashMap<K, V>, key: &K, value: V) -> Result<()>
 where
-    K: Eq + Hash + Clone + std::fmt::Debug,
+    K: Eq + Hash + Clone + fmt::Debug,
 {
     let existing = map.insert(key.clone(), value).is_some();
     ensure!(!existing, "Key {key:?} already exists in the map");
@@ -166,17 +167,29 @@ where
 }
 
 /// Format a list of items with a cap on display count for error messages
-pub fn format_items_with_cap<T: std::fmt::Debug>(items: &[T]) -> String {
+pub fn format_items_with_cap<I, J, T>(items: I) -> String
+where
+    I: IntoIterator<Item = T, IntoIter = J>,
+    J: ExactSizeIterator<Item = T>,
+    T: fmt::Debug,
+{
     const MAX_DISPLAY: usize = 10;
-    if items.len() <= MAX_DISPLAY {
-        format!("{items:?}")
-    } else {
-        format!(
-            "{:?} and {} more",
-            &items[..MAX_DISPLAY],
-            items.len() - MAX_DISPLAY
-        )
+
+    let items = items.into_iter();
+    let total_count = items.len();
+
+    // Format items with fmt::Debug::fmt() and separate with commas
+    let formatted_items = items
+        .take(MAX_DISPLAY)
+        .format_with(", ", |items, f| f(&format_args!("{items:?}")));
+    let mut out = format!("[{formatted_items}]");
+
+    // If there are remaining items, include the count
+    if total_count > MAX_DISPLAY {
+        write!(&mut out, " and {} more", total_count - MAX_DISPLAY).unwrap();
     }
+
+    out
 }
 
 /// Read a model from the specified directory.
