@@ -2,7 +2,7 @@
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::{FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap};
-use crate::region::parse_region_str;
+use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
@@ -133,6 +133,7 @@ where
     }
 
     validate_flows_and_update_primary_output(processes, &flows_map)?;
+    validate_secondary_io_flows(processes, &flows_map)?;
 
     Ok(flows_map)
 }
@@ -225,6 +226,53 @@ fn check_flows_primary_output(
             "First year is only inputs, but subsequent years have outputs, although no primary \
             output is specified"
         );
+    }
+
+    Ok(())
+}
+
+/// Checks that non-primary io are defined for all years (within a region) and that
+/// they are only inputs or only outputs in all years.
+fn validate_secondary_io_flows(
+    processes: &mut ProcessMap,
+    flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
+) -> Result<()> {
+    for (process_id, process) in processes.iter() {
+        // Get the flows for this process - there should be no error, as was checked already
+        let map = flows_map
+            .get(process_id)
+            .with_context(|| format!("Missing flows map for process {process_id}"))?;
+
+        // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
+        let iter = iproduct!(process.years.iter(), process.regions.iter());
+        let mut flows: HashMap<(CommodityID, RegionID), Vec<bool>> = HashMap::new();
+        for (&year, region_id) in iter {
+            let flow = map[&(region_id.clone(), year)]
+                .iter()
+                .filter_map(|(commodity_id, flow)| {
+                    (Some(commodity_id) != process.primary_output.as_ref())
+                        .then_some(((commodity_id.clone(), region_id.clone()), flow.is_input()))
+                });
+
+            for (key, value) in flow {
+                flows.entry(key).or_insert_with(Vec::new).push(value);
+            }
+        }
+
+        // Finally we check that the flows for a given commodity and region are defined for all
+        // years and that they are all inputs or all outputs
+        for ((commodity_id, region_id), value) in flows.iter() {
+            ensure!(
+                value.len() == process.years.len(),
+                "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
+                does not cover all years"
+            );
+            ensure!(
+                value.iter().all(|&x| x == value[0]),
+                "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
+                behaves as input or output in different years."
+            );
+        }
     }
 
     Ok(())
