@@ -259,6 +259,15 @@ impl TimeSliceInfo {
         })
     }
 
+    /// Get the duration covered by a `TimeSliceSelection`
+    pub fn get_duration(&self, ts_selection: &TimeSliceSelection) -> Year {
+        match ts_selection {
+            TimeSliceSelection::Annual => Year(1.0),
+            TimeSliceSelection::Season(season) => self.seasons[season],
+            TimeSliceSelection::Single(time_slice) => self.time_slices[time_slice],
+        }
+    }
+
     /// Get a `TimeSliceSelection` from the specified string.
     ///
     /// If the string is empty, the default value is `TimeSliceSelection::Annual`.
