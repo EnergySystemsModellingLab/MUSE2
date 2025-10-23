@@ -31,6 +31,24 @@ use region::read_regions;
 mod time_slice;
 use time_slice::read_time_slice_info;
 
+/// A trait which provides a method to insert a key and value into a map
+pub trait Insert<K, V> {
+    /// Insert a key and value into the map
+    fn insert(&mut self, key: K, value: V) -> Option<V>;
+}
+
+impl<K: Eq + Hash, V> Insert<K, V> for HashMap<K, V> {
+    fn insert(&mut self, key: K, value: V) -> Option<V> {
+        HashMap::insert(self, key, value)
+    }
+}
+
+impl<K: Eq + Hash, V> Insert<K, V> for IndexMap<K, V> {
+    fn insert(&mut self, key: K, value: V) -> Option<V> {
+        IndexMap::insert(self, key, value)
+    }
+}
+
 /// Read a series of type `T`s from a CSV file.
 ///
 /// Will raise an error if the file is empty.
@@ -161,9 +179,10 @@ where
 /// Inserts a key-value pair into a `HashMap` if the key does not already exist.
 ///
 /// If the key already exists, it returns an error with a message indicating the key's existence.
-pub fn try_insert<K, V>(map: &mut HashMap<K, V>, key: &K, value: V) -> Result<()>
+pub fn try_insert<M, K, V>(map: &mut M, key: &K, value: V) -> Result<()>
 where
-    K: Eq + Hash + Clone + fmt::Debug,
+    M: Insert<K, V>,
+    K: Eq + Hash + Clone + std::fmt::Debug,
 {
     let existing = map.insert(key.clone(), value).is_some();
     ensure!(!existing, "Key {key:?} already exists in the map");
