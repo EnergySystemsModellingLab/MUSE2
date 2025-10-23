@@ -1,8 +1,9 @@
 //! The model represents the static input data provided by the user.
 use crate::agent::AgentMap;
-use crate::commodity::{CommodityID, CommodityMap};
+use crate::commodity::CommodityMap;
 use crate::process::ProcessMap;
 use crate::region::{Region, RegionID, RegionMap};
+use crate::simulation::investment::InvestmentSet;
 use crate::time_slice::TimeSliceInfo;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -29,7 +30,7 @@ pub struct Model {
     /// Regions for the simulation
     pub regions: RegionMap,
     /// Commodity ordering for each region and year
-    pub commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>>,
+    pub investment_order: HashMap<(RegionID, u32), Vec<InvestmentSet>>,
 }
 
 impl Model {
