@@ -78,12 +78,13 @@ where
             .with_context(|| format!("Invalid process ID: {}", &asset.process_id))?;
         let region_id = region_ids.get_id(&asset.region_id)?;
 
-        Asset::new_future(
+        Asset::new_future_with_max_decommission(
             agent_id.clone(),
             Rc::clone(process),
             region_id.clone(),
             asset.capacity,
             asset.commission_year,
+            asset.max_decommission_year,
         )
     })
     .try_collect()

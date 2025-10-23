@@ -95,6 +95,8 @@ pub struct Asset {
     capacity: Capacity,
     /// The year the asset was/will be commissioned
     commission_year: u32,
+    /// The year the asset was/will be decommissioned
+    max_decommission_year: u32,
 }
 
 impl Asset {
@@ -111,6 +113,7 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            None,
         )
     }
 
@@ -125,12 +128,13 @@ impl Asset {
     }
 
     /// Create a new future asset
-    pub fn new_future(
+    pub fn new_future_with_max_decommission(
         agent_id: AgentID,
         process: Rc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
+        max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
         Self::new_with_state(
@@ -139,26 +143,27 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            max_decommission_year,
         )
     }
 
-    /// Create a new decommissioned asset TODO
-    // pub fn new_decommissioned(
-    //     agent_id: AgentID,
-    //     process: Rc<Process>,
-    //     region_id: RegionID,
-    //     capacity: Capacity,
-    //     commission_year: u32,
-    //     max_decommission_year: u32,
-    // ) -> Result<Self> {
-    // Self::new_with_state(
-    //     AssetState::Decommissioned { agent_id, decommission_year: max_decommission_year },
-    //     process,
-    //     region_id,
-    //     capacity,
-    //     commission_year,
-    // )
-    // }
+    /// Create a new future asset
+    pub fn new_future(
+        agent_id: AgentID,
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+    ) -> Result<Self> {
+        Self::new_future_with_max_decommission(
+            agent_id,
+            process,
+            region_id,
+            capacity,
+            commission_year,
+            None,
+        )
+    }
 
     /// Create a new selected asset
     ///
@@ -178,6 +183,7 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            None,
         )
     }
 
@@ -188,6 +194,7 @@ impl Asset {
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
+        max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_region_year_valid_for_process(&process, &region_id, commission_year)?;
         ensure!(capacity >= Capacity(0.0), "Capacity must be non-negative");
@@ -232,6 +239,13 @@ impl Asset {
             })?
             .clone();
 
+        let max_decommission_year =
+            max_decommission_year.unwrap_or(commission_year + process_parameter.lifetime);
+        ensure!(
+            max_decommission_year >= commission_year,
+            "Max decommission year must be after/same as commission year"
+        );
+
         Ok(Self {
             state,
             process,
@@ -241,6 +255,7 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            max_decommission_year,
         })
     }
 
@@ -256,7 +271,7 @@ impl Asset {
 
     /// The last year in which this asset should be decommissioned
     pub fn max_decommission_year(&self) -> u32 {
-        self.commission_year + self.process_parameter.lifetime
+        self.max_decommission_year
     }
 
     /// Get the activity limits for this asset in a particular time slice
