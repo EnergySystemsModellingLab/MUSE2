@@ -1,8 +1,8 @@
-commodity_id,regions,years,value,balance_type,time_slice
-CO2f,R1,2020,0.08314119,net,annual
-CO2f,R1,2025,0.120069795,net,annual
-CO2f,R1,2030,0.156998399,net,annual
-CO2f,R1,2035,0.214877567,net,annual
-CO2f,R1,2040,0.272756734,net,annual
-CO2f,R1,2045,0.35394801,net,annual
-CO2f,R1,2050,0.435139285,net,annual
+commodity_id,regions,years,time_slice,balance_type,value
+CO2f,R1,2020,annual,net,0.08314119
+CO2f,R1,2025,annual,net,0.120069795
+CO2f,R1,2030,annual,net,0.156998399
+CO2f,R1,2035,annual,net,0.214877567
+CO2f,R1,2040,annual,net,0.272756734
+CO2f,R1,2045,annual,net,0.35394801
+CO2f,R1,2050,annual,net,0.435139285
