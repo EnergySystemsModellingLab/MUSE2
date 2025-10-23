@@ -142,6 +142,24 @@ impl Asset {
         )
     }
 
+    /// Create a new decommissioned asset TODO
+    // pub fn new_decommissioned(
+    //     agent_id: AgentID,
+    //     process: Rc<Process>,
+    //     region_id: RegionID,
+    //     capacity: Capacity,
+    //     commission_year: u32,
+    //     max_decommission_year: u32,
+    // ) -> Result<Self> {
+    // Self::new_with_state(
+    //     AssetState::Decommissioned { agent_id, decommission_year: max_decommission_year },
+    //     process,
+    //     region_id,
+    //     capacity,
+    //     commission_year,
+    // )
+    // }
+
     /// Create a new selected asset
     ///
     /// This is only used for testing. In the real program, Selected assets can only be created from

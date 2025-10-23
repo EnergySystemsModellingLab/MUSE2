@@ -15,13 +15,15 @@ use std::rc::Rc;
 
 const ASSETS_FILE_NAME: &str = "assets.csv";
 
-#[derive(Deserialize, PartialEq)]
+#[derive(Default, Deserialize, PartialEq)]
 struct AssetRaw {
     process_id: String,
     region_id: String,
     agent_id: String,
     capacity: Capacity,
     commission_year: u32,
+    #[serde(default)]
+    max_decommission_year: Option<u32>,
 }
 
 /// Read assets CSV file from model directory.
@@ -113,6 +115,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            ..Default::default()
         };
         let asset_out = Asset::new_future(
             "agent1".into(),
@@ -136,6 +139,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            ..Default::default()
         })]
     #[case(AssetRaw { // Bad agent ID
             agent_id: "agent2".into(),
@@ -143,6 +147,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            ..Default::default()
         })]
     #[case(AssetRaw { // Bad region ID: not in region_ids
             agent_id: "agent1".into(),
@@ -150,6 +155,7 @@ mod tests {
             region_id: "FRA".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            ..Default::default()
         })]
     fn test_read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
