@@ -31,24 +31,65 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
+    /// Assets are selected for a layer of independent commodities. NOT YET IMPLEMENTED.
+    Layer(Vec<CommodityID>),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<CommodityID>),
 }
 
 impl InvestmentSet {
     /// Returns an iterator over the commodity IDs in this investment set
-    pub fn iter(&self) -> impl Iterator<Item = &CommodityID> {
+    fn iter(&self) -> impl Iterator<Item = &CommodityID> {
         match self {
             InvestmentSet::Single(id) => std::slice::from_ref(id).iter(),
-            InvestmentSet::Cycle(ids) => ids.iter(),
+            InvestmentSet::Layer(ids) | InvestmentSet::Cycle(ids) => ids.iter(),
         }
     }
 
-    /// Converts the investment set to a vector of commodity IDs
-    pub fn to_vec(&self) -> Vec<CommodityID> {
+    #[allow(clippy::too_many_arguments)]
+    fn select_assets(
+        &self,
+        model: &Model,
+        region_id: &RegionID,
+        year: u32,
+        demand: &AllDemandMap,
+        existing_assets: &[AssetRef],
+        prices: &CommodityPrices,
+        writer: &mut DataWriter,
+    ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single(id) => vec![id.clone()],
-            InvestmentSet::Cycle(ids) => ids.clone(),
+            InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
+                model,
+                commodity_id,
+                region_id,
+                year,
+                demand,
+                existing_assets,
+                prices,
+                writer,
+            ),
+            InvestmentSet::Layer(commodity_ids) => {
+                let mut all_assets = Vec::new();
+                for commodity_id in commodity_ids {
+                    let assets = select_assets_for_commodity(
+                        model,
+                        commodity_id,
+                        region_id,
+                        year,
+                        demand,
+                        existing_assets,
+                        prices,
+                        writer,
+                    )?;
+                    all_assets.extend(assets);
+                }
+                Ok(all_assets)
+            }
+            InvestmentSet::Cycle(_) => {
+                bail!(
+                    "Investment cycles are not yet supported. Found cycle for commodities: {self}"
+                )
+            }
         }
     }
 }
@@ -57,7 +98,9 @@ impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvestmentSet::Single(id) => write!(f, "{id}"),
-            InvestmentSet::Cycle(ids) => write!(f, "[{}]", ids.iter().join(", ")),
+            InvestmentSet::Layer(ids) | InvestmentSet::Cycle(ids) => {
+                write!(f, "[{}]", ids.iter().join(", "))
+            }
         }
     }
 }
@@ -108,23 +151,15 @@ pub fn perform_agent_investment(
         // Iterate over investment sets in the investment order for this region/year
         for investment_set in investment_order {
             // Select assets for the commodity(/ies) of interest
-            let selected_assets = match investment_set {
-                InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
-                    model,
-                    commodity_id,
-                    region_id,
-                    year,
-                    &demand,
-                    existing_assets,
-                    prices,
-                    writer,
-                )?,
-                InvestmentSet::Cycle(_) => {
-                    bail!(
-                        "Investment cycles are not yet supported. Found cycle for commodities: {investment_set}"
-                    );
-                }
-            };
+            let selected_assets = investment_set.select_assets(
+                model,
+                region_id,
+                year,
+                &demand,
+                existing_assets,
+                prices,
+                writer,
+            )?;
 
             // Update our list of seen commodities
             for commodity_id in investment_set.iter() {

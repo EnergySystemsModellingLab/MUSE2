@@ -12,6 +12,7 @@ use petgraph::Directed;
 use petgraph::algo::{condensation, toposort};
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
+use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -68,6 +69,51 @@ impl Display for GraphEdge {
     }
 }
 
+type CompressedCommodityGraph = Graph<CompressedNode, GraphEdge, Directed>;
+
+enum CompressedNode {
+    Single(GraphNode),
+    Cycle(Vec<GraphNode>),
+    _Layer(Vec<GraphNode>),
+}
+
+impl CompressedNode {
+    fn to_investment_set(&self) -> InvestmentSet {
+        match self {
+            CompressedNode::Single(node) => {
+                if let GraphNode::Commodity(id) = node {
+                    InvestmentSet::Single(id.clone())
+                } else {
+                    unreachable!("CompressedNode::Single must contain a Commodity node");
+                }
+            }
+            CompressedNode::Cycle(nodes) => {
+                let commodity_ids: Vec<CommodityID> = nodes
+                    .iter()
+                    .map(|node| match node {
+                        GraphNode::Commodity(id) => id.clone(),
+                        _ => {
+                            unreachable!("CompressedNode::Cycle must contain only Commodity nodes")
+                        }
+                    })
+                    .collect();
+                InvestmentSet::Cycle(commodity_ids)
+            }
+            CompressedNode::_Layer(nodes) => {
+                let commodity_ids: Vec<CommodityID> = nodes
+                    .iter()
+                    .map(|node| match node {
+                        GraphNode::Commodity(id) => id.clone(),
+                        _ => {
+                            unreachable!("CompressedNode::Layer must contain only Commodity nodes")
+                        }
+                    })
+                    .collect();
+                InvestmentSet::Layer(commodity_ids)
+            }
+        }
+    }
+}
 /// Creates a directed graph of commodity flows for a given region and year.
 ///
 /// The graph contains nodes for all commodities that may be consumed/produced by processes in the
@@ -320,46 +366,73 @@ fn solve_investment_order(
                 commodity.kind,
                 CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
             )
-            .then_some(node_weight)
+            .then_some(node_weight.clone())
         },
         // Consider only primary edges
-        |_, edge_weight| matches!(edge_weight, GraphEdge::Primary(_)).then_some(edge_weight),
+        |_, edge_weight| {
+            matches!(edge_weight, GraphEdge::Primary(_)).then_some(edge_weight.clone())
+        },
     );
 
     // Condense strongly connected components
-    let condensed_graph = condensation(graph_filtered, true);
+    let condensed_graph = compress_cycles(&graph_filtered);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
-    // should have been detected and compressed with `condensation`
+    // should have been detected and compressed with `compress_cycles`
     let order = toposort(&condensed_graph, None).unwrap();
 
     // Create investment sets (reverse topological order)
     order
         .iter()
         .rev()
-        .filter_map(|node_idx| {
-            // Get set of commodity ID(s) for the node, referring back to `condensed_graph`
-            let commodities: Vec<CommodityID> = condensed_graph
+        .map(|node_idx| {
+            condensed_graph
                 .node_weight(*node_idx)
                 .unwrap()
-                .iter()
-                .filter_map(|node| match node {
-                    GraphNode::Commodity(id) => Some(id.clone()),
-                    _ => None,
-                })
-                .collect();
-
-            // Create investment set
-            // If a single commodity in the node this is `InvestmentSet::Single`, if multiple
-            // commodities this is `InvestmentSet::Cycle`
-            match commodities.as_slice() {
-                [] => None,
-                [only] => Some(InvestmentSet::Single(only.clone())),
-                _ => Some(InvestmentSet::Cycle(commodities)),
-            }
+                .to_investment_set()
         })
         .collect()
+}
+
+fn compress_cycles(graph: &CommoditiesGraph) -> CompressedCommodityGraph {
+    // Detect strongly connected components
+    let condensed_graph = condensation(graph.clone(), true);
+
+    // Map to a new CompressedCommodityGraph
+    condensed_graph.map(
+        // Map nodes to CompressedNode
+        |_, node_weight| match node_weight.len() {
+            0 => unreachable!("Condensed graph node must have at least one member"),
+            1 => CompressedNode::Single(node_weight[0].clone()),
+            _ => CompressedNode::Cycle(node_weight.clone()),
+        },
+        // Keep edges the same
+        |_, edge_weight| edge_weight.clone(),
+    )
+}
+
+fn _assign_ranks(
+    graph: &CompressedCommodityGraph,
+    order: Vec<NodeIndex>,
+) -> HashMap<NodeIndex, usize> {
+    let mut rank = HashMap::new();
+
+    // Initialize all ranks to 0
+    for node in graph.node_indices() {
+        rank.insert(node, 0);
+    }
+
+    // Traverse in topological order
+    for u in order {
+        let current_rank = *rank.get(&u).unwrap();
+        for v in graph.neighbors_directed(u, petgraph::Direction::Outgoing) {
+            let entry = rank.entry(v).or_insert(0);
+            *entry = (*entry).max(current_rank + 1);
+        }
+    }
+
+    rank
 }
 
 /// Builds base commodity graphs for each region and year
