@@ -94,6 +94,42 @@ impl TimeSliceSelection {
         }
     }
 
+    /// Get the parent [`TimeSliceSelection`], if any.
+    ///
+    /// This means the [`TimeSliceSelection`] corresponding to a coarser [`TimeSliceLevel`] than
+    /// this one.
+    pub fn get_parent(&self) -> Option<Self> {
+        match self {
+            Self::Annual => None,
+            Self::Season(_) => Some(Self::Annual),
+            Self::Single(time_slice) => Some(Self::Season(time_slice.season.clone())),
+        }
+    }
+
+    /// Iterate over this [`TimeSliceSelection`]'s children, if any.
+    ///
+    /// This means the [`TimeSliceSelection`]s corresponding to a fine [`TimeSliceLevel`] than
+    /// this one, if any.
+    pub fn iter_children<'a>(
+        &'a self,
+        time_slice_info: &'a TimeSliceInfo,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        let ts_info = time_slice_info;
+        match self {
+            TimeSliceSelection::Annual => {
+                Box::new(time_slice_info.seasons.keys().cloned().map(Self::Season))
+            }
+            TimeSliceSelection::Season(season) => Box::new(
+                ts_info
+                    .iter_ids()
+                    .filter(move |ts| &ts.season == season)
+                    .cloned()
+                    .map(Self::Single),
+            ),
+            TimeSliceSelection::Single(_) => Box::new(iter::empty()),
+        }
+    }
+
     /// Iterate over the subset of time slices in this selection
     pub fn iter<'a>(
         &'a self,
