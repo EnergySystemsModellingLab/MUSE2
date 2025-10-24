@@ -130,7 +130,7 @@ where
                             try_insert(
                                 map_p,
                                 &(region.clone(), *year, time_slice.clone()),
-                                cost.value,
+                                MoneyPerFlow(cost.value.0.abs()),
                             )?;
                             let map_c = map
                                 .entry(BalanceType::Consumption)
@@ -138,7 +138,7 @@ where
                             try_insert(
                                 map_c,
                                 &(region.clone(), *year, time_slice.clone()),
-                                MoneyPerFlow(-cost.value.0),
+                                MoneyPerFlow(-cost.value.0.abs()),
                             )?;
                         }
                     }
