@@ -146,7 +146,7 @@ pub fn process(
 
     // Create maps with (empty) entries for every region/year combo
     let activity_limits = iproduct!(region_ids.iter(), years.iter())
-        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(HashMap::new())))
+        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
         .collect();
     let flows = iproduct!(region_ids.iter(), years.iter())
         .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
