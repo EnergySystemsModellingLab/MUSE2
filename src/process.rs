@@ -1,6 +1,6 @@
 //! Processes are used for converting between different commodities. The data structures in this
 //! module are used to represent these conversions along with the associated costs.
-use crate::commodity::{BalanceType, Commodity, CommodityID};
+use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceID;
@@ -105,27 +105,18 @@ impl ProcessFlow {
 
     /// Get the levy/incentive for this process flow with the given parameters, if any
     fn get_levy(&self, region_id: &RegionID, year: u32, time_slice: &TimeSliceID) -> MoneyPerFlow {
-        if self.commodity.levies.is_empty() {
-            return MoneyPerFlow(0.0);
-        }
-
-        let levy = self
-            .commodity
-            .levies
-            .get(&(region_id.clone(), year, time_slice.clone()))
-            .unwrap();
-
-        let apply_levy = match levy.balance_type {
-            BalanceType::Net => true,
-            BalanceType::Consumption => self.is_input(),
-            BalanceType::Production => self.is_output(),
-        };
-
-        if apply_levy {
-            levy.value
+        if let Some(levy) = if self.is_input() {
+            self.commodity
+                .levies_cons
+                .get(&(region_id.clone(), year, time_slice.clone()))
         } else {
-            MoneyPerFlow(0.0)
+            self.commodity
+                .levies_prod
+                .get(&(region_id.clone(), year, time_slice.clone()))
+        } {
+            return *levy;
         }
+        MoneyPerFlow(0.0)
     }
 
     /// Returns true if this flow is an input (i.e., coeff < 0)
@@ -170,9 +161,7 @@ pub struct ProcessParameter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::{
-        BalanceType, CommodityLevy, CommodityLevyMap, CommodityType, DemandMap,
-    };
+    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap};
     use crate::fixture::{region_id, time_slice};
     use crate::time_slice::TimeSliceLevel;
     use rstest::{fixture, rstest};
@@ -180,33 +169,32 @@ mod tests {
 
     #[fixture]
     fn commodity_with_levy(region_id: RegionID, time_slice: TimeSliceID) -> Rc<Commodity> {
-        let mut levies = CommodityLevyMap::new();
+        let mut levies_prod = CommodityLevyMap::new();
+        let mut levies_cons = CommodityLevyMap::new();
+
         // Add levy for the default region and time slice
-        levies.insert(
+        levies_prod.insert(
             (region_id.clone(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(10.0),
-            },
+            MoneyPerFlow(10.0),
+        );
+        levies_cons.insert(
+            (region_id.clone(), 2020, time_slice.clone()),
+            MoneyPerFlow(-10.0),
         );
         // Add levy for a different region
-        levies.insert(
-            ("USA".into(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(5.0),
-            },
-        );
+        levies_prod.insert(("USA".into(), 2020, time_slice.clone()), MoneyPerFlow(5.0));
+        levies_cons.insert(("USA".into(), 2020, time_slice.clone()), MoneyPerFlow(-5.0));
         // Add levy for a different year
-        levies.insert(
+        levies_prod.insert(
             (region_id.clone(), 2030, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(7.0),
-            },
+            MoneyPerFlow(7.0),
+        );
+        levies_cons.insert(
+            (region_id.clone(), 2030, time_slice.clone()),
+            MoneyPerFlow(-7.0),
         );
         // Add levy for a different time slice
-        levies.insert(
+        levies_prod.insert(
             (
                 region_id.clone(),
                 2020,
@@ -215,10 +203,18 @@ mod tests {
                     time_of_day: "day".into(),
                 },
             ),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(3.0),
-            },
+            MoneyPerFlow(3.0),
+        );
+        levies_cons.insert(
+            (
+                region_id.clone(),
+                2020,
+                TimeSliceID {
+                    season: "summer".into(),
+                    time_of_day: "day".into(),
+                },
+            ),
+            MoneyPerFlow(-3.0),
         );
 
         Rc::new(Commodity {
@@ -226,7 +222,8 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies,
+            levies_prod: levies_prod,
+            levies_cons: levies_cons,
             demand: DemandMap::new(),
         })
     }
@@ -237,20 +234,15 @@ mod tests {
         time_slice: TimeSliceID,
     ) -> Rc<Commodity> {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Consumption,
-                value: MoneyPerFlow(10.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         Rc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies,
+            levies_prod: CommodityLevyMap::new(),
+            levies_cons: levies,
             demand: DemandMap::new(),
         })
     }
@@ -261,41 +253,36 @@ mod tests {
         time_slice: TimeSliceID,
     ) -> Rc<Commodity> {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Production,
-                value: MoneyPerFlow(10.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         Rc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies,
+            levies_prod: levies,
+            levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
         })
     }
 
     #[fixture]
     fn commodity_with_incentive(region_id: RegionID, time_slice: TimeSliceID) -> Rc<Commodity> {
-        let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-5.0),
-            },
+        let mut levies_prod = CommodityLevyMap::new();
+        levies_prod.insert(
+            (region_id.clone(), 2020, time_slice.clone()),
+            MoneyPerFlow(-5.0),
         );
+        let mut levies_cons = CommodityLevyMap::new();
+        levies_cons.insert((region_id, 2020, time_slice), MoneyPerFlow(5.0));
 
         Rc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies,
+            levies_prod: levies_prod,
+            levies_cons: levies_cons,
             demand: DemandMap::new(),
         })
     }
@@ -307,7 +294,8 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies: CommodityLevyMap::new(),
+            levies_prod: CommodityLevyMap::new(),
+            levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
         })
     }
@@ -320,7 +308,8 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
-                levies: CommodityLevyMap::new(),
+                levies_prod: CommodityLevyMap::new(),
+                levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
             }),
             coeff: FlowPerActivity(1.0),
@@ -332,13 +321,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost_and_levy(region_id: RegionID, time_slice: TimeSliceID) -> ProcessFlow {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(10.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         ProcessFlow {
             commodity: Rc::new(Commodity {
@@ -346,7 +329,8 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
-                levies,
+                levies_prod: levies,
+                levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
             }),
             coeff: FlowPerActivity(1.0),
@@ -358,13 +342,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost_and_incentive(region_id: RegionID, time_slice: TimeSliceID) -> ProcessFlow {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-3.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(-3.0));
 
         ProcessFlow {
             commodity: Rc::new(Commodity {
@@ -372,7 +350,8 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
-                levies,
+                levies_prod: levies,
+                levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
             }),
             coeff: FlowPerActivity(1.0),
@@ -637,7 +616,8 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies: CommodityLevyMap::new(),
+            levies_prod: CommodityLevyMap::new(),
+            levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
         });
 

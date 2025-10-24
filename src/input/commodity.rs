@@ -1,6 +1,6 @@
 //! Code for reading in commodity-related data from CSV files.
 use super::read_csv_id_file;
-use crate::commodity::{Commodity, CommodityID, CommodityMap};
+use crate::commodity::{BalanceType, Commodity, CommodityID, CommodityMap};
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
 use anyhow::Result;
@@ -56,8 +56,13 @@ pub fn read_commodities(
     Ok(commodities
         .into_iter()
         .map(|(id, mut commodity)| {
-            if let Some(costs) = costs.remove(&id) {
-                commodity.levies = costs;
+            if let Some(mut costs) = costs.remove(&id) {
+                if let Some(levies) = costs.remove(&BalanceType::Consumption) {
+                    commodity.levies_cons = levies;
+                }
+                if let Some(levies) = costs.remove(&BalanceType::Production) {
+                    commodity.levies_prod = levies;
+                }
             }
             if let Some(demand) = demand.remove(&id) {
                 commodity.demand = demand;
