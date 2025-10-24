@@ -3,10 +3,10 @@ use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
-use petgraph::Directed;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
+use petgraph::{Directed, Direction};
 use std::collections::HashMap;
 
 type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
@@ -21,23 +21,21 @@ fn solve_investment_order(
     // Initialise InvestmentGraph from the original CommodityGraph
     let investment_graph = init_investment_graph(graph, commodities);
 
+    // TODO: condense sibling commodities (commodities that share at least one producer)
+
     // Condense strongly connected components
-    let condensed_graph = compress_cycles(investment_graph);
+    let investment_graph = compress_cycles(investment_graph);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
     // should have been detected and compressed with `compress_cycles`
-    let order = toposort(&condensed_graph, None).unwrap();
+    let order = toposort(&investment_graph, None).unwrap();
 
-    // Create investment sets (reverse topological order)
-    order
-        .iter()
-        .rev()
-        .map(|node_idx| condensed_graph.node_weight(*node_idx).unwrap().clone())
-        .collect()
+    // Compute layers
+    compute_layers(&investment_graph, &order)
 }
 
-// Initialise a InvestmentGraph from the original CommodityGraph
+// Initialise an InvestmentGraph from the original CommodityGraph
 //
 // This filters the graph to only include SVD/SED commodities and primary edges, then creates an
 // InvestmentGraphNode::Single for each commodity node.
@@ -64,7 +62,7 @@ fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -
         },
     );
 
-    // Map to InvestmentGraph with InvestmentGraphNode::Single nodes
+    // Map to InvestmentGraph with InvestmentSet::Single nodes
     graph_filtered.map(
         |_, node_weight| match node_weight {
             GraphNode::Commodity(id) => InvestmentSet::Single(id.clone()),
@@ -74,6 +72,7 @@ fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -
     )
 }
 
+/// Compresses cycles into `InvestmentSet::Cycle` nodes
 fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
     let condensed_graph = condensation(graph, true);
@@ -91,24 +90,44 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
     )
 }
 
-fn _assign_ranks(graph: &InvestmentGraph, order: Vec<NodeIndex>) -> HashMap<NodeIndex, usize> {
-    let mut rank = HashMap::new();
-
+fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<InvestmentSet> {
     // Initialize all ranks to 0
-    for node in graph.node_indices() {
-        rank.insert(node, 0);
-    }
+    let mut ranks: HashMap<_, usize> = graph.node_indices().map(|n| (n, 0)).collect();
 
-    // Traverse in topological order
-    for u in order {
-        let current_rank = *rank.get(&u).unwrap();
-        for v in graph.neighbors_directed(u, petgraph::Direction::Outgoing) {
-            let entry = rank.entry(v).or_insert(0);
-            *entry = (*entry).max(current_rank + 1);
+    // Calculate the rank of each node by traversing in topological order
+    for &u in order {
+        let current_rank = ranks[&u];
+        for v in graph.neighbors_directed(u, Direction::Outgoing) {
+            if let Some(r) = ranks.get_mut(&v) {
+                *r = (*r).max(current_rank + 1);
+            }
         }
     }
 
-    rank
+    // Group nodes by rank
+    let max_rank = ranks.values().copied().max().unwrap_or(0);
+    let mut groups: Vec<Vec<InvestmentSet>> = vec![Vec::new(); max_rank + 1];
+    for node_idx in order {
+        let rank = *ranks.get(node_idx).unwrap();
+        let w = graph.node_weight(*node_idx).unwrap().clone();
+        groups[rank].push(w);
+    }
+
+    // Produce final ordered Vec<InvestmentSet>: ranks descending (leaf-first),
+    // compressing equal-rank nodes into Layer.
+    let mut result = Vec::new();
+    for mut items in groups.into_iter().rev() {
+        if items.is_empty() {
+            unreachable!("Should be no gaps in the ranking")
+        }
+        if items.len() == 1 {
+            result.push(items.remove(0));
+        } else {
+            result.push(InvestmentSet::Layer(items));
+        }
+    }
+
+    result
 }
 
 /// Determine commodity ordering for each region and year
