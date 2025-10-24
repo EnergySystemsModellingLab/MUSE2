@@ -228,7 +228,15 @@ impl Display for TimeSliceSelection {
 
 /// The time granularity for a particular operation
 #[derive(
-    PartialEq, PartialOrd, Copy, Clone, Debug, DeserializeLabeledStringEnum, strum::EnumIter,
+    PartialEq,
+    PartialOrd,
+    Eq,
+    Ord,
+    Copy,
+    Clone,
+    Debug,
+    DeserializeLabeledStringEnum,
+    strum::EnumIter,
 )]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
