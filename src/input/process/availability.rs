@@ -1,11 +1,12 @@
 //! Code for reading process availabilities CSV file
 use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
-use crate::process::{Process, ProcessActivityLimitsMap, ProcessID, ProcessMap};
+use crate::process::{ActivityLimits, Process, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
-use crate::time_slice::TimeSliceInfo;
+use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Dimensionless, Year};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
+use indexmap::IndexMap;
 use itertools::iproduct;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
@@ -38,16 +39,18 @@ impl ProcessAvailabilityRaw {
         Ok(())
     }
 
-    /// Calculate fraction of annual energy as availability multiplied by time slice length.
+    /// Calculate fraction of annual energy as availability multiplied by duration.
     ///
     /// The resulting limits are max/min energy produced/consumed in each time slice per
     /// `capacity_to_activity` units of capacity.
-    fn to_bounds(&self, ts_length: Year) -> RangeInclusive<Dimensionless> {
-        // We know ts_length also represents a fraction of a year, so this is ok.
-        let ts_frac = ts_length / Year(1.0);
-        let value = self.value * ts_frac;
+    fn to_bounds(&self, duration: Year) -> RangeInclusive<Dimensionless> {
+        assert!(duration >= Year(0.0) && duration <= Year(1.0));
+
+        // We know duration also represents a fraction of a year, so this is ok.
+        let fraction = duration / Year(1.0);
+        let value = self.value * fraction;
         match self.limit_type {
-            LimitType::LowerBound => value..=ts_frac,
+            LimitType::LowerBound => value..=fraction,
             LimitType::UpperBound => Dimensionless(0.0)..=value,
             LimitType::Equality => value..=value,
         }
@@ -146,108 +149,89 @@ where
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
 
         // Insert the activity limit into the map
-        let limits_map = map
-            .entry(id.clone())
-            .or_insert_with(ProcessActivityLimitsMap::new);
+        let limits_map = map.entry(id.clone()).or_default();
         for (region_id, year) in iproduct!(&record_regions, &record_years) {
-            let limits_map_inner = limits_map
-                .entry((region_id.clone(), *year))
-                .or_insert_with(|| Rc::new(HashMap::new()));
+            let limits_map_inner = limits_map.entry((region_id.clone(), *year)).or_default();
             let limits_map_inner = Rc::get_mut(limits_map_inner).unwrap();
-            for (time_slice, ts_length) in ts_selection.iter(time_slice_info) {
-                let bounds = record.to_bounds(ts_length);
-                try_insert(limits_map_inner, time_slice, bounds.clone())?;
-            }
+            let bounds = record.to_bounds(time_slice_info.get_duration(&ts_selection));
+            try_insert(limits_map_inner, &ts_selection, bounds.clone())?;
         }
     }
 
-    validate_activity_limits_maps(&map, processes, time_slice_info, base_year)?;
+    add_fallback_limits(&mut map, processes);
 
     Ok(map)
 }
 
-/// Check that the activity limits cover every time slice and all regions/years of the process
-fn validate_activity_limits_maps(
-    all_availabilities: &HashMap<ProcessID, ProcessActivityLimitsMap>,
+fn compute_limits_full(
+    all_availabilities: &mut HashMap<ProcessID, ProcessActivityLimitsMap>,
     processes: &ProcessMap,
-    time_slice_info: &TimeSliceInfo,
-    base_year: u32,
-) -> Result<()> {
+) {
     for (process_id, process) in processes {
         // A map of maps: the outer map is keyed by region and year; the inner one by time slice
-        let map_for_process = all_availabilities
-            .get(process_id)
-            .with_context(|| format!("Missing availabilities for process {process_id}"))?;
+        // selection
+        let map_for_process = all_availabilities.entry(process_id.clone()).or_default();
 
-        check_missing_milestone_years(process, map_for_process, base_year)?;
-        check_missing_time_slices(process, map_for_process, time_slice_info)?;
-    }
+        // Iterate over all regions and years for this process and insert a fallback availability
+        // limit covering the whole year, in case it's needed
+        for (region, &year) in iproduct!(&process.regions, &process.years) {
+            // Should succeed because there should be only one reference
+            let map_for_region_year =
+                Rc::get_mut(map_for_process.entry((region.clone(), year)).or_default()).unwrap();
 
-    Ok(())
-}
-
-/// Check every milestone year in which the process can be commissioned has availabilities.
-///
-/// Entries for non-milestone years in which the process can be commissioned (which are only
-/// required for pre-defined assets, if at all) are not required and will be checked lazily when
-/// assets requiring them are constructed.
-fn check_missing_milestone_years(
-    process: &Process,
-    map_for_process: &ProcessActivityLimitsMap,
-    base_year: u32,
-) -> Result<()> {
-    let process_milestone_years = process
-        .years
-        .iter()
-        .copied()
-        .filter(|&year| year >= base_year);
-    let mut missing = Vec::new();
-    for (region_id, year) in iproduct!(&process.regions, process_milestone_years) {
-        if !map_for_process.contains_key(&(region_id.clone(), year)) {
-            missing.push((region_id, year));
+            infer_limits(map_for_region_year);
+            // map_for_region_year
+            //     .entry(TimeSliceSelection::Annual)
+            //     .or_insert(Dimensionless(0.0)..=Dimensionless(1.0));
         }
     }
-
-    ensure!(
-        missing.is_empty(),
-        "Process {} is missing availabilities for the following regions and milestone years: {}",
-        &process.id,
-        format_items_with_cap(&missing)
-    );
-
-    Ok(())
 }
 
-/// Check that entries for all time slices are provided for any process/region/year combo for which
-/// we have any entries at all
-fn check_missing_time_slices(
-    process: &Process,
-    map_for_process: &ProcessActivityLimitsMap,
+// const DEFAULT_LIMITS: &RangeInclusive<>
+
+fn infer_limits(
     time_slice_info: &TimeSliceInfo,
-) -> Result<()> {
-    let mut missing = Vec::new();
-    for (region_id, &year) in iproduct!(&process.regions, &process.years) {
-        if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), year)) {
-            // There are at least some entries for this region/year combo; check if there are
-            // any time slices not covered
-            missing.extend(
-                time_slice_info
-                    .iter_ids()
-                    .filter(|ts| !map_for_region_year.contains_key(ts))
-                    .map(|ts| (region_id, year, ts)),
-            );
+    map: &mut IndexMap<TimeSliceSelection, ActivityLimits>,
+    ts_selection: &TimeSliceSelection,
+    limits: &RangeInclusive<Dimensionless>,
+) {
+    let cur_limits = if let Some(limits) = map.get(ts_selection) {
+        limits.limits
+    } else {
+        Dimensionless(0.0)..=Dimensionless(1.0)
+    };
+
+    let mut max = Dimensionless(1.0);
+    let mut min = Dimensionless(0.0);
+    for child in ts_selection.iter_children(time_slice_info) {}
+}
+
+/// Add limits of 0..=1 for whole year for every region and year, everywhere needed.
+///
+/// The reason this is needed is because users are not required to provide limits for every single
+/// time slice (in fact, there may be none at all), and we need to add a constraint to the
+/// optimisation so that the total activity for the year does not exceed the maximum for a given
+/// asset.
+fn add_fallback_limits(
+    all_availabilities: &mut HashMap<ProcessID, ProcessActivityLimitsMap>,
+    processes: &ProcessMap,
+) {
+    for (process_id, process) in processes {
+        // A map of maps: the outer map is keyed by region and year; the inner one by time slice
+        // selection
+        let map_for_process = all_availabilities.entry(process_id.clone()).or_default();
+
+        // Iterate over all regions and years for this process and insert a fallback availability
+        // limit covering the whole year, in case it's needed
+        for (region, &year) in iproduct!(&process.regions, &process.years) {
+            // Should succeed because there should be only one reference
+            let map_for_region_year =
+                Rc::get_mut(map_for_process.entry((region.clone(), year)).or_default()).unwrap();
+            map_for_region_year
+                .entry(TimeSliceSelection::Annual)
+                .or_insert(Dimensionless(0.0)..=Dimensionless(1.0));
         }
     }
-
-    ensure!(
-        missing.is_empty(),
-        "Availabilities supplied for some, but not all time slices, for process {}. The following \
-        regions, years and time slices are missing: {}",
-        &process.id,
-        format_items_with_cap(&missing)
-    );
-
-    Ok(())
 }
 
 #[cfg(test)]

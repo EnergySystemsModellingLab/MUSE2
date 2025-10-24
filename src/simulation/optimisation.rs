@@ -260,7 +260,11 @@ impl Solution<'_> {
         self.constraint_keys
             .activity_keys
             .zip_duals(self.solution.dual_rows())
-            .map(|((asset, time_slice), dual)| (asset, time_slice, dual))
+            .flat_map(|((asset, ts_selection), dual)| {
+                ts_selection
+                    .iter(self.time_slice_info)
+                    .map(move |(ts, _)| (asset, ts, dual))
+            })
     }
 
     /// Keys and values for column duals.

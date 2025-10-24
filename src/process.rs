@@ -3,7 +3,7 @@
 use crate::commodity::{BalanceType, Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, MoneyPerFlow,
@@ -16,6 +16,18 @@ use std::rc::Rc;
 
 define_id_type! {ProcessID}
 
+#[derive(PartialEq)]
+pub enum ActivityLimitsType {
+    Constraint,
+    Inferred,
+}
+
+#[derive(PartialEq)]
+pub struct ActivityLimits {
+    pub limits: RangeInclusive<Dimensionless>,
+    pub kind: ActivityLimitsType,
+}
+
 /// A map of [`Process`]es, keyed by process ID
 pub type ProcessMap = IndexMap<ProcessID, Rc<Process>>;
 
@@ -24,7 +36,7 @@ pub type ProcessMap = IndexMap<ProcessID, Rc<Process>>;
 /// The value is calculated as availability multiplied by time slice length. The limits are given as
 /// ranges, depending on the user-specified limit type and value for availability.
 pub type ProcessActivityLimitsMap =
-    HashMap<(RegionID, u32), Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>>;
+    HashMap<(RegionID, u32), Rc<IndexMap<TimeSliceSelection, ActivityLimits>>>;
 
 /// A map of [`ProcessParameter`]s, keyed by region and year
 pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
@@ -35,7 +47,7 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
 pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
 
 /// Represents a process within the simulation
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 pub struct Process {
     /// A unique identifier for the process (e.g. GASDRV)
     pub id: ProcessID,

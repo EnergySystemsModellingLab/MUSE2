@@ -4,14 +4,13 @@ use crate::commodity::CommodityID;
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{Activity, ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -84,7 +83,7 @@ pub struct Asset {
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
     /// Activity limits for this asset
-    activity_limits: Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>,
+    activity_limits: Rc<IndexMap<TimeSliceSelection, RangeInclusive<Dimensionless>>>,
     /// The commodity flows for this asset
     flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
@@ -242,8 +241,11 @@ impl Asset {
     }
 
     /// Get the activity limits for this asset in a particular time slice
-    pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<Activity> {
-        let limits = &self.activity_limits[time_slice];
+    pub fn get_activity_limits(
+        &self,
+        ts_selection: &TimeSliceSelection,
+    ) -> RangeInclusive<Activity> {
+        let limits = &self.activity_limits[ts_selection];
         let max_act = self.max_activity();
 
         // limits in real units (which are user defined)
@@ -253,11 +255,26 @@ impl Asset {
     /// Get the activity limits per unit of capacity for this asset in a particular time slice
     pub fn get_activity_per_capacity_limits(
         &self,
-        time_slice: &TimeSliceID,
+        ts_selection: &TimeSliceSelection,
     ) -> RangeInclusive<ActivityPerCapacity> {
-        let limits = &self.activity_limits[time_slice];
+        let limits = &self.activity_limits[ts_selection];
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
+    }
+
+    /// Iterate over all activity limits for this asset
+    pub fn iter_activity_limits(
+        &self,
+    ) -> impl Iterator<Item = (&TimeSliceSelection, RangeInclusive<Activity>)> {
+        let max_act = self.max_activity();
+        self.activity_limits
+            .iter()
+            .map(move |(ts_selection, limits)| {
+                (
+                    ts_selection,
+                    (max_act * *limits.start())..=(max_act * *limits.end()),
+                )
+            })
     }
 
     /// Get the operating cost for this asset in a given year and time slice
@@ -493,6 +510,57 @@ impl Asset {
         check_capacity_valid_for_asset(self.capacity).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
+}
+
+fn upper_limit(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
+    ts_selection: &TimeSliceSelection,
+) -> Dimensionless {
+    if let Some(limits) = limits.get(ts_selection) {
+        *limits.end()
+    } else {
+        Dimensionless(1.0)
+    }
+}
+
+/// Check whether any availability is permissible for the [`TimeSliceSelection`] and its parents
+fn get_upper_limit_with_parents(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
+    ts_selection: &TimeSliceSelection,
+) -> Dimensionless {
+    let mut upper = upper_limit(limits, ts_selection);
+    if Some(parent) = ts_selection.get_parent() {
+        upper = upper.min()
+    }
+
+    upper
+}
+
+/// Check whether any availability is permissible for any children of the specified
+/// [`TimeSliceSelection`]
+fn children_have_availability(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
+    ts_selection: &TimeSliceSelection,
+    time_slice_info: &TimeSliceInfo,
+) -> bool {
+    ts_selection.iter_children(time_slice_info).any(|child| {
+        limits
+            .get(ts_selection)
+            .is_none_or(|limits| *limits.end() > Dimensionless(0.0))
+            && children_have_availability(limits, &child, time_slice_info)
+    })
+}
+
+/// Check whether there is any availability for this [`TimeSliceSelection`].
+///
+/// Searches at both coarser and finer [`TimeSliceLevel`]s to check for limits.
+fn get_upper_limit(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
+    ts_selection: &TimeSliceSelection,
+    time_slice_info: &TimeSliceInfo,
+) -> Dimensionless {
+    get_upper_limit_with_parents(limits, ts_selection)
+        && children_have_availability(limits, ts_selection, time_slice_info)
 }
 
 #[allow(clippy::missing_fields_in_debug)]
@@ -926,7 +994,7 @@ mod tests {
         let flows = hash_map! {(region_id.clone(), 2020) => flow_map.into()};
 
         // Create empty activity limits map
-        let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(HashMap::new())};
+        let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(IndexMap::new())};
 
         let process = Rc::new(Process {
             id: ProcessID::from("PROC1"),
@@ -1017,7 +1085,7 @@ mod tests {
             .collect();
         let activity_limits = years
             .iter()
-            .map(|&year| ((region_id.clone(), year), Rc::new(HashMap::new())))
+            .map(|&year| ((region_id.clone(), year), Rc::new(IndexMap::new())))
             .collect();
         let flows = years
             .iter()
@@ -1072,7 +1140,7 @@ mod tests {
         let fraction_limits = Dimensionless(1.0)..=Dimensionless(2.0);
         let mut flows = ProcessFlowsMap::new();
         let mut activity_limits = ProcessActivityLimitsMap::new();
-        let limit_map = Rc::new(hash_map! {time_slice => fraction_limits});
+        let limit_map = Rc::new(indexmap! {time_slice.into() => fraction_limits});
         for year in [2010, 2020] {
             // empty flows map, but this is fine for our purposes
             flows.insert((region_id.clone(), year), Rc::new(IndexMap::new()));
@@ -1106,7 +1174,7 @@ mod tests {
     #[rstest]
     fn test_asset_get_activity_limits(asset_with_activity_limits: Asset, time_slice: TimeSliceID) {
         assert_eq!(
-            asset_with_activity_limits.get_activity_limits(&time_slice),
+            asset_with_activity_limits.get_activity_limits(&time_slice.into()),
             Activity(6.0)..=Activity(12.0)
         );
     }
@@ -1117,7 +1185,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
+            asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice.into()),
             ActivityPerCapacity(3.0)..=ActivityPerCapacity(6.0)
         );
     }
