@@ -1,4 +1,4 @@
-process_id,commodity_id,regions,years,coeff,type,cost
+process_id,commodity_id,regions,commission_years,coeff,type,cost
 GASDRV,GASPRD,all,all,1.0,fixed,
 GASPRC,GASPRD,all,all,-1.05,fixed,
 GASPRC,GASNAT,all,all,1.0,fixed,
