@@ -35,13 +35,20 @@ pub struct Commodity {
     pub kind: CommodityType,
     /// The time slice level for commodity balance
     pub time_slice_level: TimeSliceLevel,
-    /// Levies for this commodity for different combinations of region, year and time slice.
+    /// Production levies for this commodity for different combinations of region, year and time slice.
     ///
-    /// May be empty if there are no levies for this commodity, otherwise there must be entries for
-    /// every combination of parameters. Note that these values can be negative, indicating an
-    /// incentive.
+    /// May be empty if there are no production levies for this commodity, otherwise there must be
+    /// entries for every combination of parameters. Note that these values can be negative,
+    /// indicating an incentive.
     #[serde(skip)]
-    pub levies: CommodityLevyMap,
+    pub levies_prod: CommodityLevyMap,
+    /// Consumption levies for this commodity for different combinations of region, year and time slice.
+    ///
+    /// May be empty if there are no consumption levies for this commodity, otherwise there must be
+    /// entries for every combination of parameters. Note that these values can be negative,
+    /// indicating an incentive.
+    #[serde(skip)]
+    pub levies_cons: CommodityLevyMap,
     /// Demand as defined in input files. Will be empty for non-service-demand commodities.
     ///
     /// The [`TimeSliceSelection`] part of the key is always at the same [`TimeSliceLevel`] as the
@@ -53,7 +60,7 @@ pub struct Commodity {
 define_id_getter! {Commodity, CommodityID}
 
 /// Type of balance for application of cost
-#[derive(PartialEq, Clone, Debug, DeserializeLabeledStringEnum)]
+#[derive(Eq, PartialEq, Clone, Debug, DeserializeLabeledStringEnum, Hash)]
 pub enum BalanceType {
     /// Applies to both consumption and production
     #[string = "net"]
