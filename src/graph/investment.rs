@@ -1,6 +1,6 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityID, CommodityMap, CommodityType};
+use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
 use petgraph::Directed;
@@ -9,51 +9,7 @@ use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 
-type CompressedCommodityGraph = Graph<CompressedNode, GraphEdge, Directed>;
-
-enum CompressedNode {
-    Single(GraphNode),
-    Cycle(Vec<GraphNode>),
-    _Layer(Vec<GraphNode>),
-}
-
-impl CompressedNode {
-    fn to_investment_set(&self) -> InvestmentSet {
-        match self {
-            CompressedNode::Single(node) => {
-                if let GraphNode::Commodity(id) = node {
-                    InvestmentSet::Single(id.clone())
-                } else {
-                    unreachable!("CompressedNode::Single must contain a Commodity node");
-                }
-            }
-            CompressedNode::Cycle(nodes) => {
-                let commodity_ids: Vec<CommodityID> = nodes
-                    .iter()
-                    .map(|node| match node {
-                        GraphNode::Commodity(id) => id.clone(),
-                        _ => {
-                            unreachable!("CompressedNode::Cycle must contain only Commodity nodes")
-                        }
-                    })
-                    .collect();
-                InvestmentSet::Cycle(commodity_ids)
-            }
-            CompressedNode::_Layer(nodes) => {
-                let commodity_ids: Vec<CommodityID> = nodes
-                    .iter()
-                    .map(|node| match node {
-                        GraphNode::Commodity(id) => id.clone(),
-                        _ => {
-                            unreachable!("CompressedNode::Layer must contain only Commodity nodes")
-                        }
-                    })
-                    .collect();
-                InvestmentSet::Layer(commodity_ids)
-            }
-        }
-    }
-}
+type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 
 /// Performs topological sort on the commodity graph to get the ordering for investments
 ///
@@ -62,6 +18,30 @@ fn solve_investment_order(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
 ) -> Vec<InvestmentSet> {
+    // Initialise InvestmentGraph from the original CommodityGraph
+    let investment_graph = init_investment_graph(graph, commodities);
+
+    // Condense strongly connected components
+    let condensed_graph = compress_cycles(investment_graph);
+
+    // Perform a topological sort on the condensed graph
+    // We can safely unwrap because `toposort` will only return an error in case of cycles, which
+    // should have been detected and compressed with `compress_cycles`
+    let order = toposort(&condensed_graph, None).unwrap();
+
+    // Create investment sets (reverse topological order)
+    order
+        .iter()
+        .rev()
+        .map(|node_idx| condensed_graph.node_weight(*node_idx).unwrap().clone())
+        .collect()
+}
+
+// Initialise a InvestmentGraph from the original CommodityGraph
+//
+// This filters the graph to only include SVD/SED commodities and primary edges, then creates an
+// InvestmentGraphNode::Single for each commodity node.
+fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -> InvestmentGraph {
     // Filter the graph to only include SVD/SED commodities and primary edges
     let graph_filtered = graph.filter_map(
         // Consider only SVD/SED commodities
@@ -84,48 +64,34 @@ fn solve_investment_order(
         },
     );
 
-    // Condense strongly connected components
-    let condensed_graph = compress_cycles(&graph_filtered);
-
-    // Perform a topological sort on the condensed graph
-    // We can safely unwrap because `toposort` will only return an error in case of cycles, which
-    // should have been detected and compressed with `compress_cycles`
-    let order = toposort(&condensed_graph, None).unwrap();
-
-    // Create investment sets (reverse topological order)
-    order
-        .iter()
-        .rev()
-        .map(|node_idx| {
-            condensed_graph
-                .node_weight(*node_idx)
-                .unwrap()
-                .to_investment_set()
-        })
-        .collect()
+    // Map to InvestmentGraph with InvestmentGraphNode::Single nodes
+    graph_filtered.map(
+        |_, node_weight| match node_weight {
+            GraphNode::Commodity(id) => InvestmentSet::Single(id.clone()),
+            _ => unreachable!("InvestmentGraph must only contain a GraphNode::Commodity nodes"),
+        },
+        |_, edge_weight| edge_weight.clone(),
+    )
 }
 
-fn compress_cycles(graph: &CommoditiesGraph) -> CompressedCommodityGraph {
+fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
-    let condensed_graph = condensation(graph.clone(), true);
+    let condensed_graph = condensation(graph, true);
 
-    // Map to a new CompressedCommodityGraph
+    // Map to a new InvestmentGraph
     condensed_graph.map(
-        // Map nodes to CompressedNode
+        // Map nodes to InvestmentNode
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
-            1 => CompressedNode::Single(node_weight[0].clone()),
-            _ => CompressedNode::Cycle(node_weight.clone()),
+            1 => node_weight[0].clone(),
+            _ => InvestmentSet::Cycle(node_weight.clone()),
         },
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
     )
 }
 
-fn _assign_ranks(
-    graph: &CompressedCommodityGraph,
-    order: Vec<NodeIndex>,
-) -> HashMap<NodeIndex, usize> {
+fn _assign_ranks(graph: &InvestmentGraph, order: Vec<NodeIndex>) -> HashMap<NodeIndex, usize> {
     let mut rank = HashMap::new();
 
     // Initialize all ranks to 0

@@ -27,22 +27,24 @@ type DemandMap = IndexMap<TimeSliceID, Flow>;
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
 /// Represents a set of commodities which are invested in together.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
     /// Assets are selected for a layer of independent commodities. NOT YET IMPLEMENTED.
-    Layer(Vec<CommodityID>),
+    Layer(Vec<InvestmentSet>),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
-    Cycle(Vec<CommodityID>),
+    Cycle(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
-    /// Returns an iterator over the commodity IDs in this investment set
-    fn iter(&self) -> impl Iterator<Item = &CommodityID> {
+    /// Recursively iterate over all `CommodityID`s contained in this `InvestmentSet`.
+    fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
         match self {
-            InvestmentSet::Single(id) => std::slice::from_ref(id).iter(),
-            InvestmentSet::Layer(ids) | InvestmentSet::Cycle(ids) => ids.iter(),
+            InvestmentSet::Single(id) => Box::new(std::iter::once(id)),
+            InvestmentSet::Layer(set) | InvestmentSet::Cycle(set) => {
+                Box::new(set.iter().flat_map(|s| s.iter_commodity_ids()))
+            }
         }
     }
 
@@ -70,10 +72,9 @@ impl InvestmentSet {
             ),
             InvestmentSet::Layer(commodity_ids) => {
                 let mut all_assets = Vec::new();
-                for commodity_id in commodity_ids {
-                    let assets = select_assets_for_commodity(
+                for investment_set in commodity_ids {
+                    let assets = investment_set.select_assets(
                         model,
-                        commodity_id,
                         region_id,
                         year,
                         demand,
@@ -137,7 +138,7 @@ pub fn perform_agent_investment(
         // endogenous prices for that commodity, so we'll gradually remove these external prices.
         let cur_commodities: &Vec<_> = &investment_order
             .iter()
-            .flat_map(InvestmentSet::iter)
+            .flat_map(InvestmentSet::iter_commodity_ids)
             .cloned()
             .collect();
         let mut external_prices =
@@ -162,7 +163,7 @@ pub fn perform_agent_investment(
             )?;
 
             // Update our list of seen commodities
-            for commodity_id in investment_set.iter() {
+            for commodity_id in investment_set.iter_commodity_ids() {
                 seen_commodities.push(commodity_id.clone());
             }
 
@@ -171,9 +172,10 @@ pub fn perform_agent_investment(
             // commodity balance constraints), but commodities for which investment has not yet been
             // performed will, by definition, not have any producers. For these, we provide prices
             // from the previous dispatch run otherwise they will appear to be free to the model.
-            for (commodity_id, time_slice) in
-                iproduct!(investment_set.iter(), model.time_slice_info.iter_ids())
-            {
+            for (commodity_id, time_slice) in iproduct!(
+                investment_set.iter_commodity_ids(),
+                model.time_slice_info.iter_ids()
+            ) {
                 external_prices.remove(commodity_id, region_id, time_slice);
             }
 
