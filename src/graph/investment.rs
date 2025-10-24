@@ -190,7 +190,7 @@ mod tests {
         let result = solve_investment_order(&graph, &commodities);
 
         // Expected order: C, B, A (leaf nodes first)
-        // No cycles, so all investment sets should be `Single`
+        // No cycles or layers, so all investment sets should be `Single`
         assert_eq!(result.len(), 3);
         assert_eq!(result[0], InvestmentSet::Single("C".into()));
         assert_eq!(result[1], InvestmentSet::Single("B".into()));
@@ -220,7 +220,10 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            InvestmentSet::Cycle(vec!["A".into(), "B".into()])
+            InvestmentSet::Cycle(vec![
+                InvestmentSet::Single("A".into()),
+                InvestmentSet::Single("B".into())
+            ])
         );
     }
 }
