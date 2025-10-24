@@ -14,7 +14,7 @@ define_id_type! {CommodityID}
 /// A map of [`Commodity`]s, keyed by commodity ID
 pub type CommodityMap = IndexMap<CommodityID, Rc<Commodity>>;
 
-/// A map of [`CommodityLevy`]s, keyed by region ID, year and time slice ID
+/// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
 pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
 
 /// A map of demand values, keyed by region ID, year and time slice selection
