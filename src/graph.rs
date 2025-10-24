@@ -5,7 +5,7 @@ use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Flow, PerYear};
 use anyhow::{Context, Result, anyhow, ensure};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use itertools::{Itertools, iproduct};
 use petgraph::Directed;
 use petgraph::algo::toposort;
@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::Write as IoWrite;
+use std::ops::RangeInclusive;
 use std::path::Path;
 use strum::IntoEnumIterator;
 
@@ -148,6 +149,48 @@ fn create_commodities_graph_for_region_year(
     graph
 }
 
+/// Check whether any availability is permissible for the [`TimeSliceSelection`] and its parents
+fn has_availability_with_parents(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<PerYear>>,
+    ts_selection: &TimeSliceSelection,
+) -> bool {
+    limits
+        .get(ts_selection)
+        .is_none_or(|limits| *limits.end() > PerYear(0.0))
+        && ts_selection
+            .get_parent()
+            .is_none_or(|ts_selection| has_availability_with_parents(limits, &ts_selection))
+}
+
+/// Check whether any availability is permissible for any children of the specified
+/// [`TimeSliceSelection`].
+///
+/// Returns true if there are no children.
+fn children_have_availability(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<PerYear>>,
+    ts_selection: &TimeSliceSelection,
+    time_slice_info: &TimeSliceInfo,
+) -> bool {
+    ts_selection.iter_children(time_slice_info).all(|child| {
+        !(limits
+            .get(ts_selection)
+            .is_none_or(|limits| *limits.end() > PerYear(0.0))
+            && children_have_availability(limits, &child, time_slice_info))
+    })
+}
+
+/// Check whether there is any availability for this [`TimeSliceSelection`].
+///
+/// Searches at both coarser and finer [`TimeSliceLevel`]s to check for limits.
+fn has_any_availability(
+    limits: &IndexMap<TimeSliceSelection, RangeInclusive<PerYear>>,
+    ts_selection: &TimeSliceSelection,
+    time_slice_info: &TimeSliceInfo,
+) -> bool {
+    has_availability_with_parents(limits, ts_selection)
+        && children_have_availability(limits, ts_selection, time_slice_info)
+}
+
 /// Prepares a graph for validation with [`validate_commodities_graph`].
 ///
 /// It takes a base graph produced by `create_commodities_graph_for_region_year`, and modifies it to
@@ -180,17 +223,10 @@ fn prepare_commodities_graph_for_validation(
         };
         let process = &processes[process_id];
 
-        // Check if the process has availability > 0 in any time slice in the selection
-        time_slice_selection
-            .iter(time_slice_info)
-            .any(|(time_slice, _)| {
-                let Some(limits_map) = process.activity_limits.get(&key) else {
-                    return false;
-                };
-                limits_map
-                    .get(time_slice)
-                    .is_some_and(|avail| *avail.end() > PerYear(0.0))
-            })
+        // Check whether there is any availability for this time slice selection
+        process.activity_limits.get(&key).is_some_and(|limits| {
+            has_any_availability(limits, time_slice_selection, time_slice_info)
+        })
     });
 
     // Add demand edges

@@ -7,6 +7,7 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Flow};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
+use itertools::Itertools;
 
 /// Adds a capacity constraint to the problem.
 ///
@@ -78,11 +79,16 @@ fn add_activity_constraints_for_existing(
     activity_vars: &IndexMap<TimeSliceID, Variable>,
     time_slice_info: &TimeSliceInfo,
 ) {
-    for (time_slice, var) in activity_vars {
-        let limits = asset.get_activity_limits(time_slice);
-        let duration = time_slice_info.time_slices[time_slice];
-        let limits = (*limits.start() * duration).value()..=(*limits.end() * duration).value();
-        problem.add_row(limits, [(*var, 1.0)]);
+    for (ts_selection, limits) in asset.iter_activity_limits(time_slice_info) {
+        let limits = limits.start().value()..=limits.end().value();
+        let terms = ts_selection
+            .iter(time_slice_info)
+            .map(|(time_slice, _)| {
+                let var = *activity_vars.get(time_slice).unwrap();
+                (var, 1.0)
+            })
+            .collect_vec();
+        problem.add_row(limits, &terms);
     }
 }
 
@@ -93,17 +99,23 @@ fn add_activity_constraints_for_candidate(
     activity_vars: &IndexMap<TimeSliceID, Variable>,
     time_slice_info: &TimeSliceInfo,
 ) {
-    for (time_slice, activity_var) in activity_vars {
-        let limits = asset.get_activity_per_capacity_limits(time_slice);
-        let duration = time_slice_info.time_slices[time_slice];
-        let lower_limit = (*limits.start() * duration).value();
-        let upper_limit = (*limits.end() * duration).value();
+    for (ts_selection, limits) in asset.iter_activity_limits(time_slice_info) {
+        let upper_limit = limits.end().value();
+        let lower_limit = limits.start().value();
+
+        let mut terms_upper = vec![(capacity_var, -upper_limit)];
+        let mut terms_lower = vec![(capacity_var, lower_limit)];
+        for (time_slice, _) in ts_selection.iter(time_slice_info) {
+            let var = *activity_vars.get(time_slice).unwrap();
+            terms_upper.push((var, 1.0));
+            terms_lower.push((var, -1.0));
+        }
 
         // Upper bound: activity ≤ capacity * upper_limit
-        problem.add_row(..=0.0, [(*activity_var, 1.0), (capacity_var, -upper_limit)]);
+        problem.add_row(..=0.0, &terms_upper);
 
         // Lower bound: activity ≥ capacity * lower_limit
-        problem.add_row(..=0.0, [(*activity_var, -1.0), (capacity_var, lower_limit)]);
+        problem.add_row(..=0.0, &terms_lower);
     }
 }
 

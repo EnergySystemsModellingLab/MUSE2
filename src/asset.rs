@@ -4,7 +4,7 @@ use crate::commodity::CommodityID;
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacityPerYear, ActivityPerYear, Capacity, MoneyPerActivity, PerYear,
 };
@@ -13,7 +13,6 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -86,7 +85,7 @@ pub struct Asset {
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
     /// Activity limits for this asset
-    activity_limits: Rc<HashMap<TimeSliceID, RangeInclusive<PerYear>>>,
+    activity_limits: Rc<IndexMap<TimeSliceSelection, RangeInclusive<PerYear>>>,
     /// The commodity flows for this asset
     flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
@@ -244,8 +243,11 @@ impl Asset {
     }
 
     /// Get the activity limits for this asset in a particular time slice
-    pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<ActivityPerYear> {
-        let limits = &self.activity_limits[time_slice];
+    pub fn get_activity_limits(
+        &self,
+        ts_selection: &TimeSliceSelection,
+    ) -> RangeInclusive<ActivityPerYear> {
+        let limits = &self.activity_limits[ts_selection];
         let max_act = self.max_activity();
 
         // limits in real units (which are user defined)
@@ -257,9 +259,47 @@ impl Asset {
         &self,
         time_slice: &TimeSliceID,
     ) -> RangeInclusive<ActivityPerCapacityPerYear> {
-        let limits = &self.activity_limits[time_slice];
+        // Get limits for this time slice specifically
+        let mut limits = self
+            .activity_limits
+            .get(&TimeSliceSelection::Single(time_slice.clone()))
+            .cloned()
+            .unwrap_or(PerYear(0.0)..=PerYear(1.0));
+        let mut combine_limits = |ts_selection| {
+            if let Some(other_limits) = self.activity_limits.get(&ts_selection) {
+                let lower = limits.start().max(*other_limits.start());
+                let upper = limits.end().min(*other_limits.end());
+                limits = lower..=upper;
+            }
+        };
+
+        // Take into account possibly more restrictive limits at seasonal and annual level
+        combine_limits(TimeSliceSelection::Season(time_slice.season.clone()));
+        combine_limits(TimeSliceSelection::Annual);
+
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
+    }
+
+    /// Iterate over all activity limits for this asset
+    pub fn iter_activity_limits(
+        &self,
+        time_slice_info: &TimeSliceInfo,
+    ) -> impl Iterator<Item = (&TimeSliceSelection, RangeInclusive<Activity>)> {
+        let max_act = self.max_activity();
+        self.activity_limits
+            .iter()
+            .map(move |(ts_selection, limits)| {
+                // NB: Unit types are correct here, but we're circumventing checks so we don't have
+                // to define a bunch of extra `Mul` impls
+                let mul = max_act.value() * time_slice_info.get_duration(ts_selection).value();
+                let to_act = |limit: PerYear| Activity(mul * limit.value());
+
+                (
+                    ts_selection,
+                    to_act(*limits.start())..=to_act(*limits.end()),
+                )
+            })
     }
 
     /// Get the operating cost for this asset in a given year and time slice
@@ -882,7 +922,6 @@ mod tests {
     use itertools::{Itertools, assert_equal};
     use map_macro::hash_map;
     use rstest::{fixture, rstest};
-    use std::collections::HashMap;
     use std::iter;
     use std::rc::Rc;
 
@@ -928,7 +967,7 @@ mod tests {
         let flows = hash_map! {(region_id.clone(), 2020) => flow_map.into()};
 
         // Create empty activity limits map
-        let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(HashMap::new())};
+        let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(IndexMap::new())};
 
         let process = Rc::new(Process {
             id: ProcessID::from("PROC1"),
@@ -1019,7 +1058,7 @@ mod tests {
             .collect();
         let activity_limits = years
             .iter()
-            .map(|&year| ((region_id.clone(), year), Rc::new(HashMap::new())))
+            .map(|&year| ((region_id.clone(), year), Rc::new(IndexMap::new())))
             .collect();
         let flows = years
             .iter()
@@ -1074,7 +1113,7 @@ mod tests {
         let fraction_limits = PerYear(0.5)..=PerYear(1.0);
         let mut flows = ProcessFlowsMap::new();
         let mut activity_limits = ProcessActivityLimitsMap::new();
-        let limit_map = Rc::new(hash_map! {time_slice => fraction_limits});
+        let limit_map = Rc::new(indexmap! {time_slice.into() => fraction_limits});
         for year in [2010, 2020] {
             // empty flows map, but this is fine for our purposes
             flows.insert((region_id.clone(), year), Rc::new(IndexMap::new()));
@@ -1108,7 +1147,7 @@ mod tests {
     #[rstest]
     fn test_asset_get_activity_limits(asset_with_activity_limits: Asset, time_slice: TimeSliceID) {
         assert_eq!(
-            asset_with_activity_limits.get_activity_limits(&time_slice),
+            asset_with_activity_limits.get_activity_limits(&time_slice.into()),
             ActivityPerYear(3.0)..=ActivityPerYear(6.0)
         );
     }
@@ -1119,7 +1158,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
+            asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice.into()),
             ActivityPerCapacityPerYear(1.5)..=ActivityPerCapacityPerYear(3.0)
         );
     }

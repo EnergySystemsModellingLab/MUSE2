@@ -59,8 +59,7 @@ pub fn read_processes(
 ) -> Result<ProcessMap> {
     let base_year = milestone_years[0];
     let mut processes = read_processes_file(model_dir, milestone_years, region_ids, commodities)?;
-    let mut activity_limits =
-        read_process_availabilities(model_dir, &processes, time_slice_info, base_year)?;
+    let mut activity_limits = read_process_availabilities(model_dir, &processes, time_slice_info)?;
     let mut flows = read_process_flows(model_dir, &mut processes, commodities)?;
     let mut parameters = read_process_parameters(model_dir, &processes, base_year)?;
 

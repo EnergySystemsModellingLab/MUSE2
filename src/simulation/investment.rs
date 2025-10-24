@@ -530,11 +530,10 @@ mod tests {
     };
     use crate::process::{FlowType, ProcessFlow};
     use crate::region::RegionID;
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::{Flow, FlowPerActivity, MoneyPerFlow, PerYear};
     use indexmap::indexmap;
     use itertools::Itertools;
-    use map_macro::hash_map;
     use rstest::rstest;
     use std::rc::Rc;
 
@@ -573,7 +572,7 @@ mod tests {
         // Add activity limits
         process.activity_limits.insert(
             (region_id.clone(), 2015),
-            Rc::new(hash_map! {time_slice.clone() => PerYear(0.0)..=PerYear(1.0)}),
+            Rc::new(indexmap! {TimeSliceSelection::Single(time_slice.clone()) => PerYear(0.0)..=PerYear(1.0)}),
         );
 
         // Create asset with the configured process
@@ -627,11 +626,11 @@ mod tests {
         );
 
         // Add activity limits for both time slices with different limits
-        let limits = hash_map! {
+        let limits = indexmap! {
             // Higher limit for day
-            time_slice1.clone() => PerYear(0.0)..=PerYear(1.0),
+            TimeSliceSelection::Single(time_slice1.clone()) => PerYear(0.0)..=PerYear(1.0),
             // Zero limit for night - should be skipped
-            time_slice2.clone() => PerYear(0.0)..=PerYear(0.0)
+            TimeSliceSelection::Single(time_slice2.clone()) => PerYear(0.0)..=PerYear(0.0)
         };
         process
             .activity_limits

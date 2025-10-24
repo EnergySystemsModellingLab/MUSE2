@@ -4,9 +4,10 @@ use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
+use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
 use crate::units::UnitType;
 use highs::RowProblem as Problem;
+use itertools::Itertools;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -35,7 +36,7 @@ impl<T> KeysWithOffset<T> {
 pub type CommodityBalanceKeys = KeysWithOffset<(CommodityID, RegionID, TimeSliceSelection)>;
 
 /// Indicates the asset ID and time slice covered by each activity constraint
-pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceID)>;
+pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceSelection)>;
 
 /// The keys for different constraints
 pub struct ConstraintKeys {
@@ -76,7 +77,8 @@ where
     let commodity_balance_keys =
         add_commodity_balance_constraints(problem, variables, model, assets, commodities, year);
 
-    let activity_keys = add_activity_constraints(problem, variables, &model.time_slice_info);
+    let activity_keys =
+        add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
     // Return constraint keys
     ConstraintKeys {
@@ -183,22 +185,29 @@ where
 /// See description in [the dispatch optimisation documentation][1].
 ///
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
-fn add_activity_constraints(
+fn add_activity_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
     time_slice_info: &TimeSliceInfo,
-) -> ActivityKeys {
+    assets: I,
+) -> ActivityKeys
+where
+    I: Iterator<Item = &'a AssetRef> + 'a,
+{
     // Row offset in problem. This line **must** come before we add more constraints.
     let offset = problem.num_rows();
 
     let mut keys = Vec::new();
-    for (asset, time_slice, var) in variables.iter_asset_vars() {
-        let limits = asset.get_activity_limits(time_slice);
-        let duration = time_slice_info.time_slices[time_slice];
-        let limits = (*limits.start() * duration).value()..=(*limits.end() * duration).value();
-
-        problem.add_row(limits, [(var, 1.0)]);
-        keys.push((asset.clone(), time_slice.clone()));
+    for asset in assets {
+        for (ts_selection, limits) in asset.iter_activity_limits(time_slice_info) {
+            let limits = limits.start().value()..=limits.end().value();
+            let vars = ts_selection
+                .iter(time_slice_info)
+                .map(|(time_slice, _)| (variables.get_asset_var(asset, time_slice), 1.0))
+                .collect_vec();
+            problem.add_row(limits, &vars);
+            keys.push((asset.clone(), ts_selection.clone()));
+        }
     }
 
     ActivityKeys { offset, keys }

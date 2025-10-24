@@ -161,13 +161,6 @@ impl VariableMap {
             .expect("No unmet demand variable for given params")
     }
 
-    /// Iterate over the asset variables
-    fn iter_asset_vars(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Variable)> {
-        self.asset_vars
-            .iter()
-            .map(|((asset, time_slice), var)| (asset, time_slice, *var))
-    }
-
     /// Iterate over the keys for asset variables
     fn asset_var_keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
         self.asset_vars.keys()
@@ -260,7 +253,11 @@ impl Solution<'_> {
         self.constraint_keys
             .activity_keys
             .zip_duals(self.solution.dual_rows())
-            .map(|((asset, time_slice), dual)| (asset, time_slice, dual))
+            .flat_map(|((asset, ts_selection), dual)| {
+                ts_selection
+                    .iter(self.time_slice_info)
+                    .map(move |(ts, _)| (asset, ts, dual))
+            })
     }
 
     /// Keys and values for column duals.
