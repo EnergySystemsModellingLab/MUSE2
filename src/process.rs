@@ -114,7 +114,7 @@ impl ProcessFlow {
                 .levies_prod
                 .get(&(region_id.clone(), year, time_slice.clone()))
         } {
-            return levy.value;
+            return *levy;
         }
         MoneyPerFlow(0.0)
     }
@@ -161,9 +161,7 @@ pub struct ProcessParameter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::{
-        BalanceType, CommodityLevy, CommodityLevyMap, CommodityType, DemandMap,
-    };
+    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap};
     use crate::fixture::{region_id, time_slice};
     use crate::time_slice::TimeSliceLevel;
     use rstest::{fixture, rstest};
@@ -177,47 +175,23 @@ mod tests {
         // Add levy for the default region and time slice
         levies_prod.insert(
             (region_id.clone(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(10.0),
-            },
+            MoneyPerFlow(10.0),
         );
         levies_cons.insert(
             (region_id.clone(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-10.0),
-            },
+            MoneyPerFlow(-10.0),
         );
         // Add levy for a different region
-        levies_prod.insert(
-            ("USA".into(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(5.0),
-            },
-        );
-        levies_cons.insert(
-            ("USA".into(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-5.0),
-            },
-        );
+        levies_prod.insert(("USA".into(), 2020, time_slice.clone()), MoneyPerFlow(5.0));
+        levies_cons.insert(("USA".into(), 2020, time_slice.clone()), MoneyPerFlow(-5.0));
         // Add levy for a different year
         levies_prod.insert(
             (region_id.clone(), 2030, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(7.0),
-            },
+            MoneyPerFlow(7.0),
         );
         levies_cons.insert(
             (region_id.clone(), 2030, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-7.0),
-            },
+            MoneyPerFlow(-7.0),
         );
         // Add levy for a different time slice
         levies_prod.insert(
@@ -229,10 +203,7 @@ mod tests {
                     time_of_day: "day".into(),
                 },
             ),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(3.0),
-            },
+            MoneyPerFlow(3.0),
         );
         levies_cons.insert(
             (
@@ -243,10 +214,7 @@ mod tests {
                     time_of_day: "day".into(),
                 },
             ),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-3.0),
-            },
+            MoneyPerFlow(-3.0),
         );
 
         Rc::new(Commodity {
@@ -266,13 +234,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) -> Rc<Commodity> {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Consumption,
-                value: MoneyPerFlow(10.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         Rc::new(Commodity {
             id: "test_commodity".into(),
@@ -291,13 +253,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) -> Rc<Commodity> {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Production,
-                value: MoneyPerFlow(10.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         Rc::new(Commodity {
             id: "test_commodity".into(),
@@ -315,19 +271,10 @@ mod tests {
         let mut levies_prod = CommodityLevyMap::new();
         levies_prod.insert(
             (region_id.clone(), 2020, time_slice.clone()),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(-5.0),
-            },
+            MoneyPerFlow(-5.0),
         );
         let mut levies_cons = CommodityLevyMap::new();
-        levies_cons.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Net,
-                value: MoneyPerFlow(5.0),
-            },
-        );
+        levies_cons.insert((region_id, 2020, time_slice), MoneyPerFlow(5.0));
 
         Rc::new(Commodity {
             id: "test_commodity".into(),
@@ -374,13 +321,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost_and_levy(region_id: RegionID, time_slice: TimeSliceID) -> ProcessFlow {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Production,
-                value: MoneyPerFlow(10.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         ProcessFlow {
             commodity: Rc::new(Commodity {
@@ -401,13 +342,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost_and_incentive(region_id: RegionID, time_slice: TimeSliceID) -> ProcessFlow {
         let mut levies = CommodityLevyMap::new();
-        levies.insert(
-            (region_id, 2020, time_slice),
-            CommodityLevy {
-                balance_type: BalanceType::Production,
-                value: MoneyPerFlow(-3.0),
-            },
-        );
+        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(-3.0));
 
         ProcessFlow {
             commodity: Rc::new(Commodity {

@@ -1,6 +1,6 @@
 //! Code for reading in the commodity levies CSV file.
 use super::super::{input_err_msg, read_csv_optional, try_insert};
-use crate::commodity::{BalanceType, CommodityID, CommodityLevy, CommodityLevyMap};
+use crate::commodity::{BalanceType, CommodityID, CommodityLevyMap};
 use crate::id::IDCollection;
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
@@ -102,12 +102,6 @@ where
         // Get or create CommodityLevyMap for this commodity
         let map = map.entry(commodity_id.clone()).or_insert_with(HashMap::new);
 
-        // Create CommodityLevy
-        let mut levy = CommodityLevy {
-            balance_type: cost.balance_type,
-            value: cost.value,
-        };
-
         // Insert cost into map for each region/year/time slice
         for region in &regions {
             commodity_regions
@@ -116,16 +110,16 @@ where
                 .insert(region.clone());
             for year in &years {
                 for (time_slice, _) in ts_selection.iter(time_slice_info) {
-                    match levy.balance_type {
+                    match cost.balance_type {
                         // If production or consumption, we just add the levy to the relevant map
                         BalanceType::Consumption | BalanceType::Production => {
                             let map = map
-                                .entry(levy.balance_type.clone())
+                                .entry(cost.balance_type.clone())
                                 .or_insert_with(CommodityLevyMap::new);
                             try_insert(
                                 map,
                                 &(region.clone(), *year, time_slice.clone()),
-                                levy.clone(),
+                                cost.value,
                             )?;
                         }
                         // If net, we add it to both, reversing the sign for consumption
@@ -136,16 +130,15 @@ where
                             try_insert(
                                 map_p,
                                 &(region.clone(), *year, time_slice.clone()),
-                                levy.clone(),
+                                cost.value,
                             )?;
-                            levy.value = MoneyPerFlow(-levy.value.0);
                             let map_c = map
                                 .entry(BalanceType::Consumption)
                                 .or_insert_with(CommodityLevyMap::new);
                             try_insert(
                                 map_c,
                                 &(region.clone(), *year, time_slice.clone()),
-                                levy.clone(),
+                                MoneyPerFlow(-cost.value.0),
                             )?;
                         }
                     }
@@ -197,10 +190,7 @@ fn add_missing_region_to_commodity_levy_map(
         for time_slice in time_slice_info.iter_ids() {
             map.insert(
                 (region_id.clone(), *year, time_slice.clone()),
-                CommodityLevy {
-                    balance_type: BalanceType::Net,
-                    value: MoneyPerFlow(0.0),
-                },
+                MoneyPerFlow(0.0),
             );
         }
     }
@@ -253,10 +243,7 @@ mod tests {
 
     #[fixture]
     fn cost_map(time_slice: TimeSliceID) -> CommodityLevyMap {
-        let cost = CommodityLevy {
-            balance_type: BalanceType::Net,
-            value: MoneyPerFlow(1.0),
-        };
+        let cost = MoneyPerFlow(1.0);
 
         let mut map = CommodityLevyMap::new();
         map.insert(("GBR".into(), 2020, time_slice.clone()), cost.clone());
@@ -344,10 +331,7 @@ mod tests {
         for time_slice in time_slice_info.iter_ids() {
             assert_eq!(
                 cost_map.get(&(region_id.clone(), 2020, time_slice.clone())),
-                Some(&CommodityLevy {
-                    balance_type: BalanceType::Net,
-                    value: MoneyPerFlow(0.0)
-                })
+                Some(&MoneyPerFlow(0.0))
             );
         }
     }

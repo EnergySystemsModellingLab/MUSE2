@@ -15,7 +15,7 @@ define_id_type! {CommodityID}
 pub type CommodityMap = IndexMap<CommodityID, Rc<Commodity>>;
 
 /// A map of [`CommodityLevy`]s, keyed by region ID, year and time slice ID
-pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), CommodityLevy>;
+pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
 
 /// A map of demand values, keyed by region ID, year and time slice selection
 pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
@@ -73,18 +73,6 @@ pub enum BalanceType {
     Production,
 }
 
-/// Represents a tax or other external cost on a commodity, as specified in input data.
-///
-/// For example, a CO2 price could be specified in input data to be applied to net CO2. Note that
-/// the value can also be negative, indicating an incentive.
-#[derive(PartialEq, Clone, Debug)]
-pub struct CommodityLevy {
-    /// Type of balance for application of cost
-    pub balance_type: BalanceType,
-    /// Cost per unit commodity
-    pub value: MoneyPerFlow,
-}
-
 /// Commodity balance type
 #[derive(PartialEq, Debug, DeserializeLabeledStringEnum, Clone)]
 pub enum CommodityType {
@@ -125,10 +113,7 @@ mod tests {
             season: "winter".into(),
             time_of_day: "day".into(),
         };
-        let value = CommodityLevy {
-            balance_type: BalanceType::Consumption,
-            value: MoneyPerFlow(0.5),
-        };
+        let value = MoneyPerFlow(0.5);
         let mut map = CommodityLevyMap::new();
         assert!(
             map.insert(("GBR".into(), 2010, ts.clone()), value.clone())
