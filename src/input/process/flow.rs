@@ -133,7 +133,7 @@ where
     }
 
     validate_flows_and_update_primary_output(processes, &flows_map)?;
-    validate_secondary_io_flows(processes, &flows_map)?;
+    validate_secondary_flows(processes, &flows_map)?;
 
     Ok(flows_map)
 }
@@ -233,7 +233,7 @@ fn check_flows_primary_output(
 
 /// Checks that non-primary io are defined for all years (within a region) and that
 /// they are only inputs or only outputs in all years.
-fn validate_secondary_io_flows(
+fn validate_secondary_flows(
     processes: &mut ProcessMap,
     flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
 ) -> Result<()> {
