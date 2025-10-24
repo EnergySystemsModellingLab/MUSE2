@@ -930,7 +930,8 @@ mod tests {
             description: "Test commodity".to_string(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies: Default::default(),
+            levies_prod: Default::default(),
+            levies_cons: Default::default(),
             demand: Default::default(),
         });
 
