@@ -226,4 +226,50 @@ mod tests {
             ])
         );
     }
+
+    #[rstest]
+    fn test_solve_investment_order_layered_graph(
+        sed_commodity: Commodity,
+        svd_commodity: Commodity,
+    ) {
+        // Create a graph with layers:
+        //     A
+        //    / \
+        //   B   C
+        //    \ /
+        //     D
+        let mut graph = Graph::new();
+
+        let node_a = graph.add_node(GraphNode::Commodity("A".into()));
+        let node_b = graph.add_node(GraphNode::Commodity("B".into()));
+        let node_c = graph.add_node(GraphNode::Commodity("C".into()));
+        let node_d = graph.add_node(GraphNode::Commodity("D".into()));
+
+        // Add edges
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_a, node_c, GraphEdge::Primary("process2".into()));
+        graph.add_edge(node_b, node_d, GraphEdge::Primary("process3".into()));
+        graph.add_edge(node_c, node_d, GraphEdge::Primary("process4".into()));
+
+        // Create commodities map using fixtures
+        let mut commodities = CommodityMap::new();
+        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Rc::new(sed_commodity.clone()));
+        commodities.insert("C".into(), Rc::new(sed_commodity));
+        commodities.insert("D".into(), Rc::new(svd_commodity));
+
+        let result = solve_investment_order(&graph, &commodities);
+
+        // Expected order: D, Layer(B, C), A
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], InvestmentSet::Single("D".into()));
+        assert_eq!(
+            result[1],
+            InvestmentSet::Layer(vec![
+                InvestmentSet::Single("B".into()),
+                InvestmentSet::Single("C".into())
+            ])
+        );
+        assert_eq!(result[2], InvestmentSet::Single("A".into()));
+    }
 }
