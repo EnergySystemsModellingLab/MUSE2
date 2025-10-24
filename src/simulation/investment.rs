@@ -272,9 +272,9 @@ fn get_demand_limiting_capacity(
         // Calculate max capacity required for this time slice selection
         // For commodities with a coarse time slice level, we have to allow the possibility that all
         // of the demand gets served by production in a single time slice
-        for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
+        for (time_slice, duration) in time_slice_selection.iter(time_slice_info) {
             let max_flow_per_cap =
-                *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
+                *asset.get_activity_per_capacity_limits(time_slice).end() * duration * coeff;
             if max_flow_per_cap != FlowPerCapacity(0.0) {
                 capacity = capacity.max(demand_for_selection / max_flow_per_cap);
             }
@@ -531,7 +531,7 @@ mod tests {
     use crate::process::{FlowType, ProcessFlow};
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-    use crate::units::{Dimensionless, Flow, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Flow, FlowPerActivity, MoneyPerFlow, PerYear};
     use indexmap::indexmap;
     use itertools::Itertools;
     use map_macro::hash_map;
@@ -573,7 +573,7 @@ mod tests {
         // Add activity limits
         process.activity_limits.insert(
             (region_id.clone(), 2015),
-            Rc::new(hash_map! {time_slice.clone() => Dimensionless(0.0)..=Dimensionless(1.0)}),
+            Rc::new(hash_map! {time_slice.clone() => PerYear(0.0)..=PerYear(1.0)}),
         );
 
         // Create asset with the configured process
@@ -629,9 +629,9 @@ mod tests {
         // Add activity limits for both time slices with different limits
         let limits = hash_map! {
             // Higher limit for day
-            time_slice1.clone() => Dimensionless(0.0)..=Dimensionless(2.0),
+            time_slice1.clone() => PerYear(0.0)..=PerYear(1.0),
             // Zero limit for night - should be skipped
-            time_slice2.clone() => Dimensionless(0.0)..=Dimensionless(0.0)
+            time_slice2.clone() => PerYear(0.0)..=PerYear(0.0)
         };
         process
             .activity_limits
@@ -651,9 +651,6 @@ mod tests {
             get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
 
         // Expected: maximum of the capacity requirements across time slices (excluding zero limit)
-        // Time slice 1: demand (4.0) / (activity_limit (2.0) * coeff (1.0)) = 2.0
-        // Time slice 2: skipped due to zero activity limit
-        // Maximum = 2.0
-        assert_eq!(result, Capacity(2.0));
+        assert_eq!(result, Capacity(8.0));
     }
 }

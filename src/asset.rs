@@ -5,7 +5,9 @@ use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity};
+use crate::units::{
+    Activity, ActivityPerCapacityPerYear, ActivityPerYear, Capacity, MoneyPerActivity, PerYear,
+};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -84,7 +86,7 @@ pub struct Asset {
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
     /// Activity limits for this asset
-    activity_limits: Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>,
+    activity_limits: Rc<HashMap<TimeSliceID, RangeInclusive<PerYear>>>,
     /// The commodity flows for this asset
     flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
@@ -242,7 +244,7 @@ impl Asset {
     }
 
     /// Get the activity limits for this asset in a particular time slice
-    pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<Activity> {
+    pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<ActivityPerYear> {
         let limits = &self.activity_limits[time_slice];
         let max_act = self.max_activity();
 
@@ -254,7 +256,7 @@ impl Asset {
     pub fn get_activity_per_capacity_limits(
         &self,
         time_slice: &TimeSliceID,
-    ) -> RangeInclusive<ActivityPerCapacity> {
+    ) -> RangeInclusive<ActivityPerCapacityPerYear> {
         let limits = &self.activity_limits[time_slice];
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
@@ -1069,7 +1071,7 @@ mod tests {
             season: "winter".into(),
             time_of_day: "day".into(),
         };
-        let fraction_limits = Dimensionless(1.0)..=Dimensionless(2.0);
+        let fraction_limits = PerYear(0.5)..=PerYear(1.0);
         let mut flows = ProcessFlowsMap::new();
         let mut activity_limits = ProcessActivityLimitsMap::new();
         let limit_map = Rc::new(hash_map! {time_slice => fraction_limits});
@@ -1107,7 +1109,7 @@ mod tests {
     fn test_asset_get_activity_limits(asset_with_activity_limits: Asset, time_slice: TimeSliceID) {
         assert_eq!(
             asset_with_activity_limits.get_activity_limits(&time_slice),
-            Activity(6.0)..=Activity(12.0)
+            ActivityPerYear(3.0)..=ActivityPerYear(6.0)
         );
     }
 
@@ -1118,7 +1120,7 @@ mod tests {
     ) {
         assert_eq!(
             asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
-            ActivityPerCapacity(3.0)..=ActivityPerCapacity(6.0)
+            ActivityPerCapacityPerYear(1.5)..=ActivityPerCapacityPerYear(3.0)
         );
     }
 

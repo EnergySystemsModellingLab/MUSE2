@@ -79,6 +79,7 @@ fn add_constraints(
         asset,
         variables.capacity_var,
         &variables.activity_vars,
+        time_slice_info,
     );
     add_demand_constraints(
         problem,

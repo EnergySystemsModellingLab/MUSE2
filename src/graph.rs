@@ -3,7 +3,7 @@ use crate::commodity::{CommodityID, CommodityMap, CommodityType};
 use crate::process::{ProcessID, ProcessMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
-use crate::units::{Dimensionless, Flow};
+use crate::units::{Flow, PerYear};
 use anyhow::{Context, Result, anyhow, ensure};
 use indexmap::IndexSet;
 use itertools::{Itertools, iproduct};
@@ -189,7 +189,7 @@ fn prepare_commodities_graph_for_validation(
                 };
                 limits_map
                     .get(time_slice)
-                    .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
+                    .is_some_and(|avail| *avail.end() > PerYear(0.0))
             })
     });
 
