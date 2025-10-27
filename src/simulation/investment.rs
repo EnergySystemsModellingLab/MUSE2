@@ -209,9 +209,9 @@ fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[Asset
             // Only consider input flows and output flows from the primary output commodity
             // (excluding secondary outputs)
             if (flow < &Flow(0.0))
-                | asset
+                || asset
                     .primary_output()
-                    .is_some_and(|p| &p.commodity.id != commodity_id)
+                    .is_some_and(|p| &p.commodity.id == commodity_id)
             {
                 // Note: we use the negative of the flow as input flows are negative in the flow map.
                 demand
