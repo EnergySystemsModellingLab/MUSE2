@@ -116,7 +116,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
-            ..Default::default()
+            max_decommission_year: None,
         };
         let asset_out = Asset::new_future(
             "agent1".into(),
