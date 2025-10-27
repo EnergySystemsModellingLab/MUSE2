@@ -31,7 +31,7 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
-    /// Assets are selected for a layer of independent commodities. NOT YET IMPLEMENTED.
+    /// Assets are selected for a layer of independent commodities
     Layer(Vec<InvestmentSet>),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<InvestmentSet>),
