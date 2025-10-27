@@ -21,7 +21,7 @@ const PROCESS_AVAILABILITIES_FILE_NAME: &str = "process_availabilities.csv";
 struct ProcessAvailabilityRaw {
     process_id: String,
     regions: String,
-    years: String,
+    commission_years: String,
     time_slice: String,
     limit_type: LimitType,
     value: Dimensionless,
@@ -138,9 +138,10 @@ where
 
         // Get years
         let process_years = &process.years;
-        let record_years = parse_year_str(&record.years, process_years).with_context(|| {
-            format!("Invalid year for process {id}. Valid years are {process_years:?}")
-        })?;
+        let record_years =
+            parse_year_str(&record.commission_years, process_years).with_context(|| {
+                format!("Invalid year for process {id}. Valid years are {process_years:?}")
+            })?;
 
         // Get time slices
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
@@ -261,7 +262,7 @@ mod tests {
         ProcessAvailabilityRaw {
             process_id: "process".into(),
             regions: "region".into(),
-            years: "2010".into(),
+            commission_years: "2010".into(),
             time_slice: "day".into(),
             limit_type,
             value,

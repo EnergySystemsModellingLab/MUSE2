@@ -1,7 +1,5 @@
 //! Demand slicing determines how annual demand is distributed across the year.
-use super::super::{
-    check_values_sum_to_one_approx, deserialise_proportion_nonzero, input_err_msg, read_csv,
-};
+use super::super::{check_values_sum_to_one_approx, input_err_msg, read_csv};
 use crate::commodity::CommodityID;
 use crate::id::IDCollection;
 use crate::input::commodity::demand::BorrowedCommodityMap;
@@ -22,7 +20,6 @@ struct DemandSlice {
     commodity_id: String,
     region_id: String,
     time_slice: String,
-    #[serde(deserialize_with = "deserialise_proportion_nonzero")]
     fraction: Dimensionless,
 }
 
