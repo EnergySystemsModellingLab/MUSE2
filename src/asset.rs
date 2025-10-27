@@ -95,7 +95,7 @@ pub struct Asset {
     capacity: Capacity,
     /// The year the asset was/will be commissioned
     commission_year: u32,
-    /// The year the asset was/will be decommissioned
+    /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
 }
 
