@@ -6,6 +6,8 @@ use crate::simulation::investment::InvestmentSet;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
+use petgraph::unionfind::UnionFind;
+use petgraph::visit::EdgeRef;
 use petgraph::{Directed, Direction};
 use std::collections::HashMap;
 
@@ -19,19 +21,22 @@ fn solve_investment_order(
     commodities: &CommodityMap,
 ) -> Vec<InvestmentSet> {
     // Initialise InvestmentGraph from the original CommodityGraph
-    let investment_graph = init_investment_graph(graph, commodities);
+    let mut investment_graph = init_investment_graph(graph, commodities);
 
-    // TODO: condense sibling commodities (commodities that share at least one producer)
+    // Condense sibling commodities (commodities that share at least one producer)
+    // This MUST be done before cycle compression to ensure that sibling commodities become part of
+    // the same cycle, and because `petgraph::algo::compression` loses information about edge weights
+    investment_graph = compress_siblings(investment_graph);
 
     // Condense strongly connected components
-    let investment_graph = compress_cycles(investment_graph);
+    investment_graph = compress_cycles(investment_graph);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
     // should have been detected and compressed with `compress_cycles`
     let order = toposort(&investment_graph, None).unwrap();
 
-    // Compute layers
+    // Compute layers for investment
     compute_layers(&investment_graph, &order)
 }
 
@@ -72,6 +77,98 @@ fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -
     )
 }
 
+/// Detects and returns groups of sibling nodes from an `InvestmentGraph`
+///
+/// Siblings are defined as commodities that share at least one producer process.
+/// For example, if commodities A and B share a producer process, and commodities B and C share a
+/// different producer process, then commodities A, B and C will all be grouped as siblings.
+fn group_siblings(graph: &InvestmentGraph) -> Vec<Vec<NodeIndex>> {
+    let n = graph.node_count();
+    let mut uf = UnionFind::new(n);
+
+    // Map ProcessID -> list of target node indices
+    let mut by_producer = HashMap::new();
+    for edge in graph.edge_references() {
+        let pid = edge.weight().process_id().unwrap();
+        by_producer
+            .entry(pid)
+            .or_insert_with(Vec::new)
+            .push(edge.target().index());
+    }
+
+    // Union all targets that share the same producer
+    for targets in by_producer.values() {
+        let first = targets[0];
+        for &t in &targets[1..] {
+            uf.union(first, t);
+        }
+    }
+
+    // Collect groups by root
+    let mut groups = HashMap::new();
+    for idx in 0..n {
+        let root = uf.find(idx);
+        groups
+            .entry(root)
+            .or_insert_with(Vec::new)
+            .push(NodeIndex::new(idx));
+    }
+    groups.into_values().collect()
+}
+
+/// Condense sibling commodities into a single node and return the result.
+///
+/// Note: this function is inspired heavily by `petgraph::algo::condensation`
+fn sibling_condensation(graph: InvestmentGraph) -> Graph<Vec<InvestmentSet>, GraphEdge> {
+    let sibling_groups = group_siblings(&graph);
+    let mut condensed = Graph::with_capacity(sibling_groups.len(), graph.edge_count());
+
+    // Build a map from old indices to new ones.
+    let mut node_map = vec![NodeIndex::end(); graph.node_count()];
+    for group in sibling_groups {
+        let new_nix = condensed.add_node(Vec::new());
+        for nix in group {
+            node_map[nix.index()] = new_nix;
+        }
+    }
+
+    // Consume nodes and edges of the old graph and insert them into the new one.
+    let (nodes, edges) = graph.into_nodes_edges();
+    for (nix, node) in nodes.into_iter().enumerate() {
+        condensed[node_map[nix]].push(node.weight);
+    }
+    for edge in edges {
+        let source = node_map[edge.source().index()];
+        let target = node_map[edge.target().index()];
+        condensed.add_edge(source, target, edge.weight);
+    }
+    condensed
+}
+
+/// Compress siblings into `InvestmentNode:Sibling` nodes
+fn compress_siblings(graph: InvestmentGraph) -> InvestmentGraph {
+    // Detect siblings
+    let condensed_graph = sibling_condensation(graph);
+
+    // Map to new InvestmentGraph
+    condensed_graph.map(
+        // Map nodes to InvestmentSet
+        // If only one member, keep as-is; if multiple members, create Siblings
+        |_, node_weight| match node_weight.len() {
+            0 => unreachable!("Condensed graph node must have at least one member"),
+            1 => node_weight[0].clone(),
+            _ => InvestmentSet::Siblings(
+                node_weight
+                    .iter()
+                    .flat_map(|s| s.iter_commodity_ids().cloned())
+                    .collect(),
+            ),
+        },
+        // Keep edges the same
+        |_, edge_weight| edge_weight.clone(),
+    )
+}
+
 /// Compresses cycles into `InvestmentSet::Cycle` nodes
 fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
@@ -79,7 +176,8 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
 
     // Map to a new InvestmentGraph
     condensed_graph.map(
-        // Map nodes to InvestmentNode
+        // Map nodes to InvestmentSet
+        // If only one member, keep as-is; if multiple members, create Cycle
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
@@ -114,20 +212,8 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
     }
 
     // Produce final ordered Vec<InvestmentSet>: ranks descending (leaf-first),
-    // compressing equal-rank nodes into Layer.
-    let mut result = Vec::new();
-    for mut items in groups.into_iter().rev() {
-        if items.is_empty() {
-            unreachable!("Should be no gaps in the ranking")
-        }
-        if items.len() == 1 {
-            result.push(items.remove(0));
-        } else {
-            result.push(InvestmentSet::Layer(items));
-        }
-    }
-
-    result
+    // compressing equal-rank nodes into InvestmentSet::Layer.
+    groups.into_iter().rev().map(InvestmentSet::Layer).collect()
 }
 
 /// Determine commodity ordering for each region and year

@@ -12,7 +12,7 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain, iproduct};
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::fmt::Display;
 
@@ -31,7 +31,9 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
-    /// Assets are selected for a layer of independent commodities. NOT YET IMPLEMENTED.
+    /// Assets are selected for a group of commodities which share at least one producer. NOT YET IMPLEMENTED.
+    Siblings(Vec<CommodityID>),
+    /// Assets are selected for a layer of independent commodities
     Layer(Vec<InvestmentSet>),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<InvestmentSet>),
@@ -39,9 +41,10 @@ pub enum InvestmentSet {
 
 impl InvestmentSet {
     /// Recursively iterate over all `CommodityID`s contained in this `InvestmentSet`.
-    fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
+    pub fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
         match self {
             InvestmentSet::Single(id) => Box::new(std::iter::once(id)),
+            InvestmentSet::Siblings(ids) => Box::new(ids.iter()),
             InvestmentSet::Layer(set) | InvestmentSet::Cycle(set) => {
                 Box::new(set.iter().flat_map(|s| s.iter_commodity_ids()))
             }
@@ -63,6 +66,16 @@ impl InvestmentSet {
             InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
                 model,
                 commodity_id,
+                region_id,
+                year,
+                demand,
+                existing_assets,
+                prices,
+                writer,
+            ),
+            InvestmentSet::Siblings(commodity_ids) => select_assets_for_sibling_commodities(
+                model,
+                commodity_ids,
                 region_id,
                 year,
                 demand,
@@ -99,6 +112,9 @@ impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvestmentSet::Single(id) => write!(f, "{id}"),
+            InvestmentSet::Siblings(ids) => {
+                write!(f, "[{}]", ids.iter().join(", "))
+            }
             InvestmentSet::Layer(ids) | InvestmentSet::Cycle(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
             }
@@ -276,6 +292,44 @@ fn select_assets_for_commodity(
     }
 
     Ok(selected_assets)
+}
+
+/// Select assets for a set of sibling commodities in a given region and year
+///
+/// Returns a list of assets that are selected for investment for these commodities in this region and
+/// year.
+#[allow(clippy::too_many_arguments)]
+fn select_assets_for_sibling_commodities(
+    model: &Model,
+    commodity_ids: &[CommodityID],
+    region_id: &RegionID,
+    year: u32,
+    demand: &AllDemandMap,
+    existing_assets: &[AssetRef],
+    prices: &CommodityPrices,
+    writer: &mut DataWriter,
+) -> Result<Vec<AssetRef>> {
+    warn!(
+        "WARNING: Commodities [{}] share a producer, but will be considered \
+    separately by investing agents. This may lead to over-investment in \
+    capacity for any/all of these commodities. This may be addressed in future versions of MUSE2.",
+        commodity_ids.iter().join(", ")
+    );
+    let mut all_selected_assets = Vec::new();
+    for commodity_id in commodity_ids {
+        let selected_assets = select_assets_for_commodity(
+            model,
+            commodity_id,
+            region_id,
+            year,
+            demand,
+            existing_assets,
+            prices,
+            writer,
+        )?;
+        all_selected_assets.extend(selected_assets);
+    }
+    Ok(all_selected_assets)
 }
 
 /// Flatten the preset commodity demands for a given year into a map of commodity, region and
