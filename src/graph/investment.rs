@@ -212,8 +212,20 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
     }
 
     // Produce final ordered Vec<InvestmentSet>: ranks descending (leaf-first),
-    // compressing equal-rank nodes into InvestmentSet::Layer.
-    groups.into_iter().rev().map(InvestmentSet::Layer).collect()
+    // compressing equal-rank nodes into an InvestmentSet::Layer.
+    let mut result = Vec::new();
+    for mut items in groups.into_iter().rev() {
+        if items.is_empty() {
+            unreachable!("Should be no gaps in the ranking")
+        }
+        if items.len() == 1 {
+            result.push(items.remove(0));
+        } else {
+            result.push(InvestmentSet::Layer(items));
+        }
+    }
+
+    result
 }
 
 /// Determine commodity ordering for each region and year
