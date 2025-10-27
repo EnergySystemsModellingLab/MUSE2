@@ -16,7 +16,7 @@ becomes an *Asset* that they own and operate. An *Asset* is an instance of a *Pr
 specific capacity, and a decommissioning year. A set of *Assets* must exist in the base year
 sufficient to serve base year demands (i.e. a calibrated base year, based on user input data).
 
-**Availability:** The maximum, minimum or fixed percentage of maximum output (or input) that an
+**Availability:** The maximum, minimum or fixed percentage of maximum output (or input) that a
 *Process* delivers over a period. The time period could be a single time slice, a season, or a year.
 
 **Base Year:** The starting year of a model run. The base year is typically calibrated to known
