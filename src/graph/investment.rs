@@ -7,9 +7,9 @@ use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::EdgeRef;
+use petgraph::visit::{Bfs, EdgeFiltered, EdgeRef, Reversed};
 use petgraph::{Directed, Direction};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 
@@ -40,41 +40,57 @@ fn solve_investment_order(
     compute_layers(&investment_graph, &order)
 }
 
-// Initialise an InvestmentGraph from the original CommodityGraph
-//
-// This filters the graph to only include SVD/SED commodities and primary edges, then creates an
-// InvestmentGraphNode::Single for each commodity node.
+/// Initialise an `InvestmentGraph` from the original `CommodityGraph`
+///
+/// The investment graph is set up to include all commodities that form a valid pathway to an
+/// SVD commodity node, with each initially set as an `InvestmentSet::Single`
 fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -> InvestmentGraph {
-    // Filter the graph to only include SVD/SED commodities and primary edges
-    let graph_filtered = graph.filter_map(
-        // Consider only SVD/SED commodities
-        |_, node_weight| {
-            // Get the commodity for the node
-            let GraphNode::Commodity(commodity_id) = node_weight else {
-                // Skip special nodes
-                return None;
-            };
-            let commodity = &commodities[commodity_id];
-            matches!(
-                commodity.kind,
-                CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
-            )
-            .then_some(node_weight.clone())
-        },
-        // Consider only primary edges
-        |_, edge_weight| {
-            matches!(edge_weight, GraphEdge::Primary(_)).then_some(edge_weight.clone())
-        },
-    );
+    // Find nodes that are reachable to an SVD node using only Primary edges
+    let reachable = reachable_to_svd(graph, commodities);
 
-    // Map to InvestmentGraph with InvestmentSet::Single nodes
-    graph_filtered.map(
-        |_, node_weight| match node_weight {
-            GraphNode::Commodity(id) => InvestmentSet::Single(id.clone()),
-            _ => unreachable!("InvestmentGraph must only contain a GraphNode::Commodity nodes"),
+    // Filter the graph to only include reachable nodes and Primary edges
+    // In the process, we create an `InvestmentSet::Single` for each commodity node
+    graph.filter_map(
+        |n, node| {
+            if reachable.contains(&n) {
+                match node {
+                    GraphNode::Commodity(id) => Some(InvestmentSet::Single(id.clone())),
+                    _ => None,
+                }
+            } else {
+                None
+            }
         },
-        |_, edge_weight| edge_weight.clone(),
+        |_, e| matches!(e, GraphEdge::Primary(_)).then_some(e.clone()),
     )
+}
+
+/// Find all nodes that can reach an SVD commodity node via Primary edges
+fn reachable_to_svd(graph: &CommoditiesGraph, commodities: &CommodityMap) -> HashSet<NodeIndex> {
+    // Find SVD nodes in the graph
+    let svd_nodes = graph
+        .node_indices()
+        .filter(|&n| match &graph[n] {
+            GraphNode::Commodity(id) => {
+                let commodity = &commodities[id];
+                commodity.kind == CommodityType::ServiceDemand
+            }
+            _ => false,
+        })
+        .collect::<Vec<_>>();
+
+    // Use an EdgeFiltered view that only exposes Primary edges for traversal
+    let edge_view = EdgeFiltered::from_fn(graph, |e| matches!(e.weight(), GraphEdge::Primary(_)));
+
+    // BFS on the reversed, edge-filtered view from each SVD node
+    let mut visited = HashSet::new();
+    for svd_node in svd_nodes {
+        let mut bfs = Bfs::new(&Reversed(&edge_view), svd_node);
+        while let Some(nx) = bfs.next(&Reversed(&edge_view)) {
+            visited.insert(nx);
+        }
+    }
+    visited
 }
 
 /// Detects and returns groups of sibling nodes from an `InvestmentGraph`
