@@ -19,19 +19,19 @@ fn solve_investment_order(
     commodities: &CommodityMap,
 ) -> Vec<InvestmentSet> {
     // Initialise InvestmentGraph from the original CommodityGraph
-    let investment_graph = init_investment_graph(graph, commodities);
+    let mut investment_graph = init_investment_graph(graph, commodities);
 
     // TODO: condense sibling commodities (commodities that share at least one producer)
 
     // Condense strongly connected components
-    let investment_graph = compress_cycles(investment_graph);
+    investment_graph = compress_cycles(investment_graph);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
     // should have been detected and compressed with `compress_cycles`
     let order = toposort(&investment_graph, None).unwrap();
 
-    // Compute layers
+    // Compute layers for investment
     compute_layers(&investment_graph, &order)
 }
 
@@ -79,7 +79,8 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
 
     // Map to a new InvestmentGraph
     condensed_graph.map(
-        // Map nodes to InvestmentNode
+        // Map nodes to InvestmentSet
+        // If only one member, keep as-is; if multiple members, create Cycle
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
@@ -114,20 +115,8 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
     }
 
     // Produce final ordered Vec<InvestmentSet>: ranks descending (leaf-first),
-    // compressing equal-rank nodes into Layer.
-    let mut result = Vec::new();
-    for mut items in groups.into_iter().rev() {
-        if items.is_empty() {
-            unreachable!("Should be no gaps in the ranking")
-        }
-        if items.len() == 1 {
-            result.push(items.remove(0));
-        } else {
-            result.push(InvestmentSet::Layer(items));
-        }
-    }
-
-    result
+    // compressing equal-rank nodes into InvestmentSet::Layer.
+    groups.into_iter().rev().map(InvestmentSet::Layer).collect()
 }
 
 /// Determine commodity ordering for each region and year
