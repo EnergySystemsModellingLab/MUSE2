@@ -156,7 +156,7 @@ mod tests {
             region_id: "FRA".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
-            ..Default::default()
+            max_decommission_year: None,
         })]
     fn test_read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
