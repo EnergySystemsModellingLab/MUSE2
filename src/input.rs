@@ -56,6 +56,10 @@ pub fn read_csv<'a, T: DeserializeOwned + 'a>(
 pub fn read_csv_optional<'a, T: DeserializeOwned + 'a>(
     file_path: &'a Path,
 ) -> Result<impl Iterator<Item = T> + 'a> {
+    if !file_path.exists() {
+        return Ok(Vec::new().into_iter());
+    }
+
     let vec = read_csv_internal(file_path)?;
     Ok(vec.into_iter())
 }
@@ -343,6 +347,19 @@ mod tests {
         // File with no data (only column headers)
         let file_path = create_csv_file(dir.path(), "id,value\n");
         assert!(read_csv::<Record>(&file_path).is_err());
+        assert!(
+            read_csv_optional::<Record>(&file_path)
+                .unwrap()
+                .next()
+                .is_none()
+        );
+
+        // Missing file
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("a_missing_file.csv");
+        assert!(!file_path.exists());
+        assert!(read_csv::<Record>(&file_path).is_err());
+        // optional csv's should return empty iterator
         assert!(
             read_csv_optional::<Record>(&file_path)
                 .unwrap()
