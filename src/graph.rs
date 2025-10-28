@@ -55,6 +55,16 @@ pub enum GraphEdge {
     Demand,
 }
 
+impl GraphEdge {
+    /// Gets the process ID associated with this edge, if any
+    pub fn process_id(&self) -> Option<&ProcessID> {
+        match self {
+            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => Some(process_id),
+            GraphEdge::Demand => None,
+        }
+    }
+}
+
 impl Display for GraphEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
