@@ -70,9 +70,9 @@ impl InvestmentSet {
                 prices,
                 writer,
             ),
-            InvestmentSet::Layer(commodity_ids) => {
+            InvestmentSet::Layer(investment_sets) => {
                 let mut all_assets = Vec::new();
-                for investment_set in commodity_ids {
+                for investment_set in investment_sets {
                     let assets = investment_set.select_assets(
                         model,
                         region_id,
@@ -86,11 +86,16 @@ impl InvestmentSet {
                 }
                 Ok(all_assets)
             }
-            InvestmentSet::Cycle(_) => {
-                bail!(
-                    "Investment cycles are not yet supported. Found cycle for commodities: {self}"
-                )
-            }
+            InvestmentSet::Cycle(investment_sets) => select_assets_for_cycle(
+                model,
+                region_id,
+                year,
+                demand,
+                existing_assets,
+                prices,
+                writer,
+                investment_sets,
+            ),
         }
     }
 }
@@ -200,7 +205,7 @@ pub fn perform_agent_investment(
             // their prices using previous values so that they don't appear free
             let solution = DispatchRun::new(model, &all_selected_assets, year)
                 .with_commodity_subset(&seen_commodities)
-                .with_input_prices(&external_prices)
+                .with_external_prices(&external_prices)
                 .run(
                     &format!("post {investment_set}/{region_id} investment"),
                     writer,
@@ -276,6 +281,43 @@ fn select_assets_for_commodity(
     }
 
     Ok(selected_assets)
+}
+
+/// Select assets for a cycle of commodities in a given region and year
+#[allow(clippy::too_many_arguments)]
+fn select_assets_for_cycle(
+    model: &Model,
+    region_id: &RegionID,
+    year: u32,
+    demand: &AllDemandMap,
+    existing_assets: &[AssetRef],
+    prices: &CommodityPrices,
+    writer: &mut DataWriter,
+    investment_sets: &[InvestmentSet],
+) -> Result<Vec<AssetRef>> {
+    // Iteration 1: select assets the same way you would do for a layer
+    let mut all_assets = Vec::new();
+    for investment_set in investment_sets {
+        let assets = investment_set.select_assets(
+            model,
+            region_id,
+            year,
+            demand,
+            existing_assets,
+            prices,
+            writer,
+        )?;
+        all_assets.extend(assets);
+    }
+
+    bail!("Investment for cycles is not yet implemented");
+
+    // Now, have to do a dispatch, but don't modify the global demand map
+    // Have to do this with unmet demand variables turned on for any commodities in the cycle
+
+    // Now check if demand has changed for any commodities in the cycle
+
+    // Now redo investment for any commodities where demand has changed
 }
 
 /// Flatten the preset commodity demands for a given year into a map of commodity, region and

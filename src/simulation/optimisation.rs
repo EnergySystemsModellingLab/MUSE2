@@ -61,14 +61,14 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `input_prices` - Optional explicit prices for input commodities
+    /// * `external_prices` - Optional explicit prices for input commodities
     /// * `existing_assets` - The asset pool
     /// * `candidate_assets` - Candidate assets for inclusion in active pool
     /// * `year` - Current milestone year
     fn new_with_asset_vars(
         problem: &mut Problem,
         model: &Model,
-        input_prices: Option<&CommodityPrices>,
+        external_prices: Option<&CommodityPrices>,
         existing_assets: &[AssetRef],
         candidate_assets: &[AssetRef],
         year: u32,
@@ -78,7 +78,7 @@ impl VariableMap {
             problem,
             &mut asset_vars,
             &model.time_slice_info,
-            input_prices,
+            external_prices,
             existing_assets,
             year,
         );
@@ -86,7 +86,7 @@ impl VariableMap {
             problem,
             &mut asset_vars,
             &model.time_slice_info,
-            input_prices,
+            external_prices,
             candidate_assets,
             year,
         );
@@ -326,18 +326,18 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
     }
 }
 
-/// Sanity check for input prices.
+/// Sanity check for external prices.
 ///
-/// Input prices should only be provided for commodities for which there will be no commodity
+/// External prices should only be provided for commodities for which there will be no commodity
 /// balance constraint.
-fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID]) {
+fn check_external_prices(external_prices: &CommodityPrices, commodities: &[CommodityID]) {
     let commodities_set: HashSet<_> = commodities.iter().collect();
-    let has_prices_for_commodity_subset = input_prices
+    let has_prices_for_commodity_subset = external_prices
         .keys()
         .any(|(commodity_id, _, _)| commodities_set.contains(commodity_id));
     assert!(
         !has_prices_for_commodity_subset,
-        "Input prices were included for commodities that are being modelled, which is not allowed."
+        "External prices were included for commodities that are being modelled, which is not allowed."
     );
 }
 
@@ -353,8 +353,9 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
-    commodities: &'run [CommodityID],
-    input_prices: Option<&'run CommodityPrices>,
+    commodities_to_balance: &'run [CommodityID],
+    commodities_to_allow_unmet_demand: &'run [CommodityID],
+    external_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
 
@@ -365,8 +366,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             model,
             existing_assets: assets,
             candidate_assets: &[],
-            commodities: &[],
-            input_prices: None,
+            commodities_to_balance: &[],
+            commodities_to_allow_unmet_demand: &[],
+            external_prices: None,
             year,
         }
     }
@@ -380,19 +382,32 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Only apply commodity balance constraints to the specified subset of commodities
-    pub fn with_commodity_subset(self, commodities: &'run [CommodityID]) -> Self {
-        assert!(!commodities.is_empty());
+    pub fn with_commodity_subset(self, commodities_to_balance: &'run [CommodityID]) -> Self {
+        assert!(!commodities_to_balance.is_empty());
 
         Self {
-            commodities,
+            commodities_to_balance,
             ..self
         }
     }
 
     /// Explicitly provide prices for certain input commodities
-    pub fn with_input_prices(self, input_prices: &'run CommodityPrices) -> Self {
+    pub fn with_external_prices(self, external_prices: &'run CommodityPrices) -> Self {
         Self {
-            input_prices: Some(input_prices),
+            external_prices: Some(external_prices),
+            ..self
+        }
+    }
+
+    /// Allow unmet demand variables for the specified commodities
+    pub fn with_unmet_demand_vars(
+        self,
+        commodities_to_allow_unmet_demand: &'run [CommodityID],
+    ) -> Self {
+        assert!(!commodities_to_allow_unmet_demand.is_empty());
+
+        Self {
+            commodities_to_allow_unmet_demand,
             ..self
         }
     }
@@ -418,26 +433,31 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// This is an internal function as callers always want to save results.
     fn run_no_save(&self) -> Result<Solution<'model>> {
-        // If the user provided no commodities, we all use of them
+        // If the user provided no commodities to balance, we all use of them
         let all_commodities: Vec<_>;
-        let commodities = if self.commodities.is_empty() {
+        let commodities_to_balance = if self.commodities_to_balance.is_empty() {
             all_commodities = self.model.commodities.keys().cloned().collect();
             &all_commodities
         } else {
-            self.commodities
+            self.commodities_to_balance
         };
-        if let Some(input_prices) = self.input_prices {
-            check_input_prices(input_prices, commodities);
+
+        // Check that external prices are only provided for commodities not being balanced
+        if let Some(external_prices) = self.external_prices {
+            check_external_prices(external_prices, commodities_to_balance);
         }
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
         // track the unmet demand so we can report the offending regions/commodities to users
-        match self.run_without_unmet_demand(commodities) {
+        match self.run_without_unmet_demand(
+            commodities_to_balance,
+            self.commodities_to_allow_unmet_demand,
+        ) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let pairs = self
-                    .get_regions_and_commodities_with_unmet_demand(commodities)
+                    .get_regions_and_commodities_with_unmet_demand(commodities_to_balance)
                     .expect("Failed to run dispatch to calculate unmet demand");
 
                 ensure!(
@@ -459,9 +479,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch without unmet demand variables
     fn run_without_unmet_demand(
         &self,
-        commodities: &[CommodityID],
+        commodities_to_balance: &[CommodityID],
+        commodities_to_allow_unmet_demand: &[CommodityID],
     ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(commodities, /*allow_unmet_demand=*/ false)
+        self.run_internal(commodities_to_balance, commodities_to_allow_unmet_demand)
     }
 
     /// Run dispatch to diagnose which regions and commodities have unmet demand
@@ -469,7 +490,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         &self,
         commodities: &[CommodityID],
     ) -> Result<IndexSet<(RegionID, CommodityID)>> {
-        let solution = self.run_internal(commodities, /*allow_unmet_demand=*/ true)?;
+        // Run dispatch including unmet demand variables for all commodities being balanced
+        let solution = self.run_internal(commodities, commodities)?;
+
+        // Collect regions and commodities with unmet demand
         Ok(solution
             .iter_unmet_demand()
             .filter(|(_, _, _, flow)| *flow > Flow(0.0))
@@ -480,25 +504,34 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch for specified commodities, optionally including unmet demand variables
     fn run_internal(
         &self,
-        commodities: &[CommodityID],
-        allow_unmet_demand: bool,
+        commodities_to_balance: &[CommodityID],
+        commodities_to_allow_unmet_demand: &[CommodityID],
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();
         let mut variables = VariableMap::new_with_asset_vars(
             &mut problem,
             self.model,
-            self.input_prices,
+            self.external_prices,
             self.existing_assets,
             self.candidate_assets,
             self.year,
         );
 
-        // If unmet demand is enabled for this dispatch run (and is allowed by the model param) then
-        // we add variables representing unmet demand
-        if allow_unmet_demand {
-            variables.add_unmet_demand_variables(&mut problem, self.model, commodities);
+        // Check that commodities_to_allow_unmet_demand is a subset of commodities_to_balance
+        for commodity in commodities_to_allow_unmet_demand {
+            assert!(
+                commodities_to_balance.contains(commodity),
+                "Commodities allowed unmet demand must be a subset of commodities being balanced"
+            );
         }
+
+        // Add variables representing unmet demand
+        variables.add_unmet_demand_variables(
+            &mut problem,
+            self.model,
+            commodities_to_allow_unmet_demand,
+        );
 
         // Add constraints
         let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
@@ -507,7 +540,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &variables,
             self.model,
             &all_assets,
-            commodities,
+            commodities_to_balance,
             self.year,
         );
 
@@ -534,14 +567,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
 /// * `problem` - The optimisation problem
 /// * `variables` - The map of asset variables
 /// * `time_slice_info` - Information about assets
-/// * `input_prices` - Optional explicit prices for input commodities
+/// * `external_prices` - Optional explicit prices for input commodities
 /// * `assets` - Assets to include
 /// * `year` - Current milestone year
 fn add_asset_variables(
     problem: &mut Problem,
     variables: &mut AssetVariableMap,
     time_slice_info: &TimeSliceInfo,
-    input_prices: Option<&CommodityPrices>,
+    external_prices: Option<&CommodityPrices>,
     assets: &[AssetRef],
     year: u32,
 ) -> Range<usize> {
@@ -549,7 +582,7 @@ fn add_asset_variables(
     let start = problem.num_cols();
 
     for (asset, time_slice) in iproduct!(assets.iter(), time_slice_info.iter_ids()) {
-        let coeff = calculate_cost_coefficient(asset, year, time_slice, input_prices);
+        let coeff = calculate_cost_coefficient(asset, year, time_slice, external_prices);
         let var = problem.add_column(coeff.value(), 0.0..);
         let key = (asset.clone(), time_slice.clone());
         let existing = variables.insert(key, var).is_some();
@@ -562,7 +595,7 @@ fn add_asset_variables(
 /// Calculate the cost coefficient for a decision variable.
 ///
 /// Normally, the cost coefficient is the same as the asset's operating costs for the given year and
-/// time slice. If `input_prices` is provided then those prices are added to the flow costs for the
+/// time slice. If `external_prices` is provided then those prices are added to the flow costs for the
 /// relevant commodities, if they are input flows for the asset.
 ///
 /// # Arguments
@@ -570,7 +603,7 @@ fn add_asset_variables(
 /// * `asset` - The asset to calculate the coefficient for
 /// * `year` - The current milestone year
 /// * `time_slice` - The time slice to which this coefficient applies
-/// * `input_prices` - Optional map of prices to include for input commodities
+/// * `external_prices` - Optional map of prices to include for input commodities
 ///
 /// # Returns
 ///
@@ -579,10 +612,10 @@ fn calculate_cost_coefficient(
     asset: &Asset,
     year: u32,
     time_slice: &TimeSliceID,
-    input_prices: Option<&CommodityPrices>,
+    external_prices: Option<&CommodityPrices>,
 ) -> MoneyPerActivity {
     let opex = asset.get_operating_cost(year, time_slice);
-    let input_cost = input_prices
+    let input_cost = external_prices
         .map(|prices| asset.get_input_cost_from_prices(prices, time_slice))
         .unwrap_or_default();
     opex + input_cost
