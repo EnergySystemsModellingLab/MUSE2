@@ -1538,7 +1538,7 @@ mod tests {
     #[rstest]
     #[case::early_decommission_within_lifetime(2024, 2024)]
     #[case::decommission_at_maximum_year(2026, 2025)]
-    fn test_asset_decommission(
+    fn test_asset_decommission_with_process_lifetime(
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
         process: Process,
@@ -1551,6 +1551,35 @@ mod tests {
             "GBR".into(),
             Capacity(1.0),
             2020,
+        )
+        .unwrap();
+        asset.commission(AssetID(1), "");
+        assert!(asset.is_commissioned());
+        assert_eq!(asset.id(), Some(AssetID(1)));
+
+        // Test successful decommissioning
+        asset.decommission(requested_decommission_year, "");
+        assert!(!asset.is_commissioned());
+        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
+    }
+
+    #[rstest]
+    #[case::early_decommission_within_lifetime(2024, 2024)]
+    #[case::decommission_at_maximum_year(2026, 2025)]
+    fn test_asset_decommission_with_predefined_decommission_year(
+        #[case] requested_decommission_year: u32,
+        #[case] expected_decommission_year: u32,
+        process: Process,
+    ) {
+        // Test successful commissioning of Future asset
+        let process_rc = Rc::new(process);
+        let mut asset = Asset::new_future_with_max_decommission(
+            "agent1".into(),
+            Rc::clone(&process_rc),
+            "GBR".into(),
+            Capacity(1.0),
+            2020,
+            Some(2025),
         )
         .unwrap();
         asset.commission(AssetID(1), "");

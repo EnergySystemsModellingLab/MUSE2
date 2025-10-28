@@ -140,7 +140,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
-            ..Default::default()
+            max_decommission_year: None,
         })]
     #[case(AssetRaw { // Bad agent ID
             agent_id: "agent2".into(),
@@ -148,7 +148,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
-            ..Default::default()
+            max_decommission_year: None,
         })]
     #[case(AssetRaw { // Bad region ID: not in region_ids
             agent_id: "agent1".into(),
@@ -157,6 +157,14 @@ mod tests {
             capacity: Capacity(1.0),
             commission_year: 2010,
             max_decommission_year: None,
+        })]
+    #[case(AssetRaw { // Bad max_decommission_year: before commission_year
+            agent_id: "agent1".into(),
+            process_id: "process1".into(),
+            region_id: "GBR".into(),
+            capacity: Capacity(1.0),
+            commission_year: 2010,
+            max_decommission_year: Some(2005),
         })]
     fn test_read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
