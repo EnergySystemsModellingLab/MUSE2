@@ -404,8 +404,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         self,
         commodities_to_allow_unmet_demand: &'run [CommodityID],
     ) -> Self {
-        assert!(!commodities_to_allow_unmet_demand.is_empty());
-
         Self {
             commodities_to_allow_unmet_demand,
             ..self
@@ -522,16 +520,19 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         for commodity in commodities_to_allow_unmet_demand {
             assert!(
                 commodities_to_balance.contains(commodity),
-                "Commodities allowed unmet demand must be a subset of commodities being balanced"
+                "Commodities allowed unmet demand must be a subset of commodities being balanced. \
+                 Offending commodity: {commodity:?}"
             );
         }
 
         // Add variables representing unmet demand
-        variables.add_unmet_demand_variables(
-            &mut problem,
-            self.model,
-            commodities_to_allow_unmet_demand,
-        );
+        if !commodities_to_allow_unmet_demand.is_empty() {
+            variables.add_unmet_demand_variables(
+                &mut problem,
+                self.model,
+                commodities_to_allow_unmet_demand,
+            );
+        }
 
         // Add constraints
         let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
@@ -541,6 +542,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.model,
             &all_assets,
             commodities_to_balance,
+            commodities_to_allow_unmet_demand,
             self.year,
         );
 
