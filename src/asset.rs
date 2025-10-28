@@ -1536,9 +1536,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case::early_decommission_within_lifetime(2024, 2024)]
-    #[case::decommission_at_maximum_year(2026, 2025)]
-    fn test_asset_decommission_with_process_lifetime(
+    #[case::commission_during_process_lifetime(2024, 2024)]
+    #[case::decommission_after_process_lifetime_ends(2026, 2025)]
+    fn test_asset_decommission(
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
         process: Process,
@@ -1564,11 +1564,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case::early_decommission_within_lifetime(2024, 2024)]
-    #[case::decommission_at_maximum_year(2026, 2025)]
-    fn test_asset_decommission_with_predefined_decommission_year(
+    #[case::decommission_after_predefined_max_year(2026, 2025, Some(2025))]
+    #[case::decommission_before_predefined_max_year(2024, 2024, Some(2025))]
+    #[case::decommission_during_process_lifetime_end_no_max_year(2024, 2024, None)]
+    #[case::decommission_after_process_lifetime_end_no_max_year(2026, 2025, None)]
+    fn test_asset_decommission_with_max_decommission_year_predefined(
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
+        #[case] max_decommission_year: Option<u32>,
         process: Process,
     ) {
         // Test successful commissioning of Future asset
@@ -1579,7 +1582,7 @@ mod tests {
             "GBR".into(),
             Capacity(1.0),
             2020,
-            Some(2025),
+            max_decommission_year,
         )
         .unwrap();
         asset.commission(AssetID(1), "");
