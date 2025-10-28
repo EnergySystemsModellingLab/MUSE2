@@ -1,4 +1,4 @@
-process_id,commodity_id,regions,years,coeff
+process_id,commodity_id,regions,commission_years,coeff
 gassupply1,gas,R1;R2,all,1
 gasCCGT,gas,R1;R2,all,-1.67
 gasCCGT,electricity,R1;R2,all,1
