@@ -22,3 +22,10 @@ fields:
       This value can be any integer >=0. If it is before the start of the simulation, it will
       already be commissioned in the first year and if it after the end of the simulation then it
       will never be commissioned.
+  - name: max_decommission_year
+    type: integer
+    description: The latest year in which this asset can be decommissioned
+    notes: |
+      This value can be any integer that satisfies max_decommission_year >= commission_year >=0.
+      If it is set before the simulation starting year, the asset will not be commissioned during the
+      simulation.
