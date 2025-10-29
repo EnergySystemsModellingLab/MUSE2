@@ -62,7 +62,7 @@ define_id_getter! {Commodity, CommodityID}
 /// Type of balance for application of cost
 #[derive(Eq, PartialEq, Clone, Debug, DeserializeLabeledStringEnum, Hash)]
 pub enum BalanceType {
-    /// Applies to both consumption and production
+    /// Applies to production, with an equal and opposite levy/incentive on consumption
     #[string = "net"]
     Net,
     /// Applies to consumption only
