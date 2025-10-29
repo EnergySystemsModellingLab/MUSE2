@@ -66,7 +66,7 @@ fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -
     graph_filtered.map(
         |_, node_weight| match node_weight {
             GraphNode::Commodity(id) => InvestmentSet::Single(id.clone()),
-            _ => unreachable!("InvestmentGraph must only contain a GraphNode::Commodity nodes"),
+            _ => unreachable!("Should only have commodity nodes after filtering"),
         },
         |_, edge_weight| edge_weight.clone(),
     )
