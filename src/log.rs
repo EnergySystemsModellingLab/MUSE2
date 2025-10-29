@@ -100,6 +100,7 @@ pub fn init(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Resu
 
     // Configure the logger
     let mut dispatch = Dispatch::new()
+        .level_for("highs", LevelFilter::Off) // turn off logging for highs
         .chain(
             // Write non-error messages to stdout
             Dispatch::new()

@@ -545,10 +545,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
 
         // Solve model
         let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
-
         let objective_value = Money(solution.objective_value());
-        debug!("Objective value: {objective_value}");
-
         Ok(Solution {
             solution: solution.get_solution(),
             variables,
