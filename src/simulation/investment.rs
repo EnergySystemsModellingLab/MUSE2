@@ -31,10 +31,10 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
-    /// Assets are selected for a layer of independent commodities
-    Layer(Vec<InvestmentSet>),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<InvestmentSet>),
+    /// Assets are selected for a layer of independent commodities
+    Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
@@ -70,9 +70,13 @@ impl InvestmentSet {
                 prices,
                 writer,
             ),
-            InvestmentSet::Layer(commodity_ids) => {
+            InvestmentSet::Cycle(_) => bail!(
+                "Investment cycles are not yet supported. Found cycle for commodities: {self}"
+            ),
+            InvestmentSet::Layer(investment_sets) => {
+                debug!("Starting investment for layer '{self}' in region '{region_id}'");
                 let mut all_assets = Vec::new();
-                for investment_set in commodity_ids {
+                for investment_set in investment_sets {
                     let assets = investment_set.select_assets(
                         model,
                         region_id,
@@ -84,12 +88,8 @@ impl InvestmentSet {
                     )?;
                     all_assets.extend(assets);
                 }
+                debug!("Completed investment for layer '{self}' in region '{region_id}'");
                 Ok(all_assets)
-            }
-            InvestmentSet::Cycle(_) => {
-                bail!(
-                    "Investment cycles are not yet supported. Found cycle for commodities: {self}"
-                )
             }
         }
     }
@@ -99,7 +99,10 @@ impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvestmentSet::Single(id) => write!(f, "{id}"),
-            InvestmentSet::Layer(ids) | InvestmentSet::Cycle(ids) => {
+            InvestmentSet::Cycle(ids) => {
+                write!(f, "({})", ids.iter().join(", "))
+            }
+            InvestmentSet::Layer(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
             }
         }
@@ -122,8 +125,8 @@ pub fn perform_agent_investment(
     prices: &CommodityPrices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    // Initialise demand map
-    let mut demand =
+    // Initialise net demand map
+    let mut net_demand =
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
 
     // Keep a list of all the assets selected
@@ -156,7 +159,7 @@ pub fn perform_agent_investment(
                 model,
                 region_id,
                 year,
-                &demand,
+                &net_demand,
                 existing_assets,
                 prices,
                 writer,
@@ -207,7 +210,11 @@ pub fn perform_agent_investment(
                 )?;
 
             // Update demand map with flows from newly added assets
-            update_demand_map(&mut demand, &solution.create_flow_map(), &selected_assets);
+            update_net_demand_map(
+                &mut net_demand,
+                &solution.create_flow_map(),
+                &selected_assets,
+            );
         }
     }
 
@@ -316,7 +323,7 @@ fn flatten_preset_demands_for_year(
     demand_map
 }
 
-/// Update demand map with flows from a set of assets
+/// Update net demand map with flows from a set of assets
 ///
 /// Non-primary output flows are ignored. This way, demand profiles aren't affected by production
 /// of side-products from other assets. The result is that all commodity demands must be met by
@@ -325,7 +332,7 @@ fn flatten_preset_demands_for_year(
 ///
 /// TODO: this is a very flawed approach. The proper solution might be for agents to consider
 /// multiple commodities simultaneously, but that would require substantial work to implement.
-fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
+fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
     for ((asset, commodity_id, time_slice), flow) in flows {
         if assets.contains(asset) {
             let key = (
