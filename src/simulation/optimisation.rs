@@ -14,7 +14,6 @@ use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
-use log::debug;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
@@ -336,19 +335,16 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
     }
 }
 
-/// Sanity check for external prices.
-///
-/// External prices should only be provided for commodities for which there will be no commodity
-/// balance constraint.
-fn check_external_prices(external_prices: &CommodityPrices, commodities: &[CommodityID]) {
-    let commodities_set: HashSet<_> = commodities.iter().collect();
-    let has_prices_for_commodity_subset = external_prices
-        .keys()
-        .any(|(commodity_id, _, _)| commodities_set.contains(commodity_id));
-    assert!(
-        !has_prices_for_commodity_subset,
-        "External prices were included for commodities that are being modelled, which is not allowed."
-    );
+/// Select prices for commodities not being balanced
+fn select_external_prices(
+    external_prices: &CommodityPrices,
+    commodities_to_balance: &[CommodityID],
+) -> CommodityPrices {
+    let commodities_set: HashSet<_> = commodities_to_balance.iter().collect();
+    external_prices
+        .iter()
+        .filter(|(commodity_id, _, _, _)| !commodities_set.contains(commodity_id))
+        .collect()
 }
 
 /// Provides the interface for running the dispatch optimisation.
@@ -451,9 +447,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         };
 
         // Check that external prices are only provided for commodities not being balanced
-        if let Some(external_prices) = self.external_prices {
-            check_external_prices(external_prices, commodities_to_balance);
-        }
+        let external_prices_owned = self
+            .external_prices
+            .map(|prices| select_external_prices(prices, commodities_to_balance));
+        let external_prices = external_prices_owned.as_ref();
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
@@ -461,11 +458,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         match self.run_internal(
             commodities_to_balance,
             self.commodities_to_allow_unmet_demand,
+            external_prices,
         ) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let pairs = self
-                    .get_regions_and_commodities_with_unmet_demand(commodities_to_balance)
+                    .get_regions_and_commodities_with_unmet_demand(
+                        commodities_to_balance,
+                        external_prices,
+                    )
                     .expect("Failed to run dispatch to calculate unmet demand");
 
                 ensure!(
@@ -487,10 +488,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch to diagnose which regions and commodities have unmet demand
     fn get_regions_and_commodities_with_unmet_demand(
         &self,
-        commodities: &[CommodityID],
+        commodities_to_balance: &[CommodityID],
+        external_prices: Option<&CommodityPrices>,
     ) -> Result<IndexSet<(RegionID, CommodityID)>> {
         // Run dispatch including unmet demand variables for all commodities being balanced
-        let solution = self.run_internal(commodities, commodities)?;
+        let solution = self.run_internal(
+            commodities_to_balance,
+            commodities_to_balance,
+            external_prices,
+        )?;
 
         // Collect regions and commodities with unmet demand
         Ok(solution.get_regions_and_commodities_with_unmet_demand())
@@ -501,13 +507,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         &self,
         commodities_to_balance: &[CommodityID],
         commodities_to_allow_unmet_demand: &[CommodityID],
+        external_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();
         let mut variables = VariableMap::new_with_asset_vars(
             &mut problem,
             self.model,
-            self.external_prices,
+            external_prices,
             self.existing_assets,
             self.candidate_assets,
             self.year,

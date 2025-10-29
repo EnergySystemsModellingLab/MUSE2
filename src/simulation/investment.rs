@@ -9,16 +9,16 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Result, bail, ensure};
+use anyhow::{bail, ensure, Result};
 use indexmap::IndexMap;
-use itertools::{Itertools, chain, iproduct};
+use itertools::{chain, iproduct, Itertools};
 use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{AppraisalOutput, appraise_investment};
+use appraisal::{appraise_investment, AppraisalOutput};
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -29,9 +29,9 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 /// Represents a set of commodities which are invested in together.
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum InvestmentSet {
-    /// Assets are selected for a single commodity using `select_assets_for_commodity`
+    /// Assets are selected for a single commodity
     Single(CommodityID),
-    /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
+    /// Assets are selected for a group of commodities which forms a cycle
     Cycle(Vec<InvestmentSet>),
     /// Assets are selected for a layer of independent commodities
     Layer(Vec<InvestmentSet>),
@@ -143,7 +143,7 @@ impl InvestmentSet {
     ) -> Result<Vec<AssetRef>> {
         // Get the commodity of interest
         let InvestmentSet::Single(commodity_id) = self else {
-            bail!("select_assets_for_single called on non-single InvestmentSet")
+            panic!("select_assets_for_single called on non-single InvestmentSet")
         };
         let commodity = &model.commodities[commodity_id];
 
@@ -211,7 +211,7 @@ impl InvestmentSet {
 
         // Get internal investment sets
         let InvestmentSet::Cycle(investment_sets) = self else {
-            bail!("select_assets_for_cycle called on non-cycle InvestmentSet")
+            panic!("select_assets_for_cycle called on non-cycle InvestmentSet")
         };
 
         // Dispatch will attempt to balance all commodities seen so far plus those under consideration
@@ -266,7 +266,11 @@ impl InvestmentSet {
                 .into_iter()
                 .filter_map(
                     |(reg, com)| {
-                        if &reg == region_id { Some(com) } else { None }
+                        if &reg == region_id {
+                            Some(com)
+                        } else {
+                            None
+                        }
                     },
                 )
                 .collect::<HashSet<CommodityID>>();
@@ -350,7 +354,10 @@ impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvestmentSet::Single(id) => write!(f, "{id}"),
-            InvestmentSet::Layer(ids) | InvestmentSet::Cycle(ids) => {
+            InvestmentSet::Cycle(ids) => {
+                write!(f, "({})", ids.iter().join(", "))
+            }
+            InvestmentSet::Layer(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
             }
         }
@@ -420,6 +427,7 @@ pub fn perform_agent_investment(
             // **TODO**: this probably means there's no demand for the commodity, which we could
             // presumably preempt
             if selected_assets.is_empty() {
+                debug!("No assets selected for '{investment_set}' in region '{region_id}'");
                 continue;
             }
 
