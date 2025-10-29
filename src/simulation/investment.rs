@@ -9,11 +9,12 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Result, ensure};
+use anyhow::{Result, bail, ensure};
 use indexmap::IndexMap;
-use itertools::{chain, iproduct};
+use itertools::{Itertools, chain, iproduct};
 use log::debug;
 use std::collections::HashMap;
+use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -24,6 +25,42 @@ type DemandMap = IndexMap<TimeSliceID, Flow>;
 
 /// Demand for a given combination of commodity, region and time slice
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
+
+/// Represents a set of commodities which are invested in together.
+#[derive(PartialEq, Debug)]
+pub enum InvestmentSet {
+    /// Assets are selected for a single commodity using `select_assets_for_commodity`
+    Single(CommodityID),
+    /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
+    Cycle(Vec<CommodityID>),
+}
+
+impl InvestmentSet {
+    /// Returns an iterator over the commodity IDs in this investment set
+    pub fn iter(&self) -> impl Iterator<Item = &CommodityID> {
+        match self {
+            InvestmentSet::Single(id) => std::slice::from_ref(id).iter(),
+            InvestmentSet::Cycle(ids) => ids.iter(),
+        }
+    }
+
+    /// Converts the investment set to a vector of commodity IDs
+    pub fn to_vec(&self) -> Vec<CommodityID> {
+        match self {
+            InvestmentSet::Single(id) => vec![id.clone()],
+            InvestmentSet::Cycle(ids) => ids.clone(),
+        }
+    }
+}
+
+impl Display for InvestmentSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvestmentSet::Single(id) => write!(f, "{id}"),
+            InvestmentSet::Cycle(ids) => write!(f, "[{}]", ids.iter().join(", ")),
+        }
+    }
+}
 
 /// Perform agent investment to determine capacity investment of new assets for next milestone year.
 ///
@@ -50,72 +87,62 @@ pub fn perform_agent_investment(
     let mut all_selected_assets = Vec::new();
 
     for region_id in model.iter_regions() {
-        let cur_commodities = &model.commodity_order[&(region_id.clone(), year)];
+        let investment_order = &model.investment_order[&(region_id.clone(), year)];
 
-        // Prices to be used for input flows for commodities not produced in dispatch run
+        // External prices to be used in dispatch optimisation
+        // Once investments are performed for a commodity, the dispatch system will be able to produce
+        // endogenous prices for that commodity, so we'll gradually remove these external prices.
+        let cur_commodities: &Vec<_> = &investment_order
+            .iter()
+            .flat_map(InvestmentSet::iter)
+            .cloned()
+            .collect();
         let mut external_prices =
             get_prices_for_commodities(prices, &model.time_slice_info, region_id, cur_commodities);
+
+        // Keep track of the commodities that have been seen so far. This will be used to apply
+        // balance constraints in the dispatch optimisation - we only apply balance constraints for
+        // commodities that have been seen so far.
         let mut seen_commodities = Vec::new();
-        for commodity_id in cur_commodities {
-            seen_commodities.push(commodity_id.clone());
-            let commodity = &model.commodities[commodity_id];
+
+        // Iterate over investment sets in the investment order for this region/year
+        for investment_set in investment_order {
+            // Select assets for the commodity(/ies) of interest
+            let selected_assets = match investment_set {
+                InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
+                    model,
+                    commodity_id,
+                    region_id,
+                    year,
+                    &demand,
+                    existing_assets,
+                    prices,
+                    writer,
+                )?,
+                InvestmentSet::Cycle(_) => {
+                    bail!(
+                        "Investment cycles are not yet supported. Found cycle for commodities: {investment_set}"
+                    );
+                }
+            };
+
+            // Update our list of seen commodities
+            for commodity_id in investment_set.iter() {
+                seen_commodities.push(commodity_id.clone());
+            }
 
             // Remove prices for already-seen commodities. Commodities which are produced by at
             // least one asset in the dispatch run will have prices produced endogenously (via the
             // commodity balance constraints), but commodities for which investment has not yet been
             // performed will, by definition, not have any producers. For these, we provide prices
             // from the previous dispatch run otherwise they will appear to be free to the model.
-            for time_slice in model.time_slice_info.iter_ids() {
+            for (commodity_id, time_slice) in
+                iproduct!(investment_set.iter(), model.time_slice_info.iter_ids())
+            {
                 external_prices.remove(commodity_id, region_id, time_slice);
             }
 
-            // List of assets selected/retained for this region/commodity
-            let mut selected_assets = Vec::new();
-
-            for (agent, commodity_portion) in
-                get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
-            {
-                debug!(
-                    "Running investment for agent '{}' with commodity '{}' in region '{}'",
-                    &agent.id, commodity_id, region_id
-                );
-
-                // Get demand portion for this commodity for this agent in this region/year
-                let demand_portion_for_commodity = get_demand_portion_for_commodity(
-                    &model.time_slice_info,
-                    &demand,
-                    commodity_id,
-                    region_id,
-                    commodity_portion,
-                );
-
-                // Existing and candidate assets from which to choose
-                let opt_assets = get_asset_options(
-                    &model.time_slice_info,
-                    existing_assets,
-                    &demand_portion_for_commodity,
-                    agent,
-                    commodity,
-                    region_id,
-                    year,
-                )
-                .collect();
-
-                // Choose assets from among existing pool and candidates
-                let best_assets = select_best_assets(
-                    model,
-                    opt_assets,
-                    commodity,
-                    agent,
-                    prices,
-                    demand_portion_for_commodity,
-                    year,
-                    writer,
-                )?;
-                selected_assets.extend(best_assets);
-            }
-
-            // If no assets have been selected for this region/commodity, skip dispatch optimisation
+            // If no assets have been selected, skip dispatch optimisation
             // **TODO**: this probably means there's no demand for the commodity, which we could
             // presumably preempt
             if selected_assets.is_empty() {
@@ -129,7 +156,7 @@ pub fn perform_agent_investment(
             // **TODO**: presumably we only need to do this for selected_assets, as assets added in
             // previous iterations should not change
             debug!(
-                "Running post-investment dispatch for commodity '{commodity_id}' in region '{region_id}'"
+                "Running post-investment dispatch for '{investment_set}' in region '{region_id}'"
             );
 
             // As upstream commodities by definition will not yet have producers, we explicitly set
@@ -138,7 +165,7 @@ pub fn perform_agent_investment(
                 .with_commodity_subset(&seen_commodities)
                 .with_input_prices(&external_prices)
                 .run(
-                    &format!("post {commodity_id}/{region_id} investment"),
+                    &format!("post {investment_set}/{region_id} investment"),
                     writer,
                 )?;
 
@@ -148,6 +175,70 @@ pub fn perform_agent_investment(
     }
 
     Ok(all_selected_assets)
+}
+
+/// Select assets for a single commodity in a given region and year
+///
+/// Returns a list of assets that are selected for investment for this commodity in this region and
+/// year.
+#[allow(clippy::too_many_arguments)]
+fn select_assets_for_commodity(
+    model: &Model,
+    commodity_id: &CommodityID,
+    region_id: &RegionID,
+    year: u32,
+    demand: &AllDemandMap,
+    existing_assets: &[AssetRef],
+    prices: &CommodityPrices,
+    writer: &mut DataWriter,
+) -> Result<Vec<AssetRef>> {
+    let commodity = &model.commodities[commodity_id];
+
+    let mut selected_assets = Vec::new();
+    for (agent, commodity_portion) in
+        get_responsible_agents(model.agents.values(), &commodity.id, region_id, year)
+    {
+        debug!(
+            "Running investment for agent '{}' with commodity '{}' in region '{}'",
+            &agent.id, commodity.id, region_id
+        );
+
+        // Get demand portion for this commodity for this agent in this region/year
+        let demand_portion_for_commodity = get_demand_portion_for_commodity(
+            &model.time_slice_info,
+            demand,
+            &commodity.id,
+            region_id,
+            commodity_portion,
+        );
+
+        // Existing and candidate assets from which to choose
+        let opt_assets = get_asset_options(
+            &model.time_slice_info,
+            existing_assets,
+            &demand_portion_for_commodity,
+            agent,
+            commodity,
+            region_id,
+            year,
+        )
+        .collect();
+
+        // Choose assets from among existing pool and candidates
+        let best_assets = select_best_assets(
+            model,
+            opt_assets,
+            commodity,
+            agent,
+            prices,
+            demand_portion_for_commodity,
+            year,
+            writer,
+        )?;
+        selected_assets.extend(best_assets);
+    }
+
+    Ok(selected_assets)
 }
 
 /// Flatten the preset commodity demands for a given year into a map of commodity, region and
@@ -189,6 +280,14 @@ fn flatten_preset_demands_for_year(
 }
 
 /// Update demand map with flows from a set of assets
+///
+/// Non-primary output flows are ignored. This way, demand profiles aren't affected by production
+/// of side-products from other assets. The result is that all commodity demands must be met by
+/// assets with that commodity as their primary output. Effectively, agents do not see production of
+/// side-products from other assets when making investment decisions.
+///
+/// TODO: this is a very flawed approach. The proper solution might be for agents to consider
+/// multiple commodities simultaneously, but that would require substantial work to implement.
 fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
     for ((asset, commodity_id, time_slice), flow) in flows {
         if assets.contains(asset) {
@@ -198,11 +297,19 @@ fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[Asset
                 time_slice.clone(),
             );
 
-            // Note: we use the negative of the flow as input flows are negative in the flow map.
-            demand
-                .entry(key)
-                .and_modify(|value| *value -= *flow)
-                .or_insert(-*flow);
+            // Only consider input flows and output flows from the primary output commodity
+            // (excluding secondary outputs)
+            if (flow < &Flow(0.0))
+                || asset
+                    .primary_output()
+                    .is_some_and(|p| &p.commodity.id == commodity_id)
+            {
+                // Note: we use the negative of the flow as input flows are negative in the flow map.
+                demand
+                    .entry(key)
+                    .and_modify(|value| *value -= *flow)
+                    .or_insert(-*flow);
+            }
         }
     }
 }

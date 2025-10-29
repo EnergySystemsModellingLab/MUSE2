@@ -15,13 +15,15 @@ use std::rc::Rc;
 
 const ASSETS_FILE_NAME: &str = "assets.csv";
 
-#[derive(Deserialize, PartialEq)]
+#[derive(Default, Deserialize, PartialEq)]
 struct AssetRaw {
     process_id: String,
     region_id: String,
     agent_id: String,
     capacity: Capacity,
     commission_year: u32,
+    #[serde(default)]
+    max_decommission_year: Option<u32>,
 }
 
 /// Read assets CSV file from model directory.
@@ -76,12 +78,13 @@ where
             .with_context(|| format!("Invalid process ID: {}", &asset.process_id))?;
         let region_id = region_ids.get_id(&asset.region_id)?;
 
-        Asset::new_future(
+        Asset::new_future_with_max_decommission(
             agent_id.clone(),
             Rc::clone(process),
             region_id.clone(),
             asset.capacity,
             asset.commission_year,
+            asset.max_decommission_year,
         )
     })
     .try_collect()
@@ -102,7 +105,10 @@ mod tests {
     }
 
     #[rstest]
+    #[case::max_decommission_year_provided(Some(2015))]
+    #[case::max_decommission_year_not_provided(None)]
     fn test_read_assets_from_iter_valid(
+        #[case] max_decommission_year: Option<u32>,
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
@@ -113,13 +119,15 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            max_decommission_year: max_decommission_year,
         };
-        let asset_out = Asset::new_future(
+        let asset_out = Asset::new_future_with_max_decommission(
             "agent1".into(),
             Rc::clone(processes.values().next().unwrap()),
             "GBR".into(),
             Capacity(1.0),
             2010,
+            max_decommission_year,
         )
         .unwrap();
         assert_equal(
@@ -136,6 +144,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            max_decommission_year: None,
         })]
     #[case(AssetRaw { // Bad agent ID
             agent_id: "agent2".into(),
@@ -143,6 +152,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            max_decommission_year: None,
         })]
     #[case(AssetRaw { // Bad region ID: not in region_ids
             agent_id: "agent1".into(),
@@ -150,6 +160,15 @@ mod tests {
             region_id: "FRA".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
+            max_decommission_year: None,
+        })]
+    #[case(AssetRaw { // Bad max_decommission_year: before commission_year
+            agent_id: "agent1".into(),
+            process_id: "process1".into(),
+            region_id: "GBR".into(),
+            capacity: Capacity(1.0),
+            commission_year: 2010,
+            max_decommission_year: Some(2005),
         })]
     fn test_read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
