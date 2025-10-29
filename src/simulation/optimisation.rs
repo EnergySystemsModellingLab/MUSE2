@@ -290,6 +290,16 @@ impl Solution<'_> {
         keys.zip(output[variable_idx.clone()].iter())
             .map(|((asset, time_slice), value)| (asset, time_slice, T::new(*value)))
     }
+
+    /// Get the regions and commodities for which unmet demand is positive in any time slice.
+    pub fn get_regions_and_commodities_with_unmet_demand(
+        &self,
+    ) -> IndexSet<(RegionID, CommodityID)> {
+        self.iter_unmet_demand()
+            .filter(|(_, _, _, flow)| *flow > Flow(0.0))
+            .map(|(commodity_id, region_id, _, _)| (region_id.clone(), commodity_id.clone()))
+            .collect()
+    }
 }
 
 /// Defines the possible errors that can occur when running the solver
@@ -448,7 +458,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
         // track the unmet demand so we can report the offending regions/commodities to users
-        match self.run_without_unmet_demand(
+        match self.run_internal(
             commodities_to_balance,
             self.commodities_to_allow_unmet_demand,
         ) {
@@ -474,15 +484,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
     }
 
-    /// Run dispatch without unmet demand variables
-    fn run_without_unmet_demand(
-        &self,
-        commodities_to_balance: &[CommodityID],
-        commodities_to_allow_unmet_demand: &[CommodityID],
-    ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(commodities_to_balance, commodities_to_allow_unmet_demand)
-    }
-
     /// Run dispatch to diagnose which regions and commodities have unmet demand
     fn get_regions_and_commodities_with_unmet_demand(
         &self,
@@ -492,11 +493,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         let solution = self.run_internal(commodities, commodities)?;
 
         // Collect regions and commodities with unmet demand
-        Ok(solution
-            .iter_unmet_demand()
-            .filter(|(_, _, _, flow)| *flow > Flow(0.0))
-            .map(|(commodity_id, region_id, _, _)| (region_id.clone(), commodity_id.clone()))
-            .collect())
+        Ok(solution.get_regions_and_commodities_with_unmet_demand())
     }
 
     /// Run dispatch for specified commodities, optionally including unmet demand variables
