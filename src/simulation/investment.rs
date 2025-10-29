@@ -207,6 +207,8 @@ impl InvestmentSet {
         investment_state: &InvestmentState,
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
+        debug!("Starting cycle investment for '{self}' in region '{region_id}'");
+
         // Get internal investment sets
         let InvestmentSet::Cycle(investment_sets) = self else {
             bail!("select_assets_for_cycle called on non-cycle InvestmentSet")
@@ -253,7 +255,7 @@ impl InvestmentSet {
             let solution = DispatchRun::new(model, &all_assets, year)
                 .with_commodity_subset(&to_balance)
                 .with_unmet_demand_vars(&commodities_under_consideration)
-                .run(&format!("post xxx/{region_id} investment"), writer)?;
+                .run(&format!("cycle {self} iteration {loop_iter}"), writer)?;
 
             // Update demand map with input flows from assets in the cycle
             let mut demand_new = demand.clone();
@@ -289,6 +291,7 @@ impl InvestmentSet {
                 .collect();
             demand = demand_new;
         }
+        debug!("Completed cycle investment for '{self}' in region '{region_id}'");
 
         // Flatten the hashmap of selected assets into a single vec
         Ok(selected_assets.into_values().flatten().collect())
@@ -306,6 +309,8 @@ impl InvestmentSet {
         investment_state: &InvestmentState,
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
+        debug!("Starting layer investment for '{self}' in region '{region_id}'");
+
         // Get internal investment sets
         let InvestmentSet::Layer(investment_sets) = self else {
             bail!("select_assets_for_layer called on non-layer InvestmentSet")
@@ -325,6 +330,7 @@ impl InvestmentSet {
             )?;
             all_assets.extend(assets);
         }
+        debug!("Completed layer investment for '{self}' in region '{region_id}'");
         Ok(all_assets)
     }
 }
