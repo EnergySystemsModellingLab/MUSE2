@@ -5,9 +5,9 @@ description: |
 notes:
   - If an entry is included for a given combination of commodity and region, entries must be
     provided covering all milestone years and time slices. For those regions not explicitly included
-    for a given commodity, a zero levy/incentive is assumed. At least one levy/incentive entry must
-    be provided for at least one commodity. For one particular combination of region, year and
-    time slice, there can be one production and one consumption levy, or a single net levy.
+    for a given commodity, a zero levy/incentive is assumed. For one particular combination of
+    region, year and time slice, there can be one production and one consumption levy, or a single
+    net levy.
 
 fields:
   - name: commodity_id
@@ -32,7 +32,7 @@ fields:
     description: The type of balance to which this is applied
     notes: |
       Can be `cons` (applies to consumption only), `prod` (applies to production only) or
-      `net` (applies to consumption and production)
+      `net` (applies to production, with an equal and opposite levy/incentive on consumption)
   - name: value
     type: number
     description: The value of the levy/incentive
