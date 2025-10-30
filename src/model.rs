@@ -30,7 +30,7 @@ pub struct Model {
     /// Regions for the simulation
     pub regions: RegionMap,
     /// Commodity ordering for each region and year
-    pub investment_order: HashMap<(RegionID, u32), Vec<InvestmentSet>>,
+    pub investment_order: HashMap<u32, Vec<InvestmentSet>>,
 }
 
 impl Model {

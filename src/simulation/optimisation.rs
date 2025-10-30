@@ -110,7 +110,7 @@ impl VariableMap {
         &mut self,
         problem: &mut Problem,
         model: &Model,
-        commodities: &[CommodityID],
+        commodities: &[(CommodityID, RegionID)],
     ) {
         assert!(!commodities.is_empty());
 
@@ -120,17 +120,14 @@ impl VariableMap {
         // Add variables
         let voll = model.parameters.value_of_lost_load;
         self.unmet_demand_vars.extend(
-            iproduct!(
-                commodities.iter(),
-                model.iter_regions(),
-                model.time_slice_info.iter_ids()
-            )
-            .map(|(commodity_id, region_id, time_slice)| {
-                let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-                let var = problem.add_column(voll.value(), 0.0..);
+            iproduct!(commodities.iter(), model.time_slice_info.iter_ids()).map(
+                |((commodity_id, region_id), time_slice)| {
+                    let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
+                    let var = problem.add_column(voll.value(), 0.0..);
 
-                (key, var)
-            }),
+                    (key, var)
+                },
+            ),
         );
 
         self.unmet_demand_var_idx = start..problem.num_cols();
@@ -330,11 +327,12 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 ///
 /// Input prices should only be provided for commodities for which there will be no commodity
 /// balance constraint.
-fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID]) {
+fn check_input_prices(input_prices: &CommodityPrices, commodities: &[(CommodityID, RegionID)]) {
     let commodities_set: HashSet<_> = commodities.iter().collect();
-    let has_prices_for_commodity_subset = input_prices
-        .keys()
-        .any(|(commodity_id, _, _)| commodities_set.contains(commodity_id));
+    let has_prices_for_commodity_subset =
+        input_prices.keys().any(|(commodity_id, region_id, _)| {
+            commodities_set.contains(&(commodity_id.clone(), region_id.clone()))
+        });
     assert!(
         !has_prices_for_commodity_subset,
         "Input prices were included for commodities that are being modelled, which is not allowed."
@@ -353,7 +351,7 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
-    commodities_to_balance: &'run [CommodityID],
+    commodities_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
@@ -380,7 +378,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Only apply commodity balance constraints to the specified subset of commodities
-    pub fn with_commodity_subset(self, commodities: &'run [CommodityID]) -> Self {
+    pub fn with_commodity_subset(self, commodities: &'run [(CommodityID, RegionID)]) -> Self {
         assert!(!commodities.is_empty());
 
         Self {
@@ -419,13 +417,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// This is an internal function as callers always want to save results.
     fn run_no_save(&self) -> Result<Solution<'model>> {
         // If the user provided no commodities to balance, we all use of them
-        let all_commodities: Vec<_>;
-        let commodities_to_balance = if self.commodities_to_balance.is_empty() {
-            all_commodities = self.model.commodities.keys().cloned().collect();
-            &all_commodities
-        } else {
-            self.commodities_to_balance
-        };
+        let commodities_to_balance_owned: Vec<(CommodityID, RegionID)> =
+            if self.commodities_to_balance.is_empty() {
+                let all_commodities = self.model.commodities.keys().cloned().collect::<Vec<_>>();
+                let all_regions = self.model.iter_regions().cloned().collect::<Vec<_>>();
+                iproduct!(all_commodities, all_regions).collect::<Vec<_>>()
+            } else {
+                self.commodities_to_balance.to_vec()
+            };
+        let commodities_to_balance = commodities_to_balance_owned.as_slice();
         if let Some(input_prices) = self.input_prices {
             check_input_prices(input_prices, commodities_to_balance);
         }
@@ -459,7 +459,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch without unmet demand variables
     fn run_without_unmet_demand(
         &self,
-        commodities: &[CommodityID],
+        commodities: &[(CommodityID, RegionID)],
     ) -> Result<Solution<'model>, ModelError> {
         self.run_internal(commodities, /*allow_unmet_demand=*/ false)
     }
@@ -467,7 +467,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch to diagnose which regions and commodities have unmet demand
     fn get_regions_and_commodities_with_unmet_demand(
         &self,
-        commodities: &[CommodityID],
+        commodities: &[(CommodityID, RegionID)],
     ) -> Result<IndexSet<(RegionID, CommodityID)>> {
         let solution = self.run_internal(commodities, /*allow_unmet_demand=*/ true)?;
         Ok(solution
@@ -480,7 +480,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch for specified commodities, optionally including unmet demand variables
     fn run_internal(
         &self,
-        commodities: &[CommodityID],
+        commodities: &[(CommodityID, RegionID)],
         allow_unmet_demand: bool,
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
