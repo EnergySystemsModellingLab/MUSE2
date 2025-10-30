@@ -134,6 +134,10 @@ pub fn perform_agent_investment(
 
     for region_id in model.iter_regions() {
         let investment_order = &model.investment_order[&(region_id.clone(), year)];
+        debug!(
+            "Investment order for region '{region_id}' in year '{year}': {}",
+            investment_order.iter().join(" -> ")
+        );
 
         // External prices to be used in dispatch optimisation
         // Once investments are performed for a commodity, the dispatch system will be able to produce
