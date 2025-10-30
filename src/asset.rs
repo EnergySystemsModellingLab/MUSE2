@@ -986,7 +986,14 @@ mod tests {
 
         // Set input prices
         let mut input_prices = CommodityPrices::default();
-        input_prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(3.0));
+        input_prices.insert(
+            &Market {
+                commodity_id,
+                region_id,
+            },
+            &time_slice,
+            MoneyPerFlow(3.0),
+        );
 
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);

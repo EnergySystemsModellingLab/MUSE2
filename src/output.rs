@@ -560,7 +560,7 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{assets, commodity_id, region_id, time_slice};
+    use crate::fixture::{assets, commodity_id, market, time_slice};
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
@@ -624,11 +624,11 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_prices(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
+    fn test_write_prices(market: Market, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let price = MoneyPerFlow(42.0);
         let mut prices = CommodityPrices::default();
-        prices.insert(&commodity_id, &region_id, &time_slice, price);
+        prices.insert(&market, &time_slice, price);
 
         let dir = tempdir().unwrap();
 
@@ -642,8 +642,8 @@ mod tests {
         // Read back and compare
         let expected = CommodityPriceRow {
             milestone_year,
-            commodity_id,
-            region_id,
+            commodity_id: market.commodity_id,
+            region_id: market.region_id,
             time_slice,
             price,
         };
@@ -657,11 +657,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_commodity_balance_duals(
-        commodity_id: CommodityID,
-        region_id: RegionID,
-        time_slice: TimeSliceID,
-    ) {
+    fn test_write_commodity_balance_duals(market: Market, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let value = MoneyPerFlow(0.5);
@@ -674,7 +670,7 @@ mod tests {
                 .write_commodity_balance_duals(
                     milestone_year,
                     &run_description,
-                    iter::once((&commodity_id, &region_id, &time_slice, value)),
+                    iter::once((&market, &time_slice, value)),
                 )
                 .unwrap();
             writer.flush().unwrap();
@@ -684,8 +680,8 @@ mod tests {
         let expected = CommodityBalanceDualsRow {
             milestone_year,
             run_description,
-            commodity_id,
-            region_id,
+            commodity_id: market.commodity_id,
+            region_id: market.region_id,
             time_slice,
             value,
         };

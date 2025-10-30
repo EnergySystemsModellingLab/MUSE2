@@ -212,9 +212,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::CommodityID;
-    use crate::fixture::{commodity_id, region_id, time_slice, time_slice_info};
-    use crate::region::RegionID;
+    use crate::fixture::{market, time_slice, time_slice_info};
     use crate::time_slice::TimeSliceID;
     use rstest::rstest;
 
@@ -234,17 +232,16 @@ mod tests {
         #[case] price2: MoneyPerFlow,
         #[case] tolerance: Dimensionless,
         #[case] expected: bool,
+        market: Market,
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
         let mut prices1 = CommodityPrices::default();
         let mut prices2 = CommodityPrices::default();
 
-        // Set up two price sets for a single commodity/region/time slice
-        let commodity = CommodityID::new("test_commodity");
-        let region = RegionID::new("test_region");
-        prices1.insert(&commodity, &region, &time_slice, price1);
-        prices2.insert(&commodity, &region, &time_slice, price2);
+        // Set up two price sets for a single market/timeslice
+        prices1.insert(&market, &time_slice, price1);
+        prices2.insert(&market, &time_slice, price2);
 
         assert_eq!(
             prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info),
@@ -254,19 +251,18 @@ mod tests {
 
     #[rstest]
     fn test_time_slice_weighted_averages(
-        commodity_id: CommodityID,
-        region_id: RegionID,
+        market: Market,
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
         let mut prices = CommodityPrices::default();
 
         // Insert a price
-        prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(100.0));
+        prices.insert(&market, &time_slice, MoneyPerFlow(100.0));
 
         let averages = prices.time_slice_weighted_averages(&time_slice_info);
 
         // With single time slice (duration=1.0), average should equal the price
-        assert_eq!(averages[&(commodity_id, region_id)], MoneyPerFlow(100.0));
+        assert_eq!(averages[&market], MoneyPerFlow(100.0));
     }
 }
