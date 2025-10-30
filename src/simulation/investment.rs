@@ -9,16 +9,16 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use indexmap::IndexMap;
-use itertools::{chain, iproduct, Itertools};
+use itertools::{Itertools, chain, iproduct};
 use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{appraise_investment, AppraisalOutput};
+use appraisal::{AppraisalOutput, appraise_investment};
 
 /// A map of demand across time slices for a specific commodity and region
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -220,27 +220,62 @@ impl InvestmentSet {
         let mut to_balance = investment_state.seen_commodities.clone();
         to_balance.extend_from_slice(&commodities_under_consideration);
 
-        // Iterate over the investment sets in the cycle
+        // Get commodity with unmet demand
+        let mut commodities_with_unmet_demand: Vec<CommodityID> = demand
+            .keys()
+            .filter_map(|(commodity_id, region, _)| {
+                if region == region_id && commodities_under_consideration.contains(commodity_id) {
+                    Some(commodity_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         let mut current_demand = demand.clone();
-        let mut investment_sets_to_run = investment_sets.clone();
         let mut selected_assets = HashMap::new();
         let mut loop_iter = 0;
         loop {
-            // Select assets for each investment set
-            for investment_set in investment_sets_to_run {
-                let assets = investment_set.select_assets(
-                    model,
-                    region_id,
-                    year,
-                    &current_demand,
-                    external_prices,
-                    investment_state,
-                    writer,
-                )?;
-
-                // This will replace any assets previously selected for this investment set
-                selected_assets.insert(investment_set, assets);
+            // If max iterations reached, break
+            if loop_iter == 10 {
+                warn!(
+                    "Max cycle investment iterations (10) reached. Unable to find stable solution for commodities {:?}",
+                    commodities_with_unmet_demand
+                );
+                break;
             }
+
+            // Pop off the first commodity with unmet demand
+            let commodity_of_interest = if let Some(commodity_id) =
+                commodities_with_unmet_demand.pop()
+            {
+                commodity_id
+            } else {
+                // If there are no commodities with unmet demand, we are done
+                info!(
+                    "Cycle investment for '{self}' in region '{region_id}' converged after {loop_iter} iterations"
+                );
+                break;
+            };
+
+            // Find the investment set related to this commodity
+            let investment_set = investment_sets
+                .iter()
+                .find(|set| set.contains_commodity(&HashSet::from([commodity_of_interest.clone()])))
+                .unwrap();
+
+            // Select assets for this investment set
+            // This will replace any assets previously selected for this investment set
+            let assets = investment_set.select_assets(
+                model,
+                region_id,
+                year,
+                &current_demand,
+                external_prices,
+                investment_state,
+                writer,
+            )?;
+            selected_assets.insert(investment_set, assets);
 
             // Full asset pool is previously selected assets plus assets selected in the cycle
             let mut all_assets = investment_state.selected_assets.clone();
@@ -251,60 +286,41 @@ impl InvestmentSet {
             all_assets.extend_from_slice(&flat_selected);
 
             // Run dispatch optimisation with the complete asset pool
-            // We allow unmet demand for any commodities under consideration in the cycle
             info!(
                 "Running cycle investment dispatch for '{self}' in region '{region_id}', iteration {loop_iter}"
             );
             let solution = DispatchRun::new(model, &all_assets, year)
                 .with_commodity_subset(&to_balance)
-                .with_unmet_demand_vars(&commodities_under_consideration)
+                .with_unmet_demand_vars(&commodities_with_unmet_demand)
                 .run(&format!("cycle {self} iteration {loop_iter}"), writer)?;
 
-            // Find commodities with unmet demand in this region
-            let changed_commodities = solution
+            // Look at dispatch solution to find commodities that have unmet demand
+            let coms = solution
                 .get_regions_and_commodities_with_unmet_demand()
                 .into_iter()
                 .filter_map(
                     |(reg, com)| {
-                        if &reg == region_id {
-                            Some(com)
-                        } else {
-                            None
-                        }
+                        if &reg == region_id { Some(com) } else { None }
                     },
                 )
                 .collect::<HashSet<CommodityID>>();
 
-            // If no commodities have unmet demand, we are done
-            if changed_commodities.is_empty() {
-                info!(
-                    "Cycle investment for '{self}' in region '{region_id}' converged after {loop_iter} iterations"
-                );
-                break;
+            // Add these to commodities_with_unmet_demand
+            for commodity_id in coms {
+                if !commodities_with_unmet_demand.contains(&commodity_id) {
+                    commodities_with_unmet_demand.push(commodity_id);
+                }
             }
 
-            // If max iterations reached, break
-            loop_iter += 1;
-            if loop_iter == 10 {
-                warn!(
-                    "Max cycle investment iterations (10) reached. Unable to find stable solution for commodities {:?}",
-                    changed_commodities
-                );
-                break;
-            }
-
-            // Otherwise, we have to update demand map and rerun with the relevant investment sets
+            // Calculate a new demand map for the next iteration
             current_demand = demand.clone();
             update_demand_map_with_inputs(
                 &mut current_demand,
                 &solution.create_flow_map(),
                 &flat_selected,
             );
-            investment_sets_to_run = investment_sets
-                .iter()
-                .filter(|s| s.contains_commodity(&changed_commodities))
-                .cloned()
-                .collect();
+
+            loop_iter += 1;
         }
         debug!("Completed cycle investment for '{self}' in region '{region_id}'");
 
