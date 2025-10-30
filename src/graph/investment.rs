@@ -1,6 +1,6 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityMap, CommodityType};
+use crate::commodity::{CommodityMap, CommodityType, Market};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
 use petgraph::algo::{condensation, toposort};
@@ -84,7 +84,11 @@ fn init_investment_graph_for_year(
             let node_weight = graph_filtered.node_weight(node_idx).unwrap();
             let investment_node = match node_weight {
                 GraphNode::Commodity(commodity_id) => {
-                    InvestmentSet::Single((commodity_id.clone(), region_id.clone()))
+                    let market = Market {
+                        commodity_id: commodity_id.clone(),
+                        region_id: region_id.clone(),
+                    };
+                    InvestmentSet::Single(market)
                 }
                 _ => unreachable!("Should only have commodity nodes after filtering"),
             };
@@ -118,7 +122,7 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
             _ => InvestmentSet::Cycle(
                 node_weight
                     .iter()
-                    .flat_map(|s| s.iter_commodity_ids())
+                    .flat_map(|s| s.iter_markets())
                     .cloned()
                     .collect(),
             ),

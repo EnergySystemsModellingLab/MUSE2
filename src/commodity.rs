@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::rc::Rc;
 
 define_id_type! {CommodityID}
@@ -87,6 +88,21 @@ pub enum CommodityType {
     /// This represents a commodity which can either be produced or consumed, but not both.
     #[string = "oth"]
     Other,
+}
+
+/// Represents a market for a specific commodity in a specific region (e.g. the coal market in GB).
+#[derive(PartialEq, Debug, Deserialize, Clone, Eq, Hash)]
+pub struct Market {
+    /// Commodity identifier
+    pub commodity_id: CommodityID,
+    /// Region identifier
+    pub region_id: RegionID,
+}
+
+impl Display for Market {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}|{}", self.commodity_id, self.region_id)
+    }
 }
 
 #[cfg(test)]
