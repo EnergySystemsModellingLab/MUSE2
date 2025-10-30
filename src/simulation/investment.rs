@@ -145,7 +145,7 @@ pub fn perform_agent_investment(
 
     // Iterate over investment sets in the investment order for this year
     for investment_set in investment_order {
-        // Select assets for the commodity(/ies) of interest
+        // Select assets for this investment set
         let selected_assets = investment_set.select_assets(
             model,
             year,
