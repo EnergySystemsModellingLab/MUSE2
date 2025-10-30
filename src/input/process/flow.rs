@@ -30,9 +30,9 @@ struct ProcessFlowRaw {
 
 impl ProcessFlowRaw {
     fn validate(&self) -> Result<()> {
-        // Check that flow is not infinity, nan, 0 etc.
+        // Check that flow is not infinity or nan.
         ensure!(
-            self.coeff.is_normal(),
+            self.coeff.is_finite(),
             "Invalid value for coeff ({})",
             self.coeff
         );
