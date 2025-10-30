@@ -171,9 +171,9 @@ struct ActivityRow {
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
-    activity: Activity,
-    activity_dual: MoneyPerActivity,
-    column_dual: MoneyPerActivity,
+    activity: Option<Activity>,
+    activity_dual: Option<MoneyPerActivity>,
+    column_dual: Option<MoneyPerActivity>,
 }
 
 /// Represents the commodity balance duals data in a row of the commodity balance duals CSV file
@@ -285,22 +285,24 @@ impl DebugDataWriter {
         K: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
     {
         // To account for different order of entries or missing ones, we first compile data in hash map
-        let mut map: IndexMap<
-            (&AssetRef, &TimeSliceID),
-            (Activity, MoneyPerActivity, MoneyPerActivity),
-        > = IndexMap::new();
+        type CompiledActivityData = (
+            Option<Activity>,
+            Option<MoneyPerActivity>,
+            Option<MoneyPerActivity>,
+        );
+        let mut map: IndexMap<(&AssetRef, &TimeSliceID), CompiledActivityData> = IndexMap::new();
 
         // For the activities
         for (asset, time_slice, activity) in iter_activity {
-            map.entry((asset, time_slice)).or_default().0 = activity;
+            map.entry((asset, time_slice)).or_default().0 = Some(activity);
         }
         // The activity duals
         for (asset, time_slice, activity_dual) in iter_activity_duals {
-            map.entry((asset, time_slice)).or_default().1 = activity_dual;
+            map.entry((asset, time_slice)).or_default().1 = Some(activity_dual);
         }
         // And the column duals
         for (asset, time_slice, column_dual) in iter_column_duals {
-            map.entry((asset, time_slice)).or_default().2 = column_dual;
+            map.entry((asset, time_slice)).or_default().2 = Some(column_dual);
         }
 
         for (asset, time_slice, activity, activity_dual, column_dual) in
@@ -729,9 +731,53 @@ mod tests {
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice,
-            activity,
-            activity_dual,
-            column_dual,
+            activity: Some(activity),
+            activity_dual: Some(activity_dual),
+            column_dual: Some(column_dual),
+        };
+        let records: Vec<ActivityRow> =
+            csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn test_write_activity_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
+        let milestone_year = 2020;
+        let run_description = "test_run".to_string();
+        let activity = Activity(100.5);
+        let dir = tempdir().unwrap();
+        let asset = assets.iter_active().next().unwrap();
+
+        // Write activity
+        {
+            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            writer
+                .write_activity(
+                    milestone_year,
+                    &run_description,
+                    iter::once((asset, &time_slice, activity)),
+                    iter::empty::<(&AssetRef, &TimeSliceID, MoneyPerActivity)>(),
+                    iter::empty::<(&AssetRef, &TimeSliceID, MoneyPerActivity)>(),
+                )
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let expected = ActivityRow {
+            milestone_year,
+            run_description,
+            asset_id: asset.id(),
+            process_id: asset.process_id().clone(),
+            region_id: asset.region_id().clone(),
+            time_slice,
+            activity: Some(activity),
+            activity_dual: None,
+            column_dual: None,
         };
         let records: Vec<ActivityRow> =
             csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
