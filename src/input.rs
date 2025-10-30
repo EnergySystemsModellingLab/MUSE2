@@ -66,7 +66,9 @@ pub fn read_csv_optional<'a, T: DeserializeOwned + 'a>(
 }
 
 fn read_csv_internal<'a, T: DeserializeOwned + 'a>(file_path: &'a Path) -> Result<Vec<T>> {
-    let vec = csv::Reader::from_path(file_path)
+    let vec = csv::ReaderBuilder::new()
+        .trim(csv::Trim::All)
+        .from_path(file_path)
         .with_context(|| input_err_msg(file_path))?
         .into_deserialize()
         .process_results(|iter| iter.collect_vec())
@@ -330,6 +332,24 @@ mod tests {
     fn test_read_csv() {
         let dir = tempdir().unwrap();
         let file_path = create_csv_file(dir.path(), "id,value\nhello,1\nworld,2\n");
+        let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
+        assert_eq!(
+            records,
+            &[
+                Record {
+                    id: "hello".into(),
+                    value: 1,
+                },
+                Record {
+                    id: "world".into(),
+                    value: 2,
+                }
+            ]
+        );
+
+        // File with leading/trailing whitespace
+        let dir = tempdir().unwrap();
+        let file_path = create_csv_file(dir.path(), "id  , value\t\n  hello\t ,1\n world ,2\n");
         let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
         assert_eq!(
             records,
