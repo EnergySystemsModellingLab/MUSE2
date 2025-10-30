@@ -11,6 +11,7 @@ use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use csv;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -283,14 +284,30 @@ impl DebugDataWriter {
         J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
         K: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
     {
-        for (asset, time_slice, activity, activity_dual, column_dual) in iter_activity
-            .zip(iter_activity_duals)
-            .zip(iter_column_duals)
-            .map(
-                |(((agent, ts, activity), (_, _, activity_dual)), (_, _, column_dual))| {
+        // To account for different order of entries or missing ones, we first compile data in hash map
+        let mut map: IndexMap<
+            (&AssetRef, &TimeSliceID),
+            (Activity, MoneyPerActivity, MoneyPerActivity),
+        > = IndexMap::new();
+
+        // For the activities
+        for (asset, time_slice, activity) in iter_activity {
+            map.entry((asset, time_slice)).or_default().0 = activity;
+        }
+        // The activity duals
+        for (asset, time_slice, activity_dual) in iter_activity_duals {
+            map.entry((asset, time_slice)).or_default().1 = activity_dual;
+        }
+        // And the column duals
+        for (asset, time_slice, column_dual) in iter_column_duals {
+            map.entry((asset, time_slice)).or_default().2 = column_dual;
+        }
+
+        for (asset, time_slice, activity, activity_dual, column_dual) in
+            map.iter()
+                .map(|(&(agent, ts), &(activity, activity_dual, column_dual))| {
                     (agent, ts, activity, activity_dual, column_dual)
-                },
-            )
+                })
         {
             let row = ActivityRow {
                 milestone_year,
