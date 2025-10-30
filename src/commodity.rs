@@ -14,8 +14,8 @@ define_id_type! {CommodityID}
 /// A map of [`Commodity`]s, keyed by commodity ID
 pub type CommodityMap = IndexMap<CommodityID, Rc<Commodity>>;
 
-/// A map of [`CommodityLevy`]s, keyed by region ID, year and time slice ID
-pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), CommodityLevy>;
+/// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
+pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
 
 /// A map of demand values, keyed by region ID, year and time slice selection
 pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
@@ -35,13 +35,20 @@ pub struct Commodity {
     pub kind: CommodityType,
     /// The time slice level for commodity balance
     pub time_slice_level: TimeSliceLevel,
-    /// Levies for this commodity for different combinations of region, year and time slice.
+    /// Production levies for this commodity for different combinations of region, year and time slice.
     ///
-    /// May be empty if there are no levies for this commodity, otherwise there must be entries for
-    /// every combination of parameters. Note that these values can be negative, indicating an
-    /// incentive.
+    /// May be empty if there are no production levies for this commodity, otherwise there must be
+    /// entries for every combination of parameters. Note that these values can be negative,
+    /// indicating an incentive.
     #[serde(skip)]
-    pub levies: CommodityLevyMap,
+    pub levies_prod: CommodityLevyMap,
+    /// Consumption levies for this commodity for different combinations of region, year and time slice.
+    ///
+    /// May be empty if there are no consumption levies for this commodity, otherwise there must be
+    /// entries for every combination of parameters. Note that these values can be negative,
+    /// indicating an incentive.
+    #[serde(skip)]
+    pub levies_cons: CommodityLevyMap,
     /// Demand as defined in input files. Will be empty for non-service-demand commodities.
     ///
     /// The [`TimeSliceSelection`] part of the key is always at the same [`TimeSliceLevel`] as the
@@ -53,9 +60,9 @@ pub struct Commodity {
 define_id_getter! {Commodity, CommodityID}
 
 /// Type of balance for application of cost
-#[derive(PartialEq, Clone, Debug, DeserializeLabeledStringEnum)]
+#[derive(Eq, PartialEq, Clone, Debug, DeserializeLabeledStringEnum, Hash)]
 pub enum BalanceType {
-    /// Applies to both consumption and production
+    /// Applies to production, with an equal and opposite levy/incentive on consumption
     #[string = "net"]
     Net,
     /// Applies to consumption only
@@ -64,18 +71,6 @@ pub enum BalanceType {
     /// Applies to production only
     #[string = "prod"]
     Production,
-}
-
-/// Represents a tax or other external cost on a commodity, as specified in input data.
-///
-/// For example, a CO2 price could be specified in input data to be applied to net CO2. Note that
-/// the value can also be negative, indicating an incentive.
-#[derive(PartialEq, Clone, Debug)]
-pub struct CommodityLevy {
-    /// Type of balance for application of cost
-    pub balance_type: BalanceType,
-    /// Cost per unit commodity
-    pub value: MoneyPerFlow,
 }
 
 /// Commodity balance type
@@ -118,10 +113,7 @@ mod tests {
             season: "winter".into(),
             time_of_day: "day".into(),
         };
-        let value = CommodityLevy {
-            balance_type: BalanceType::Consumption,
-            value: MoneyPerFlow(0.5),
-        };
+        let value = MoneyPerFlow(0.5);
         let mut map = CommodityLevyMap::new();
         assert!(
             map.insert(("GBR".into(), 2010, ts.clone()), value.clone())
