@@ -77,8 +77,7 @@ pub struct ProcessFlow {
     pub commodity: Rc<Commodity>,
     /// Maximum annual commodity flow quantity relative to other commodity flows.
     ///
-    /// Positive value indicates flow out and negative value indicates flow in. A value of zero is
-    /// both input and output.
+    /// Positive value indicates flow out and negative value indicates flow in.
     pub coeff: FlowPerActivity,
     /// Identifies if a flow is fixed or flexible.
     pub kind: FlowType,
@@ -106,33 +105,28 @@ impl ProcessFlow {
 
     /// Get the levy/incentive for this process flow with the given parameters, if any
     fn get_levy(&self, region_id: &RegionID, year: u32, time_slice: &TimeSliceID) -> MoneyPerFlow {
-        if let Some(levy) = if self.is_input() {
-            self.commodity
+        match self.direction() {
+            FlowDirection::Input => *self
+                .commodity
                 .levies_cons
                 .get(&(region_id.clone(), year, time_slice.clone()))
-        } else {
-            self.commodity
+                .unwrap_or(&MoneyPerFlow(0.0)),
+            FlowDirection::Output => *self
+                .commodity
                 .levies_prod
                 .get(&(region_id.clone(), year, time_slice.clone()))
-        } {
-            return *levy;
+                .unwrap_or(&MoneyPerFlow(0.0)),
+            FlowDirection::Zero => MoneyPerFlow(0.0),
         }
-        MoneyPerFlow(0.0)
     }
 
-    /// Returns true if this flow is an input (i.e., coeff < 0)
-    pub fn is_input(&self) -> bool {
-        self.coeff < FlowPerActivity(0.0)
-    }
-
-    /// Returns true if this flow is an output (i.e., coeff > 0)
-    pub fn is_output(&self) -> bool {
-        self.coeff > FlowPerActivity(0.0)
-    }
-
-    /// Returns true if this flow is zero
-    pub fn is_zero(&self) -> bool {
-        self.coeff == FlowPerActivity(0.0)
+    /// Direction of the flow
+    pub fn direction(&self) -> FlowDirection {
+        match self.coeff {
+            x if x < FlowPerActivity(0.0) => FlowDirection::Input,
+            x if x > FlowPerActivity(0.0) => FlowDirection::Output,
+            _ => FlowDirection::Zero,
+        }
     }
 }
 
@@ -147,6 +141,17 @@ pub enum FlowType {
     /// input/output ratio must be as per user input data
     #[string = "flexible"]
     Flexible,
+}
+
+/// Direction of the flow (see [`ProcessFlow`])
+#[derive(PartialEq, Debug)]
+pub enum FlowDirection {
+    /// The flow is an input (i.e., coeff > 0)
+    Input,
+    /// The flow is an output (i.e., coeff > 0)
+    Output,
+    /// The flow is zero, neither input nor output (i.e., coeff == 0)
+    Zero,
 }
 
 /// Additional parameters for a process
@@ -646,14 +651,8 @@ mod tests {
             cost: MoneyPerFlow(0.0),
         };
 
-        assert!(flow_in.is_input());
-        assert!(!flow_in.is_output());
-        assert!(!flow_in.is_zero());
-        assert!(flow_out.is_output());
-        assert!(!flow_out.is_input());
-        assert!(!flow_out.is_zero());
-        assert!(!flow_zero.is_input());
-        assert!(!flow_zero.is_output());
-        assert!(flow_zero.is_zero());
+        assert!(flow_in.direction() == FlowDirection::Input);
+        assert!(flow_out.direction() == FlowDirection::Output);
+        assert!(flow_zero.direction() == FlowDirection::Zero);
     }
 }

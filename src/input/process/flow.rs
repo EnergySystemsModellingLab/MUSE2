@@ -1,7 +1,9 @@
 //! Code for reading process flows file
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap};
-use crate::process::{FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap};
+use crate::process::{
+    FlowDirection, FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap,
+};
 use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
@@ -190,7 +192,7 @@ fn validate_flows_and_update_primary_output(
 /// This is only possible if there is only one output flow for the process.
 fn infer_primary_output(map: &IndexMap<CommodityID, ProcessFlow>) -> Result<Option<CommodityID>> {
     let mut iter = map.iter().filter_map(|(commodity_id, flow)| {
-        (flow.is_output() || flow.is_zero()).then_some(commodity_id)
+        (flow.direction() == FlowDirection::Output).then_some(commodity_id)
     });
 
     let Some(first_output) = iter.next() else {
@@ -217,14 +219,15 @@ fn check_flows_primary_output(
         })?;
 
         ensure!(
-            flow.is_output() || flow.is_zero(),
+            flow.direction() == FlowDirection::Output,
             "Primary output commodity '{primary_output}' isn't an output flow",
         );
     } else {
         ensure!(
             flows_map
                 .values()
-                .all(|x| ProcessFlow::is_input(x) || ProcessFlow::is_zero(x)),
+                .all(|x| x.direction() == FlowDirection::Input
+                    || x.direction() == FlowDirection::Zero),
             "First year is only inputs, but subsequent years have outputs, although no primary \
             output is specified"
         );
@@ -247,15 +250,13 @@ fn validate_secondary_flows(
 
         // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
         let iter = iproduct!(process.years.iter(), process.regions.iter());
-        let mut flows: HashMap<(CommodityID, RegionID), Vec<bool>> = HashMap::new();
+        let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
         for (&year, region_id) in iter {
             let flow = map[&(region_id.clone(), year)]
                 .iter()
                 .filter_map(|(commodity_id, flow)| {
-                    (Some(commodity_id) != process.primary_output.as_ref()).then_some((
-                        (commodity_id.clone(), region_id.clone()),
-                        flow.is_input() || flow.is_zero(),
-                    ))
+                    (Some(commodity_id) != process.primary_output.as_ref())
+                        .then_some(((commodity_id.clone(), region_id.clone()), flow))
                 });
 
             for (key, value) in flow {
@@ -272,7 +273,7 @@ fn validate_secondary_flows(
                 does not cover all years"
             );
             ensure!(
-                value.iter().all(|&x| x == value[0]),
+                value.iter().all(|&x| x.direction() == value[0].direction()),
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
                 behaves as input or output in different years."
             );
