@@ -77,7 +77,8 @@ pub struct ProcessFlow {
     pub commodity: Rc<Commodity>,
     /// Maximum annual commodity flow quantity relative to other commodity flows.
     ///
-    /// Positive value indicates flow out and negative value indicates flow in.
+    /// Positive value indicates flow out and negative value indicates flow in. A value of zero is
+    /// both input and output.
     pub coeff: FlowPerActivity,
     /// Identifies if a flow is fixed or flexible.
     pub kind: FlowType,
@@ -119,14 +120,14 @@ impl ProcessFlow {
         MoneyPerFlow(0.0)
     }
 
-    /// Returns true if this flow is an input (i.e., coeff < 0)
+    /// Returns true if this flow is an input (i.e., coeff <= 0)
     pub fn is_input(&self) -> bool {
-        self.coeff < FlowPerActivity(0.0)
+        self.coeff <= FlowPerActivity(0.0)
     }
 
-    /// Returns true if this flow is an output (i.e., coeff > 0)
+    /// Returns true if this flow is an output (i.e., coeff >= 0)
     pub fn is_output(&self) -> bool {
-        self.coeff > FlowPerActivity(0.0)
+        self.coeff >= FlowPerActivity(0.0)
     }
 }
 
@@ -644,7 +645,7 @@ mod tests {
         assert!(!flow_in.is_output());
         assert!(flow_out.is_output());
         assert!(!flow_out.is_input());
-        assert!(!flow_zero.is_input());
-        assert!(!flow_zero.is_output());
+        assert!(flow_zero.is_input());
+        assert!(flow_zero.is_output());
     }
 }
