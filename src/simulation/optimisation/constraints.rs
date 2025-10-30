@@ -144,11 +144,7 @@ where
             // Also include unmet demand variables if required
             if !variables.unmet_demand_var_idx.is_empty() {
                 for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                    let var = variables.get_unmet_demand_var(
-                        &market.commodity_id,
-                        &market.region_id,
-                        time_slice,
-                    );
+                    let var = variables.get_unmet_demand_var(&market, time_slice);
                     terms.push((var, 1.0));
                 }
             }
