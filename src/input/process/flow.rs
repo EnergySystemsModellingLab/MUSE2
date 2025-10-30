@@ -272,8 +272,14 @@ fn validate_secondary_flows(
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
                 does not cover all years"
             );
+            let input_or_zero = value
+                .iter()
+                .all(|&x| [FlowDirection::Input, FlowDirection::Zero].contains(&x.direction()));
+            let output_or_zero = value
+                .iter()
+                .all(|&x| [FlowDirection::Output, FlowDirection::Zero].contains(&x.direction()));
             ensure!(
-                value.iter().all(|&x| x.direction() == value[0].direction()),
+                input_or_zero || output_or_zero,
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
                 behaves as input or output in different years."
             );
