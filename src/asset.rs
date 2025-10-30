@@ -1,6 +1,6 @@
 //! Assets are instances of a process which are owned and invested in by agents.
 use crate::agent::AgentID;
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, MarketID};
 use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
@@ -359,7 +359,10 @@ impl Asset {
             .map(|flow| {
                 flow.coeff
                     * prices
-                        .get(&flow.commodity.id, self.region_id(), time_slice)
+                        .get(
+                            &MarketID::from((&flow.commodity.id, self.region_id())),
+                            time_slice,
+                        )
                         .unwrap_or_default()
             })
             .sum()
@@ -980,7 +983,11 @@ mod tests {
 
         // Set input prices
         let mut input_prices = CommodityPrices::default();
-        input_prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(3.0));
+        input_prices.insert(
+            &MarketID::from((&commodity_id, &region_id)),
+            &time_slice,
+            MoneyPerFlow(3.0),
+        );
 
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);

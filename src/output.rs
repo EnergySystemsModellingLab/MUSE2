@@ -1,7 +1,7 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
 use crate::asset::{Asset, AssetID, AssetRef};
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, MarketID};
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
@@ -336,14 +336,14 @@ impl DebugDataWriter {
         iter: I,
     ) -> Result<()>
     where
-        I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
+        I: Iterator<Item = (&'a MarketID, &'a TimeSliceID, MoneyPerFlow)>,
     {
-        for (commodity_id, region_id, time_slice, value) in iter {
+        for (market, time_slice, value) in iter {
             let row = CommodityBalanceDualsRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
+                commodity_id: market.commodity.clone(),
+                region_id: market.region.clone(),
                 time_slice: time_slice.clone(),
                 value,
             };
@@ -516,11 +516,11 @@ impl DataWriter {
 
     /// Write commodity prices to a CSV file
     pub fn write_prices(&mut self, milestone_year: u32, prices: &CommodityPrices) -> Result<()> {
-        for (commodity_id, region_id, time_slice, price) in prices.iter() {
+        for (market, time_slice, price) in prices.iter() {
             let row = CommodityPriceRow {
                 milestone_year,
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
+                commodity_id: market.commodity.clone(),
+                region_id: market.region.clone(),
                 time_slice: time_slice.clone(),
                 price,
             };
@@ -560,7 +560,7 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{assets, commodity_id, region_id, time_slice};
+    use crate::fixture::{assets, commodity_id, market_id, time_slice};
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
@@ -624,11 +624,11 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_prices(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
+    fn test_write_prices(market_id: MarketID, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let price = MoneyPerFlow(42.0);
         let mut prices = CommodityPrices::default();
-        prices.insert(&commodity_id, &region_id, &time_slice, price);
+        prices.insert(&market_id, &time_slice, price);
 
         let dir = tempdir().unwrap();
 
@@ -642,8 +642,8 @@ mod tests {
         // Read back and compare
         let expected = CommodityPriceRow {
             milestone_year,
-            commodity_id,
-            region_id,
+            commodity_id: market_id.commodity,
+            region_id: market_id.region,
             time_slice,
             price,
         };
@@ -657,11 +657,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_commodity_balance_duals(
-        commodity_id: CommodityID,
-        region_id: RegionID,
-        time_slice: TimeSliceID,
-    ) {
+    fn test_write_commodity_balance_duals(market_id: MarketID, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let value = MoneyPerFlow(0.5);
@@ -674,7 +670,7 @@ mod tests {
                 .write_commodity_balance_duals(
                     milestone_year,
                     &run_description,
-                    iter::once((&commodity_id, &region_id, &time_slice, value)),
+                    iter::once((&market_id, &time_slice, value)),
                 )
                 .unwrap();
             writer.flush().unwrap();
@@ -684,8 +680,8 @@ mod tests {
         let expected = CommodityBalanceDualsRow {
             milestone_year,
             run_description,
-            commodity_id,
-            region_id,
+            commodity_id: market_id.commodity,
+            region_id: market_id.region,
             time_slice,
             value,
         };

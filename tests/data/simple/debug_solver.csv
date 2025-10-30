@@ -1,22 +1,22 @@
 milestone_year,run_description,objective_value
 2020,final without candidates,4161.39238403039
 2020,final with candidates,4161.360353332644
-2030,ironing out iteration 0; post RSHEAT/GBR investment,5758.123189254355
-2030,ironing out iteration 0; post ELCTRI/GBR investment,4737.9849712525465
-2030,ironing out iteration 0; post GASNAT/GBR investment,4737.9849712525465
-2030,ironing out iteration 0; post GASPRD/GBR investment,4737.984971252546
+2030,ironing out iteration 0; post RSHEAT|GBR investment,5758.123189254355
+2030,ironing out iteration 0; post ELCTRI|GBR investment,4737.9849712525465
+2030,ironing out iteration 0; post GASNAT|GBR investment,4737.9849712525465
+2030,ironing out iteration 0; post GASPRD|GBR investment,4737.984971252546
 2030,ironing out iteration 0; final without candidates,4737.984971252546
 2030,ironing out iteration 0; final with candidates,4737.952940554798
 2030,final without candidates,4737.984971252546
 2030,final with candidates,4737.952940554799
-2040,ironing out iteration 0; post RSHEAT/GBR investment,6613.816363708183
-2040,ironing out iteration 0; post GASNAT/GBR investment,6613.816363708183
-2040,ironing out iteration 0; post GASPRD/GBR investment,6613.816363708186
+2040,ironing out iteration 0; post RSHEAT|GBR investment,6613.816363708183
+2040,ironing out iteration 0; post GASNAT|GBR investment,6613.816363708183
+2040,ironing out iteration 0; post GASPRD|GBR investment,6613.816363708186
 2040,ironing out iteration 0; final without candidates,6613.816363708186
 2040,ironing out iteration 0; final with candidates,6613.8158072544975
-2040,ironing out iteration 1; post RSHEAT/GBR investment,6613.816363708183
-2040,ironing out iteration 1; post GASNAT/GBR investment,6613.816363708183
-2040,ironing out iteration 1; post GASPRD/GBR investment,6613.816363708186
+2040,ironing out iteration 1; post RSHEAT|GBR investment,6613.816363708183
+2040,ironing out iteration 1; post GASNAT|GBR investment,6613.816363708183
+2040,ironing out iteration 1; post GASPRD|GBR investment,6613.816363708186
 2040,ironing out iteration 1; final without candidates,6613.816363708186
 2040,ironing out iteration 1; final with candidates,6613.8158072544975
 2040,final without candidates,6613.816363708184

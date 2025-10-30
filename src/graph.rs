@@ -3,7 +3,7 @@ use crate::commodity::CommodityID;
 use crate::process::{ProcessID, ProcessMap};
 use crate::region::RegionID;
 use anyhow::Result;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use itertools::iproduct;
 use petgraph::Directed;
 use petgraph::dot::Dot;
@@ -153,7 +153,7 @@ pub fn build_commodity_graphs_for_model(
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
     years: &[u32],
-) -> HashMap<(RegionID, u32), CommoditiesGraph> {
+) -> IndexMap<(RegionID, u32), CommoditiesGraph> {
     iproduct!(region_ids, years.iter())
         .map(|(region_id, year)| {
             let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
@@ -176,7 +176,7 @@ fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>)
 ///
 /// The graphs are saved as DOT files to the specified output path
 pub fn save_commodity_graphs_for_model(
-    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     output_path: &Path,
 ) -> Result<()> {
     for ((region_id, year), graph) in commodity_graphs {

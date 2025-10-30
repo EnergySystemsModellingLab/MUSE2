@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::rc::Rc;
 
 define_id_type! {CommodityID}
@@ -87,6 +88,46 @@ pub enum CommodityType {
     /// This represents a commodity which can either be produced or consumed, but not both.
     #[string = "oth"]
     Other,
+}
+
+/// Identifies a market for a specific commodity in a specific region (e.g. the coal market in GBR).
+#[derive(PartialEq, Debug, Deserialize, Clone, Eq, Hash, Ord, PartialOrd)]
+pub struct MarketID {
+    /// Commodity that the market refers to
+    pub commodity: CommodityID,
+    /// Region that the market refers to
+    pub region: RegionID,
+}
+
+impl Display for MarketID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}|{}", self.commodity, self.region)
+    }
+}
+
+impl From<(&CommodityID, &RegionID)> for MarketID {
+    fn from((c, r): (&CommodityID, &RegionID)) -> Self {
+        Self {
+            commodity: c.clone(),
+            region: r.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl From<&str> for MarketID {
+    /// Parse a `MarketID` from a string in the format 'commodity_id|region_id'
+    ///
+    /// This is only used as a shortcut for creating `MarketID` objects in tests.
+    fn from(s: &str) -> Self {
+        let (commodity, region) = s
+            .split_once('|')
+            .expect("Market string must be in format 'commodity_id|region_id'");
+        MarketID {
+            commodity: commodity.into(),
+            region: region.into(),
+        }
+    }
 }
 
 #[cfg(test)]

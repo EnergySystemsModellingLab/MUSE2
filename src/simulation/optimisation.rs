@@ -2,11 +2,10 @@
 //!
 //! This is used to calculate commodity flows and prices.
 use crate::asset::{Asset, AssetRef};
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, MarketID};
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
@@ -35,8 +34,8 @@ type Variable = highs::Col;
 /// The map of variables related to assets
 type AssetVariableMap = IndexMap<(AssetRef, TimeSliceID), Variable>;
 
-/// Variables representing unmet demand for a given commodity
-type UnmetDemandVariableMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Variable>;
+/// Variables representing unmet demand for a given market
+type UnmetDemandVariableMap = IndexMap<(MarketID, TimeSliceID), Variable>;
 
 /// A map for easy lookup of variables in the problem.
 ///
@@ -110,9 +109,9 @@ impl VariableMap {
         &mut self,
         problem: &mut Problem,
         model: &Model,
-        commodities: &[CommodityID],
+        markets: &[MarketID],
     ) {
-        assert!(!commodities.is_empty());
+        assert!(!markets.is_empty());
 
         // This line **must** come before we add more variables
         let start = problem.num_cols();
@@ -120,17 +119,14 @@ impl VariableMap {
         // Add variables
         let voll = model.parameters.value_of_lost_load;
         self.unmet_demand_vars.extend(
-            iproduct!(
-                commodities.iter(),
-                model.iter_regions(),
-                model.time_slice_info.iter_ids()
-            )
-            .map(|(commodity_id, region_id, time_slice)| {
-                let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-                let var = problem.add_column(voll.value(), 0.0..);
+            iproduct!(markets.iter(), model.time_slice_info.iter_ids()).map(
+                |(market, time_slice)| {
+                    let key = (market.clone(), time_slice.clone());
+                    let var = problem.add_column(voll.value(), 0.0..);
 
-                (key, var)
-            }),
+                    (key, var)
+                },
+            ),
         );
 
         self.unmet_demand_var_idx = start..problem.num_cols();
@@ -147,13 +143,8 @@ impl VariableMap {
     }
 
     /// Get the unmet demand [`Variable`] corresponding to the given parameters.
-    fn get_unmet_demand_var(
-        &self,
-        commodity_id: &CommodityID,
-        region_id: &RegionID,
-        time_slice: &TimeSliceID,
-    ) -> Variable {
-        let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
+    fn get_unmet_demand_var(&self, market: &MarketID, time_slice: &TimeSliceID) -> Variable {
+        let key = (market.clone(), time_slice.clone());
 
         *self
             .unmet_demand_vars
@@ -224,32 +215,28 @@ impl Solution<'_> {
     }
 
     /// Iterate over unmet demand
-    pub fn iter_unmet_demand(
-        &self,
-    ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, Flow)> {
+    pub fn iter_unmet_demand(&self) -> impl Iterator<Item = (&MarketID, &TimeSliceID, Flow)> {
         self.variables
             .unmet_demand_vars
             .keys()
             .zip(self.solution.columns()[self.variables.unmet_demand_var_idx.clone()].iter())
-            .map(|((commodity_id, region_id, time_slice), flow)| {
-                (commodity_id, region_id, time_slice, Flow(*flow))
-            })
+            .map(|((market, time_slice), flow)| (market, time_slice, Flow(*flow)))
     }
 
     /// Keys and dual values for commodity balance constraints.
     pub fn iter_commodity_balance_duals(
         &self,
-    ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, MoneyPerFlow)> {
+    ) -> impl Iterator<Item = (&MarketID, &TimeSliceID, MoneyPerFlow)> {
         // Each commodity balance constraint applies to a particular time slice
         // selection (depending on time slice level). Where this covers multiple time slices,
         // we return the same dual for each individual time slice.
         self.constraint_keys
             .commodity_balance_keys
             .zip_duals(self.solution.dual_rows())
-            .flat_map(|((commodity_id, region_id, ts_selection), price)| {
+            .flat_map(|((market, ts_selection), price)| {
                 ts_selection
                     .iter(self.time_slice_info)
-                    .map(move |(ts, _)| (commodity_id, region_id, ts, price))
+                    .map(move |(ts, _)| (market, ts, price))
             })
     }
 
@@ -330,13 +317,13 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 ///
 /// Input prices should only be provided for commodities for which there will be no commodity
 /// balance constraint.
-fn check_input_prices(input_prices: &CommodityPrices, commodities: &[CommodityID]) {
-    let commodities_set: HashSet<_> = commodities.iter().collect();
-    let has_prices_for_commodity_subset = input_prices
+fn check_input_prices(input_prices: &CommodityPrices, markets: &[MarketID]) {
+    let markets_set: HashSet<_> = markets.iter().collect();
+    let has_prices_for_market_subset = input_prices
         .keys()
-        .any(|(commodity_id, _, _)| commodities_set.contains(commodity_id));
+        .any(|(market, _)| markets_set.contains(&market));
     assert!(
-        !has_prices_for_commodity_subset,
+        !has_prices_for_market_subset,
         "Input prices were included for commodities that are being modelled, which is not allowed."
     );
 }
@@ -353,7 +340,7 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
-    commodities_to_balance: &'run [CommodityID],
+    markets_to_balance: &'run [MarketID],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
@@ -365,7 +352,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             model,
             existing_assets: assets,
             candidate_assets: &[],
-            commodities_to_balance: &[],
+            markets_to_balance: &[],
             input_prices: None,
             year,
         }
@@ -379,12 +366,12 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
     }
 
-    /// Only apply commodity balance constraints to the specified subset of commodities
-    pub fn with_commodity_subset(self, commodities: &'run [CommodityID]) -> Self {
-        assert!(!commodities.is_empty());
+    /// Only apply commodity balance constraints to the specified subset of markets
+    pub fn with_market_subset(self, markets: &'run [MarketID]) -> Self {
+        assert!(!markets.is_empty());
 
         Self {
-            commodities_to_balance: commodities,
+            markets_to_balance: markets,
             ..self
         }
     }
@@ -418,30 +405,30 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// This is an internal function as callers always want to save results.
     fn run_no_save(&self) -> Result<Solution<'model>> {
-        // If the user provided no commodities to balance, we all use of them
-        let all_commodities: Vec<_>;
-        let commodities_to_balance = if self.commodities_to_balance.is_empty() {
-            all_commodities = self.model.commodities.keys().cloned().collect();
-            &all_commodities
+        // If the user provided no markets to balance, we all use of them
+        let all_markets: Vec<_>;
+        let markets_to_balance = if self.markets_to_balance.is_empty() {
+            all_markets = self.model.iter_markets().collect();
+            &all_markets
         } else {
-            self.commodities_to_balance
+            self.markets_to_balance
         };
         if let Some(input_prices) = self.input_prices {
-            check_input_prices(input_prices, commodities_to_balance);
+            check_input_prices(input_prices, markets_to_balance);
         }
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
         // track the unmet demand so we can report the offending regions/commodities to users
-        match self.run_without_unmet_demand(commodities_to_balance) {
+        match self.run_without_unmet_demand(markets_to_balance) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
-                let pairs = self
-                    .get_regions_and_commodities_with_unmet_demand(commodities_to_balance)
+                let markets = self
+                    .get_markets_with_unmet_demand(markets_to_balance)
                     .expect("Failed to run dispatch to calculate unmet demand");
 
                 ensure!(
-                    !pairs.is_empty(),
+                    !markets.is_empty(),
                     "Model is infeasible, but there was no unmet demand"
                 );
 
@@ -449,7 +436,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     "The solver has indicated that the problem is infeasible, probably because \
                     the supplied assets could not meet the required demand. Demand was not met \
                     for the following region and commodity pairs: {}",
-                    format_items_with_cap(pairs)
+                    format_items_with_cap(markets)
                 )
             }
             Err(err) => Err(err)?,
@@ -459,28 +446,25 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch without unmet demand variables
     fn run_without_unmet_demand(
         &self,
-        commodities: &[CommodityID],
+        markets: &[MarketID],
     ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(commodities, /*allow_unmet_demand=*/ false)
+        self.run_internal(markets, /*allow_unmet_demand=*/ false)
     }
 
-    /// Run dispatch to diagnose which regions and commodities have unmet demand
-    fn get_regions_and_commodities_with_unmet_demand(
-        &self,
-        commodities: &[CommodityID],
-    ) -> Result<IndexSet<(RegionID, CommodityID)>> {
-        let solution = self.run_internal(commodities, /*allow_unmet_demand=*/ true)?;
+    /// Run dispatch to diagnose which markets have unmet demand
+    fn get_markets_with_unmet_demand(&self, markets: &[MarketID]) -> Result<IndexSet<MarketID>> {
+        let solution = self.run_internal(markets, /*allow_unmet_demand=*/ true)?;
         Ok(solution
             .iter_unmet_demand()
-            .filter(|(_, _, _, flow)| *flow > Flow(0.0))
-            .map(|(commodity_id, region_id, _, _)| (region_id.clone(), commodity_id.clone()))
+            .filter(|(_, _, flow)| *flow > Flow(0.0))
+            .map(|(market, _, _)| market.clone())
             .collect())
     }
 
     /// Run dispatch for specified commodities, optionally including unmet demand variables
     fn run_internal(
         &self,
-        commodities: &[CommodityID],
+        markets: &[MarketID],
         allow_unmet_demand: bool,
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
@@ -497,7 +481,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // If unmet demand is enabled for this dispatch run (and is allowed by the model param) then
         // we add variables representing unmet demand
         if allow_unmet_demand {
-            variables.add_unmet_demand_variables(&mut problem, self.model, commodities);
+            variables.add_unmet_demand_variables(&mut problem, self.model, markets);
         }
 
         // Add constraints
@@ -507,7 +491,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &variables,
             self.model,
             &all_assets,
-            commodities,
+            markets,
             self.year,
         );
 
