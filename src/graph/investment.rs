@@ -227,14 +227,15 @@ mod tests {
         commodities.insert("B".into(), Rc::new(sed_commodity));
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
-        let result = solve_investment_order(&graph, &commodities);
+        let graphs = HashMap::from([(("GBR".into(), 2020), graph)]);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all investment sets should be `Single`
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single("C".into()));
-        assert_eq!(result[1], InvestmentSet::Single("B".into()));
-        assert_eq!(result[2], InvestmentSet::Single("A".into()));
+        assert_eq!(result[0], InvestmentSet::Single("C|GBR".into()));
+        assert_eq!(result[1], InvestmentSet::Single("B|GBR".into()));
+        assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
     }
 
     #[rstest]
@@ -254,13 +255,14 @@ mod tests {
         commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
         commodities.insert("B".into(), Rc::new(sed_commodity));
 
-        let result = solve_investment_order(&graph, &commodities);
+        let graphs = HashMap::from([(("GBR".into(), 2020), graph)]);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Should be a single `Cycle` investment set containing both commodities
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            InvestmentSet::Cycle(vec!["A".into(), "B".into()])
+            InvestmentSet::Cycle(vec!["A|GBR".into(), "B|GBR".into()])
         );
     }
 
@@ -295,18 +297,72 @@ mod tests {
         commodities.insert("C".into(), Rc::new(sed_commodity));
         commodities.insert("D".into(), Rc::new(svd_commodity));
 
-        let result = solve_investment_order(&graph, &commodities);
+        let graphs = HashMap::from([(("GBR".into(), 2020), graph)]);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single("D".into()));
+        assert_eq!(result[0], InvestmentSet::Single("D|GBR".into()));
         assert_eq!(
             result[1],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("B".into()),
-                InvestmentSet::Single("C".into())
+                InvestmentSet::Single("B|GBR".into()),
+                InvestmentSet::Single("C|GBR".into())
             ])
         );
-        assert_eq!(result[2], InvestmentSet::Single("A".into()));
+        assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
+    }
+
+    fn test_solve_investment_order_multiple_regions(
+        sed_commodity: Commodity,
+        svd_commodity: Commodity,
+    ) {
+        // Create a simple linear graph: A -> B -> C
+        let mut graph = Graph::new();
+
+        let node_a = graph.add_node(GraphNode::Commodity("A".into()));
+        let node_b = graph.add_node(GraphNode::Commodity("B".into()));
+        let node_c = graph.add_node(GraphNode::Commodity("C".into()));
+
+        // Add edges: A -> B -> C
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
+
+        // Create commodities map using fixtures
+        let mut commodities = CommodityMap::new();
+        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Rc::new(sed_commodity));
+        commodities.insert("C".into(), Rc::new(svd_commodity));
+
+        // Duplicate the graph over two regions
+        let graphs = HashMap::from([
+            (("GBR".into(), 2020), graph.clone()),
+            (("FRA".into(), 2020), graph),
+        ]);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
+
+        // Expected order: Should have three layers, each with two commodities (one per region)
+        assert_eq!(result.len(), 3);
+        assert_eq!(
+            result[0],
+            InvestmentSet::Layer(vec![
+                InvestmentSet::Single("C|GBR".into()),
+                InvestmentSet::Single("C|FRA".into())
+            ])
+        );
+        assert_eq!(
+            result[1],
+            InvestmentSet::Layer(vec![
+                InvestmentSet::Single("B|GBR".into()),
+                InvestmentSet::Single("B|FRA".into())
+            ])
+        );
+        assert_eq!(
+            result[2],
+            InvestmentSet::Layer(vec![
+                InvestmentSet::Single("A|GBR".into()),
+                InvestmentSet::Single("A|FRA".into())
+            ])
+        );
     }
 }

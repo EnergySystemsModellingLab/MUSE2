@@ -106,6 +106,19 @@ impl Display for Market {
 }
 
 #[cfg(test)]
+impl From<&str> for Market {
+    fn from(s: &str) -> Self {
+        let (commodity, region) = s
+            .split_once('|')
+            .expect("Market string must be in format 'commodity_id|region_id'");
+        Market {
+            commodity_id: commodity.into(),
+            region_id: region.into(),
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::time_slice::TimeSliceSelection;

@@ -472,21 +472,6 @@ fn get_candidate_assets<'a>(
         })
 }
 
-/// Get a map of prices for a subset of commodities
-fn get_prices_for_commodities(
-    prices: &CommodityPrices,
-    time_slice_info: &TimeSliceInfo,
-    region_id: &RegionID,
-    commodities: &[CommodityID],
-) -> CommodityPrices {
-    iproduct!(commodities.iter(), time_slice_info.iter_ids())
-        .map(|(commodity_id, time_slice)| {
-            let price = prices.get(commodity_id, region_id, time_slice).unwrap();
-            (commodity_id, region_id, time_slice, price)
-        })
-        .collect()
-}
-
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
 fn select_best_assets(
