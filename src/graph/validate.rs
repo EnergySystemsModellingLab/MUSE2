@@ -6,7 +6,7 @@ use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use strum::IntoEnumIterator;
 
 /// Prepares a graph for validation with [`validate_commodities_graph`].
@@ -181,7 +181,7 @@ fn validate_commodities_graph(
 /// - Commodity type rules are violated (e.g., SVD commodities being consumed)
 /// - Demand cannot be satisfied
 pub fn validate_commodity_graphs_for_model(
-    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     processes: &ProcessMap,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
