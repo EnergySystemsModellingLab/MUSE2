@@ -32,19 +32,18 @@ pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
-    Cycle(Vec<InvestmentSet>),
+    Cycle(Vec<CommodityID>),
     /// Assets are selected for a layer of independent commodities
     Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
     /// Recursively iterate over all `CommodityID`s contained in this `InvestmentSet`.
-    fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
+    pub fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
         match self {
             InvestmentSet::Single(id) => Box::new(std::iter::once(id)),
-            InvestmentSet::Layer(set) | InvestmentSet::Cycle(set) => {
-                Box::new(set.iter().flat_map(|s| s.iter_commodity_ids()))
-            }
+            InvestmentSet::Cycle(ids) => Box::new(ids.iter()),
+            InvestmentSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_commodity_ids())),
         }
     }
 

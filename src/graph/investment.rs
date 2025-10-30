@@ -84,7 +84,13 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
-            _ => InvestmentSet::Cycle(node_weight.clone()),
+            _ => InvestmentSet::Cycle(
+                node_weight
+                    .iter()
+                    .flat_map(|s| s.iter_commodity_ids())
+                    .cloned()
+                    .collect(),
+            ),
         },
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
@@ -221,10 +227,7 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            InvestmentSet::Cycle(vec![
-                InvestmentSet::Single("A".into()),
-                InvestmentSet::Single("B".into())
-            ])
+            InvestmentSet::Cycle(vec!["A".into(), "B".into()])
         );
     }
 
