@@ -1,8 +1,7 @@
 //! Code for updating the simulation state.
 use crate::asset::AssetRef;
-use crate::commodity::CommodityID;
+use crate::commodity::Market;
 use crate::model::{Model, PricingStrategy};
-use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
@@ -31,7 +30,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
 #[derive(Default, Clone)]
-pub struct CommodityPrices(BTreeMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
+pub struct CommodityPrices(BTreeMap<(Market, TimeSliceID), MoneyPerFlow>);
 
 impl CommodityPrices {
     /// Remove the impact of scarcity on prices.
@@ -60,20 +59,14 @@ impl CommodityPrices {
     /// Extend the prices map, possibly overwriting values
     pub fn extend<T>(&mut self, iter: T)
     where
-        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
+        T: IntoIterator<Item = ((Market, TimeSliceID), MoneyPerFlow)>,
     {
         self.0.extend(iter);
     }
 
     /// Insert a price for the given commodity, region and time slice
-    pub fn insert(
-        &mut self,
-        commodity_id: &CommodityID,
-        region_id: &RegionID,
-        time_slice: &TimeSliceID,
-        price: MoneyPerFlow,
-    ) {
-        let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
+    pub fn insert(&mut self, market: &Market, time_slice: &TimeSliceID, price: MoneyPerFlow) {
+        let key = (market.clone(), time_slice.clone());
         self.0.insert(key, price);
     }
 
@@ -82,40 +75,25 @@ impl CommodityPrices {
     /// # Returns
     ///
     /// An iterator of tuples containing commodity ID, region ID, time slice and price.
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, MoneyPerFlow)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Market, &TimeSliceID, MoneyPerFlow)> {
         self.0
             .iter()
-            .map(|((commodity_id, region_id, ts), price)| (commodity_id, region_id, ts, *price))
+            .map(|((market, ts), price)| (market, ts, *price))
     }
 
     /// Get the price for the specified commodity for a given region and time slice
-    pub fn get(
-        &self,
-        commodity_id: &CommodityID,
-        region_id: &RegionID,
-        time_slice: &TimeSliceID,
-    ) -> Option<MoneyPerFlow> {
-        self.0
-            .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
-            .copied()
+    pub fn get(&self, market: &Market, time_slice: &TimeSliceID) -> Option<MoneyPerFlow> {
+        self.0.get(&(market.clone(), time_slice.clone())).copied()
     }
 
     /// Iterate over the price map's keys
-    pub fn keys(&self) -> btree_map::Keys<'_, (CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+    pub fn keys(&self) -> btree_map::Keys<'_, (Market, TimeSliceID), MoneyPerFlow> {
         self.0.keys()
     }
 
     /// Remove the specified entry from the map
-    pub fn remove(
-        &mut self,
-        commodity_id: &CommodityID,
-        region_id: &RegionID,
-        time_slice: &TimeSliceID,
-    ) -> Option<MoneyPerFlow> {
-        self.0
-            .remove(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
+    pub fn remove(&mut self, market: &Market, time_slice: &TimeSliceID) -> Option<MoneyPerFlow> {
+        self.0.remove(&(market.clone(), time_slice.clone()))
     }
 
     /// Calculate time slice-weighted average prices for each commodity-region pair
@@ -128,14 +106,13 @@ impl CommodityPrices {
     fn time_slice_weighted_averages(
         &self,
         time_slice_info: &TimeSliceInfo,
-    ) -> HashMap<(CommodityID, RegionID), MoneyPerFlow> {
+    ) -> HashMap<Market, MoneyPerFlow> {
         let mut weighted_prices = HashMap::new();
 
-        for ((commodity_id, region_id, time_slice_id), price) in &self.0 {
+        for ((market, time_slice_id), price) in &self.0 {
             // NB: Time slice fractions will sum to one
             let weight = time_slice_info.time_slices[time_slice_id] / Year(1.0);
-            let key = (commodity_id.clone(), region_id.clone());
-            *weighted_prices.entry(key).or_default() += *price * weight;
+            *weighted_prices.entry(market.clone()).or_default() += *price * weight;
         }
 
         weighted_prices
@@ -178,30 +155,22 @@ impl CommodityPrices {
     }
 }
 
-impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>
-    for CommodityPrices
-{
+impl<'a> FromIterator<(&'a Market, &'a TimeSliceID, MoneyPerFlow)> for CommodityPrices {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
+        I: IntoIterator<Item = (&'a Market, &'a TimeSliceID, MoneyPerFlow)>,
     {
         let map = iter
             .into_iter()
-            .map(|(commodity_id, region_id, time_slice, price)| {
-                (
-                    (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-                    price,
-                )
-            })
+            .map(|(market, time_slice, price)| ((market.clone(), time_slice.clone()), price))
             .collect();
         CommodityPrices(map)
     }
 }
 
 impl IntoIterator for CommodityPrices {
-    type Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow);
-    type IntoIter =
-        std::collections::btree_map::IntoIter<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>;
+    type Item = ((Market, TimeSliceID), MoneyPerFlow);
+    type IntoIter = std::collections::btree_map::IntoIter<(Market, TimeSliceID), MoneyPerFlow>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -210,7 +179,7 @@ impl IntoIterator for CommodityPrices {
 
 fn get_highest_activity_duals<'a, I>(
     activity_duals: I,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerActivity>
+) -> HashMap<(Market, TimeSliceID), MoneyPerActivity>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
 {
@@ -222,8 +191,10 @@ where
             // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
-                    flow.commodity.id.clone(),
-                    asset.region_id().clone(),
+                    Market {
+                        commodity_id: flow.commodity.id.clone(),
+                        region_id: asset.region_id().clone(),
+                    },
                     time_slice.clone(),
                 ))
                 .and_modify(|current_dual| {

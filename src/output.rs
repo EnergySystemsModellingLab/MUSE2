@@ -1,7 +1,7 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
 use crate::asset::{Asset, AssetID, AssetRef};
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, Market};
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
@@ -336,14 +336,14 @@ impl DebugDataWriter {
         iter: I,
     ) -> Result<()>
     where
-        I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
+        I: Iterator<Item = (&'a Market, &'a TimeSliceID, MoneyPerFlow)>,
     {
-        for (commodity_id, region_id, time_slice, value) in iter {
+        for (market, time_slice, value) in iter {
             let row = CommodityBalanceDualsRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
+                commodity_id: market.commodity_id.clone(),
+                region_id: market.region_id.clone(),
                 time_slice: time_slice.clone(),
                 value,
             };
@@ -516,11 +516,11 @@ impl DataWriter {
 
     /// Write commodity prices to a CSV file
     pub fn write_prices(&mut self, milestone_year: u32, prices: &CommodityPrices) -> Result<()> {
-        for (commodity_id, region_id, time_slice, price) in prices.iter() {
+        for (market, time_slice, price) in prices.iter() {
             let row = CommodityPriceRow {
                 milestone_year,
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
+                commodity_id: market.commodity_id.clone(),
+                region_id: market.region_id.clone(),
                 time_slice: time_slice.clone(),
                 price,
             };

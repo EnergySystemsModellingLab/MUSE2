@@ -1,9 +1,8 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
-use crate::commodity::{CommodityID, CommodityType, Market};
+use crate::commodity::{CommodityType, Market};
 use crate::model::Model;
-use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::UnitType;
 use highs::RowProblem as Problem;
@@ -32,7 +31,7 @@ impl<T> KeysWithOffset<T> {
 }
 
 /// Indicates the commodity ID and time slice selection covered by each commodity balance constraint
-pub type CommodityBalanceKeys = KeysWithOffset<(CommodityID, RegionID, TimeSliceSelection)>;
+pub type CommodityBalanceKeys = KeysWithOffset<(Market, TimeSliceSelection)>;
 
 /// Indicates the asset ID and time slice covered by each activity constraint
 pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceID)>;
@@ -144,7 +143,7 @@ where
             // Also include unmet demand variables if required
             if !variables.unmet_demand_var_idx.is_empty() {
                 for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                    let var = variables.get_unmet_demand_var(&market, time_slice);
+                    let var = variables.get_unmet_demand_var(market, time_slice);
                     terms.push((var, 1.0));
                 }
             }
@@ -161,11 +160,7 @@ where
                 0.0
             };
             problem.add_row(min.., terms.drain(..));
-            keys.push((
-                market.commodity_id.clone(),
-                market.region_id.clone(),
-                ts_selection.clone(),
-            ));
+            keys.push((market.clone(), ts_selection.clone()));
         }
     }
 

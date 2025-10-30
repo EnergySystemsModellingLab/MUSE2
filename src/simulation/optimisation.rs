@@ -6,7 +6,6 @@ use crate::commodity::{CommodityID, Market};
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
@@ -227,17 +226,17 @@ impl Solution<'_> {
     /// Keys and dual values for commodity balance constraints.
     pub fn iter_commodity_balance_duals(
         &self,
-    ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, MoneyPerFlow)> {
+    ) -> impl Iterator<Item = (&Market, &TimeSliceID, MoneyPerFlow)> {
         // Each commodity balance constraint applies to a particular time slice
         // selection (depending on time slice level). Where this covers multiple time slices,
         // we return the same dual for each individual time slice.
         self.constraint_keys
             .commodity_balance_keys
             .zip_duals(self.solution.dual_rows())
-            .flat_map(|((commodity_id, region_id, ts_selection), price)| {
+            .flat_map(|((market, ts_selection), price)| {
                 ts_selection
                     .iter(self.time_slice_info)
-                    .map(move |(ts, _)| (commodity_id, region_id, ts, price))
+                    .map(move |(ts, _)| (market, ts, price))
             })
     }
 
@@ -320,13 +319,9 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 /// balance constraint.
 fn check_input_prices(input_prices: &CommodityPrices, markets: &[Market]) {
     let markets_set: HashSet<_> = markets.iter().collect();
-    let has_prices_for_market_subset = input_prices.keys().any(|(commodity_id, region_id, _)| {
-        let market_for_commodity_region = Market {
-            commodity_id: commodity_id.clone(),
-            region_id: region_id.clone(),
-        };
-        markets_set.contains(&market_for_commodity_region)
-    });
+    let has_prices_for_market_subset = input_prices
+        .keys()
+        .any(|(market, _)| markets_set.contains(&market));
     assert!(
         !has_prices_for_market_subset,
         "Input prices were included for commodities that are being modelled, which is not allowed."
@@ -454,10 +449,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Run dispatch to diagnose which markets have unmet demand
-    fn get_markets_with_unmet_demand(
-        &self,
-        markets: &[Market],
-    ) -> Result<IndexSet<Market>> {
+    fn get_markets_with_unmet_demand(&self, markets: &[Market]) -> Result<IndexSet<Market>> {
         let solution = self.run_internal(markets, /*allow_unmet_demand=*/ true)?;
         Ok(solution
             .iter_unmet_demand()

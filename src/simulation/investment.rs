@@ -169,7 +169,7 @@ pub fn perform_agent_investment(
             investment_set.iter_markets(),
             model.time_slice_info.iter_ids()
         ) {
-            external_prices.remove(&market.commodity_id, &market.region_id, time_slice);
+            external_prices.remove(market, time_slice);
         }
 
         // If no assets have been selected, skip dispatch optimisation
@@ -472,17 +472,16 @@ fn get_candidate_assets<'a>(
         })
 }
 
-/// Get a map of prices for a subset of commodities
-fn get_prices_for_commodities(
+/// Get a map of prices for a subset of markets
+fn get_prices_for_markets(
     prices: &CommodityPrices,
     time_slice_info: &TimeSliceInfo,
-    region_id: &RegionID,
-    commodities: &[CommodityID],
+    markets: &[Market],
 ) -> CommodityPrices {
-    iproduct!(commodities.iter(), time_slice_info.iter_ids())
-        .map(|(commodity_id, time_slice)| {
-            let price = prices.get(commodity_id, region_id, time_slice).unwrap();
-            (commodity_id, region_id, time_slice, price)
+    iproduct!(markets.iter(), time_slice_info.iter_ids())
+        .map(|(market, time_slice)| {
+            let price = prices.get(market, time_slice).unwrap();
+            (market, time_slice, price)
         })
         .collect()
 }
