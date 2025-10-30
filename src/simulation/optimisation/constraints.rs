@@ -30,7 +30,7 @@ impl<T> KeysWithOffset<T> {
     }
 }
 
-/// Indicates the commodity ID and time slice selection covered by each commodity balance constraint
+/// Indicates the market and time slice selection covered by each commodity balance constraint
 pub type CommodityBalanceKeys = KeysWithOffset<(Market, TimeSliceSelection)>;
 
 /// Indicates the asset ID and time slice covered by each activity constraint

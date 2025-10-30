@@ -3,9 +3,11 @@ use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType, Market};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
+use indexmap::IndexMap;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
+use petgraph::visit::EdgeRef;
 use petgraph::{Directed, Direction};
 use std::collections::HashMap;
 
@@ -15,11 +17,11 @@ type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 ///
 /// The returned Vec only includes SVD and SED commodities.
 fn solve_investment_order_for_year(
-    graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
     year: u32,
 ) -> Vec<InvestmentSet> {
-    // Initialise InvestmentGraph from the original `CommodityGraph`
+    // Initialise InvestmentGraph for this year from the set of original `CommodityGraph`s
     let mut investment_graph = init_investment_graph_for_year(graphs, year, commodities);
 
     // TODO: condense sibling commodities (commodities that share at least one producer)
@@ -41,70 +43,56 @@ fn solve_investment_order_for_year(
 // This filters the graph to only include SVD/SED commodities and primary edges, then creates an
 // InvestmentGraphNode::Single for each commodity node.
 fn init_investment_graph_for_year(
-    graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     year: u32,
     commodities: &CommodityMap,
 ) -> InvestmentGraph {
-    // Select graphs for all regions in this year
-    let mut graphs_for_year = HashMap::new();
-    for ((region_id, graph_year), graph) in graphs {
-        if *graph_year == year {
-            graphs_for_year.insert(region_id.clone(), graph.clone());
-        }
-    }
+    let mut combined = InvestmentGraph::new();
 
-    // Create empty InvestmentGraph
-    let mut combined_graph = InvestmentGraph::new();
-
-    // Loop over the regions, adding to the combined graph
-    for (region_id, graph) in graphs_for_year {
+    // Iterate over the graphs for the given year
+    for ((region_id, _), graph) in graphs.iter().filter(|((_, y), _)| *y == year) {
         // Filter the graph to only include SVD/SED commodities and primary edges
-        let graph_filtered = graph.filter_map(
-            // Consider only SVD/SED commodities
-            |_, node_weight| {
-                let GraphNode::Commodity(commodity_id) = node_weight else {
-                    return None;
-                };
-                let commodity = &commodities[commodity_id];
-                matches!(
-                    commodity.kind,
-                    CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
-                )
-                .then_some(node_weight.clone())
+        let filtered = graph.filter_map(
+            |_, n| match n {
+                GraphNode::Commodity(cid) => {
+                    let kind = &commodities[cid].kind;
+                    matches!(
+                        kind,
+                        CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
+                    )
+                    .then_some(GraphNode::Commodity(cid.clone()))
+                }
+                _ => None,
             },
-            // Consider only primary edges
-            |_, edge_weight| {
-                matches!(edge_weight, GraphEdge::Primary(_)).then_some(edge_weight.clone())
-            },
+            |_, e| matches!(e, GraphEdge::Primary(_)).then_some(e.clone()),
         );
 
-        // Add nodes and edges to the combined graph
-        let mut node_map = HashMap::new();
-        for node_idx in graph_filtered.node_indices() {
-            let node_weight = graph_filtered.node_weight(node_idx).unwrap();
-            let investment_node = match node_weight {
-                GraphNode::Commodity(commodity_id) => {
-                    let market = Market {
-                        commodity_id: commodity_id.clone(),
-                        region_id: region_id.clone(),
-                    };
-                    InvestmentSet::Single(market)
-                }
-                _ => unreachable!("Should only have commodity nodes after filtering"),
-            };
-            let new_node_idx = combined_graph.add_node(investment_node);
-            node_map.insert(node_idx, new_node_idx);
-        }
-        for edge_idx in graph_filtered.edge_indices() {
-            let (source, target) = graph_filtered.edge_endpoints(edge_idx).unwrap();
-            let edge_weight = graph_filtered.edge_weight(edge_idx).unwrap();
-            let new_source = node_map[&source];
-            let new_target = node_map[&target];
-            combined_graph.add_edge(new_source, new_target, edge_weight.clone());
+        // Add nodes to the combined graph
+        let node_map: HashMap<_, _> = filtered
+            .node_indices()
+            .map(|ni| {
+                let GraphNode::Commodity(cid) = filtered.node_weight(ni).unwrap() else {
+                    unreachable!()
+                };
+                let market = Market {
+                    commodity_id: cid.clone(),
+                    region_id: region_id.clone(),
+                };
+                (ni, combined.add_node(InvestmentSet::Single(market)))
+            })
+            .collect();
+
+        // Add edges to the combined graph
+        for e in filtered.edge_references() {
+            combined.add_edge(
+                node_map[&e.source()],
+                node_map[&e.target()],
+                e.weight().clone(),
+            );
         }
     }
 
-    combined_graph
+    combined
 }
 
 /// Compresses cycles into `InvestmentSet::Cycle` nodes
@@ -184,7 +172,7 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
 /// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
 /// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
 pub fn solve_investment_order_for_model(
-    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
     years: &[u32],
 ) -> HashMap<u32, Vec<InvestmentSet>> {
@@ -227,7 +215,7 @@ mod tests {
         commodities.insert("B".into(), Rc::new(sed_commodity));
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
-        let graphs = HashMap::from([(("GBR".into(), 2020), graph)]);
+        let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Expected order: C, B, A (leaf nodes first)
@@ -255,7 +243,7 @@ mod tests {
         commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
         commodities.insert("B".into(), Rc::new(sed_commodity));
 
-        let graphs = HashMap::from([(("GBR".into(), 2020), graph)]);
+        let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Should be a single `Cycle` investment set containing both commodities
@@ -297,7 +285,7 @@ mod tests {
         commodities.insert("C".into(), Rc::new(sed_commodity));
         commodities.insert("D".into(), Rc::new(svd_commodity));
 
-        let graphs = HashMap::from([(("GBR".into(), 2020), graph)]);
+        let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Expected order: D, Layer(B, C), A
@@ -313,6 +301,7 @@ mod tests {
         assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
     }
 
+    #[rstest]
     fn test_solve_investment_order_multiple_regions(
         sed_commodity: Commodity,
         svd_commodity: Commodity,
@@ -335,7 +324,7 @@ mod tests {
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
         // Duplicate the graph over two regions
-        let graphs = HashMap::from([
+        let graphs = IndexMap::from([
             (("GBR".into(), 2020), graph.clone()),
             (("FRA".into(), 2020), graph),
         ]);

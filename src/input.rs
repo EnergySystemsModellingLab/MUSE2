@@ -269,7 +269,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 /// validation would fail, which may be helpful for debugging.
 pub fn load_commodity_graphs<P: AsRef<Path>>(
     model_dir: P,
-) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
+) -> Result<IndexMap<(RegionID, u32), CommoditiesGraph>> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
