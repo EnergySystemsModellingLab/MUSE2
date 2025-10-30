@@ -64,7 +64,8 @@ pub fn svd_commodity() -> Commodity {
         description: "".into(),
         kind: CommodityType::ServiceDemand,
         time_slice_level: TimeSliceLevel::DayNight,
-        levies: CommodityLevyMap::new(),
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
     }
 }
@@ -76,7 +77,8 @@ pub fn sed_commodity() -> Commodity {
         description: "Test SED commodity".into(),
         kind: CommodityType::SupplyEqualsDemand,
         time_slice_level: TimeSliceLevel::DayNight,
-        levies: CommodityLevyMap::new(),
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
     }
 }
@@ -88,7 +90,8 @@ pub fn other_commodity() -> Commodity {
         description: "Test other commodity".into(),
         kind: CommodityType::Other,
         time_slice_level: TimeSliceLevel::DayNight,
-        levies: CommodityLevyMap::new(),
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
     }
 }

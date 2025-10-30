@@ -95,6 +95,8 @@ pub struct Asset {
     capacity: Capacity,
     /// The year the asset was/will be commissioned
     commission_year: u32,
+    /// The maximum year that the asset could be decommissioned
+    max_decommission_year: u32,
 }
 
 impl Asset {
@@ -111,6 +113,7 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            None,
         )
     }
 
@@ -125,12 +128,13 @@ impl Asset {
     }
 
     /// Create a new future asset
-    pub fn new_future(
+    pub fn new_future_with_max_decommission(
         agent_id: AgentID,
         process: Rc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
+        max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
         Self::new_with_state(
@@ -139,6 +143,25 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            max_decommission_year,
+        )
+    }
+
+    /// Create a new future asset
+    pub fn new_future(
+        agent_id: AgentID,
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+    ) -> Result<Self> {
+        Self::new_future_with_max_decommission(
+            agent_id,
+            process,
+            region_id,
+            capacity,
+            commission_year,
+            None,
         )
     }
 
@@ -160,6 +183,7 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            None,
         )
     }
 
@@ -170,6 +194,7 @@ impl Asset {
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
+        max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_region_year_valid_for_process(&process, &region_id, commission_year)?;
         ensure!(capacity >= Capacity(0.0), "Capacity must be non-negative");
@@ -214,6 +239,13 @@ impl Asset {
             })?
             .clone();
 
+        let max_decommission_year =
+            max_decommission_year.unwrap_or(commission_year + process_parameter.lifetime);
+        ensure!(
+            max_decommission_year >= commission_year,
+            "Max decommission year must be after/same as commission year"
+        );
+
         Ok(Self {
             state,
             process,
@@ -223,6 +255,7 @@ impl Asset {
             region_id,
             capacity,
             commission_year,
+            max_decommission_year,
         })
     }
 
@@ -238,7 +271,7 @@ impl Asset {
 
     /// The last year in which this asset should be decommissioned
     pub fn max_decommission_year(&self) -> u32 {
-        self.commission_year + self.process_parameter.lifetime
+        self.max_decommission_year
     }
 
     /// Get the activity limits for this asset in a particular time slice
@@ -898,7 +931,8 @@ mod tests {
             description: "Test commodity".to_string(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
-            levies: Default::default(),
+            levies_prod: Default::default(),
+            levies_cons: Default::default(),
             demand: Default::default(),
         });
 
@@ -1504,8 +1538,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::early_decommission_within_lifetime(2024, 2024)]
-    #[case::decommission_at_maximum_year(2026, 2025)]
+    #[case::commission_during_process_lifetime(2024, 2024)]
+    #[case::decommission_after_process_lifetime_ends(2026, 2025)]
     fn test_asset_decommission(
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
@@ -1519,6 +1553,38 @@ mod tests {
             "GBR".into(),
             Capacity(1.0),
             2020,
+        )
+        .unwrap();
+        asset.commission(AssetID(1), "");
+        assert!(asset.is_commissioned());
+        assert_eq!(asset.id(), Some(AssetID(1)));
+
+        // Test successful decommissioning
+        asset.decommission(requested_decommission_year, "");
+        assert!(!asset.is_commissioned());
+        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
+    }
+
+    #[rstest]
+    #[case::decommission_after_predefined_max_year(2026, 2025, Some(2025))]
+    #[case::decommission_before_predefined_max_year(2024, 2024, Some(2025))]
+    #[case::decommission_during_process_lifetime_end_no_max_year(2024, 2024, None)]
+    #[case::decommission_after_process_lifetime_end_no_max_year(2026, 2025, None)]
+    fn test_asset_decommission_with_max_decommission_year_predefined(
+        #[case] requested_decommission_year: u32,
+        #[case] expected_decommission_year: u32,
+        #[case] max_decommission_year: Option<u32>,
+        process: Process,
+    ) {
+        // Test successful commissioning of Future asset
+        let process_rc = Rc::new(process);
+        let mut asset = Asset::new_future_with_max_decommission(
+            "agent1".into(),
+            Rc::clone(&process_rc),
+            "GBR".into(),
+            Capacity(1.0),
+            2020,
+            max_decommission_year,
         )
         .unwrap();
         asset.commission(AssetID(1), "");

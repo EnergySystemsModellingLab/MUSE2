@@ -219,7 +219,8 @@ mod tests {
                 description: "A commodity".into(),
                 kind: CommodityType::SupplyEqualsDemand,
                 time_slice_level: TimeSliceLevel::Annual,
-                levies: CommodityLevyMap::new(),
+                levies_prod: CommodityLevyMap::new(),
+                levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
             }),
         )]);
@@ -262,7 +263,8 @@ mod tests {
                 description: "Another commodity".into(),
                 kind: CommodityType::SupplyEqualsDemand,
                 time_slice_level: TimeSliceLevel::Annual,
-                levies: CommodityLevyMap::new(),
+                levies_prod: CommodityLevyMap::new(),
+                levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
             }),
         );

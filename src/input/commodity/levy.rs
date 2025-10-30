@@ -1,6 +1,6 @@
 //! Code for reading in the commodity levies CSV file.
 use super::super::{input_err_msg, read_csv_optional, try_insert};
-use crate::commodity::{BalanceType, CommodityID, CommodityLevy, CommodityLevyMap};
+use crate::commodity::{BalanceType, CommodityID, CommodityLevyMap};
 use crate::id::IDCollection;
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
@@ -51,7 +51,7 @@ pub fn read_commodity_levies(
     region_ids: &IndexSet<RegionID>,
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
-) -> Result<HashMap<CommodityID, CommodityLevyMap>> {
+) -> Result<HashMap<CommodityID, HashMap<BalanceType, CommodityLevyMap>>> {
     let file_path = model_dir.join(COMMODITY_LEVIES_FILE_NAME);
     let commodity_levies_csv = read_csv_optional(&file_path)?;
     read_commodity_levies_iter(
@@ -83,7 +83,7 @@ fn read_commodity_levies_iter<I>(
     region_ids: &IndexSet<RegionID>,
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
-) -> Result<HashMap<CommodityID, CommodityLevyMap>>
+) -> Result<HashMap<CommodityID, HashMap<BalanceType, CommodityLevyMap>>>
 where
     I: Iterator<Item = CommodityLevyRaw>,
 {
@@ -100,15 +100,7 @@ where
         let ts_selection = time_slice_info.get_selection(&cost.time_slice)?;
 
         // Get or create CommodityLevyMap for this commodity
-        let map = map
-            .entry(commodity_id.clone())
-            .or_insert_with(CommodityLevyMap::new);
-
-        // Create CommodityLevy
-        let cost = CommodityLevy {
-            balance_type: cost.balance_type,
-            value: cost.value,
-        };
+        let map = map.entry(commodity_id.clone()).or_insert_with(HashMap::new);
 
         // Insert cost into map for each region/year/time slice
         for region in &regions {
@@ -118,11 +110,38 @@ where
                 .insert(region.clone());
             for year in &years {
                 for (time_slice, _) in ts_selection.iter(time_slice_info) {
-                    try_insert(
-                        map,
-                        &(region.clone(), *year, time_slice.clone()),
-                        cost.clone(),
-                    )?;
+                    match cost.balance_type {
+                        // If production or consumption, we just add the levy to the relevant map
+                        BalanceType::Consumption | BalanceType::Production => {
+                            let map = map
+                                .entry(cost.balance_type.clone())
+                                .or_insert_with(CommodityLevyMap::new);
+                            try_insert(
+                                map,
+                                &(region.clone(), *year, time_slice.clone()),
+                                cost.value,
+                            )?;
+                        }
+                        // If net, we add it to both, reversing the sign for consumption
+                        BalanceType::Net => {
+                            let map_p = map
+                                .entry(BalanceType::Production)
+                                .or_insert_with(CommodityLevyMap::new);
+                            try_insert(
+                                map_p,
+                                &(region.clone(), *year, time_slice.clone()),
+                                cost.value,
+                            )?;
+                            let map_c = map
+                                .entry(BalanceType::Consumption)
+                                .or_insert_with(CommodityLevyMap::new);
+                            try_insert(
+                                map_c,
+                                &(region.clone(), *year, time_slice.clone()),
+                                -cost.value,
+                            )?;
+                        }
+                    }
                 }
             }
         }
@@ -131,19 +150,22 @@ where
     // Validate map and complete with missing regions/years/time slices
     for (commodity_id, regions) in &commodity_regions {
         let map = map.get_mut(commodity_id).unwrap();
-        validate_commodity_levy_map(map, regions, milestone_years, time_slice_info)
-            .with_context(|| format!("Missing costs for commodity {commodity_id}"))?;
 
-        for region_id in region_ids.difference(regions) {
-            add_missing_region_to_commodity_levy_map(
-                map,
-                region_id,
-                milestone_years,
-                time_slice_info,
-            );
-            warn!(
-                "No levy specified for commodity {commodity_id} in region {region_id}. Assuming zero levy."
-            );
+        for map_inner in map.values_mut() {
+            validate_commodity_levy_map(map_inner, regions, milestone_years, time_slice_info)
+                .with_context(|| format!("Missing costs for commodity {commodity_id}"))?;
+
+            for region_id in region_ids.difference(regions) {
+                add_missing_region_to_commodity_levy_map(
+                    map_inner,
+                    region_id,
+                    milestone_years,
+                    time_slice_info,
+                );
+                warn!(
+                    "No levy specified for commodity {commodity_id} in region {region_id}. Assuming zero levy."
+                );
+            }
         }
     }
 
@@ -168,10 +190,7 @@ fn add_missing_region_to_commodity_levy_map(
         for time_slice in time_slice_info.iter_ids() {
             map.insert(
                 (region_id.clone(), *year, time_slice.clone()),
-                CommodityLevy {
-                    balance_type: BalanceType::Net,
-                    value: MoneyPerFlow(0.0),
-                },
+                MoneyPerFlow(0.0),
             );
         }
     }
@@ -224,10 +243,7 @@ mod tests {
 
     #[fixture]
     fn cost_map(time_slice: TimeSliceID) -> CommodityLevyMap {
-        let cost = CommodityLevy {
-            balance_type: BalanceType::Net,
-            value: MoneyPerFlow(1.0),
-        };
+        let cost = MoneyPerFlow(1.0);
 
         let mut map = CommodityLevyMap::new();
         map.insert(("GBR".into(), 2020, time_slice.clone()), cost.clone());
@@ -315,10 +331,7 @@ mod tests {
         for time_slice in time_slice_info.iter_ids() {
             assert_eq!(
                 cost_map.get(&(region_id.clone(), 2020, time_slice.clone())),
-                Some(&CommodityLevy {
-                    balance_type: BalanceType::Net,
-                    value: MoneyPerFlow(0.0)
-                })
+                Some(&MoneyPerFlow(0.0))
             );
         }
     }
