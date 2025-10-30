@@ -138,7 +138,7 @@ where
                             try_insert(
                                 map_c,
                                 &(region.clone(), *year, time_slice.clone()),
-                                MoneyPerFlow(-cost.value.0),
+                                -cost.value,
                             )?;
                         }
                     }
