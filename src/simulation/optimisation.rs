@@ -353,7 +353,7 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
-    commodities: &'run [CommodityID],
+    commodities_to_balance: &'run [CommodityID],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
@@ -365,7 +365,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             model,
             existing_assets: assets,
             candidate_assets: &[],
-            commodities: &[],
+            commodities_to_balance: &[],
             input_prices: None,
             year,
         }
@@ -384,7 +384,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         assert!(!commodities.is_empty());
 
         Self {
-            commodities,
+            commodities_to_balance: commodities,
             ..self
         }
     }
@@ -418,26 +418,26 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// This is an internal function as callers always want to save results.
     fn run_no_save(&self) -> Result<Solution<'model>> {
-        // If the user provided no commodities, we all use of them
+        // If the user provided no commodities to balance, we all use of them
         let all_commodities: Vec<_>;
-        let commodities = if self.commodities.is_empty() {
+        let commodities_to_balance = if self.commodities_to_balance.is_empty() {
             all_commodities = self.model.commodities.keys().cloned().collect();
             &all_commodities
         } else {
-            self.commodities
+            self.commodities_to_balance
         };
         if let Some(input_prices) = self.input_prices {
-            check_input_prices(input_prices, commodities);
+            check_input_prices(input_prices, commodities_to_balance);
         }
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
         // track the unmet demand so we can report the offending regions/commodities to users
-        match self.run_without_unmet_demand(commodities) {
+        match self.run_without_unmet_demand(commodities_to_balance) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let pairs = self
-                    .get_regions_and_commodities_with_unmet_demand(commodities)
+                    .get_regions_and_commodities_with_unmet_demand(commodities_to_balance)
                     .expect("Failed to run dispatch to calculate unmet demand");
 
                 ensure!(
