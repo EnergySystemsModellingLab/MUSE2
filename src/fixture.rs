@@ -6,7 +6,7 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool};
 use crate::commodity::{
-    Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, Market,
+    Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, MarketID,
 };
 use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
@@ -60,11 +60,8 @@ pub fn commodity_id() -> CommodityID {
 }
 
 #[fixture]
-pub fn market() -> Market {
-    Market {
-        commodity_id: "commodity1".into(),
-        region_id: "GBR".into(),
-    }
+pub fn market_id() -> MarketID {
+    MarketID::from((&"commodity1".into(), &"GBR".into()))
 }
 
 #[fixture]

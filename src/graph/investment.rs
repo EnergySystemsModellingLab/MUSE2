@@ -1,6 +1,6 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityMap, CommodityType, Market};
+use crate::commodity::{CommodityMap, CommodityType, MarketID};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
 use indexmap::IndexMap;
@@ -74,11 +74,10 @@ fn init_investment_graph_for_year(
                 let GraphNode::Commodity(cid) = filtered.node_weight(ni).unwrap() else {
                     unreachable!()
                 };
-                let market = Market {
-                    commodity_id: cid.clone(),
-                    region_id: region_id.clone(),
-                };
-                (ni, combined.add_node(InvestmentSet::Single(market)))
+                (
+                    ni,
+                    combined.add_node(InvestmentSet::Single(MarketID::from((cid, region_id)))),
+                )
             })
             .collect();
 

@@ -1,7 +1,7 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
-use crate::commodity::{CommodityType, Market};
+use crate::commodity::{CommodityType, MarketID};
 use crate::model::Model;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::UnitType;
@@ -31,7 +31,7 @@ impl<T> KeysWithOffset<T> {
 }
 
 /// Indicates the market and time slice selection covered by each commodity balance constraint
-pub type CommodityBalanceKeys = KeysWithOffset<(Market, TimeSliceSelection)>;
+pub type CommodityBalanceKeys = KeysWithOffset<(MarketID, TimeSliceSelection)>;
 
 /// Indicates the asset ID and time slice covered by each activity constraint
 pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceID)>;
@@ -66,7 +66,7 @@ pub fn add_asset_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [Market],
+    markets: &'a [MarketID],
     year: u32,
 ) -> ConstraintKeys
 where
@@ -96,7 +96,7 @@ fn add_commodity_balance_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [Market],
+    markets: &'a [MarketID],
     year: u32,
 ) -> CommodityBalanceKeys
 where
@@ -108,7 +108,7 @@ where
     let mut keys = Vec::new();
     let mut terms = Vec::new();
     for market in markets {
-        let commodity = &model.commodities[&market.commodity_id];
+        let commodity = &model.commodities[&market.commodity];
         if !matches!(
             commodity.kind,
             CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
@@ -122,8 +122,8 @@ where
         {
             for (asset, flow) in assets
                 .clone()
-                .filter_region(&market.region_id)
-                .flows_for_commodity(&market.commodity_id)
+                .filter_region(&market.region)
+                .flows_for_commodity(&market.commodity)
             {
                 // If the commodity has a time slice level of season/annual, the constraint will
                 // cover multiple time slices
@@ -153,7 +153,7 @@ where
             let min = if commodity.kind == CommodityType::ServiceDemand {
                 commodity
                     .demand
-                    .get(&(market.region_id.clone(), year, ts_selection.clone()))
+                    .get(&(market.region.clone(), year, ts_selection.clone()))
                     .unwrap()
                     .value()
             } else {

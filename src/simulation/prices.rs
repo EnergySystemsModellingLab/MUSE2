@@ -1,6 +1,6 @@
 //! Code for updating the simulation state.
 use crate::asset::AssetRef;
-use crate::commodity::Market;
+use crate::commodity::MarketID;
 use crate::model::{Model, PricingStrategy};
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
@@ -30,7 +30,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
 #[derive(Default, Clone)]
-pub struct CommodityPrices(BTreeMap<(Market, TimeSliceID), MoneyPerFlow>);
+pub struct CommodityPrices(BTreeMap<(MarketID, TimeSliceID), MoneyPerFlow>);
 
 impl CommodityPrices {
     /// Remove the impact of scarcity on prices.
@@ -59,13 +59,13 @@ impl CommodityPrices {
     /// Extend the prices map, possibly overwriting values
     pub fn extend<T>(&mut self, iter: T)
     where
-        T: IntoIterator<Item = ((Market, TimeSliceID), MoneyPerFlow)>,
+        T: IntoIterator<Item = ((MarketID, TimeSliceID), MoneyPerFlow)>,
     {
         self.0.extend(iter);
     }
 
     /// Insert a price for the given commodity, region and time slice
-    pub fn insert(&mut self, market: &Market, time_slice: &TimeSliceID, price: MoneyPerFlow) {
+    pub fn insert(&mut self, market: &MarketID, time_slice: &TimeSliceID, price: MoneyPerFlow) {
         let key = (market.clone(), time_slice.clone());
         self.0.insert(key, price);
     }
@@ -75,24 +75,24 @@ impl CommodityPrices {
     /// # Returns
     ///
     /// An iterator of tuples containing commodity ID, region ID, time slice and price.
-    pub fn iter(&self) -> impl Iterator<Item = (&Market, &TimeSliceID, MoneyPerFlow)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&MarketID, &TimeSliceID, MoneyPerFlow)> {
         self.0
             .iter()
             .map(|((market, ts), price)| (market, ts, *price))
     }
 
     /// Get the price for the specified commodity for a given region and time slice
-    pub fn get(&self, market: &Market, time_slice: &TimeSliceID) -> Option<MoneyPerFlow> {
+    pub fn get(&self, market: &MarketID, time_slice: &TimeSliceID) -> Option<MoneyPerFlow> {
         self.0.get(&(market.clone(), time_slice.clone())).copied()
     }
 
     /// Iterate over the price map's keys
-    pub fn keys(&self) -> btree_map::Keys<'_, (Market, TimeSliceID), MoneyPerFlow> {
+    pub fn keys(&self) -> btree_map::Keys<'_, (MarketID, TimeSliceID), MoneyPerFlow> {
         self.0.keys()
     }
 
     /// Remove the specified entry from the map
-    pub fn remove(&mut self, market: &Market, time_slice: &TimeSliceID) -> Option<MoneyPerFlow> {
+    pub fn remove(&mut self, market: &MarketID, time_slice: &TimeSliceID) -> Option<MoneyPerFlow> {
         self.0.remove(&(market.clone(), time_slice.clone()))
     }
 
@@ -106,7 +106,7 @@ impl CommodityPrices {
     fn time_slice_weighted_averages(
         &self,
         time_slice_info: &TimeSliceInfo,
-    ) -> HashMap<Market, MoneyPerFlow> {
+    ) -> HashMap<MarketID, MoneyPerFlow> {
         let mut weighted_prices = HashMap::new();
 
         for ((market, time_slice_id), price) in &self.0 {
@@ -155,10 +155,10 @@ impl CommodityPrices {
     }
 }
 
-impl<'a> FromIterator<(&'a Market, &'a TimeSliceID, MoneyPerFlow)> for CommodityPrices {
+impl<'a> FromIterator<(&'a MarketID, &'a TimeSliceID, MoneyPerFlow)> for CommodityPrices {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = (&'a Market, &'a TimeSliceID, MoneyPerFlow)>,
+        I: IntoIterator<Item = (&'a MarketID, &'a TimeSliceID, MoneyPerFlow)>,
     {
         let map = iter
             .into_iter()
@@ -169,8 +169,8 @@ impl<'a> FromIterator<(&'a Market, &'a TimeSliceID, MoneyPerFlow)> for Commodity
 }
 
 impl IntoIterator for CommodityPrices {
-    type Item = ((Market, TimeSliceID), MoneyPerFlow);
-    type IntoIter = std::collections::btree_map::IntoIter<(Market, TimeSliceID), MoneyPerFlow>;
+    type Item = ((MarketID, TimeSliceID), MoneyPerFlow);
+    type IntoIter = std::collections::btree_map::IntoIter<(MarketID, TimeSliceID), MoneyPerFlow>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -179,7 +179,7 @@ impl IntoIterator for CommodityPrices {
 
 fn get_highest_activity_duals<'a, I>(
     activity_duals: I,
-) -> HashMap<(Market, TimeSliceID), MoneyPerActivity>
+) -> HashMap<(MarketID, TimeSliceID), MoneyPerActivity>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
 {
@@ -191,10 +191,7 @@ where
             // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
-                    Market {
-                        commodity_id: flow.commodity.id.clone(),
-                        region_id: asset.region_id().clone(),
-                    },
+                    MarketID::from((&flow.commodity.id, asset.region_id())),
                     time_slice.clone(),
                 ))
                 .and_modify(|current_dual| {
@@ -212,7 +209,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{market, time_slice, time_slice_info};
+    use crate::fixture::{market_id, time_slice, time_slice_info};
     use crate::time_slice::TimeSliceID;
     use rstest::rstest;
 
@@ -232,7 +229,7 @@ mod tests {
         #[case] price2: MoneyPerFlow,
         #[case] tolerance: Dimensionless,
         #[case] expected: bool,
-        market: Market,
+        market_id: MarketID,
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
@@ -240,8 +237,8 @@ mod tests {
         let mut prices2 = CommodityPrices::default();
 
         // Set up two price sets for a single market/timeslice
-        prices1.insert(&market, &time_slice, price1);
-        prices2.insert(&market, &time_slice, price2);
+        prices1.insert(&market_id, &time_slice, price1);
+        prices2.insert(&market_id, &time_slice, price2);
 
         assert_eq!(
             prices1.within_tolerance_weighted(&prices2, tolerance, &time_slice_info),
@@ -251,18 +248,18 @@ mod tests {
 
     #[rstest]
     fn test_time_slice_weighted_averages(
-        market: Market,
+        market_id: MarketID,
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
         let mut prices = CommodityPrices::default();
 
         // Insert a price
-        prices.insert(&market, &time_slice, MoneyPerFlow(100.0));
+        prices.insert(&market_id, &time_slice, MoneyPerFlow(100.0));
 
         let averages = prices.time_slice_weighted_averages(&time_slice_info);
 
         // With single time slice (duration=1.0), average should equal the price
-        assert_eq!(averages[&market], MoneyPerFlow(100.0));
+        assert_eq!(averages[&market_id], MoneyPerFlow(100.0));
     }
 }

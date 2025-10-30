@@ -90,30 +90,42 @@ pub enum CommodityType {
     Other,
 }
 
-/// Represents a market for a specific commodity in a specific region (e.g. the coal market in GBR).
+/// Identifies a market for a specific commodity in a specific region (e.g. the coal market in GBR).
 #[derive(PartialEq, Debug, Deserialize, Clone, Eq, Hash, Ord, PartialOrd)]
-pub struct Market {
+pub struct MarketID {
     /// Commodity that the market refers to
-    pub commodity_id: CommodityID,
+    pub commodity: CommodityID,
     /// Region that the market refers to
-    pub region_id: RegionID,
+    pub region: RegionID,
 }
 
-impl Display for Market {
+impl Display for MarketID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}|{}", self.commodity_id, self.region_id)
+        write!(f, "{}|{}", self.commodity, self.region)
+    }
+}
+
+impl From<(&CommodityID, &RegionID)> for MarketID {
+    fn from((c, r): (&CommodityID, &RegionID)) -> Self {
+        Self {
+            commodity: c.clone(),
+            region: r.clone(),
+        }
     }
 }
 
 #[cfg(test)]
-impl From<&str> for Market {
+impl From<&str> for MarketID {
+    /// Parse a `MarketID` from a string in the format 'commodity_id|region_id'
+    ///
+    /// This is only used as a shortcut for creating `MarketID` objects in tests.
     fn from(s: &str) -> Self {
         let (commodity, region) = s
             .split_once('|')
             .expect("Market string must be in format 'commodity_id|region_id'");
-        Market {
-            commodity_id: commodity.into(),
-            region_id: region.into(),
+        MarketID {
+            commodity: commodity.into(),
+            region: region.into(),
         }
     }
 }

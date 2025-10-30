@@ -2,7 +2,7 @@
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
-use crate::commodity::{Commodity, CommodityID, CommodityMap, Market};
+use crate::commodity::{Commodity, CommodityID, CommodityMap, MarketID};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
@@ -30,16 +30,16 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 #[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
-    Single(Market),
+    Single(MarketID),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
-    Cycle(Vec<Market>),
+    Cycle(Vec<MarketID>),
     /// Assets are selected for a layer of independent commodities
     Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
-    /// Recursively iterate over all `Market`s contained in this `InvestmentSet`.
-    pub fn iter_markets<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Market> + 'a> {
+    /// Recursively iterate over all `MarketID`s contained in this `InvestmentSet`.
+    pub fn iter_markets<'a>(&'a self) -> Box<dyn Iterator<Item = &'a MarketID> + 'a> {
         match self {
             InvestmentSet::Single(market) => Box::new(std::iter::once(market)),
             InvestmentSet::Cycle(markets) => Box::new(markets.iter()),
@@ -212,22 +212,19 @@ pub fn perform_agent_investment(
 #[allow(clippy::too_many_arguments)]
 fn select_assets_for_market(
     model: &Model,
-    market: &Market,
+    market: &MarketID,
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &CommodityPrices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let commodity = &model.commodities[&market.commodity_id];
+    let commodity = &model.commodities[&market.commodity];
 
     let mut selected_assets = Vec::new();
-    for (agent, commodity_portion) in get_responsible_agents(
-        model.agents.values(),
-        &commodity.id,
-        &market.region_id,
-        year,
-    ) {
+    for (agent, commodity_portion) in
+        get_responsible_agents(model.agents.values(), &commodity.id, &market.region, year)
+    {
         debug!(
             "Running investment for agent '{}' in market '{}'",
             &agent.id, market
@@ -238,7 +235,7 @@ fn select_assets_for_market(
             &model.time_slice_info,
             demand,
             &commodity.id,
-            &market.region_id,
+            &market.region,
             commodity_portion,
         );
 
@@ -249,7 +246,7 @@ fn select_assets_for_market(
             &demand_portion_for_commodity,
             agent,
             commodity,
-            &market.region_id,
+            &market.region,
             year,
         )
         .collect();
