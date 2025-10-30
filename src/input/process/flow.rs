@@ -189,9 +189,9 @@ fn validate_flows_and_update_primary_output(
 ///
 /// This is only possible if there is only one output flow for the process.
 fn infer_primary_output(map: &IndexMap<CommodityID, ProcessFlow>) -> Result<Option<CommodityID>> {
-    let mut iter = map
-        .iter()
-        .filter_map(|(commodity_id, flow)| flow.is_output().then_some(commodity_id));
+    let mut iter = map.iter().filter_map(|(commodity_id, flow)| {
+        (flow.is_output() || flow.is_zero()).then_some(commodity_id)
+    });
 
     let Some(first_output) = iter.next() else {
         // If there are only input flows, then the primary output should be None
@@ -217,12 +217,14 @@ fn check_flows_primary_output(
         })?;
 
         ensure!(
-            flow.is_output(),
+            flow.is_output() || flow.is_zero(),
             "Primary output commodity '{primary_output}' isn't an output flow",
         );
     } else {
         ensure!(
-            flows_map.values().all(ProcessFlow::is_input),
+            flows_map
+                .values()
+                .all(|x| ProcessFlow::is_input(x) || ProcessFlow::is_zero(x)),
             "First year is only inputs, but subsequent years have outputs, although no primary \
             output is specified"
         );
@@ -250,8 +252,10 @@ fn validate_secondary_flows(
             let flow = map[&(region_id.clone(), year)]
                 .iter()
                 .filter_map(|(commodity_id, flow)| {
-                    (Some(commodity_id) != process.primary_output.as_ref())
-                        .then_some(((commodity_id.clone(), region_id.clone()), flow.is_input()))
+                    (Some(commodity_id) != process.primary_output.as_ref()).then_some((
+                        (commodity_id.clone(), region_id.clone()),
+                        flow.is_input() || flow.is_zero(),
+                    ))
                 });
 
             for (key, value) in flow {

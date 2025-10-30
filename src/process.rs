@@ -120,14 +120,19 @@ impl ProcessFlow {
         MoneyPerFlow(0.0)
     }
 
-    /// Returns true if this flow is an input (i.e., coeff <= 0)
+    /// Returns true if this flow is an input (i.e., coeff < 0)
     pub fn is_input(&self) -> bool {
-        self.coeff <= FlowPerActivity(0.0)
+        self.coeff < FlowPerActivity(0.0)
     }
 
-    /// Returns true if this flow is an output (i.e., coeff >= 0)
+    /// Returns true if this flow is an output (i.e., coeff > 0)
     pub fn is_output(&self) -> bool {
-        self.coeff >= FlowPerActivity(0.0)
+        self.coeff > FlowPerActivity(0.0)
+    }
+
+    /// Returns true if this flow is zero
+    pub fn is_zero(&self) -> bool {
+        self.coeff == FlowPerActivity(0.0)
     }
 }
 
@@ -643,9 +648,12 @@ mod tests {
 
         assert!(flow_in.is_input());
         assert!(!flow_in.is_output());
+        assert!(!flow_in.is_zero());
         assert!(flow_out.is_output());
         assert!(!flow_out.is_input());
-        assert!(flow_zero.is_input());
-        assert!(flow_zero.is_output());
+        assert!(!flow_out.is_zero());
+        assert!(!flow_zero.is_input());
+        assert!(!flow_zero.is_output());
+        assert!(flow_zero.is_zero());
     }
 }
