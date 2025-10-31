@@ -2,7 +2,7 @@
 //! assets.
 use crate::commodity::CommodityID;
 use crate::id::define_id_type;
-use crate::process::Process;
+use crate::process::{FlowDirection, Process};
 use crate::region::RegionID;
 use crate::units::{Dimensionless, Money};
 use indexmap::{IndexMap, IndexSet};
@@ -63,7 +63,9 @@ impl Agent {
         let flows_key = (region_id.clone(), year);
         self.search_space[&(commodity_id.clone(), year)]
             .iter()
-            .filter(move |process| process.flows[&flows_key][commodity_id].is_output())
+            .filter(move |process| {
+                process.flows[&flows_key][commodity_id].direction() == FlowDirection::Output
+            })
     }
 }
 

@@ -1,6 +1,6 @@
 //! Module for creating and analysing commodity graphs
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
-use crate::process::{ProcessID, ProcessMap};
+use crate::process::{FlowDirection, ProcessID, ProcessMap};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -97,14 +97,14 @@ fn create_commodities_graph_for_region_year(
         // Get output nodes for the process
         let mut outputs: Vec<_> = flows
             .values()
-            .filter(|flow| flow.is_output())
+            .filter(|flow| flow.direction() == FlowDirection::Output)
             .map(|flow| GraphNode::Commodity(flow.commodity.id.clone()))
             .collect();
 
         // Get input nodes for the process
         let mut inputs: Vec<_> = flows
             .values()
-            .filter(|flow| flow.is_input())
+            .filter(|flow| flow.direction() == FlowDirection::Input)
             .map(|flow| GraphNode::Commodity(flow.commodity.id.clone()))
             .collect();
 

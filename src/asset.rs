@@ -1,7 +1,7 @@
 //! Assets are instances of a process which are owned and invested in by agents.
 use crate::agent::AgentID;
 use crate::commodity::CommodityID;
-use crate::process::{Process, ProcessFlow, ProcessID, ProcessParameter};
+use crate::process::{FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter};
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::TimeSliceID;
@@ -338,7 +338,9 @@ impl Asset {
         input_prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        -self.get_revenue_from_flows_with_filter(input_prices, time_slice, ProcessFlow::is_input)
+        -self.get_revenue_from_flows_with_filter(input_prices, time_slice, |x| {
+            x.direction() == FlowDirection::Input
+        })
     }
 
     /// Get the total revenue from a subset of flows.
