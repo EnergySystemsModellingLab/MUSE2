@@ -146,7 +146,7 @@ pub enum FlowType {
 /// Direction of the flow (see [`ProcessFlow`])
 #[derive(PartialEq, Debug)]
 pub enum FlowDirection {
-    /// The flow is an input (i.e., coeff > 0)
+    /// The flow is an input (i.e., coeff < 0)
     Input,
     /// The flow is an output (i.e., coeff > 0)
     Output,
