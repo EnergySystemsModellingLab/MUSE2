@@ -1,4 +1,4 @@
-process_id,regions,years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate
+process_id,regions,commission_years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate
 GASDRV,GBR,all,10,0.3,2,25,0.1
 OAGRSV,GBR,all,15,0.45,3,25,0.1
 GASPRC,GBR,all,7,0.21,0.5,25,0.1
