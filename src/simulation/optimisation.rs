@@ -105,14 +105,15 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `markets` - The subset of markets (commodity/region combinations) the problem is being run for
+    /// * `markets_to_allow_unmet_demand` - The subset of markets (commodity/region combinations)
+    ///   to assign unmet demand variables to
     fn add_unmet_demand_variables(
         &mut self,
         problem: &mut Problem,
         model: &Model,
-        markets: &[MarketID],
+        markets_to_allow_unmet_demand: &[MarketID],
     ) {
-        assert!(!markets.is_empty());
+        assert!(!markets_to_allow_unmet_demand.is_empty());
 
         // This line **must** come before we add more variables
         let start = problem.num_cols();
@@ -120,14 +121,16 @@ impl VariableMap {
         // Add variables
         let voll = model.parameters.value_of_lost_load;
         self.unmet_demand_vars.extend(
-            iproduct!(markets.iter(), model.time_slice_info.iter_ids()).map(
-                |(market, time_slice)| {
-                    let key = (market.clone(), time_slice.clone());
-                    let var = problem.add_column(voll.value(), 0.0..);
+            iproduct!(
+                markets_to_allow_unmet_demand.iter(),
+                model.time_slice_info.iter_ids()
+            )
+            .map(|(market, time_slice)| {
+                let key = (market.clone(), time_slice.clone());
+                let var = problem.add_column(voll.value(), 0.0..);
 
-                    (key, var)
-                },
-            ),
+                (key, var)
+            }),
         );
 
         self.unmet_demand_var_idx = start..problem.num_cols();
@@ -474,7 +477,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             .collect())
     }
 
-    /// Run dispatch for specified commodities, optionally including unmet demand variables
+    /// Run dispatch to balance the specified markets, allowing unmet demand for a subset of these
     fn run_internal(
         &self,
         markets_to_balance: &[MarketID],
@@ -495,7 +498,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         for market in markets_to_allow_unmet_demand {
             assert!(
                 markets_to_balance.contains(market),
-                "Markets allowed unmet demand must be a subset of markets being balanced. \
+                "markets_to_allow_unmet_demand must be a subset of markets_to_balance. \
                  Offending market: {market:?}"
             );
         }
