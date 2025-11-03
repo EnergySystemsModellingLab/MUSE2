@@ -67,14 +67,22 @@ pub fn add_asset_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [MarketID],
+    markets_to_balance: &'a [MarketID],
+    markets_to_allow_unmet_demand: &'a [MarketID],
     year: u32,
 ) -> ConstraintKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
 {
-    let commodity_balance_keys =
-        add_commodity_balance_constraints(problem, variables, model, assets, markets, year);
+    let commodity_balance_keys = add_commodity_balance_constraints(
+        problem,
+        variables,
+        model,
+        assets,
+        markets_to_balance,
+        markets_to_allow_unmet_demand,
+        year,
+    );
 
     let activity_keys = add_activity_constraints(problem, variables);
 
@@ -97,7 +105,8 @@ fn add_commodity_balance_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [MarketID],
+    markets_to_balance: &'a [MarketID],
+    markets_to_allow_unmet_demand: &'a [MarketID],
     year: u32,
 ) -> CommodityBalanceKeys
 where
@@ -108,7 +117,7 @@ where
 
     let mut keys = Vec::new();
     let mut terms = Vec::new();
-    for market in markets {
+    for market in markets_to_balance {
         let commodity = &model.commodities[&market.commodity_id];
         if !matches!(
             commodity.kind,
@@ -142,7 +151,7 @@ where
             }
 
             // Also include unmet demand variables if required
-            if !variables.unmet_demand_var_idx.is_empty() {
+            if markets_to_allow_unmet_demand.contains(market) {
                 for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
                     let var = variables.get_unmet_demand_var(market, time_slice);
                     terms.push((var, 1.0));

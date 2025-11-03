@@ -190,7 +190,7 @@ pub fn perform_agent_investment(
         // As upstream commodities by definition will not yet have producers, we explicitly set
         // their prices using previous values so that they don't appear free
         let solution = DispatchRun::new(model, &all_selected_assets, year)
-            .with_market_subset(&seen_markets)
+            .with_market_balance_subset(&seen_markets)
             .with_input_prices(&external_prices)
             .run(&format!("post {investment_set} investment"), writer)?;
 

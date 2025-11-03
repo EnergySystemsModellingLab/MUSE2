@@ -346,6 +346,7 @@ pub struct DispatchRun<'model, 'run> {
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [MarketID],
+    markets_to_allow_unmet_demand: &'run [MarketID],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
@@ -358,6 +359,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             existing_assets: assets,
             candidate_assets: &[],
             markets_to_balance: &[],
+            markets_to_allow_unmet_demand: &[],
             input_prices: None,
             year,
         }
@@ -372,7 +374,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Only apply commodity balance constraints to the specified subset of markets
-    pub fn with_market_subset(self, markets: &'run [MarketID]) -> Self {
+    pub fn with_market_balance_subset(self, markets: &'run [MarketID]) -> Self {
         assert!(!markets.is_empty());
 
         Self {
@@ -385,6 +387,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn with_input_prices(self, input_prices: &'run CommodityPrices) -> Self {
         Self {
             input_prices: Some(input_prices),
+            ..self
+        }
+    }
+
+    /// Allow unmet demand variables for the specified subset of markets
+    pub fn with_unmet_demand_vars(self, markets: &'run [MarketID]) -> Self {
+        Self {
+            markets_to_allow_unmet_demand: markets,
             ..self
         }
     }
@@ -423,9 +433,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
-        // is due to unmet demand, in this case, we rerun dispatch including extra variables to
-        // track the unmet demand so we can report the offending regions/commodities to users
-        match self.run_without_unmet_demand(markets_to_balance) {
+        // is due to unmet demand, in this case, we rerun dispatch including with unmet demand
+        // variables for all markets so we can report the offending markets to users
+        match self.run_internal(markets_to_balance, self.markets_to_allow_unmet_demand) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let markets = self
@@ -440,7 +450,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 bail!(
                     "The solver has indicated that the problem is infeasible, probably because \
                     the supplied assets could not meet the required demand. Demand was not met \
-                    for the following region and commodity pairs: {}",
+                    for the following markets: {}",
                     format_items_with_cap(markets)
                 )
             }
@@ -448,17 +458,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
     }
 
-    /// Run dispatch without unmet demand variables
-    fn run_without_unmet_demand(
-        &self,
-        markets: &[MarketID],
-    ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(markets, /*allow_unmet_demand=*/ false)
-    }
-
     /// Run dispatch to diagnose which markets have unmet demand
-    fn get_markets_with_unmet_demand(&self, markets: &[MarketID]) -> Result<IndexSet<MarketID>> {
-        let solution = self.run_internal(markets, /*allow_unmet_demand=*/ true)?;
+    fn get_markets_with_unmet_demand(
+        &self,
+        markets_to_balance: &[MarketID],
+    ) -> Result<IndexSet<MarketID>> {
+        // Run dispatch including unmet demand variables for all markets being balanced
+        let solution = self.run_internal(markets_to_balance, markets_to_balance)?;
+
+        // Collect markets with unmet demand
         Ok(solution
             .iter_unmet_demand()
             .filter(|(_, _, flow)| *flow > Flow(0.0))
@@ -469,8 +477,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch for specified commodities, optionally including unmet demand variables
     fn run_internal(
         &self,
-        markets: &[MarketID],
-        allow_unmet_demand: bool,
+        markets_to_balance: &[MarketID],
+        markets_to_allow_unmet_demand: &[MarketID],
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();
@@ -483,10 +491,22 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.year,
         );
 
-        // If unmet demand is enabled for this dispatch run (and is allowed by the model param) then
-        // we add variables representing unmet demand
-        if allow_unmet_demand {
-            variables.add_unmet_demand_variables(&mut problem, self.model, markets);
+        // Check that markets_to_allow_unmet_demand is a subset of markets_to_balance
+        for market in markets_to_allow_unmet_demand {
+            assert!(
+                markets_to_balance.contains(market),
+                "Markets allowed unmet demand must be a subset of markets being balanced. \
+                 Offending market: {market:?}"
+            );
+        }
+
+        // Add variables representing unmet demand
+        if !markets_to_allow_unmet_demand.is_empty() {
+            variables.add_unmet_demand_variables(
+                &mut problem,
+                self.model,
+                markets_to_allow_unmet_demand,
+            );
         }
 
         // Add constraints
@@ -496,7 +516,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &variables,
             self.model,
             &all_assets,
-            markets,
+            markets_to_balance,
+            markets_to_allow_unmet_demand,
             self.year,
         );
 
