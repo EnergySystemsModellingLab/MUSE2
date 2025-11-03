@@ -1,8 +1,10 @@
 //! Code for reading process flows file
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap};
-use crate::process::{FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap};
-use crate::region::parse_region_str;
+use crate::process::{
+    FlowDirection, FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap,
+};
+use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
@@ -19,7 +21,7 @@ const PROCESS_FLOWS_FILE_NAME: &str = "process_flows.csv";
 struct ProcessFlowRaw {
     process_id: String,
     commodity_id: String,
-    years: String,
+    commission_years: String,
     regions: String,
     coeff: FlowPerActivity,
     #[serde(default)]
@@ -30,9 +32,9 @@ struct ProcessFlowRaw {
 
 impl ProcessFlowRaw {
     fn validate(&self) -> Result<()> {
-        // Check that flow is not infinity, nan, 0 etc.
+        // Check that flow is not infinity or nan.
         ensure!(
-            self.coeff.is_normal(),
+            self.coeff.is_finite(),
             "Invalid value for coeff ({})",
             self.coeff
         );
@@ -46,7 +48,7 @@ impl ProcessFlowRaw {
         // Check that flow cost is non-negative
         if let Some(cost) = self.cost {
             ensure!(
-                (0.0..f64::INFINITY).contains(&cost.value()),
+                (cost.value() >= 0.0),
                 "Invalid value for flow cost ({cost}). Must be >=0."
             );
         }
@@ -94,9 +96,10 @@ where
 
         // Get years
         let process_years = &process.years;
-        let record_years = parse_year_str(&record.years, process_years).with_context(|| {
-            format!("Invalid year for process {id}. Valid years are {process_years:?}")
-        })?;
+        let record_years =
+            parse_year_str(&record.commission_years, process_years).with_context(|| {
+                format!("Invalid year for process {id}. Valid years are {process_years:?}")
+            })?;
 
         // Get commodity
         let commodity = commodities
@@ -132,6 +135,7 @@ where
     }
 
     validate_flows_and_update_primary_output(processes, &flows_map)?;
+    validate_secondary_flows(processes, &flows_map)?;
 
     Ok(flows_map)
 }
@@ -187,9 +191,9 @@ fn validate_flows_and_update_primary_output(
 ///
 /// This is only possible if there is only one output flow for the process.
 fn infer_primary_output(map: &IndexMap<CommodityID, ProcessFlow>) -> Result<Option<CommodityID>> {
-    let mut iter = map
-        .iter()
-        .filter_map(|(commodity_id, flow)| flow.is_output().then_some(commodity_id));
+    let mut iter = map.iter().filter_map(|(commodity_id, flow)| {
+        (flow.direction() == FlowDirection::Output).then_some(commodity_id)
+    });
 
     let Some(first_output) = iter.next() else {
         // If there are only input flows, then the primary output should be None
@@ -211,19 +215,75 @@ fn check_flows_primary_output(
 ) -> Result<()> {
     if let Some(primary_output) = primary_output {
         let flow = flows_map.get(primary_output).with_context(|| {
-            format!("Primary output commodity '{primary_output}' isn't a process flow",)
+            format!("Primary output commodity '{primary_output}' isn't a process flow")
         })?;
 
         ensure!(
-            flow.is_output(),
+            flow.direction() == FlowDirection::Output,
             "Primary output commodity '{primary_output}' isn't an output flow",
         );
     } else {
         ensure!(
-            flows_map.values().all(ProcessFlow::is_input),
+            flows_map
+                .values()
+                .all(|x| x.direction() == FlowDirection::Input
+                    || x.direction() == FlowDirection::Zero),
             "First year is only inputs, but subsequent years have outputs, although no primary \
             output is specified"
         );
+    }
+
+    Ok(())
+}
+
+/// Checks that non-primary io are defined for all years (within a region) and that
+/// they are only inputs or only outputs in all years.
+fn validate_secondary_flows(
+    processes: &mut ProcessMap,
+    flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
+) -> Result<()> {
+    for (process_id, process) in processes.iter() {
+        // Get the flows for this process - there should be no error, as was checked already
+        let map = flows_map
+            .get(process_id)
+            .with_context(|| format!("Missing flows map for process {process_id}"))?;
+
+        // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
+        let iter = iproduct!(process.years.iter(), process.regions.iter());
+        let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
+        for (&year, region_id) in iter {
+            let flow = map[&(region_id.clone(), year)]
+                .iter()
+                .filter_map(|(commodity_id, flow)| {
+                    (Some(commodity_id) != process.primary_output.as_ref())
+                        .then_some(((commodity_id.clone(), region_id.clone()), flow))
+                });
+
+            for (key, value) in flow {
+                flows.entry(key).or_default().push(value);
+            }
+        }
+
+        // Finally we check that the flows for a given commodity and region are defined for all
+        // years and that they are all inputs or all outputs
+        for ((commodity_id, region_id), value) in &flows {
+            ensure!(
+                value.len() == process.years.len(),
+                "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
+                does not cover all years"
+            );
+            let input_or_zero = value
+                .iter()
+                .all(|&x| [FlowDirection::Input, FlowDirection::Zero].contains(&x.direction()));
+            let output_or_zero = value
+                .iter()
+                .all(|&x| [FlowDirection::Output, FlowDirection::Zero].contains(&x.direction()));
+            ensure!(
+                input_or_zero || output_or_zero,
+                "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
+                behaves as input or output in different years."
+            );
+        }
     }
 
     Ok(())

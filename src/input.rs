@@ -1,7 +1,8 @@
 //! Common routines for handling input data.
 use crate::asset::AssetPool;
 use crate::graph::{
-    CommoditiesGraph, build_commodity_graphs_for_model, validate_commodity_graphs_for_model,
+    CommoditiesGraph, build_commodity_graphs_for_model, solve_investment_order_for_model,
+    validate_commodity_graphs_for_model,
 };
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
@@ -13,6 +14,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::de::{Deserialize, DeserializeOwned, Deserializer};
 use std::collections::HashMap;
+use std::fmt::{self, Write};
 use std::fs;
 use std::hash::Hash;
 use std::path::Path;
@@ -55,12 +57,18 @@ pub fn read_csv<'a, T: DeserializeOwned + 'a>(
 pub fn read_csv_optional<'a, T: DeserializeOwned + 'a>(
     file_path: &'a Path,
 ) -> Result<impl Iterator<Item = T> + 'a> {
+    if !file_path.exists() {
+        return Ok(Vec::new().into_iter());
+    }
+
     let vec = read_csv_internal(file_path)?;
     Ok(vec.into_iter())
 }
 
 fn read_csv_internal<'a, T: DeserializeOwned + 'a>(file_path: &'a Path) -> Result<Vec<T>> {
-    let vec = csv::Reader::from_path(file_path)
+    let vec = csv::ReaderBuilder::new()
+        .trim(csv::Trim::All)
+        .from_path(file_path)
         .with_context(|| input_err_msg(file_path))?
         .into_deserialize()
         .process_results(|iter| iter.collect_vec())
@@ -158,7 +166,7 @@ where
 /// If the key already exists, it returns an error with a message indicating the key's existence.
 pub fn try_insert<K, V>(map: &mut HashMap<K, V>, key: &K, value: V) -> Result<()>
 where
-    K: Eq + Hash + Clone + std::fmt::Debug,
+    K: Eq + Hash + Clone + fmt::Debug,
 {
     let existing = map.insert(key.clone(), value).is_some();
     ensure!(!existing, "Key {key:?} already exists in the map");
@@ -166,17 +174,29 @@ where
 }
 
 /// Format a list of items with a cap on display count for error messages
-pub fn format_items_with_cap<T: std::fmt::Debug>(items: &[T]) -> String {
+pub fn format_items_with_cap<I, J, T>(items: I) -> String
+where
+    I: IntoIterator<Item = T, IntoIter = J>,
+    J: ExactSizeIterator<Item = T>,
+    T: fmt::Debug,
+{
     const MAX_DISPLAY: usize = 10;
-    if items.len() <= MAX_DISPLAY {
-        format!("{items:?}")
-    } else {
-        format!(
-            "{:?} and {} more",
-            &items[..MAX_DISPLAY],
-            items.len() - MAX_DISPLAY
-        )
+
+    let items = items.into_iter();
+    let total_count = items.len();
+
+    // Format items with fmt::Debug::fmt() and separate with commas
+    let formatted_items = items
+        .take(MAX_DISPLAY)
+        .format_with(", ", |items, f| f(&format_args!("{items:?}")));
+    let mut out = format!("[{formatted_items}]");
+
+    // If there are remaining items, include the count
+    if total_count > MAX_DISPLAY {
+        write!(&mut out, " and {} more", total_count - MAX_DISPLAY).unwrap();
     }
+
+    out
 }
 
 /// Read a model from the specified directory.
@@ -215,14 +235,16 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 
     // Build and validate commodity graphs for all regions and years
-    // This gives us the commodity order for each region/year which is passed to the model
-    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
-    let commodity_order = validate_commodity_graphs_for_model(
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
+    validate_commodity_graphs_for_model(
         &commodity_graphs,
         &processes,
         &commodities,
         &time_slice_info,
     )?;
+
+    // Solve investment order for each region/year
+    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities);
 
     let model_path = model_dir
         .as_ref()
@@ -236,7 +258,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         processes,
         time_slice_info,
         regions,
-        commodity_order,
+        investment_order,
     };
     Ok((model, AssetPool::new(assets)))
 }
@@ -267,7 +289,7 @@ pub fn load_commodity_graphs<P: AsRef<Path>>(
         years,
     )?;
 
-    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
     Ok(commodity_graphs)
 }
 
@@ -325,9 +347,40 @@ mod tests {
             ]
         );
 
+        // File with leading/trailing whitespace
+        let dir = tempdir().unwrap();
+        let file_path = create_csv_file(dir.path(), "id  , value\t\n  hello\t ,1\n world ,2\n");
+        let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
+        assert_eq!(
+            records,
+            &[
+                Record {
+                    id: "hello".into(),
+                    value: 1,
+                },
+                Record {
+                    id: "world".into(),
+                    value: 2,
+                }
+            ]
+        );
+
         // File with no data (only column headers)
         let file_path = create_csv_file(dir.path(), "id,value\n");
         assert!(read_csv::<Record>(&file_path).is_err());
+        assert!(
+            read_csv_optional::<Record>(&file_path)
+                .unwrap()
+                .next()
+                .is_none()
+        );
+
+        // Missing file
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("a_missing_file.csv");
+        assert!(!file_path.exists());
+        assert!(read_csv::<Record>(&file_path).is_err());
+        // optional csv's should return empty iterator
         assert!(
             read_csv_optional::<Record>(&file_path)
                 .unwrap()

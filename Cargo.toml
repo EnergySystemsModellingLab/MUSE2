@@ -1,6 +1,6 @@
 [package]
 name = "muse2"
-version = "2.0.0-dev1"
+version = "2.0.0"
 authors = ["Hawkes Research Group @ Chemical Engineering, Imperial College London <a.hawkes@imperial.ac.uk>", "Imperial College London RSE Team <ict-rse-team@imperial.ac.uk>"]
 edition = "2024"
 description = "A tool for running simulations of energy systems"
@@ -13,22 +13,22 @@ categories = ["science", "simulation", "command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0.100"
-csv = "1.3.0"
+csv = "1.4.0"
 log = "0.4.28"
 float-cmp = "0.10.0"
 itertools = "0.14.0"
 serde = {version = "1.0.228", features = ["derive", "rc"]}
 serde_string_enum = "0.2.1"
 tempfile = "3.23.0"
-toml = "0.9.7"
+toml = "0.9.8"
 unicase = "2.8.1"
 fern = {version = "0.7.1", features = ["chrono", "colored"]}
 chrono = "0.4"
-clap = {version = "4.5.48", features = ["cargo", "derive"]}
+clap = {version = "4.5.51", features = ["cargo", "derive"]}
 include_dir = "0.7.4"
 highs = "1.12.0"
-indexmap = "2.11.0"
-human-panic = "2.0.3"
+indexmap = "2.12.0"
+human-panic = "2.0.4"
 clap-markdown = "0.1.5"
 platform-info = "2.0.5"
 derive_more = {version = "2.0", features = ["add", "display"]}
@@ -41,6 +41,7 @@ edit = "0.1.5"
 [dev-dependencies]
 map-macro = "0.3.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
+yaml-rust2 = {version = "0.10.4", default-features = false}
 
 [build-dependencies]
 built = {version = "0.8.0", features = ["chrono", "git2"]}

@@ -115,14 +115,14 @@ pub fn run_cli() -> Result<()> {
         return Ok(());
     }
 
-    let Some(command) = cli.command else {
-        // Output program help in markdown format
-        let help_str = Cli::command().render_long_help().to_string();
-        println!("{help_str}");
-        return Ok(());
-    };
+    if let Some(command) = cli.command {
+        command.execute()?;
+    } else {
+        // No command provided. Show help.
+        Cli::command().print_long_help()?;
+    }
 
-    command.execute()
+    Ok(())
 }
 
 /// Handle the `run` command.
@@ -165,6 +165,8 @@ pub fn handle_run_command(
 
     // Initialise program logger
     log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
+
+    info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
 
     // Load the model to run
     let (model, assets) = load_model(model_path).context("Failed to load model.")?;

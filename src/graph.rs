@@ -1,16 +1,17 @@
 //! Module for creating and analysing commodity graphs
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
-use crate::process::{ProcessID, ProcessMap};
+use crate::process::{FlowDirection, ProcessID, ProcessMap};
 use crate::region::RegionID;
+use crate::simulation::investment::InvestmentSet;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexSet;
-use itertools::{Itertools, iproduct};
+use itertools::iproduct;
 use petgraph::Directed;
-use petgraph::algo::toposort;
+use petgraph::algo::{condensation, toposort};
 use petgraph::dot::Dot;
-use petgraph::graph::Graph;
+use petgraph::graph::{EdgeReference, Graph};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -48,8 +49,10 @@ impl Display for GraphNode {
 #[derive(Eq, PartialEq, Clone, Hash)]
 /// An edge in the commodity graph
 pub enum GraphEdge {
-    /// An edge representing a process
-    Process(ProcessID),
+    /// An edge representing a primary flow of a process
+    Primary(ProcessID),
+    /// An edge representing a secondary (non-primary) flow of a process
+    Secondary(ProcessID),
     /// An edge representing a service demand
     Demand,
 }
@@ -57,7 +60,9 @@ pub enum GraphEdge {
 impl Display for GraphEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GraphEdge::Process(id) => write!(f, "{id}"),
+            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => {
+                write!(f, "{process_id}")
+            }
             GraphEdge::Demand => write!(f, "DEMAND"),
         }
     }
@@ -92,14 +97,14 @@ fn create_commodities_graph_for_region_year(
         // Get output nodes for the process
         let mut outputs: Vec<_> = flows
             .values()
-            .filter(|flow| flow.is_output())
+            .filter(|flow| flow.direction() == FlowDirection::Output)
             .map(|flow| GraphNode::Commodity(flow.commodity.id.clone()))
             .collect();
 
         // Get input nodes for the process
         let mut inputs: Vec<_> = flows
             .values()
-            .filter(|flow| flow.is_input())
+            .filter(|flow| flow.direction() == FlowDirection::Input)
             .map(|flow| GraphNode::Commodity(flow.commodity.id.clone()))
             .collect();
 
@@ -111,6 +116,9 @@ fn create_commodities_graph_for_region_year(
             outputs.push(GraphNode::Sink);
         }
 
+        // Get primary output for the process
+        let primary_output = &process.primary_output;
+
         // Create edges from all inputs to all outputs
         // We also create nodes the first time they are encountered
         for (input, output) in iproduct!(inputs, outputs) {
@@ -120,10 +128,19 @@ fn create_commodities_graph_for_region_year(
             let target_node_index = *commodity_to_node_index
                 .entry(output.clone())
                 .or_insert_with(|| graph.add_node(output.clone()));
+            let is_primary = match &output {
+                GraphNode::Commodity(commodity_id) => primary_output.as_ref() == Some(commodity_id),
+                _ => false,
+            };
+
             graph.add_edge(
                 source_node_index,
                 target_node_index,
-                GraphEdge::Process(process.id.clone()),
+                if is_primary {
+                    GraphEdge::Primary(process.id.clone())
+                } else {
+                    GraphEdge::Secondary(process.id.clone())
+                },
             );
         }
     }
@@ -157,13 +174,13 @@ fn prepare_commodities_graph_for_validation(
     let key = (region_id.clone(), year);
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
-        let GraphEdge::Process(process_id) = graph.edge_weight(edge_idx).unwrap() else {
-            panic!("Demand edges should not be present in the base graph");
+        let process_id = match graph.edge_weight(edge_idx).unwrap() {
+            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => process_id,
+            GraphEdge::Demand => panic!("Demand edges should not be present in the base graph"),
         };
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
-
         time_slice_selection
             .iter(time_slice_info)
             .any(|(time_slice, _)| {
@@ -181,11 +198,10 @@ fn prepare_commodities_graph_for_validation(
     // NOTE: we only do this for commodities with the same time_slice_level as the selection
     let demand_node_index = filtered_graph.add_node(GraphNode::Demand);
     for (commodity_id, commodity) in commodities {
-        if time_slice_selection.level() == commodity.time_slice_level
-            && commodity
-                .demand
-                .get(&(region_id.clone(), year, time_slice_selection.clone()))
-                .is_some_and(|&v| v > Flow(0.0))
+        if commodity
+            .demand
+            .get(&(region_id.clone(), year, time_slice_selection.clone()))
+            .is_some_and(|&v| v > Flow(0.0))
         {
             let commodity_node = GraphNode::Commodity(commodity_id.clone());
             let commodity_node_index = filtered_graph
@@ -242,7 +258,7 @@ fn validate_commodities_graph(
         // Match validation rules to commodity type
         match commodity.kind {
             CommodityType::ServiceDemand => {
-                // Cannot have outgoing `Process` (non-`Demand`) edges
+                // Cannot have outgoing `Primary`/`Secondary` (non-`Demand`) edges
                 let has_non_demand_outgoing = graph
                     .edges_directed(node_idx, petgraph::Direction::Outgoing)
                     .any(|edge| edge.weight() != &GraphEdge::Demand);
@@ -285,39 +301,64 @@ fn validate_commodities_graph(
 /// Performs topological sort on the commodity graph to get the ordering for investments
 ///
 /// The returned Vec only includes SVD and SED commodities.
-fn topo_sort_commodities(
+fn solve_investment_order(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
-) -> Result<Vec<CommodityID>> {
-    // Perform a topological sort on the graph
-    let order = toposort(graph, None).map_err(|cycle| {
-        let cycle_commodity = graph.node_weight(cycle.node_id()).unwrap().clone();
-        anyhow!("Cycle detected in commodity graph for commodity {cycle_commodity}")
-    })?;
-
-    // We return the order in reverse so that leaf-node commodities are solved first
-    // We also filter to only include SVD and SED commodities
-    let order = order
-        .iter()
-        .rev()
-        .filter_map(|node_idx| {
+) -> Vec<InvestmentSet> {
+    // Filter the graph to only include SVD/SED commodities and primary edges
+    let graph_filtered = graph.filter_map(
+        // Consider only SVD/SED commodities
+        |_, node_weight| {
             // Get the commodity for the node
-            let GraphNode::Commodity(commodity_id) = graph.node_weight(*node_idx).unwrap() else {
+            let GraphNode::Commodity(commodity_id) = node_weight else {
                 // Skip special nodes
                 return None;
             };
             let commodity = &commodities[commodity_id];
-
-            // Only include SVD and SED commodities
             matches!(
                 commodity.kind,
                 CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
             )
-            .then(|| commodity_id.clone())
-        })
-        .collect();
+            .then_some(node_weight)
+        },
+        // Consider only primary edges
+        |_, edge_weight| matches!(edge_weight, GraphEdge::Primary(_)).then_some(edge_weight),
+    );
 
-    Ok(order)
+    // Condense strongly connected components
+    let condensed_graph = condensation(graph_filtered, true);
+
+    // Perform a topological sort on the condensed graph
+    // We can safely unwrap because `toposort` will only return an error in case of cycles, which
+    // should have been detected and compressed with `condensation`
+    let order = toposort(&condensed_graph, None).unwrap();
+
+    // Create investment sets (reverse topological order)
+    order
+        .iter()
+        .rev()
+        .filter_map(|node_idx| {
+            // Get set of commodity ID(s) for the node, referring back to `condensed_graph`
+            let commodities: Vec<CommodityID> = condensed_graph
+                .node_weight(*node_idx)
+                .unwrap()
+                .iter()
+                .filter_map(|node| match node {
+                    GraphNode::Commodity(id) => Some(id.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            // Create investment set
+            // If a single commodity in the node this is `InvestmentSet::Single`, if multiple
+            // commodities this is `InvestmentSet::Cycle`
+            match commodities.as_slice() {
+                [] => None,
+                [only] => Some(InvestmentSet::Single(only.clone())),
+                _ => Some(InvestmentSet::Cycle(commodities)),
+            }
+        })
+        .collect()
 }
 
 /// Builds base commodity graphs for each region and year
@@ -327,23 +368,16 @@ pub fn build_commodity_graphs_for_model(
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
     years: &[u32],
-) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
-    let commodity_graphs: HashMap<(RegionID, u32), CommoditiesGraph> =
-        iproduct!(region_ids, years.iter())
-            .map(|(region_id, year)| {
-                let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
-                ((region_id.clone(), *year), graph)
-            })
-            .collect();
-
-    Ok(commodity_graphs)
+) -> HashMap<(RegionID, u32), CommoditiesGraph> {
+    iproduct!(region_ids, years.iter())
+        .map(|(region_id, year)| {
+            let graph = create_commodities_graph_for_region_year(processes, region_id, *year);
+            ((region_id.clone(), *year), graph)
+        })
+        .collect()
 }
 
 /// Validates commodity graphs for the entire model.
-///
-/// This function creates commodity flow graphs for each region/year combination in the model,
-/// validates the graph structure against commodity type rules, and determines the optimal
-/// investment order for commodities.
 ///
 /// The validation process checks three time slice levels:
 /// - **Annual**: Validates annual-level commodities and processes
@@ -352,21 +386,16 @@ pub fn build_commodity_graphs_for_model(
 ///
 /// # Arguments
 ///
+/// * `commodity_graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
 /// * `processes` - All processes in the model with their flows and activity limits
 /// * `commodities` - All commodities with their types and demand specifications
 /// * `region_ids` - Collection of regions to model
 /// * `years` - Years to analyse
 /// * `time_slice_info` - Time slice configuration (seasons, day/night periods)
 ///
-/// # Returns
-///
-/// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
-/// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
-///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Any commodity graph contains cycles
 /// - Commodity type rules are violated (e.g., SVD commodities being consumed)
 /// - Demand cannot be satisfied
 pub fn validate_commodity_graphs_for_model(
@@ -374,18 +403,7 @@ pub fn validate_commodity_graphs_for_model(
     processes: &ProcessMap,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> Result<HashMap<(RegionID, u32), Vec<CommodityID>>> {
-    // Determine commodity ordering for each region and year
-    let commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>> = commodity_graphs
-        .iter()
-        .map(|((region_id, year), graph)| -> Result<_> {
-            let order = topo_sort_commodities(graph, commodities).with_context(|| {
-                format!("Error validating commodity graph for {region_id} in {year}")
-            })?;
-            Ok(((region_id.clone(), *year), order))
-        })
-        .try_collect()?;
-
+) -> Result<()> {
     // Validate graphs at all time slice levels (taking into account process availability and demand)
     for ((region_id, year), base_graph) in commodity_graphs {
         for ts_level in TimeSliceLevel::iter() {
@@ -408,9 +426,43 @@ pub fn validate_commodity_graphs_for_model(
             }
         }
     }
+    Ok(())
+}
 
-    // If all the validation passes, return the commodity ordering
-    Ok(commodity_order)
+/// Determine commodity ordering for each region and year
+///
+/// # Arguments
+///
+/// * `commodity_graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
+/// * `commodities` - All commodities with their types and demand specifications
+///
+/// # Returns
+///
+/// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
+/// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
+pub fn solve_investment_order_for_model(
+    commodity_graphs: &HashMap<(RegionID, u32), CommoditiesGraph>,
+    commodities: &CommodityMap,
+) -> HashMap<(RegionID, u32), Vec<InvestmentSet>> {
+    commodity_graphs
+        .iter()
+        .map(|((region_id, year), graph)| {
+            (
+                (region_id.clone(), *year),
+                solve_investment_order(graph, commodities),
+            )
+        })
+        .collect()
+}
+
+/// Gets custom DOT attributes for edges in a commodity graph
+fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
+    match edge_ref.weight() {
+        // Use dashed lines for secondary flows
+        GraphEdge::Secondary(_) => "style=dashed".to_string(),
+        // Other edges use default attributes
+        _ => String::new(),
+    }
 }
 
 /// Saves commodity graphs to file
@@ -421,7 +473,12 @@ pub fn save_commodity_graphs_for_model(
     output_path: &Path,
 ) -> Result<()> {
     for ((region_id, year), graph) in commodity_graphs {
-        let dot = Dot::new(&graph);
+        let dot = Dot::with_attr_getters(
+            graph,
+            &[],
+            &get_edge_attributes,  // Custom attributes for edges
+            &|_, _| String::new(), // Use default attributes for nodes
+        );
         let mut file = File::create(output_path.join(format!("{region_id}_{year}.dot")))?;
         write!(file, "{dot}")?;
     }
@@ -438,7 +495,10 @@ mod tests {
     use std::rc::Rc;
 
     #[rstest]
-    fn test_topo_sort_linear_graph(sed_commodity: Commodity, svd_commodity: Commodity) {
+    fn test_solve_investment_order_linear_graph(
+        sed_commodity: Commodity,
+        svd_commodity: Commodity,
+    ) {
         // Create a simple linear graph: A -> B -> C
         let mut graph = Graph::new();
 
@@ -447,8 +507,8 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
 
         // Add edges: A -> B -> C
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
@@ -456,17 +516,18 @@ mod tests {
         commodities.insert("B".into(), Rc::new(sed_commodity));
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
-        let result = topo_sort_commodities(&graph, &commodities).unwrap();
+        let result = solve_investment_order(&graph, &commodities);
 
         // Expected order: C, B, A (leaf nodes first)
+        // No cycles, so all investment sets should be `Single`
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], "C".into());
-        assert_eq!(result[1], "B".into());
-        assert_eq!(result[2], "A".into());
+        assert_eq!(result[0], InvestmentSet::Single("C".into()));
+        assert_eq!(result[1], InvestmentSet::Single("B".into()));
+        assert_eq!(result[2], InvestmentSet::Single("A".into()));
     }
 
     #[rstest]
-    fn test_topo_sort_cyclic_graph(sed_commodity: Commodity) {
+    fn test_solve_investment_order_cyclic_graph(sed_commodity: Commodity) {
         // Create a simple cyclic graph: A -> B -> A
         let mut graph = Graph::new();
 
@@ -474,19 +535,22 @@ mod tests {
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
 
         // Add edges creating a cycle: A -> B -> A
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_a, GraphEdge::Primary("process2".into()));
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
         commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
         commodities.insert("B".into(), Rc::new(sed_commodity));
 
-        // This should return an error due to the cycle
-        // The error message should flag commodity B
-        // Note: A is also involved in the cycle, but B is flagged as it is encountered first
-        let result = topo_sort_commodities(&graph, &commodities);
-        assert_error!(result, "Cycle detected in commodity graph for commodity B");
+        let result = solve_investment_order(&graph, &commodities);
+
+        // Should be a single `Cycle` investment set containing both commodities
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0],
+            InvestmentSet::Cycle(vec!["A".into(), "B".into()])
+        );
     }
 
     #[rstest]
@@ -508,13 +572,12 @@ mod tests {
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
         let node_d = graph.add_node(GraphNode::Demand);
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
         graph.add_edge(node_c, node_d, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::Annual);
-        assert!(result.is_ok());
+        assert!(validate_commodities_graph(&graph, &commodities, TimeSliceLevel::Annual).is_ok());
     }
 
     #[rstest]
@@ -535,12 +598,14 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
-        graph.add_edge(node_c, node_a, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_a, node_b, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_c, node_a, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_a, node_b, GraphEdge::Primary("process2".into()));
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
-        assert_error!(result, "SVD commodity A cannot be an input to a process");
+        assert_error!(
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
+            "SVD commodity A cannot be an input to a process"
+        );
     }
 
     #[rstest]
@@ -557,8 +622,10 @@ mod tests {
         graph.add_edge(node_a, node_b, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
-        assert_error!(result, "SVD commodity A is demanded but has no producers");
+        assert_error!(
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
+            "SVD commodity A is demanded but has no producers"
+        );
     }
 
     #[rstest]
@@ -573,12 +640,11 @@ mod tests {
         // Build invalid graph: B(SED) -> A(SED)
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Process("process1".into()));
+        graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
         assert_error!(
-            result,
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
             "SED commodity B may be consumed but has no producers"
         );
     }
@@ -600,13 +666,12 @@ mod tests {
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Process("process1".into()));
-        graph.add_edge(node_a, node_c, GraphEdge::Process("process2".into()));
+        graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
+        graph.add_edge(node_a, node_c, GraphEdge::Primary("process2".into()));
 
         // Validate the graph at DayNight level
-        let result = validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight);
         assert_error!(
-            result,
+            validate_commodities_graph(&graph, &commodities, TimeSliceLevel::DayNight),
             "OTH commodity A cannot have both producers and consumers"
         );
     }
