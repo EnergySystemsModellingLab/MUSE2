@@ -5,7 +5,9 @@ use crate::agent::{
     AgentSearchSpaceMap, DecisionRule,
 };
 use crate::asset::{Asset, AssetPool};
-use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
+use crate::commodity::{
+    Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, MarketID,
+};
 use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
@@ -55,6 +57,11 @@ pub fn agent_id() -> AgentID {
 #[fixture]
 pub fn commodity_id() -> CommodityID {
     "commodity1".into()
+}
+
+#[fixture]
+pub fn market_id() -> MarketID {
+    "commodity1|GBR".into()
 }
 
 #[fixture]

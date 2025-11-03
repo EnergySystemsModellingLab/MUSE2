@@ -1,7 +1,7 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
 use crate::asset::{Asset, AssetID, AssetRef};
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, MarketID};
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
@@ -38,6 +38,9 @@ const ACTIVITY_ASSET_DISPATCH: &str = "debug_dispatch_assets.csv";
 
 /// The output file name for commodity balance duals
 const COMMODITY_BALANCE_DUALS_FILE_NAME: &str = "debug_commodity_balance_duals.csv";
+
+/// The output file name for unmet demand values
+const UNMET_DEMAND_FILE_NAME: &str = "debug_unmet_demand.csv";
 
 /// The output file name for extra solver output values
 const SOLVER_VALUES_FILE_NAME: &str = "debug_solver.csv";
@@ -187,6 +190,17 @@ struct CommodityBalanceDualsRow {
     value: MoneyPerFlow,
 }
 
+/// Represents the unmet demand data in a row of the unmet demand CSV file
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct UnmetDemandRow {
+    milestone_year: u32,
+    run_description: String,
+    commodity_id: CommodityID,
+    region_id: RegionID,
+    time_slice: TimeSliceID,
+    value: Flow,
+}
+
 /// Represents solver output values
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SolverValuesRow {
@@ -212,6 +226,7 @@ struct AppraisalResultsRow {
 struct DebugDataWriter {
     context: Option<String>,
     commodity_balance_duals_writer: csv::Writer<File>,
+    unmet_demand_writer: csv::Writer<File>,
     solver_values_writer: csv::Writer<File>,
     appraisal_results_writer: csv::Writer<File>,
     dispatch_asset_writer: csv::Writer<File>,
@@ -232,6 +247,7 @@ impl DebugDataWriter {
         Ok(Self {
             context: None,
             commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
+            unmet_demand_writer: new_writer(UNMET_DEMAND_FILE_NAME)?,
             solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
             appraisal_results_writer: new_writer(APPRAISAL_RESULTS_FILE_NAME)?,
             dispatch_asset_writer: new_writer(ACTIVITY_ASSET_DISPATCH)?,
@@ -265,6 +281,11 @@ impl DebugDataWriter {
             milestone_year,
             run_description,
             solution.iter_commodity_balance_duals(),
+        )?;
+        self.write_unmet_demand(
+            milestone_year,
+            run_description,
+            solution.iter_unmet_demand(),
         )?;
         self.write_solver_values(milestone_year, run_description, solution.objective_value)?;
         Ok(())
@@ -353,6 +374,31 @@ impl DebugDataWriter {
         Ok(())
     }
 
+    /// Write unmet demand values to file
+    fn write_unmet_demand<'a, I>(
+        &mut self,
+        milestone_year: u32,
+        run_description: &str,
+        iter: I,
+    ) -> Result<()>
+    where
+        I: Iterator<Item = (&'a MarketID, &'a TimeSliceID, Flow)>,
+    {
+        for (market_id, time_slice, value) in iter {
+            let row = UnmetDemandRow {
+                milestone_year,
+                run_description: self.with_context(run_description),
+                commodity_id: market_id.commodity_id.clone(),
+                region_id: market_id.region_id.clone(),
+                time_slice: time_slice.clone(),
+                value,
+            };
+            self.unmet_demand_writer.serialize(row)?;
+        }
+
+        Ok(())
+    }
+
     /// Write additional solver output values to file
     fn write_solver_values(
         &mut self,
@@ -398,6 +444,7 @@ impl DebugDataWriter {
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
         self.commodity_balance_duals_writer.flush()?;
+        self.unmet_demand_writer.flush()?;
         self.solver_values_writer.flush()?;
         self.appraisal_results_writer.flush()?;
         self.dispatch_asset_writer.flush()?;
@@ -560,7 +607,7 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{assets, commodity_id, region_id, time_slice};
+    use crate::fixture::{assets, commodity_id, market_id, region_id, time_slice};
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
@@ -691,6 +738,44 @@ mod tests {
         };
         let records: Vec<CommodityBalanceDualsRow> =
             csv::Reader::from_path(dir.path().join(COMMODITY_BALANCE_DUALS_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn test_write_unmet_demand(market_id: MarketID, time_slice: TimeSliceID) {
+        let milestone_year = 2020;
+        let run_description = "test_run".to_string();
+        let value = Flow(0.5);
+        let dir = tempdir().unwrap();
+
+        // Write unmet demand
+        {
+            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            writer
+                .write_unmet_demand(
+                    milestone_year,
+                    &run_description,
+                    iter::once((&market_id, &time_slice, value)),
+                )
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let expected = UnmetDemandRow {
+            milestone_year,
+            run_description,
+            commodity_id: market_id.commodity_id,
+            region_id: market_id.region_id,
+            time_slice,
+            value,
+        };
+        let records: Vec<UnmetDemandRow> =
+            csv::Reader::from_path(dir.path().join(UNMET_DEMAND_FILE_NAME))
                 .unwrap()
                 .into_deserialize()
                 .try_collect()
