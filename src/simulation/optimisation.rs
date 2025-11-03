@@ -10,7 +10,7 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow, UnitType};
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, bail};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
@@ -414,15 +414,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// A solution containing new commodity flows for assets and prices for (some) commodities or an
     /// error.
     pub fn run(self, run_description: &str, writer: &mut DataWriter) -> Result<Solution<'model>> {
-        let solution = self.run_no_save()?;
-        writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
-        Ok(solution)
-    }
-
-    /// Run dispatch without saving the results.
-    ///
-    /// This is an internal function as callers always want to save results.
-    fn run_no_save(&self) -> Result<Solution<'model>> {
         // If the user provided no markets to balance, we all use of them
         let all_markets: Vec<_>;
         let markets_to_balance = if self.markets_to_balance.is_empty() {
@@ -439,42 +430,27 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // is due to unmet demand, in this case, we rerun dispatch including with unmet demand
         // variables for all markets so we can report the offending markets to users
         match self.run_internal(markets_to_balance, self.markets_to_allow_unmet_demand) {
-            Ok(solution) => Ok(solution),
+            Ok(solution) => {
+                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+                Ok(solution)
+            }
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
-                let markets = self
-                    .get_markets_with_unmet_demand(markets_to_balance)
-                    .expect("Failed to run dispatch to calculate unmet demand");
-
-                ensure!(
-                    !markets.is_empty(),
-                    "Model is infeasible, but there was no unmet demand"
-                );
-
+                let solution = self.run_internal(markets_to_balance, markets_to_balance)?;
+                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+                let markets_with_unmet_demand: IndexSet<String> = solution
+                    .iter_unmet_demand()
+                    .filter(|(_, _, flow)| *flow > Flow(0.0))
+                    .map(|(market, _, _)| market.to_string())
+                    .collect();
                 bail!(
                     "The solver has indicated that the problem is infeasible, probably because \
                     the supplied assets could not meet the required demand. Demand was not met \
                     for the following markets: {}",
-                    format_items_with_cap(markets)
+                    format_items_with_cap(markets_with_unmet_demand)
                 )
             }
             Err(err) => Err(err)?,
         }
-    }
-
-    /// Run dispatch to diagnose which markets have unmet demand
-    fn get_markets_with_unmet_demand(
-        &self,
-        markets_to_balance: &[MarketID],
-    ) -> Result<IndexSet<MarketID>> {
-        // Run dispatch including unmet demand variables for all markets being balanced
-        let solution = self.run_internal(markets_to_balance, markets_to_balance)?;
-
-        // Collect markets with unmet demand
-        Ok(solution
-            .iter_unmet_demand()
-            .filter(|(_, _, flow)| *flow > Flow(0.0))
-            .map(|(market, _, _)| market.clone())
-            .collect())
     }
 
     /// Run dispatch to balance the specified markets, allowing unmet demand for a subset of these
