@@ -1,7 +1,7 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
-use crate::commodity::{CommodityID, CommodityType, Market};
+use crate::commodity::{CommodityID, CommodityType, MarketID};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
@@ -67,7 +67,7 @@ pub fn add_asset_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [Market],
+    markets: &'a [MarketID],
     year: u32,
 ) -> ConstraintKeys
 where
@@ -97,7 +97,7 @@ fn add_commodity_balance_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [Market],
+    markets: &'a [MarketID],
     year: u32,
 ) -> CommodityBalanceKeys
 where
@@ -144,7 +144,7 @@ where
             // Also include unmet demand variables if required
             if !variables.unmet_demand_var_idx.is_empty() {
                 for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                    let var = variables.get_unmet_demand_var(&market, time_slice);
+                    let var = variables.get_unmet_demand_var(market, time_slice);
                     terms.push((var, 1.0));
                 }
             }
