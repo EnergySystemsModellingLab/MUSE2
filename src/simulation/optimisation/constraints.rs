@@ -56,7 +56,7 @@ pub struct ConstraintKeys {
 /// * `variables` - The variables in the problem
 /// * `model` - The model
 /// * `assets` - The asset pool
-/// * `commodities` - The subset of commodities to apply constraints to
+/// * `markets` - The subset of markets (commodity/region combinations) to apply constraints to
 /// * `year` - Current milestone year
 ///
 /// # Returns

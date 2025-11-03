@@ -205,10 +205,9 @@ pub fn perform_agent_investment(
     Ok(all_selected_assets)
 }
 
-/// Select assets for a single commodity in a given region and year
+/// Select assets for a single market (commodity/region combination) in a given year
 ///
-/// Returns a list of assets that are selected for investment for this commodity in this region and
-/// year.
+/// Returns a list of assets that are selected for investment for this market in this year.
 #[allow(clippy::too_many_arguments)]
 fn select_assets_for_market(
     model: &Model,
