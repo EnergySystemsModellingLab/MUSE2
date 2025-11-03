@@ -56,7 +56,8 @@ pub struct ConstraintKeys {
 /// * `variables` - The variables in the problem
 /// * `model` - The model
 /// * `assets` - The asset pool
-/// * `markets` - The subset of markets (commodity/region combinations) to apply constraints to
+/// * `markets_to_balance` - The subset of markets (commodity/region combinations) to apply balance constraints to
+/// * `markets_to_allow_unmet_demand` - The subset of markets to assign unmet demand variables to
 /// * `year` - Current milestone year
 ///
 /// # Returns
