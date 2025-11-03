@@ -214,19 +214,15 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let agent_ids = agents.keys().cloned().collect();
     let assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 
-    // TEMPORARY: Turn off graph validation
-    // Commodity order replaced with an empty HashMap - will panic when it gets to investment
-
     // Build and validate commodity graphs for all regions and years
     // This gives us the commodity order for each region/year which is passed to the model
-    // let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
-    // let commodity_order = validate_commodity_graphs_for_model(
-    //     &commodity_graphs,
-    //     &processes,
-    //     &commodities,
-    //     &time_slice_info,
-    // )?;
-    let commodity_order = HashMap::new();
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
+    let commodity_order = validate_commodity_graphs_for_model(
+        &commodity_graphs,
+        &processes,
+        &commodities,
+        &time_slice_info,
+    )?;
 
     let model_path = model_dir
         .as_ref()
