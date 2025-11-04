@@ -26,12 +26,12 @@ type DemandMap = IndexMap<TimeSliceID, Flow>;
 /// Demand for a given combination of commodity, region and time slice
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
-/// Represents a set of commodities which are invested in together.
+/// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
-    /// Assets are selected for a single commodity using `select_assets_for_commodity`
+    /// Assets are selected for a single market using `select_assets_for_single_market`
     Single(MarketID),
-    /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
+    /// Assets are selected for a group of markets which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<MarketID>),
     /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
@@ -58,7 +58,7 @@ impl InvestmentSet {
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single(market) => select_assets_for_market(
+            InvestmentSet::Single(market) => select_assets_for_single_market(
                 model,
                 market,
                 year,
@@ -205,11 +205,11 @@ pub fn perform_agent_investment(
     Ok(all_selected_assets)
 }
 
-/// Select assets for a single market (commodity/region combination) in a given year
+/// Select assets for a single market in a given year
 ///
 /// Returns a list of assets that are selected for investment for this market in this year.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_market(
+fn select_assets_for_single_market(
     model: &Model,
     market: &MarketID,
     year: u32,

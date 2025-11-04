@@ -90,7 +90,8 @@ pub enum CommodityType {
     Other,
 }
 
-/// Represents a market for a specific commodity in a specific region (e.g. the coal market in GBR).
+/// Identifier for a market of a specific commodity in a specific region (e.g. the coal market in
+/// GBR).
 #[derive(PartialEq, Debug, Deserialize, Clone, Eq, Hash)]
 pub struct MarketID {
     /// Commodity that the market refers to

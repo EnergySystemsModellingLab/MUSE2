@@ -105,7 +105,7 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `markets` - The subset of markets (commodity/region combinations) the problem is being run for
+    /// * `markets` - The subset of markets the problem is being run for
     fn add_unmet_demand_variables(
         &mut self,
         problem: &mut Problem,

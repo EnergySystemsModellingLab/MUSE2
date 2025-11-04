@@ -13,9 +13,28 @@ use std::collections::HashMap;
 
 type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 
-/// Performs topological sort on the commodity graph to get the ordering for investments
+/// Analyse the commodity graphs for a given year to determine the order in which investment
+/// decisions should be made.
 ///
-/// The returned Vec only includes SVD and SED commodities.
+/// Steps:
+/// 1. Initialise an `InvestmentGraph` from the set of original `CommodityGraph`s for the given
+///    year, filtering to only include SVD/SED commodities and primary edges. `CommodityGraph`s from
+///    all regions are combined into a single `InvestmentGraph`. TODO: at present there can be no
+///    edges between regions; in future we will want to implement trade as edges between regions,
+///    but this will have no impact on the following steps.
+/// 2. Condense strongly connected components (cycles) into `InvestmentSet::Cycle` nodes.
+/// 3. Perform a topological sort on the condensed graph.
+/// 4. Compute layers for investment based on the topological order, grouping independent sets into
+///    `InvestmentSet::Layer`s.
+///
+/// Arguments:
+/// * `graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
+/// * `commodities` - All commodities with their types and demand specifications
+/// * `year` - The year to solve the investment order for
+///
+/// # Returns
+/// A Vec of `InvestmentSet`s in the order they should be solved, with cycles grouped into
+/// `InvestmentSet::Cycle`s and independent sets grouped into `InvestmentSet::Layer`s.
 fn solve_investment_order_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
@@ -38,10 +57,11 @@ fn solve_investment_order_for_year(
     compute_layers(&investment_graph, &order)
 }
 
-// Initialise an InvestmentGraph from the original CommodityGraph
-//
-// This filters the graph to only include SVD/SED commodities and primary edges, then creates an
-// InvestmentGraphNode::Single for each commodity node.
+/// Initialise an `InvestmentGraph` for the given year from a set of `CommodityGraph`s
+///
+/// Commodity graphs for each region are first filtered to only include SVD/SED commodities and
+/// primary edges. Each commodity node is then added to a global investment graph as an
+/// `InvestmentSet::Single`, with edges preserved from the original commodity graphs.
 fn init_investment_graph_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     year: u32,
@@ -205,7 +225,7 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
     result
 }
 
-/// Determine commodity ordering for each region and year
+/// Determine investment ordering for each year
 ///
 /// # Arguments
 ///
@@ -214,8 +234,9 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
 ///
 /// # Returns
 ///
-/// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
-/// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
+/// A map from `year` to the ordered list of `InvestmentSet`s for investment decisions. The
+/// ordering ensures that leaf-node `InvestmentSet`s (those with no outgoing edges) are solved
+/// first.
 pub fn solve_investment_order_for_model(
     commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
