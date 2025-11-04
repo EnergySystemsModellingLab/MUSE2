@@ -113,11 +113,13 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
 ///
 /// For example, given the following graph:
 ///
+/// ```text
 ///     A
 ///    / \
 ///   B   C
 ///  / \   \
 /// D   E   F
+/// ```
 ///
 /// Rank 0: A -> `InvestmentSet::Single`
 /// Rank 1: B, C -> `InvestmentSet::Layer`
