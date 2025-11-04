@@ -33,7 +33,7 @@ pub enum InvestmentSet {
     Single(CommodityID),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<CommodityID>),
-    /// Assets are selected for a layer of independent commodities
+    /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
 }
 
@@ -73,7 +73,7 @@ impl InvestmentSet {
                 "Investment cycles are not yet supported. Found cycle for commodities: {self}"
             ),
             InvestmentSet::Layer(investment_sets) => {
-                debug!("Starting investment for layer '{self}' in region '{region_id}'");
+                debug!("Starting asset selection for layer '{self}' in region '{region_id}'");
                 let mut all_assets = Vec::new();
                 for investment_set in investment_sets {
                     let assets = investment_set.select_assets(
@@ -87,7 +87,7 @@ impl InvestmentSet {
                     )?;
                     all_assets.extend(assets);
                 }
-                debug!("Completed investment for layer '{self}' in region '{region_id}'");
+                debug!("Completed asset selection for layer '{self}' in region '{region_id}'");
                 Ok(all_assets)
             }
         }
@@ -246,7 +246,7 @@ fn select_assets_for_commodity(
         get_responsible_agents(model.agents.values(), &commodity.id, region_id, year)
     {
         debug!(
-            "Running investment for agent '{}' with commodity '{}' in region '{}'",
+            "Running asset selection for agent '{}' with commodity '{}' in region '{}'",
             &agent.id, commodity.id, region_id
         );
 
