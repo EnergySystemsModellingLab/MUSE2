@@ -120,11 +120,53 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
     )
 }
 
+/// Compute layers of investment sets from the topological order
+///
+/// This function works by computing the rank of each node in the graph based on the longest path
+/// from any root node to that node. Any nodes with the same rank are independent and can be solved
+/// in parallel. Nodes with different rank must be solved in order from highest rank (leaf nodes)
+/// to lowest rank (root nodes).
+///
+/// This function computes the ranks of each node, groups nodes by rank, and then produces a final
+/// ordered Vec of `InvestmentSet`s which gives the order in which to solve the investment decisions.
+///
+/// Investment sets with the same rank (i.e., can be solved in parallel) are grouped into
+/// `InvestmentSet::Layer`. Investment sets that are alone in their rank remain as-is (i.e. either
+/// `Single` or `Cycle`). `Layer`s can contain a mix of `Single` and `Cycle` investment sets.
+///
+/// For example, given the following graph:
+///
+/// ```text
+///     A
+///    / \
+///   B   C
+///  / \   \
+/// D   E   F
+/// ```
+///
+/// Rank 0: A -> `InvestmentSet::Single`
+/// Rank 1: B, C -> `InvestmentSet::Layer`
+/// Rank 2: D, E, F -> `InvestmentSet::Layer`
+///
+/// These are returned as a `Vec<InvestmentSet>` from highest rank to lowest (i.e. the D, E, F layer
+/// first, then the B, C layer, then the singleton A).
+///
+/// Arguments:
+/// * `graph` - The investment graph. Any cycles in the graph MUST have already been compressed.
+///   This will be necessary anyway as computing a topological sort to obtain the `order` requires
+///   an acyclic graph.
+/// * `order` - The topological order of the graph nodes. Computed using `petgraph::algo::toposort`.
+///
+/// Returns:
+/// A Vec of `InvestmentSet`s in the order they should be solved, with independent sets grouped into
+/// `InvestmentSet::Layer`s.
 fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<InvestmentSet> {
     // Initialize all ranks to 0
     let mut ranks: HashMap<_, usize> = graph.node_indices().map(|n| (n, 0)).collect();
 
     // Calculate the rank of each node by traversing in topological order
+    // The algorithm works by iterating through each node in topological order and updating the ranks
+    // of its neighbors to be at least one more than the current node's rank.
     for &u in order {
         let current_rank = ranks[&u];
         for v in graph.neighbors_directed(u, Direction::Outgoing) {
@@ -150,8 +192,11 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
         if items.is_empty() {
             unreachable!("Should be no gaps in the ranking")
         }
+        // If only one InvestmentSet in the group, we do not need to compress into a layer, so just
+        // push the single item (this item may be a `Single` or `Cycle`).
         if items.len() == 1 {
             result.push(items.remove(0));
+        // Otherwise, create a layer. The items within the layer may be a mix of `Single` or `Cycle`.
         } else {
             result.push(InvestmentSet::Layer(items));
         }
