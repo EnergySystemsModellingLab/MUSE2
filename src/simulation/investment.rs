@@ -27,28 +27,69 @@ type DemandMap = IndexMap<TimeSliceID, Flow>;
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
 /// Represents a set of commodities which are invested in together.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
     /// Assets are selected for a single commodity using `select_assets_for_commodity`
     Single(CommodityID),
     /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
     Cycle(Vec<CommodityID>),
+    /// Assets are selected for a layer of independent `InvestmentSet`s
+    Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
-    /// Returns an iterator over the commodity IDs in this investment set
-    pub fn iter(&self) -> impl Iterator<Item = &CommodityID> {
+    /// Recursively iterate over all `CommodityID`s contained in this `InvestmentSet`.
+    pub fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
         match self {
-            InvestmentSet::Single(id) => std::slice::from_ref(id).iter(),
-            InvestmentSet::Cycle(ids) => ids.iter(),
+            InvestmentSet::Single(id) => Box::new(std::iter::once(id)),
+            InvestmentSet::Cycle(ids) => Box::new(ids.iter()),
+            InvestmentSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_commodity_ids())),
         }
     }
 
-    /// Converts the investment set to a vector of commodity IDs
-    pub fn to_vec(&self) -> Vec<CommodityID> {
+    #[allow(clippy::too_many_arguments)]
+    fn select_assets(
+        &self,
+        model: &Model,
+        region_id: &RegionID,
+        year: u32,
+        demand: &AllDemandMap,
+        existing_assets: &[AssetRef],
+        prices: &CommodityPrices,
+        writer: &mut DataWriter,
+    ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single(id) => vec![id.clone()],
-            InvestmentSet::Cycle(ids) => ids.clone(),
+            InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
+                model,
+                commodity_id,
+                region_id,
+                year,
+                demand,
+                existing_assets,
+                prices,
+                writer,
+            ),
+            InvestmentSet::Cycle(_) => bail!(
+                "Investment cycles are not yet supported. Found cycle for commodities: {self}"
+            ),
+            InvestmentSet::Layer(investment_sets) => {
+                debug!("Starting asset selection for layer '{self}' in region '{region_id}'");
+                let mut all_assets = Vec::new();
+                for investment_set in investment_sets {
+                    let assets = investment_set.select_assets(
+                        model,
+                        region_id,
+                        year,
+                        demand,
+                        existing_assets,
+                        prices,
+                        writer,
+                    )?;
+                    all_assets.extend(assets);
+                }
+                debug!("Completed asset selection for layer '{self}' in region '{region_id}'");
+                Ok(all_assets)
+            }
         }
     }
 }
@@ -57,7 +98,12 @@ impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvestmentSet::Single(id) => write!(f, "{id}"),
-            InvestmentSet::Cycle(ids) => write!(f, "[{}]", ids.iter().join(", ")),
+            InvestmentSet::Cycle(ids) => {
+                write!(f, "({})", ids.iter().join(", "))
+            }
+            InvestmentSet::Layer(ids) => {
+                write!(f, "[{}]", ids.iter().join(", "))
+            }
         }
     }
 }
@@ -78,8 +124,8 @@ pub fn perform_agent_investment(
     prices: &CommodityPrices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    // Initialise demand map
-    let mut demand =
+    // Initialise net demand map
+    let mut net_demand =
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
 
     // Keep a list of all the assets selected
@@ -88,13 +134,17 @@ pub fn perform_agent_investment(
 
     for region_id in model.iter_regions() {
         let investment_order = &model.investment_order[&(region_id.clone(), year)];
+        debug!(
+            "Investment order for region '{region_id}' in year '{year}': {}",
+            investment_order.iter().join(" -> ")
+        );
 
         // External prices to be used in dispatch optimisation
         // Once investments are performed for a commodity, the dispatch system will be able to produce
         // endogenous prices for that commodity, so we'll gradually remove these external prices.
         let cur_commodities: &Vec<_> = &investment_order
             .iter()
-            .flat_map(InvestmentSet::iter)
+            .flat_map(InvestmentSet::iter_commodity_ids)
             .cloned()
             .collect();
         let mut external_prices =
@@ -108,26 +158,18 @@ pub fn perform_agent_investment(
         // Iterate over investment sets in the investment order for this region/year
         for investment_set in investment_order {
             // Select assets for the commodity(/ies) of interest
-            let selected_assets = match investment_set {
-                InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
-                    model,
-                    commodity_id,
-                    region_id,
-                    year,
-                    &demand,
-                    existing_assets,
-                    prices,
-                    writer,
-                )?,
-                InvestmentSet::Cycle(_) => {
-                    bail!(
-                        "Investment cycles are not yet supported. Found cycle for commodities: {investment_set}"
-                    );
-                }
-            };
+            let selected_assets = investment_set.select_assets(
+                model,
+                region_id,
+                year,
+                &net_demand,
+                existing_assets,
+                prices,
+                writer,
+            )?;
 
             // Update our list of seen commodities
-            for commodity_id in investment_set.iter() {
+            for commodity_id in investment_set.iter_commodity_ids() {
                 seen_commodities.push(commodity_id.clone());
             }
 
@@ -136,9 +178,10 @@ pub fn perform_agent_investment(
             // commodity balance constraints), but commodities for which investment has not yet been
             // performed will, by definition, not have any producers. For these, we provide prices
             // from the previous dispatch run otherwise they will appear to be free to the model.
-            for (commodity_id, time_slice) in
-                iproduct!(investment_set.iter(), model.time_slice_info.iter_ids())
-            {
+            for (commodity_id, time_slice) in iproduct!(
+                investment_set.iter_commodity_ids(),
+                model.time_slice_info.iter_ids()
+            ) {
                 external_prices.remove(commodity_id, region_id, time_slice);
             }
 
@@ -170,7 +213,11 @@ pub fn perform_agent_investment(
                 )?;
 
             // Update demand map with flows from newly added assets
-            update_demand_map(&mut demand, &solution.create_flow_map(), &selected_assets);
+            update_net_demand_map(
+                &mut net_demand,
+                &solution.create_flow_map(),
+                &selected_assets,
+            );
         }
     }
 
@@ -199,7 +246,7 @@ fn select_assets_for_commodity(
         get_responsible_agents(model.agents.values(), &commodity.id, region_id, year)
     {
         debug!(
-            "Running investment for agent '{}' with commodity '{}' in region '{}'",
+            "Running asset selection for agent '{}' with commodity '{}' in region '{}'",
             &agent.id, commodity.id, region_id
         );
 
@@ -279,7 +326,7 @@ fn flatten_preset_demands_for_year(
     demand_map
 }
 
-/// Update demand map with flows from a set of assets
+/// Update net demand map with flows from a set of assets
 ///
 /// Non-primary output flows are ignored. This way, demand profiles aren't affected by production
 /// of side-products from other assets. The result is that all commodity demands must be met by
@@ -288,7 +335,7 @@ fn flatten_preset_demands_for_year(
 ///
 /// TODO: this is a very flawed approach. The proper solution might be for agents to consider
 /// multiple commodities simultaneously, but that would require substantial work to implement.
-fn update_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
+fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
     for ((asset, commodity_id, time_slice), flow) in flows {
         if assets.contains(asset) {
             let key = (

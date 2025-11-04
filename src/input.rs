@@ -1,9 +1,8 @@
 //! Common routines for handling input data.
 use crate::asset::AssetPool;
-use crate::graph::{
-    CommoditiesGraph, build_commodity_graphs_for_model, solve_investment_order_for_model,
-    validate_commodity_graphs_for_model,
-};
+use crate::graph::investment::solve_investment_order_for_model;
+use crate::graph::validate::validate_commodity_graphs_for_model;
+use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
 use crate::region::RegionID;

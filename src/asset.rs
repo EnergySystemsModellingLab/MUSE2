@@ -507,9 +507,10 @@ impl Asset {
             state => panic!("Assets with state {state} cannot be commissioned"),
         };
         debug!(
-            "Commissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
+            "Commissioning '{}' asset (ID: {}, capacity: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
+            self.capacity(),
             agent_id,
             reason
         );
