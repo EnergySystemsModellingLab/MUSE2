@@ -1,7 +1,7 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
 use crate::asset::{Asset, AssetID, AssetRef};
-use crate::commodity::{CommodityID, MarketID};
+use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
@@ -382,14 +382,14 @@ impl DebugDataWriter {
         iter: I,
     ) -> Result<()>
     where
-        I: Iterator<Item = (&'a MarketID, &'a TimeSliceID, Flow)>,
+        I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, Flow)>,
     {
-        for (market_id, time_slice, value) in iter {
+        for (commodity_id, region_id, time_slice, value) in iter {
             let row = UnmetDemandRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
-                commodity_id: market_id.commodity_id.clone(),
-                region_id: market_id.region_id.clone(),
+                commodity_id: commodity_id.clone(),
+                region_id: region_id.clone(),
                 time_slice: time_slice.clone(),
                 value,
             };

@@ -1,6 +1,6 @@
 //! The model represents the static input data provided by the user.
 use crate::agent::AgentMap;
-use crate::commodity::{CommodityMap, MarketID};
+use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::ProcessMap;
 use crate::region::{Region, RegionID, RegionMap};
 use crate::simulation::investment::InvestmentSet;
@@ -45,12 +45,11 @@ impl Model {
     }
 
     /// Iterate over all the markets in the model.
-    pub fn iter_markets(&self) -> impl Iterator<Item = MarketID> + '_ {
+    pub fn iter_markets(&self) -> impl Iterator<Item = (CommodityID, RegionID)> + '_ {
         self.commodities.keys().flat_map(move |commodity_id| {
-            self.regions.keys().map(move |region_id| MarketID {
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
-            })
+            self.regions
+                .keys()
+                .map(move |region_id| (commodity_id.clone(), region_id.clone()))
         })
     }
 }

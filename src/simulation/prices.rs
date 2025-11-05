@@ -2,6 +2,7 @@
 use crate::asset::AssetRef;
 use crate::commodity::CommodityID;
 use crate::model::{Model, PricingStrategy};
+use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
@@ -218,7 +219,10 @@ where
     let mut highest_duals = HashMap::new();
     for (asset, time_slice, dual) in activity_duals {
         // Iterate over all output flows
-        for flow in asset.iter_flows().filter(|flow| flow.is_output()) {
+        for flow in asset
+            .iter_flows()
+            .filter(|flow| flow.direction() == FlowDirection::Output)
+        {
             // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
