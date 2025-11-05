@@ -607,7 +607,7 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{assets, commodity_id, market_id, region_id, time_slice};
+    use crate::fixture::{assets, commodity_id, region_id, time_slice};
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
@@ -746,7 +746,11 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_unmet_demand(market_id: MarketID, time_slice: TimeSliceID) {
+    fn test_write_unmet_demand(
+        commodity_id: CommodityID,
+        region_id: RegionID,
+        time_slice: TimeSliceID,
+    ) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let value = Flow(0.5);
@@ -759,7 +763,7 @@ mod tests {
                 .write_unmet_demand(
                     milestone_year,
                     &run_description,
-                    iter::once((&market_id, &time_slice, value)),
+                    iter::once((&commodity_id, &region_id, &time_slice, value)),
                 )
                 .unwrap();
             writer.flush().unwrap();
@@ -769,8 +773,8 @@ mod tests {
         let expected = UnmetDemandRow {
             milestone_year,
             run_description,
-            commodity_id: market_id.commodity_id,
-            region_id: market_id.region_id,
+            commodity_id: commodity_id,
+            region_id: region_id,
             time_slice,
             value,
         };
