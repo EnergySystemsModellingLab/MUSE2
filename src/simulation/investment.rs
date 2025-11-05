@@ -2,7 +2,7 @@
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
-use crate::commodity::{Commodity, CommodityID, CommodityMap, MarketID};
+use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
@@ -30,16 +30,18 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 #[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
     /// Assets are selected for a single market using `select_assets_for_single_market`
-    Single(MarketID),
+    Single((CommodityID, RegionID)),
     /// Assets are selected for a group of markets which forms a cycle. NOT YET IMPLEMENTED.
-    Cycle(Vec<MarketID>),
+    Cycle(Vec<(CommodityID, RegionID)>),
     /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
-    /// Recursively iterate over all `Market`s contained in this `InvestmentSet`.
-    pub fn iter_markets<'a>(&'a self) -> Box<dyn Iterator<Item = &'a MarketID> + 'a> {
+    /// Recursively iterate over all markets contained in this `InvestmentSet`.
+    pub fn iter_markets<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
             InvestmentSet::Single(market) => Box::new(std::iter::once(market)),
             InvestmentSet::Cycle(markets) => Box::new(markets.iter()),
@@ -58,9 +60,10 @@ impl InvestmentSet {
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single(market) => select_assets_for_single_market(
+            InvestmentSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
                 model,
-                market,
+                commodity_id,
+                region_id,
                 year,
                 demand,
                 existing_assets,
@@ -94,8 +97,16 @@ impl InvestmentSet {
 impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvestmentSet::Single(market) => write!(f, "{market}"),
-            InvestmentSet::Cycle(markets) => write!(f, "({})", markets.iter().join(", ")),
+            InvestmentSet::Single((commodity_id, region_id)) => {
+                write!(f, "{commodity_id}|{region_id}")
+            }
+            InvestmentSet::Cycle(markets) => {
+                write!(
+                    f,
+                    "{}",
+                    markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ")
+                )
+            }
             InvestmentSet::Layer(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
             }
@@ -165,11 +176,11 @@ pub fn perform_agent_investment(
         // commodity balance constraints), but markets for which investment has not yet been
         // performed will, by definition, not have any producers. For these, we provide prices
         // from the previous dispatch run otherwise they will appear to be free to the model.
-        for (market, time_slice) in iproduct!(
+        for ((commodity_id, region_id), time_slice) in iproduct!(
             investment_set.iter_markets(),
             model.time_slice_info.iter_ids()
         ) {
-            external_prices.remove(&market.commodity_id, &market.region_id, time_slice);
+            external_prices.remove(commodity_id, region_id, time_slice);
         }
 
         // If no assets have been selected, skip dispatch optimisation
@@ -211,27 +222,31 @@ pub fn perform_agent_investment(
 #[allow(clippy::too_many_arguments)]
 fn select_assets_for_single_market(
     model: &Model,
-    market: &MarketID,
+    commodity_id: &CommodityID,
+    region_id: &RegionID,
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &CommodityPrices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let commodity = &model.commodities[&market.commodity_id];
+    let commodity = &model.commodities[commodity_id];
 
     let mut selected_assets = Vec::new();
-    for (agent, commodity_portion) in get_responsible_agents(model.agents.values(), market, year) {
+    for (agent, commodity_portion) in
+        get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
+    {
         debug!(
-            "Running asset selection for agent '{}' in market '{}'",
-            &agent.id, market
+            "Running asset selection for agent '{}' in market '{}|{}'",
+            &agent.id, commodity_id, region_id
         );
 
         // Get demand portion for this market for this agent in this year
         let demand_portion_for_market = get_demand_portion_for_market(
             &model.time_slice_info,
             demand,
-            market,
+            commodity_id,
+            region_id,
             commodity_portion,
         );
 
@@ -242,7 +257,7 @@ fn select_assets_for_single_market(
             &demand_portion_for_market,
             agent,
             commodity,
-            &market.region_id,
+            region_id,
             year,
         )
         .collect();
@@ -341,7 +356,8 @@ fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[A
 fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
-    market_id: &MarketID,
+    commodity_id: &CommodityID,
+    region_id: &RegionID,
     commodity_portion: Dimensionless,
 ) -> DemandMap {
     time_slice_info
@@ -351,11 +367,7 @@ fn get_demand_portion_for_market(
                 time_slice.clone(),
                 commodity_portion
                     * *demand
-                        .get(&(
-                            market_id.commodity_id.clone(),
-                            market_id.region_id.clone(),
-                            time_slice.clone(),
-                        ))
+                        .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
                         .unwrap_or(&Flow(0.0)),
             )
         })
@@ -366,19 +378,20 @@ fn get_demand_portion_for_market(
 /// portion for which they are responsible
 fn get_responsible_agents<'a, I>(
     agents: I,
-    market_id: &'a MarketID,
+    commodity_id: &CommodityID,
+    region_id: &RegionID,
     year: u32,
 ) -> impl Iterator<Item = (&'a Agent, Dimensionless)>
 where
     I: Iterator<Item = &'a Agent>,
 {
     agents.filter_map(move |agent| {
-        if !agent.regions.contains(&market_id.region_id) {
+        if !agent.regions.contains(&region_id.clone()) {
             return None;
         }
         let portion = agent
             .commodity_portions
-            .get(&(market_id.commodity_id.clone(), year))?;
+            .get(&(commodity_id.clone(), year))?;
 
         Some((agent, *portion))
     })

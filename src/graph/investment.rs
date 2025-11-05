@@ -1,6 +1,6 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityMap, CommodityType, MarketID};
+use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
 use indexmap::IndexMap;
@@ -94,11 +94,10 @@ fn init_investment_graph_for_year(
                 let GraphNode::Commodity(cid) = filtered.node_weight(ni).unwrap() else {
                     unreachable!()
                 };
-                let market = MarketID {
-                    commodity_id: cid.clone(),
-                    region_id: region_id.clone(),
-                };
-                (ni, combined.add_node(InvestmentSet::Single(market)))
+                (
+                    ni,
+                    combined.add_node(InvestmentSet::Single((cid.clone(), region_id.clone()))),
+                )
             })
             .collect();
 
@@ -287,9 +286,9 @@ mod tests {
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all investment sets should be `Single`
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single("C|GBR".into()));
-        assert_eq!(result[1], InvestmentSet::Single("B|GBR".into()));
-        assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
+        assert_eq!(result[0], InvestmentSet::Single(("C".into(), "GBR".into())));
+        assert_eq!(result[1], InvestmentSet::Single(("B".into(), "GBR".into())));
+        assert_eq!(result[2], InvestmentSet::Single(("A".into(), "GBR".into())));
     }
 
     #[rstest]
@@ -316,7 +315,7 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            InvestmentSet::Cycle(vec!["A|GBR".into(), "B|GBR".into()])
+            InvestmentSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
         );
     }
 
@@ -356,15 +355,15 @@ mod tests {
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single("D|GBR".into()));
+        assert_eq!(result[0], InvestmentSet::Single(("D".into(), "GBR".into())));
         assert_eq!(
             result[1],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("B|GBR".into()),
-                InvestmentSet::Single("C|GBR".into())
+                InvestmentSet::Single(("B".into(), "GBR".into())),
+                InvestmentSet::Single(("C".into(), "GBR".into()))
             ])
         );
-        assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
+        assert_eq!(result[2], InvestmentSet::Single(("A".into(), "GBR".into())));
     }
 
     #[rstest]
@@ -401,22 +400,22 @@ mod tests {
         assert_eq!(
             result[0],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("C|GBR".into()),
-                InvestmentSet::Single("C|FRA".into())
+                InvestmentSet::Single(("C".into(), "GBR".into())),
+                InvestmentSet::Single(("C".into(), "FRA".into()))
             ])
         );
         assert_eq!(
             result[1],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("B|GBR".into()),
-                InvestmentSet::Single("B|FRA".into())
+                InvestmentSet::Single(("B".into(), "GBR".into())),
+                InvestmentSet::Single(("B".into(), "FRA".into()))
             ])
         );
         assert_eq!(
             result[2],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("A|GBR".into()),
-                InvestmentSet::Single("A|FRA".into())
+                InvestmentSet::Single(("A".into(), "GBR".into())),
+                InvestmentSet::Single(("A".into(), "FRA".into()))
             ])
         );
     }
