@@ -6,6 +6,7 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
+use crate::process::ProcessID;
 use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
 use crate::simulation::investment::appraisal::{
