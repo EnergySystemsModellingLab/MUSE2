@@ -378,15 +378,15 @@ fn get_demand_portion_for_market(
 /// portion for which they are responsible
 fn get_responsible_agents<'a, I>(
     agents: I,
-    commodity_id: &CommodityID,
-    region_id: &RegionID,
+    commodity_id: &'a CommodityID,
+    region_id: &'a RegionID,
     year: u32,
 ) -> impl Iterator<Item = (&'a Agent, Dimensionless)>
 where
     I: Iterator<Item = &'a Agent>,
 {
     agents.filter_map(move |agent| {
-        if !agent.regions.contains(&region_id.clone()) {
+        if !agent.regions.contains(region_id) {
             return None;
         }
         let portion = agent

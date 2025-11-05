@@ -225,8 +225,8 @@ impl Solution<'_> {
             .unmet_demand_vars
             .keys()
             .zip(self.solution.columns()[self.variables.unmet_demand_var_idx.clone()].iter())
-            .map(|((commodity, region, time_slice), flow)| {
-                (commodity, region, time_slice, Flow(*flow))
+            .map(|((commodity_id, region_id, time_slice), flow)| {
+                (commodity_id, region_id, time_slice, Flow(*flow))
             })
     }
 
