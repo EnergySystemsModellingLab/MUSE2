@@ -2,7 +2,7 @@
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
-use crate::commodity::{Commodity, CommodityID, CommodityMap, MarketID};
+use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
@@ -20,26 +20,28 @@ pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
 use appraisal::{AppraisalOutput, appraise_investment};
 
-/// A map of demand across time slices for a specific commodity and region
+/// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
 
 /// Demand for a given combination of commodity, region and time slice
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
-/// Represents a set of commodities which are invested in together.
+/// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
-    /// Assets are selected for a single commodity using `select_assets_for_commodity`
-    Single(MarketID),
-    /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
-    Cycle(Vec<MarketID>),
-    /// Assets are selected for a layer of independent commodities
+    /// Assets are selected for a single market using `select_assets_for_single_market`
+    Single((CommodityID, RegionID)),
+    /// Assets are selected for a group of markets which forms a cycle. NOT YET IMPLEMENTED.
+    Cycle(Vec<(CommodityID, RegionID)>),
+    /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
-    /// Recursively iterate over all `Market`s contained in this `InvestmentSet`.
-    pub fn iter_markets<'a>(&'a self) -> Box<dyn Iterator<Item = &'a MarketID> + 'a> {
+    /// Recursively iterate over all markets contained in this `InvestmentSet`.
+    pub fn iter_markets<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
             InvestmentSet::Single(market) => Box::new(std::iter::once(market)),
             InvestmentSet::Cycle(markets) => Box::new(markets.iter()),
@@ -58,9 +60,10 @@ impl InvestmentSet {
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single(market) => select_assets_for_market(
+            InvestmentSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
                 model,
-                market,
+                commodity_id,
+                region_id,
                 year,
                 demand,
                 existing_assets,
@@ -71,7 +74,7 @@ impl InvestmentSet {
                 "Investment cycles are not yet supported. Found cycle for commodities: {self}"
             ),
             InvestmentSet::Layer(investment_sets) => {
-                debug!("Starting investment for layer '{self}'");
+                debug!("Starting asset selection for layer '{self}'");
                 let mut all_assets = Vec::new();
                 for investment_set in investment_sets {
                     let assets = investment_set.select_assets(
@@ -84,7 +87,7 @@ impl InvestmentSet {
                     )?;
                     all_assets.extend(assets);
                 }
-                debug!("Completed investment for layer '{self}'");
+                debug!("Completed asset selection for layer '{self}'");
                 Ok(all_assets)
             }
         }
@@ -94,8 +97,16 @@ impl InvestmentSet {
 impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvestmentSet::Single(market) => write!(f, "{market}"),
-            InvestmentSet::Cycle(markets) => write!(f, "({})", markets.iter().join(", ")),
+            InvestmentSet::Single((commodity_id, region_id)) => {
+                write!(f, "{commodity_id}|{region_id}")
+            }
+            InvestmentSet::Cycle(markets) => {
+                write!(
+                    f,
+                    "{}",
+                    markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ")
+                )
+            }
             InvestmentSet::Layer(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
             }
@@ -110,7 +121,7 @@ impl Display for InvestmentSet {
 /// * `model` - The model
 /// * `year` - Current milestone year
 /// * `assets` - The asset pool
-/// * `prices` - Commodity prices
+/// * `prices` - Commodity prices calculated in the previous full system dispatch
 /// * `writer` - Data writer
 pub fn perform_agent_investment(
     model: &Model,
@@ -134,13 +145,13 @@ pub fn perform_agent_investment(
     );
 
     // External prices to be used in dispatch optimisation
-    // Once investments are performed for a commodity, the dispatch system will be able to produce
-    // endogenous prices for that commodity, so we'll gradually remove these external prices.
+    // Once investments are performed for a market, the dispatch system will be able to produce
+    // endogenous prices for that market, so we'll gradually remove these external prices.
     let mut external_prices = prices.clone();
 
     // Keep track of the markets that have been seen so far. This will be used to apply
     // balance constraints in the dispatch optimisation - we only apply balance constraints for
-    // commodities that have been seen so far.
+    // markets that have been seen so far.
     let mut seen_markets = Vec::new();
 
     // Iterate over investment sets in the investment order for this year
@@ -165,15 +176,15 @@ pub fn perform_agent_investment(
         // commodity balance constraints), but markets for which investment has not yet been
         // performed will, by definition, not have any producers. For these, we provide prices
         // from the previous dispatch run otherwise they will appear to be free to the model.
-        for (market, time_slice) in iproduct!(
+        for ((commodity_id, region_id), time_slice) in iproduct!(
             investment_set.iter_markets(),
             model.time_slice_info.iter_ids()
         ) {
-            external_prices.remove(&market.commodity_id, &market.region_id, time_slice);
+            external_prices.remove(commodity_id, region_id, time_slice);
         }
 
         // If no assets have been selected, skip dispatch optimisation
-        // **TODO**: this probably means there's no demand for the commodity, which we could
+        // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
         if selected_assets.is_empty() {
             continue;
@@ -187,8 +198,8 @@ pub fn perform_agent_investment(
         // previous iterations should not change
         debug!("Running post-investment dispatch for '{investment_set}'");
 
-        // As upstream commodities by definition will not yet have producers, we explicitly set
-        // their prices using previous values so that they don't appear free
+        // As upstream markets by definition will not yet have producers, we explicitly set
+        // their prices using external values so that they don't appear free
         let solution = DispatchRun::new(model, &all_selected_assets, year)
             .with_market_balance_subset(&seen_markets)
             .with_input_prices(&external_prices)
@@ -205,39 +216,37 @@ pub fn perform_agent_investment(
     Ok(all_selected_assets)
 }
 
-/// Select assets for a single market (commodity/region combination) in a given year
+/// Select assets for a single market in a given year
 ///
 /// Returns a list of assets that are selected for investment for this market in this year.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_market(
+fn select_assets_for_single_market(
     model: &Model,
-    market: &MarketID,
+    commodity_id: &CommodityID,
+    region_id: &RegionID,
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &CommodityPrices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let commodity = &model.commodities[&market.commodity_id];
+    let commodity = &model.commodities[commodity_id];
 
     let mut selected_assets = Vec::new();
-    for (agent, commodity_portion) in get_responsible_agents(
-        model.agents.values(),
-        &commodity.id,
-        &market.region_id,
-        year,
-    ) {
+    for (agent, commodity_portion) in
+        get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
+    {
         debug!(
-            "Running investment for agent '{}' in market '{}'",
-            &agent.id, market
+            "Running asset selection for agent '{}' in market '{}|{}'",
+            &agent.id, commodity_id, region_id
         );
 
-        // Get demand portion for this commodity for this agent in this region/year
-        let demand_portion_for_commodity = get_demand_portion_for_commodity(
+        // Get demand portion for this market for this agent in this year
+        let demand_portion_for_market = get_demand_portion_for_market(
             &model.time_slice_info,
             demand,
-            &commodity.id,
-            &market.region_id,
+            commodity_id,
+            region_id,
             commodity_portion,
         );
 
@@ -245,10 +254,10 @@ fn select_assets_for_market(
         let opt_assets = get_asset_options(
             &model.time_slice_info,
             existing_assets,
-            &demand_portion_for_commodity,
+            &demand_portion_for_market,
             agent,
             commodity,
-            &market.region_id,
+            region_id,
             year,
         )
         .collect();
@@ -260,7 +269,7 @@ fn select_assets_for_market(
             commodity,
             agent,
             prices,
-            demand_portion_for_commodity,
+            demand_portion_for_market,
             year,
             writer,
         )?;
@@ -343,8 +352,8 @@ fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[A
     }
 }
 
-/// Get a portion of the demand profile for this commodity and region
-fn get_demand_portion_for_commodity(
+/// Get a portion of the demand profile for this market
+fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
     commodity_id: &CommodityID,
@@ -365,7 +374,7 @@ fn get_demand_portion_for_commodity(
         .collect()
 }
 
-/// Get the agents responsible for a given commodity in a given year along with the commodity
+/// Get the agents responsible for a given market in a given year along with the commodity
 /// portion for which they are responsible
 fn get_responsible_agents<'a, I>(
     agents: I,

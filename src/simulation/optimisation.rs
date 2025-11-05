@@ -2,7 +2,7 @@
 //!
 //! This is used to calculate commodity flows and prices.
 use crate::asset::{Asset, AssetRef};
-use crate::commodity::{CommodityID, MarketID};
+use crate::commodity::CommodityID;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
@@ -36,7 +36,7 @@ type Variable = highs::Col;
 type AssetVariableMap = IndexMap<(AssetRef, TimeSliceID), Variable>;
 
 /// Variables representing unmet demand for a given market
-type UnmetDemandVariableMap = IndexMap<(MarketID, TimeSliceID), Variable>;
+type UnmetDemandVariableMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Variable>;
 
 /// A map for easy lookup of variables in the problem.
 ///
@@ -105,13 +105,12 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `markets_to_allow_unmet_demand` - The subset of markets (commodity/region combinations)
-    ///   to assign unmet demand variables to
+    /// * `markets_to_allow_unmet_demand` - The subset of markets to assign unmet demand variables to
     fn add_unmet_demand_variables(
         &mut self,
         problem: &mut Problem,
         model: &Model,
-        markets_to_allow_unmet_demand: &[MarketID],
+        markets_to_allow_unmet_demand: &[(CommodityID, RegionID)],
     ) {
         assert!(!markets_to_allow_unmet_demand.is_empty());
 
@@ -125,10 +124,9 @@ impl VariableMap {
                 markets_to_allow_unmet_demand.iter(),
                 model.time_slice_info.iter_ids()
             )
-            .map(|(market, time_slice)| {
-                let key = (market.clone(), time_slice.clone());
+            .map(|((commodity_id, region_id), time_slice)| {
+                let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
                 let var = problem.add_column(voll.value(), 0.0..);
-
                 (key, var)
             }),
         );
@@ -147,12 +145,15 @@ impl VariableMap {
     }
 
     /// Get the unmet demand [`Variable`] corresponding to the given parameters.
-    fn get_unmet_demand_var(&self, market: &MarketID, time_slice: &TimeSliceID) -> Variable {
-        let key = (market.clone(), time_slice.clone());
-
+    fn get_unmet_demand_var(
+        &self,
+        commodity_id: &CommodityID,
+        region_id: &RegionID,
+        time_slice: &TimeSliceID,
+    ) -> Variable {
         *self
             .unmet_demand_vars
-            .get(&key)
+            .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
             .expect("No unmet demand variable for given params")
     }
 
@@ -219,12 +220,16 @@ impl Solution<'_> {
     }
 
     /// Iterate over unmet demand
-    pub fn iter_unmet_demand(&self) -> impl Iterator<Item = (&MarketID, &TimeSliceID, Flow)> {
+    pub fn iter_unmet_demand(
+        &self,
+    ) -> impl Iterator<Item = (&CommodityID, &RegionID, &TimeSliceID, Flow)> {
         self.variables
             .unmet_demand_vars
             .keys()
             .zip(self.solution.columns()[self.variables.unmet_demand_var_idx.clone()].iter())
-            .map(|((market, time_slice), flow)| (market, time_slice, Flow(*flow)))
+            .map(|((commodity_id, region_id, time_slice), flow)| {
+                (commodity_id, region_id, time_slice, Flow(*flow))
+            })
     }
 
     /// Keys and dual values for commodity balance constraints.
@@ -321,14 +326,10 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 ///
 /// Input prices should only be provided for commodities for which there will be no commodity
 /// balance constraint.
-fn check_input_prices(input_prices: &CommodityPrices, markets: &[MarketID]) {
+fn check_input_prices(input_prices: &CommodityPrices, markets: &[(CommodityID, RegionID)]) {
     let markets_set: HashSet<_> = markets.iter().collect();
     let has_prices_for_market_subset = input_prices.keys().any(|(commodity_id, region_id, _)| {
-        let market_for_commodity_region = MarketID {
-            commodity_id: commodity_id.clone(),
-            region_id: region_id.clone(),
-        };
-        markets_set.contains(&market_for_commodity_region)
+        markets_set.contains(&(commodity_id.clone(), region_id.clone()))
     });
     assert!(
         !has_prices_for_market_subset,
@@ -348,8 +349,8 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
-    markets_to_balance: &'run [MarketID],
-    markets_to_allow_unmet_demand: &'run [MarketID],
+    markets_to_balance: &'run [(CommodityID, RegionID)],
+    markets_to_allow_unmet_demand: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
 }
@@ -377,7 +378,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Only apply commodity balance constraints to the specified subset of markets
-    pub fn with_market_balance_subset(self, markets: &'run [MarketID]) -> Self {
+    pub fn with_market_balance_subset(self, markets: &'run [(CommodityID, RegionID)]) -> Self {
         assert!(!markets.is_empty());
 
         Self {
@@ -395,7 +396,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Allow unmet demand variables for the specified subset of markets
-    pub fn with_unmet_demand_vars(self, markets: &'run [MarketID]) -> Self {
+    pub fn with_unmet_demand_vars(self, markets: &'run [(CommodityID, RegionID)]) -> Self {
         Self {
             markets_to_allow_unmet_demand: markets,
             ..self
@@ -464,24 +465,24 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Run dispatch to diagnose which markets have unmet demand
     fn get_markets_with_unmet_demand(
         &self,
-        markets_to_balance: &[MarketID],
-    ) -> Result<IndexSet<MarketID>> {
+        markets_to_balance: &[(CommodityID, RegionID)],
+    ) -> Result<IndexSet<(CommodityID, RegionID)>> {
         // Run dispatch including unmet demand variables for all markets being balanced
         let solution = self.run_internal(markets_to_balance, markets_to_balance)?;
 
         // Collect markets with unmet demand
         Ok(solution
             .iter_unmet_demand()
-            .filter(|(_, _, flow)| *flow > Flow(0.0))
-            .map(|(market, _, _)| market.clone())
+            .filter(|(_, _, _, flow)| *flow > Flow(0.0))
+            .map(|(commodity_id, region_id, _, _)| (commodity_id.clone(), region_id.clone()))
             .collect())
     }
 
     /// Run dispatch to balance the specified markets, allowing unmet demand for a subset of these
     fn run_internal(
         &self,
-        markets_to_balance: &[MarketID],
-        markets_to_allow_unmet_demand: &[MarketID],
+        markets_to_balance: &[(CommodityID, RegionID)],
+        markets_to_allow_unmet_demand: &[(CommodityID, RegionID)],
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();

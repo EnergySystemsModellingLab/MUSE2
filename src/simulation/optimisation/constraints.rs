@@ -1,7 +1,7 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
-use crate::commodity::{CommodityID, CommodityType, MarketID};
+use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
@@ -56,7 +56,7 @@ pub struct ConstraintKeys {
 /// * `variables` - The variables in the problem
 /// * `model` - The model
 /// * `assets` - The asset pool
-/// * `markets_to_balance` - The subset of markets (commodity/region combinations) to apply balance constraints to
+/// * `markets_to_balance` - The subset of markets to apply balance constraints to
 /// * `markets_to_allow_unmet_demand` - The subset of markets to assign unmet demand variables to
 /// * `year` - Current milestone year
 ///
@@ -68,8 +68,8 @@ pub fn add_asset_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets_to_balance: &'a [MarketID],
-    markets_to_allow_unmet_demand: &'a [MarketID],
+    markets_to_balance: &'a [(CommodityID, RegionID)],
+    markets_to_allow_unmet_demand: &'a [(CommodityID, RegionID)],
     year: u32,
 ) -> ConstraintKeys
 where
@@ -106,8 +106,8 @@ fn add_commodity_balance_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets_to_balance: &'a [MarketID],
-    markets_to_allow_unmet_demand: &'a [MarketID],
+    markets_to_balance: &'a [(CommodityID, RegionID)],
+    markets_to_allow_unmet_demand: &'a [(CommodityID, RegionID)],
     year: u32,
 ) -> CommodityBalanceKeys
 where
@@ -118,8 +118,8 @@ where
 
     let mut keys = Vec::new();
     let mut terms = Vec::new();
-    for market in markets_to_balance {
-        let commodity = &model.commodities[&market.commodity_id];
+    for (commodity_id, region_id) in markets_to_balance {
+        let commodity = &model.commodities[commodity_id];
         if !matches!(
             commodity.kind,
             CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
@@ -133,8 +133,8 @@ where
         {
             for (asset, flow) in assets
                 .clone()
-                .filter_region(&market.region_id)
-                .flows_for_commodity(&market.commodity_id)
+                .filter_region(region_id)
+                .flows_for_commodity(commodity_id)
             {
                 // If the commodity has a time slice level of season/annual, the constraint will
                 // cover multiple time slices
@@ -152,9 +152,9 @@ where
             }
 
             // Also include unmet demand variables if required
-            if markets_to_allow_unmet_demand.contains(market) {
+            if markets_to_allow_unmet_demand.contains(&(commodity_id.clone(), region_id.clone())) {
                 for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                    let var = variables.get_unmet_demand_var(market, time_slice);
+                    let var = variables.get_unmet_demand_var(commodity_id, region_id, time_slice);
                     terms.push((var, 1.0));
                 }
             }
@@ -164,7 +164,7 @@ where
             let min = if commodity.kind == CommodityType::ServiceDemand {
                 commodity
                     .demand
-                    .get(&(market.region_id.clone(), year, ts_selection.clone()))
+                    .get(&(region_id.clone(), year, ts_selection.clone()))
                     .unwrap()
                     .value()
             } else {
@@ -172,8 +172,8 @@ where
             };
             problem.add_row(min.., terms.drain(..));
             keys.push((
-                market.commodity_id.clone(),
-                market.region_id.clone(),
+                commodity_id.clone(),
+                region_id.clone(),
                 ts_selection.clone(),
             ));
         }

@@ -1,6 +1,6 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityMap, CommodityType, MarketID};
+use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
 use indexmap::IndexMap;
@@ -13,9 +13,28 @@ use std::collections::HashMap;
 
 type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 
-/// Performs topological sort on the commodity graph to get the ordering for investments
+/// Analyse the commodity graphs for a given year to determine the order in which investment
+/// decisions should be made.
 ///
-/// The returned Vec only includes SVD and SED commodities.
+/// Steps:
+/// 1. Initialise an `InvestmentGraph` from the set of original `CommodityGraph`s for the given
+///    year, filtering to only include SVD/SED commodities and primary edges. `CommodityGraph`s from
+///    all regions are combined into a single `InvestmentGraph`. TODO: at present there can be no
+///    edges between regions; in future we will want to implement trade as edges between regions,
+///    but this will have no impact on the following steps.
+/// 2. Condense strongly connected components (cycles) into `InvestmentSet::Cycle` nodes.
+/// 3. Perform a topological sort on the condensed graph.
+/// 4. Compute layers for investment based on the topological order, grouping independent sets into
+///    `InvestmentSet::Layer`s.
+///
+/// Arguments:
+/// * `graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
+/// * `commodities` - All commodities with their types and demand specifications
+/// * `year` - The year to solve the investment order for
+///
+/// # Returns
+/// A Vec of `InvestmentSet`s in the order they should be solved, with cycles grouped into
+/// `InvestmentSet::Cycle`s and independent sets grouped into `InvestmentSet::Layer`s.
 fn solve_investment_order_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
@@ -38,10 +57,11 @@ fn solve_investment_order_for_year(
     compute_layers(&investment_graph, &order)
 }
 
-// Initialise an InvestmentGraph from the original CommodityGraph
-//
-// This filters the graph to only include SVD/SED commodities and primary edges, then creates an
-// InvestmentGraphNode::Single for each commodity node.
+/// Initialise an `InvestmentGraph` for the given year from a set of `CommodityGraph`s
+///
+/// Commodity graphs for each region are first filtered to only include SVD/SED commodities and
+/// primary edges. Each commodity node is then added to a global investment graph as an
+/// `InvestmentSet::Single`, with edges preserved from the original commodity graphs.
 fn init_investment_graph_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     year: u32,
@@ -74,11 +94,10 @@ fn init_investment_graph_for_year(
                 let GraphNode::Commodity(cid) = filtered.node_weight(ni).unwrap() else {
                     unreachable!()
                 };
-                let market = MarketID {
-                    commodity_id: cid.clone(),
-                    region_id: region_id.clone(),
-                };
-                (ni, combined.add_node(InvestmentSet::Single(market)))
+                (
+                    ni,
+                    combined.add_node(InvestmentSet::Single((cid.clone(), region_id.clone()))),
+                )
             })
             .collect();
 
@@ -120,11 +139,53 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
     )
 }
 
+/// Compute layers of investment sets from the topological order
+///
+/// This function works by computing the rank of each node in the graph based on the longest path
+/// from any root node to that node. Any nodes with the same rank are independent and can be solved
+/// in parallel. Nodes with different rank must be solved in order from highest rank (leaf nodes)
+/// to lowest rank (root nodes).
+///
+/// This function computes the ranks of each node, groups nodes by rank, and then produces a final
+/// ordered Vec of `InvestmentSet`s which gives the order in which to solve the investment decisions.
+///
+/// Investment sets with the same rank (i.e., can be solved in parallel) are grouped into
+/// `InvestmentSet::Layer`. Investment sets that are alone in their rank remain as-is (i.e. either
+/// `Single` or `Cycle`). `Layer`s can contain a mix of `Single` and `Cycle` investment sets.
+///
+/// For example, given the following graph:
+///
+/// ```text
+///     A
+///    / \
+///   B   C
+///  / \   \
+/// D   E   F
+/// ```
+///
+/// Rank 0: A -> `InvestmentSet::Single`
+/// Rank 1: B, C -> `InvestmentSet::Layer`
+/// Rank 2: D, E, F -> `InvestmentSet::Layer`
+///
+/// These are returned as a `Vec<InvestmentSet>` from highest rank to lowest (i.e. the D, E, F layer
+/// first, then the B, C layer, then the singleton A).
+///
+/// Arguments:
+/// * `graph` - The investment graph. Any cycles in the graph MUST have already been compressed.
+///   This will be necessary anyway as computing a topological sort to obtain the `order` requires
+///   an acyclic graph.
+/// * `order` - The topological order of the graph nodes. Computed using `petgraph::algo::toposort`.
+///
+/// Returns:
+/// A Vec of `InvestmentSet`s in the order they should be solved, with independent sets grouped into
+/// `InvestmentSet::Layer`s.
 fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<InvestmentSet> {
     // Initialize all ranks to 0
     let mut ranks: HashMap<_, usize> = graph.node_indices().map(|n| (n, 0)).collect();
 
     // Calculate the rank of each node by traversing in topological order
+    // The algorithm works by iterating through each node in topological order and updating the ranks
+    // of its neighbors to be at least one more than the current node's rank.
     for &u in order {
         let current_rank = ranks[&u];
         for v in graph.neighbors_directed(u, Direction::Outgoing) {
@@ -150,8 +211,11 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
         if items.is_empty() {
             unreachable!("Should be no gaps in the ranking")
         }
+        // If only one InvestmentSet in the group, we do not need to compress into a layer, so just
+        // push the single item (this item may be a `Single` or `Cycle`).
         if items.len() == 1 {
             result.push(items.remove(0));
+        // Otherwise, create a layer. The items within the layer may be a mix of `Single` or `Cycle`.
         } else {
             result.push(InvestmentSet::Layer(items));
         }
@@ -160,7 +224,7 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
     result
 }
 
-/// Determine commodity ordering for each region and year
+/// Determine investment ordering for each year
 ///
 /// # Arguments
 ///
@@ -169,8 +233,9 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
 ///
 /// # Returns
 ///
-/// A map from `(region, year)` to the ordered list of commodities for investment decisions. The
-/// ordering ensures that leaf-node commodities (those with no outgoing edges) are solved first.
+/// A map from `year` to the ordered list of `InvestmentSet`s for investment decisions. The
+/// ordering ensures that leaf-node `InvestmentSet`s (those with no outgoing edges) are solved
+/// first.
 pub fn solve_investment_order_for_model(
     commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
@@ -221,9 +286,9 @@ mod tests {
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all investment sets should be `Single`
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single("C|GBR".into()));
-        assert_eq!(result[1], InvestmentSet::Single("B|GBR".into()));
-        assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
+        assert_eq!(result[0], InvestmentSet::Single(("C".into(), "GBR".into())));
+        assert_eq!(result[1], InvestmentSet::Single(("B".into(), "GBR".into())));
+        assert_eq!(result[2], InvestmentSet::Single(("A".into(), "GBR".into())));
     }
 
     #[rstest]
@@ -250,7 +315,7 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            InvestmentSet::Cycle(vec!["A|GBR".into(), "B|GBR".into()])
+            InvestmentSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
         );
     }
 
@@ -290,15 +355,15 @@ mod tests {
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single("D|GBR".into()));
+        assert_eq!(result[0], InvestmentSet::Single(("D".into(), "GBR".into())));
         assert_eq!(
             result[1],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("B|GBR".into()),
-                InvestmentSet::Single("C|GBR".into())
+                InvestmentSet::Single(("B".into(), "GBR".into())),
+                InvestmentSet::Single(("C".into(), "GBR".into()))
             ])
         );
-        assert_eq!(result[2], InvestmentSet::Single("A|GBR".into()));
+        assert_eq!(result[2], InvestmentSet::Single(("A".into(), "GBR".into())));
     }
 
     #[rstest]
@@ -335,22 +400,22 @@ mod tests {
         assert_eq!(
             result[0],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("C|GBR".into()),
-                InvestmentSet::Single("C|FRA".into())
+                InvestmentSet::Single(("C".into(), "GBR".into())),
+                InvestmentSet::Single(("C".into(), "FRA".into()))
             ])
         );
         assert_eq!(
             result[1],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("B|GBR".into()),
-                InvestmentSet::Single("B|FRA".into())
+                InvestmentSet::Single(("B".into(), "GBR".into())),
+                InvestmentSet::Single(("B".into(), "FRA".into()))
             ])
         );
         assert_eq!(
             result[2],
             InvestmentSet::Layer(vec![
-                InvestmentSet::Single("A|GBR".into()),
-                InvestmentSet::Single("A|FRA".into())
+                InvestmentSet::Single(("A".into(), "GBR".into())),
+                InvestmentSet::Single(("A".into(), "FRA".into()))
             ])
         );
     }
