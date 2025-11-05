@@ -5,8 +5,10 @@ use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::finance::{lcox, profitability_index};
 use crate::model::Model;
-use crate::units::Capacity;
+use crate::time_slice::TimeSliceID;
+use crate::units::{Activity, Capacity};
 use anyhow::Result;
+use indexmap::IndexMap;
 use std::cmp::Ordering;
 
 pub mod coefficients;
@@ -23,10 +25,16 @@ pub struct AppraisalOutput {
     pub asset: AssetRef,
     /// The hypothetical capacity to install
     pub capacity: Capacity,
+    /// Time slice level activity of the asset
+    pub activity: IndexMap<TimeSliceID, Activity>,
     /// The hypothetical unmet demand following investment in this asset
     pub unmet_demand: DemandMap,
     /// The comparison metric to compare investment decisions (lower is better)
     pub metric: f64,
+    /// Capacity and activity coefficients used in the appraisal
+    pub coefficients: ObjectiveCoefficients,
+    /// Demand profile used in the appraisal
+    pub demand: DemandMap,
 }
 
 impl AppraisalOutput {
@@ -89,8 +97,11 @@ fn calculate_lcox(
     Ok(AppraisalOutput {
         asset: asset.clone(),
         capacity: results.capacity,
+        activity: results.activity,
         unmet_demand: results.unmet_demand,
         metric: cost_index.value(),
+        coefficients: coefficients.clone(),
+        demand: demand.clone(),
     })
 }
 
@@ -129,8 +140,11 @@ fn calculate_npv(
     Ok(AppraisalOutput {
         asset: asset.clone(),
         capacity: results.capacity,
+        activity: results.activity,
         unmet_demand: results.unmet_demand,
         metric: -profitability_index.value(),
+        coefficients: coefficients.clone(),
+        demand: demand.clone(),
     })
 }
 
