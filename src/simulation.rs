@@ -85,24 +85,10 @@ pub fn run(
                 perform_agent_investment(model, year, &existing_assets, &prices, &mut writer)
                     .context("Agent investment failed")?;
 
-            // We need to add candidates from all existing_assets that aren't in selected_assets as
-            // these may be re-chosen in the next iteration
-            let mut all_candidates = candidates.clone();
-            all_candidates.extend(
-                existing_assets
-                    .iter()
-                    .filter(|asset| !selected_assets.contains(asset))
-                    .map(|asset| {
-                        let mut asset = Asset::new_candidate_from_commissioned(asset);
-                        asset.set_capacity(model.parameters.candidate_asset_capacity);
-                        asset.into()
-                    }),
-            );
-
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
             let (_flow_map, new_prices) =
-                run_dispatch_for_year(model, &selected_assets, &all_candidates, year, &mut writer)?;
+                run_dispatch_for_year(model, &selected_assets, &candidates, year, &mut writer)?;
 
             // Check if prices have converged using time slice-weighted averages
             let prices_stable = prices.within_tolerance_weighted(
