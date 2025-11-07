@@ -243,7 +243,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     )?;
 
     // Solve investment order for each region/year
-    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities);
+    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities, years);
 
     let model_path = model_dir
         .as_ref()
@@ -271,7 +271,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 /// validation would fail, which may be helpful for debugging.
 pub fn load_commodity_graphs<P: AsRef<Path>>(
     model_dir: P,
-) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
+) -> Result<IndexMap<(RegionID, u32), CommoditiesGraph>> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
