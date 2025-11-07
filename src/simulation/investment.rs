@@ -20,30 +20,32 @@ pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
 use appraisal::{AppraisalOutput, appraise_investment};
 
-/// A map of demand across time slices for a specific commodity and region
+/// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
 
 /// Demand for a given combination of commodity, region and time slice
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
-/// Represents a set of commodities which are invested in together.
+/// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone)]
 pub enum InvestmentSet {
-    /// Assets are selected for a single commodity using `select_assets_for_commodity`
-    Single(CommodityID),
-    /// Assets are selected for a group of commodities which forms a cycle. NOT YET IMPLEMENTED.
-    Cycle(Vec<CommodityID>),
+    /// Assets are selected for a single market using `select_assets_for_single_market`
+    Single((CommodityID, RegionID)),
+    /// Assets are selected for a group of markets which forms a cycle. NOT YET IMPLEMENTED.
+    Cycle(Vec<(CommodityID, RegionID)>),
     /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
 }
 
 impl InvestmentSet {
-    /// Recursively iterate over all `CommodityID`s contained in this `InvestmentSet`.
-    pub fn iter_commodity_ids<'a>(&'a self) -> Box<dyn Iterator<Item = &'a CommodityID> + 'a> {
+    /// Recursively iterate over all markets contained in this `InvestmentSet`.
+    pub fn iter_markets<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
-            InvestmentSet::Single(id) => Box::new(std::iter::once(id)),
-            InvestmentSet::Cycle(ids) => Box::new(ids.iter()),
-            InvestmentSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_commodity_ids())),
+            InvestmentSet::Single(market) => Box::new(std::iter::once(market)),
+            InvestmentSet::Cycle(markets) => Box::new(markets.iter()),
+            InvestmentSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_markets())),
         }
     }
 
@@ -51,7 +53,6 @@ impl InvestmentSet {
     fn select_assets(
         &self,
         model: &Model,
-        region_id: &RegionID,
         year: u32,
         demand: &AllDemandMap,
         existing_assets: &[AssetRef],
@@ -59,7 +60,7 @@ impl InvestmentSet {
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single(commodity_id) => select_assets_for_commodity(
+            InvestmentSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
                 model,
                 commodity_id,
                 region_id,
@@ -73,12 +74,11 @@ impl InvestmentSet {
                 "Investment cycles are not yet supported. Found cycle for commodities: {self}"
             ),
             InvestmentSet::Layer(investment_sets) => {
-                debug!("Starting asset selection for layer '{self}' in region '{region_id}'");
+                debug!("Starting asset selection for layer '{self}'");
                 let mut all_assets = Vec::new();
                 for investment_set in investment_sets {
                     let assets = investment_set.select_assets(
                         model,
-                        region_id,
                         year,
                         demand,
                         existing_assets,
@@ -87,7 +87,7 @@ impl InvestmentSet {
                     )?;
                     all_assets.extend(assets);
                 }
-                debug!("Completed asset selection for layer '{self}' in region '{region_id}'");
+                debug!("Completed asset selection for layer '{self}'");
                 Ok(all_assets)
             }
         }
@@ -97,9 +97,15 @@ impl InvestmentSet {
 impl Display for InvestmentSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvestmentSet::Single(id) => write!(f, "{id}"),
-            InvestmentSet::Cycle(ids) => {
-                write!(f, "({})", ids.iter().join(", "))
+            InvestmentSet::Single((commodity_id, region_id)) => {
+                write!(f, "{commodity_id}|{region_id}")
+            }
+            InvestmentSet::Cycle(markets) => {
+                write!(
+                    f,
+                    "{}",
+                    markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ")
+                )
             }
             InvestmentSet::Layer(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
@@ -115,7 +121,7 @@ impl Display for InvestmentSet {
 /// * `model` - The model
 /// * `year` - Current milestone year
 /// * `assets` - The asset pool
-/// * `prices` - Commodity prices
+/// * `prices` - Commodity prices calculated in the previous full system dispatch
 /// * `writer` - Data writer
 pub fn perform_agent_investment(
     model: &Model,
@@ -132,104 +138,89 @@ pub fn perform_agent_investment(
     // This includes Commissioned assets that are selected for retention, and new Selected assets
     let mut all_selected_assets = Vec::new();
 
-    for region_id in model.iter_regions() {
-        let investment_order = &model.investment_order[&(region_id.clone(), year)];
-        debug!(
-            "Investment order for region '{region_id}' in year '{year}': {}",
-            investment_order.iter().join(" -> ")
-        );
+    let investment_order = &model.investment_order[&year];
+    debug!(
+        "Investment order for year '{year}': {}",
+        investment_order.iter().join(" -> ")
+    );
 
-        // External prices to be used in dispatch optimisation
-        // Once investments are performed for a commodity, the dispatch system will be able to produce
-        // endogenous prices for that commodity, so we'll gradually remove these external prices.
-        let cur_commodities: &Vec<_> = &investment_order
-            .iter()
-            .flat_map(InvestmentSet::iter_commodity_ids)
-            .cloned()
-            .collect();
-        let mut external_prices =
-            get_prices_for_commodities(prices, &model.time_slice_info, region_id, cur_commodities);
+    // External prices to be used in dispatch optimisation
+    // Once investments are performed for a market, the dispatch system will be able to produce
+    // endogenous prices for that market, so we'll gradually remove these external prices.
+    let mut external_prices = prices.clone();
 
-        // Keep track of the commodities that have been seen so far. This will be used to apply
-        // balance constraints in the dispatch optimisation - we only apply balance constraints for
-        // commodities that have been seen so far.
-        let mut seen_commodities = Vec::new();
+    // Keep track of the markets that have been seen so far. This will be used to apply
+    // balance constraints in the dispatch optimisation - we only apply balance constraints for
+    // markets that have been seen so far.
+    let mut seen_markets = Vec::new();
 
-        // Iterate over investment sets in the investment order for this region/year
-        for investment_set in investment_order {
-            // Select assets for the commodity(/ies) of interest
-            let selected_assets = investment_set.select_assets(
-                model,
-                region_id,
-                year,
-                &net_demand,
-                existing_assets,
-                prices,
-                writer,
-            )?;
+    // Iterate over investment sets in the investment order for this year
+    for investment_set in investment_order {
+        // Select assets for this investment set
+        let selected_assets = investment_set.select_assets(
+            model,
+            year,
+            &net_demand,
+            existing_assets,
+            prices,
+            writer,
+        )?;
 
-            // Update our list of seen commodities
-            for commodity_id in investment_set.iter_commodity_ids() {
-                seen_commodities.push(commodity_id.clone());
-            }
-
-            // Remove prices for already-seen commodities. Commodities which are produced by at
-            // least one asset in the dispatch run will have prices produced endogenously (via the
-            // commodity balance constraints), but commodities for which investment has not yet been
-            // performed will, by definition, not have any producers. For these, we provide prices
-            // from the previous dispatch run otherwise they will appear to be free to the model.
-            for (commodity_id, time_slice) in iproduct!(
-                investment_set.iter_commodity_ids(),
-                model.time_slice_info.iter_ids()
-            ) {
-                external_prices.remove(commodity_id, region_id, time_slice);
-            }
-
-            // If no assets have been selected, skip dispatch optimisation
-            // **TODO**: this probably means there's no demand for the commodity, which we could
-            // presumably preempt
-            if selected_assets.is_empty() {
-                continue;
-            }
-
-            // Add the selected assets to the list of all selected assets
-            all_selected_assets.extend(selected_assets.iter().cloned());
-
-            // Perform dispatch optimisation with assets that have been selected so far
-            // **TODO**: presumably we only need to do this for selected_assets, as assets added in
-            // previous iterations should not change
-            debug!(
-                "Running post-investment dispatch for '{investment_set}' in region '{region_id}'"
-            );
-
-            // As upstream commodities by definition will not yet have producers, we explicitly set
-            // their prices using previous values so that they don't appear free
-            let solution = DispatchRun::new(model, &all_selected_assets, year)
-                .with_commodity_subset(&seen_commodities)
-                .with_input_prices(&external_prices)
-                .run(
-                    &format!("post {investment_set}/{region_id} investment"),
-                    writer,
-                )?;
-
-            // Update demand map with flows from newly added assets
-            update_net_demand_map(
-                &mut net_demand,
-                &solution.create_flow_map(),
-                &selected_assets,
-            );
+        // Update our list of seen markets
+        for market in investment_set.iter_markets() {
+            seen_markets.push(market.clone());
         }
+
+        // Remove prices for already-seen markets. Markets which are produced by at
+        // least one asset in the dispatch run will have prices produced endogenously (via the
+        // commodity balance constraints), but markets for which investment has not yet been
+        // performed will, by definition, not have any producers. For these, we provide prices
+        // from the previous dispatch run otherwise they will appear to be free to the model.
+        for ((commodity_id, region_id), time_slice) in iproduct!(
+            investment_set.iter_markets(),
+            model.time_slice_info.iter_ids()
+        ) {
+            external_prices.remove(commodity_id, region_id, time_slice);
+        }
+
+        // If no assets have been selected, skip dispatch optimisation
+        // **TODO**: this probably means there's no demand for the market, which we could
+        // presumably preempt
+        if selected_assets.is_empty() {
+            continue;
+        }
+
+        // Add the selected assets to the list of all selected assets
+        all_selected_assets.extend(selected_assets.iter().cloned());
+
+        // Perform dispatch optimisation with assets that have been selected so far
+        // **TODO**: presumably we only need to do this for selected_assets, as assets added in
+        // previous iterations should not change
+        debug!("Running post-investment dispatch for '{investment_set}'");
+
+        // As upstream markets by definition will not yet have producers, we explicitly set
+        // their prices using external values so that they don't appear free
+        let solution = DispatchRun::new(model, &all_selected_assets, year)
+            .with_market_subset(&seen_markets)
+            .with_input_prices(&external_prices)
+            .run(&format!("post {investment_set} investment"), writer)?;
+
+        // Update demand map with flows from newly added assets
+        update_net_demand_map(
+            &mut net_demand,
+            &solution.create_flow_map(),
+            &selected_assets,
+        );
     }
 
     Ok(all_selected_assets)
 }
 
-/// Select assets for a single commodity in a given region and year
+/// Select assets for a single market in a given year
 ///
-/// Returns a list of assets that are selected for investment for this commodity in this region and
-/// year.
+/// Returns a list of assets that are selected for investment for this market in this year.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_commodity(
+fn select_assets_for_single_market(
     model: &Model,
     commodity_id: &CommodityID,
     region_id: &RegionID,
@@ -243,18 +234,18 @@ fn select_assets_for_commodity(
 
     let mut selected_assets = Vec::new();
     for (agent, commodity_portion) in
-        get_responsible_agents(model.agents.values(), &commodity.id, region_id, year)
+        get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
     {
         debug!(
-            "Running asset selection for agent '{}' with commodity '{}' in region '{}'",
-            &agent.id, commodity.id, region_id
+            "Running asset selection for agent '{}' in market '{}|{}'",
+            &agent.id, commodity_id, region_id
         );
 
-        // Get demand portion for this commodity for this agent in this region/year
-        let demand_portion_for_commodity = get_demand_portion_for_commodity(
+        // Get demand portion for this market for this agent in this year
+        let demand_portion_for_market = get_demand_portion_for_market(
             &model.time_slice_info,
             demand,
-            &commodity.id,
+            commodity_id,
             region_id,
             commodity_portion,
         );
@@ -263,7 +254,7 @@ fn select_assets_for_commodity(
         let opt_assets = get_asset_options(
             &model.time_slice_info,
             existing_assets,
-            &demand_portion_for_commodity,
+            &demand_portion_for_market,
             agent,
             commodity,
             region_id,
@@ -278,7 +269,7 @@ fn select_assets_for_commodity(
             commodity,
             agent,
             prices,
-            demand_portion_for_commodity,
+            demand_portion_for_market,
             year,
             writer,
         )?;
@@ -361,8 +352,8 @@ fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[A
     }
 }
 
-/// Get a portion of the demand profile for this commodity and region
-fn get_demand_portion_for_commodity(
+/// Get a portion of the demand profile for this market
+fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
     commodity_id: &CommodityID,
@@ -383,7 +374,7 @@ fn get_demand_portion_for_commodity(
         .collect()
 }
 
-/// Get the agents responsible for a given commodity in a given year along with the commodity
+/// Get the agents responsible for a given market in a given year along with the commodity
 /// portion for which they are responsible
 fn get_responsible_agents<'a, I>(
     agents: I,
@@ -489,21 +480,6 @@ fn get_candidate_assets<'a>(
         })
 }
 
-/// Get a map of prices for a subset of commodities
-fn get_prices_for_commodities(
-    prices: &CommodityPrices,
-    time_slice_info: &TimeSliceInfo,
-    region_id: &RegionID,
-    commodities: &[CommodityID],
-) -> CommodityPrices {
-    iproduct!(commodities.iter(), time_slice_info.iter_ids())
-        .map(|(commodity_id, time_slice)| {
-            let price = prices.get(commodity_id, region_id, time_slice).unwrap();
-            (commodity_id, region_id, time_slice, price)
-        })
-        .collect()
-}
-
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
 fn select_best_assets(
@@ -556,28 +532,8 @@ fn select_best_assets(
                 &coefficients[asset],
                 &demand,
             )?;
-
-            // Store the appraisal results if the capacity is positive. If capacity is zero,
-            // this means the asset is infeasible for investment. This can happen if the asset has
-            // zero activity limits for all time slices with demand. This can also happen due to a
-            // known issue with the NPV objective, for which we do not currently have a solution
-            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
-            if output.capacity > Capacity(0.0) {
-                outputs_for_opts.push(output);
-            } else {
-                debug!(
-                    "Skipping candidate '{}' with zero capacity",
-                    asset.process_id()
-                );
-            }
+            outputs_for_opts.push(output);
         }
-
-        // Make sure there are some options to consider
-        ensure!(
-            !outputs_for_opts.is_empty(),
-            "No feasible investment options for commodity '{}'",
-            &commodity.id
-        );
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
@@ -586,11 +542,23 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Select the best investment option
-        let best_output = outputs_for_opts
+        // Select the best investment option according to `AppraisalOutput::compare_metric`
+        let Some(best_output) = outputs_for_opts
             .into_iter()
+            // Investment options with zero capacity are excluded. This may happen if the asset has
+            // zero activity limits for all time slices with demand. This can also happen due to a
+            // known issue with the NPV objective, for which we do not currently have a solution
+            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
+            .filter(|output| output.capacity > Capacity(0.0))
             .min_by(AppraisalOutput::compare_metric)
-            .unwrap();
+        else {
+            // If None, this means all investment options have zero capacity. In this case, we
+            // cannot meet demand, so have to bail out.
+            bail!(
+                "No feasible investment options for commodity '{}' after appraisal",
+                &commodity.id
+            )
+        };
 
         // Log the selected asset
         debug!(
