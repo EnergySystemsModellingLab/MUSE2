@@ -38,8 +38,8 @@ pub struct ResultsMap {
 
 /// Add variables to the problem based on cost coefficients
 fn add_variables(problem: &mut Problem, cost_coefficients: &ObjectiveCoefficients) -> VariableMap {
-    // Create capacity variable
-    let capacity_var = problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
+    // Create (Zeroed) capacity variable - does not contribute to objective
+    let capacity_var = problem.add_column(0.0, 0.0..);
 
     // Create activity variables
     let mut activity_vars = IndexMap::new();
