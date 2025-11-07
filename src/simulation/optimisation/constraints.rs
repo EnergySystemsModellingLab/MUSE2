@@ -56,7 +56,7 @@ pub struct ConstraintKeys {
 /// * `variables` - The variables in the problem
 /// * `model` - The model
 /// * `assets` - The asset pool
-/// * `commodities` - The subset of commodities to apply constraints to
+/// * `markets` - The subset of markets to apply constraints to
 /// * `year` - Current milestone year
 ///
 /// # Returns
@@ -67,14 +67,14 @@ pub fn add_asset_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    commodities: &'a [CommodityID],
+    markets: &'a [(CommodityID, RegionID)],
     year: u32,
 ) -> ConstraintKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
 {
     let commodity_balance_keys =
-        add_commodity_balance_constraints(problem, variables, model, assets, commodities, year);
+        add_commodity_balance_constraints(problem, variables, model, assets, markets, year);
 
     let activity_keys = add_activity_constraints(problem, variables);
 
@@ -97,7 +97,7 @@ fn add_commodity_balance_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    commodities: &'a [CommodityID],
+    markets: &'a [(CommodityID, RegionID)],
     year: u32,
 ) -> CommodityBalanceKeys
 where
@@ -108,7 +108,7 @@ where
 
     let mut keys = Vec::new();
     let mut terms = Vec::new();
-    for commodity_id in commodities {
+    for (commodity_id, region_id) in markets {
         let commodity = &model.commodities[commodity_id];
         if !matches!(
             commodity.kind,
@@ -117,58 +117,55 @@ where
             continue;
         }
 
-        for region_id in model.iter_regions() {
-            for ts_selection in model
-                .time_slice_info
-                .iter_selections_at_level(commodity.time_slice_level)
+        for ts_selection in model
+            .time_slice_info
+            .iter_selections_at_level(commodity.time_slice_level)
+        {
+            for (asset, flow) in assets
+                .clone()
+                .filter_region(region_id)
+                .flows_for_commodity(commodity_id)
             {
-                for (asset, flow) in assets
-                    .clone()
-                    .filter_region(region_id)
-                    .flows_for_commodity(commodity_id)
-                {
-                    // If the commodity has a time slice level of season/annual, the constraint will
-                    // cover multiple time slices
-                    for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                        let var = variables.get_asset_var(asset, time_slice);
-                        terms.push((var, flow.coeff.value()));
-                    }
+                // If the commodity has a time slice level of season/annual, the constraint will
+                // cover multiple time slices
+                for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
+                    let var = variables.get_asset_var(asset, time_slice);
+                    terms.push((var, flow.coeff.value()));
                 }
-
-                // It is possible that a commodity may not be produced or consumed by anything in a
-                // given milestone year, in which case it doesn't make sense to add a commodity
-                // balance constraint
-                if terms.is_empty() {
-                    continue;
-                }
-
-                // Also include unmet demand variables if required
-                if !variables.unmet_demand_var_idx.is_empty() {
-                    for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                        let var =
-                            variables.get_unmet_demand_var(commodity_id, region_id, time_slice);
-                        terms.push((var, 1.0));
-                    }
-                }
-
-                // For SED commodities, the LHS must be >=0 and for SVD commodities, it must be >=
-                // the exogenous demand supplied by the user
-                let min = if commodity.kind == CommodityType::ServiceDemand {
-                    commodity
-                        .demand
-                        .get(&(region_id.clone(), year, ts_selection.clone()))
-                        .unwrap()
-                        .value()
-                } else {
-                    0.0
-                };
-                problem.add_row(min.., terms.drain(..));
-                keys.push((
-                    commodity_id.clone(),
-                    region_id.clone(),
-                    ts_selection.clone(),
-                ));
             }
+
+            // It is possible that a commodity may not be produced or consumed by anything in a
+            // given milestone year, in which case it doesn't make sense to add a commodity
+            // balance constraint
+            if terms.is_empty() {
+                continue;
+            }
+
+            // Also include unmet demand variables if required
+            if !variables.unmet_demand_var_idx.is_empty() {
+                for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
+                    let var = variables.get_unmet_demand_var(commodity_id, region_id, time_slice);
+                    terms.push((var, 1.0));
+                }
+            }
+
+            // For SED commodities, the LHS must be >=0 and for SVD commodities, it must be >=
+            // the exogenous demand supplied by the user
+            let min = if commodity.kind == CommodityType::ServiceDemand {
+                commodity
+                    .demand
+                    .get(&(region_id.clone(), year, ts_selection.clone()))
+                    .unwrap()
+                    .value()
+            } else {
+                0.0
+            };
+            problem.add_row(min.., terms.drain(..));
+            keys.push((
+                commodity_id.clone(),
+                region_id.clone(),
+                ts_selection.clone(),
+            ));
         }
     }
 
