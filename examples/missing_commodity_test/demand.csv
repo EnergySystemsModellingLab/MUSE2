@@ -1,0 +1,4 @@
+commodity_id,region_id,year,demand
+RSHEAT,GBR,2020,927.38
+RSHEAT,GBR,2030,1027.38
+RSHEAT,GBR,2040,1127.38
