@@ -1,0 +1,8 @@
+id,description,type,time_slice_level
+GASPRD,Gas produced,sed,season
+GASNAT,Natural gas,sed,season
+BIOPRD,Biomass produced,sed,season
+BIOPEL,Biomass pellets,sed,season
+ELCTRI,Electricity,sed,daynight
+RSHEAT,Residential heating,svd,daynight
+CO2EMT,CO2 emitted,oth,annual
