@@ -1,0 +1,17 @@
+commodity_id,region_id,time_slice,fraction
+RSHEAT,GBR,winter.night,0.065498087
+RSHEAT,GBR,winter.day,0.226148097
+RSHEAT,GBR,winter.peak,0.111199678
+RSHEAT,GBR,winter.evening,0.076688397
+RSHEAT,GBR,peak.night,0.045882959
+RSHEAT,GBR,peak.day,0.121987853
+RSHEAT,GBR,peak.peak,0.068135438
+RSHEAT,GBR,peak.evening,0.041334529
+RSHEAT,GBR,summer.night,0.005698366
+RSHEAT,GBR,summer.day,0.009494171
+RSHEAT,GBR,summer.peak,0.003126411
+RSHEAT,GBR,summer.evening,0.002327863
+RSHEAT,GBR,autumn.night,0.037269058
+RSHEAT,GBR,autumn.day,0.098086985
+RSHEAT,GBR,autumn.peak,0.054500569
+RSHEAT,GBR,autumn.evening,0.032621538
