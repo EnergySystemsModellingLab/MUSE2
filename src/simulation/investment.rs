@@ -532,28 +532,8 @@ fn select_best_assets(
                 &coefficients[asset],
                 &demand,
             )?;
-
-            // Store the appraisal results if the capacity is positive. If capacity is zero,
-            // this means the asset is infeasible for investment. This can happen if the asset has
-            // zero activity limits for all time slices with demand. This can also happen due to a
-            // known issue with the NPV objective, for which we do not currently have a solution
-            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
-            if output.capacity > Capacity(0.0) {
-                outputs_for_opts.push(output);
-            } else {
-                debug!(
-                    "Skipping candidate '{}' with zero capacity",
-                    asset.process_id()
-                );
-            }
+            outputs_for_opts.push(output);
         }
-
-        // Make sure there are some options to consider
-        ensure!(
-            !outputs_for_opts.is_empty(),
-            "No feasible investment options for commodity '{}'",
-            &commodity.id
-        );
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
@@ -562,11 +542,23 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Select the best investment option
-        let best_output = outputs_for_opts
+        // Select the best investment option according to `AppraisalOutput::compare_metric`
+        let Some(best_output) = outputs_for_opts
             .into_iter()
+            // Investment options with zero capacity are excluded. This may happen if the asset has
+            // zero activity limits for all time slices with demand. This can also happen due to a
+            // known issue with the NPV objective, for which we do not currently have a solution
+            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
+            .filter(|output| output.capacity > Capacity(0.0))
             .min_by(AppraisalOutput::compare_metric)
-            .unwrap();
+        else {
+            // If None, this means all investment options have zero capacity. In this case, we
+            // cannot meet demand, so have to bail out.
+            bail!(
+                "No feasible investment options for commodity '{}' after appraisal",
+                &commodity.id
+            )
+        };
 
         // Log the selected asset
         debug!(
