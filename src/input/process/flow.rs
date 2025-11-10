@@ -11,7 +11,7 @@ use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::iproduct;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -63,11 +63,9 @@ pub fn read_process_flows(
     processes: &mut ProcessMap,
     commodities: &CommodityMap,
     milestone_years: &[u32],
-    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessFlowsMap>> {
     let file_path = model_dir.join(PROCESS_FLOWS_FILE_NAME);
     let process_flow_csv = read_csv(&file_path)?;
-    read_process_flows_from_iter(process_flow_csv, processes, commodities, milestone_years)
     read_process_flows_from_iter(process_flow_csv, processes, commodities, milestone_years)
         .with_context(|| input_err_msg(&file_path))
 }
@@ -154,18 +152,14 @@ fn validate_flows_and_update_primary_output(
             .get(process_id)
             .with_context(|| format!("Missing flows map for process {process_id}"))?;
 
-        // Flows are required for all milestone years within the process years of activity
-        let required_years = milestone_years
-            .iter()
-            .filter(|&y| process.years.contains(y));
         let region_year: Vec<(&RegionID, &u32)> =
-            iproduct!(process.regions.iter(), required_years).collect();
+            iproduct!(process.regions.iter(), milestone_years.iter()).collect();
 
         ensure!(
             region_year
                 .iter()
                 .all(|(region_id, year)| map.contains_key(&((*region_id).clone(), **year))),
-            "Flows map for process {process_id} does not cover all regions and required years"
+            "Flows map for process {process_id} does not cover all regions and milestone years"
         );
 
         let primary_output = if let Some(primary_output) = &process.primary_output {
@@ -270,8 +264,11 @@ fn validate_secondary_flows(
         // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
         let iter = iproduct!(process.years.iter(), process.regions.iter());
         let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
-        let mut number_of_years: HashMap<(CommodityID, RegionID), u32> = HashMap::new();
+        let mut years: HashMap<(CommodityID, RegionID), HashSet<u32>> = HashMap::new();
         for (&year, region_id) in iter {
+            if !map.contains_key(&(region_id.clone(), year)) {
+                continue;
+            }
             let flow = map[&(region_id.clone(), year)]
                 .iter()
                 .filter_map(|(commodity_id, flow)| {
@@ -281,21 +278,20 @@ fn validate_secondary_flows(
 
             for (key, value) in flow {
                 flows.entry(key.clone()).or_default().push(value);
-                if required_years.contains(&&year) {
-                    *number_of_years.entry(key).or_default() += 1;
+                if milestone_years.contains(&year) {
+                    years.entry(key).or_default().insert(year);
                 }
             }
         }
 
         // Finally we check that the flows for a given commodity and region are defined for all
         // milestone years and that they are all inputs or all outputs. This later check is done
-        // for all years in the process range, required or not.
+        // for all years, milestone or not.
         for ((commodity_id, region_id), value) in &flows {
             ensure!(
-                number_of_years[&(commodity_id.clone(), region_id.clone())]
-                    == required_years.len().try_into().unwrap(),
+                years[&(commodity_id.clone(), region_id.clone())].len() == milestone_years.len(),
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
-                does not cover all milestone years within the process range of activity."
+                does not cover all milestone years"
             );
             let input_or_zero = value
                 .iter()
@@ -372,6 +368,10 @@ mod tests {
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
                 .is_ok()
         );
+        assert!(
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+                .is_ok()
+        );
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity.id.clone())
@@ -425,6 +425,10 @@ mod tests {
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
                 .is_ok()
         );
+        assert!(
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+                .is_ok()
+        );
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity2.id.clone())
@@ -448,6 +452,10 @@ mod tests {
             ]
             .into_iter(),
             None,
+        );
+        assert!(
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+                .is_ok()
         );
         assert!(
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
