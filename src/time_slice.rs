@@ -11,10 +11,23 @@ use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::fmt::Display;
-use std::iter;
+use std::{cmp, iter};
 
 define_id_type! {Season}
 define_id_type! {TimeOfDay}
+
+impl Season {
+    /// Compare this [`Season`] with another for sorting.
+    ///
+    /// Compares based on index in which it is stored in `time_slice_info` (ultimately: the order in
+    /// the input file).
+    pub fn compare(&self, other: &Season, time_slice_info: &TimeSliceInfo) -> cmp::Ordering {
+        // Get index of each - they will exist because all season are stored there
+        let idx1 = time_slice_info.seasons.get_index_of(self).unwrap();
+        let idx2 = time_slice_info.seasons.get_index_of(other).unwrap();
+        idx1.cmp(&idx2)
+    }
+}
 
 /// An ID describing season and time of day
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
@@ -23,6 +36,19 @@ pub struct TimeSliceID {
     pub season: Season,
     /// The name of each time slice within a day.
     pub time_of_day: TimeOfDay,
+}
+
+impl TimeSliceID {
+    /// Compare this [`TimeSliceID`] with another for sorting.
+    ///
+    /// Compares based on index in which it is stored in `time_slice_info` (ultimately: the order in
+    /// the input file).
+    pub fn compare(&self, other: &TimeSliceID, time_slice_info: &TimeSliceInfo) -> cmp::Ordering {
+        // Get index of each - it will exist because all time slices are stored there
+        let idx1 = time_slice_info.time_slices.get_index_of(self).unwrap();
+        let idx2 = time_slice_info.time_slices.get_index_of(other).unwrap();
+        idx1.cmp(&idx2)
+    }
 }
 
 /// Only implement for tests as this is a bit of a footgun
@@ -91,6 +117,57 @@ impl TimeSliceSelection {
             Self::Annual => TimeSliceLevel::Annual,
             Self::Season(_) => TimeSliceLevel::Season,
             Self::Single(_) => TimeSliceLevel::DayNight,
+        }
+    }
+
+    /// Compare this [`TimeSliceSelection`] with another for sorting.
+    ///
+    /// If the [`TimeSliceSelection`]s are both individual time slices or seasons, then they are
+    /// compared based on their order in `time_slice_info`, else they are compared based on
+    /// [`TimeSliceLevel`].
+    pub fn compare(&self, other: &Self, time_slice_info: &TimeSliceInfo) -> cmp::Ordering {
+        match (self, other) {
+            (Self::Single(ts1), Self::Single(ts2)) => ts1.compare(ts2, time_slice_info),
+            (Self::Season(season1), Self::Season(season2)) => {
+                season1.compare(season2, time_slice_info)
+            }
+            (a, b) => a.level().cmp(&b.level()),
+        }
+    }
+
+    /// Get the parent [`TimeSliceSelection`], if any.
+    ///
+    /// This means the [`TimeSliceSelection`] corresponding to a coarser [`TimeSliceLevel`] than
+    /// this one.
+    pub fn get_parent(&self) -> Option<Self> {
+        match self {
+            Self::Annual => None,
+            Self::Season(_) => Some(Self::Annual),
+            Self::Single(time_slice) => Some(Self::Season(time_slice.season.clone())),
+        }
+    }
+
+    /// Iterate over this [`TimeSliceSelection`]'s children, if any.
+    ///
+    /// This means the [`TimeSliceSelection`]s corresponding to a fine [`TimeSliceLevel`] than
+    /// this one, if any.
+    pub fn iter_children<'a>(
+        &'a self,
+        time_slice_info: &'a TimeSliceInfo,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        let ts_info = time_slice_info;
+        match self {
+            TimeSliceSelection::Annual => {
+                Box::new(time_slice_info.seasons.keys().cloned().map(Self::Season))
+            }
+            TimeSliceSelection::Season(season) => Box::new(
+                ts_info
+                    .iter_ids()
+                    .filter(move |ts| &ts.season == season)
+                    .cloned()
+                    .map(Self::Single),
+            ),
+            TimeSliceSelection::Single(_) => Box::new(iter::empty()),
         }
     }
 
@@ -192,7 +269,15 @@ impl Display for TimeSliceSelection {
 
 /// The time granularity for a particular operation
 #[derive(
-    PartialEq, PartialOrd, Copy, Clone, Debug, DeserializeLabeledStringEnum, strum::EnumIter,
+    PartialEq,
+    PartialOrd,
+    Eq,
+    Ord,
+    Copy,
+    Clone,
+    Debug,
+    DeserializeLabeledStringEnum,
+    strum::EnumIter,
 )]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
@@ -257,6 +342,15 @@ impl TimeSliceInfo {
             season: season.clone(),
             time_of_day: time_of_day.clone(),
         })
+    }
+
+    /// Get the duration covered by a `TimeSliceSelection`
+    pub fn get_duration(&self, ts_selection: &TimeSliceSelection) -> Year {
+        match ts_selection {
+            TimeSliceSelection::Annual => Year(1.0),
+            TimeSliceSelection::Season(season) => self.seasons[season],
+            TimeSliceSelection::Single(time_slice) => self.time_slices[time_slice],
+        }
     }
 
     /// Get a `TimeSliceSelection` from the specified string.

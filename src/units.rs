@@ -244,12 +244,15 @@ unit_struct!(Capacity);
 unit_struct!(Year);
 
 // Derived quantities
+unit_struct!(PerYear);
 unit_struct!(MoneyPerYear);
 unit_struct!(MoneyPerFlow);
 unit_struct!(MoneyPerCapacity);
 unit_struct!(MoneyPerCapacityPerYear);
 unit_struct!(MoneyPerActivity);
+unit_struct!(ActivityPerYear);
 unit_struct!(ActivityPerCapacity);
+unit_struct!(ActivityPerCapacityPerYear);
 unit_struct!(FlowPerActivity);
 unit_struct!(FlowPerCapacity);
 
@@ -302,7 +305,41 @@ impl_div!(Money, Flow, MoneyPerFlow);
 impl_div!(Money, Capacity, MoneyPerCapacity);
 impl_div!(Money, Activity, MoneyPerActivity);
 impl_div!(Activity, Capacity, ActivityPerCapacity);
+impl_div!(Activity, Year, ActivityPerYear);
+impl_div!(ActivityPerCapacity, Year, ActivityPerCapacityPerYear);
 impl_div!(MoneyPerYear, Capacity, MoneyPerCapacityPerYear);
 impl_div!(MoneyPerActivity, FlowPerActivity, MoneyPerFlow);
 impl_div!(MoneyPerCapacity, Year, MoneyPerCapacityPerYear);
 impl_div!(FlowPerCapacity, ActivityPerCapacity, FlowPerActivity);
+
+impl std::ops::Mul<PerYear> for Year {
+    type Output = Dimensionless;
+
+    fn mul(self, by: PerYear) -> Self::Output {
+        Dimensionless(self.0 * by.0)
+    }
+}
+
+impl std::ops::Mul<PerYear> for Activity {
+    type Output = ActivityPerYear;
+
+    fn mul(self, by: PerYear) -> Self::Output {
+        ActivityPerYear(self.0 * by.0)
+    }
+}
+
+impl std::ops::Mul<PerYear> for ActivityPerCapacity {
+    type Output = ActivityPerCapacityPerYear;
+
+    fn mul(self, by: PerYear) -> Self::Output {
+        ActivityPerCapacityPerYear(self.0 * by.0)
+    }
+}
+
+impl std::ops::Div<Year> for Dimensionless {
+    type Output = PerYear;
+
+    fn div(self, rhs: Year) -> Self::Output {
+        PerYear(self.0 / rhs.0)
+    }
+}

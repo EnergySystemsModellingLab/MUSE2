@@ -3,10 +3,10 @@
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerCapacityPerYear, MoneyPerFlow,
+    MoneyPerCapacityPerYear, MoneyPerFlow, PerYear,
 };
 use indexmap::{IndexMap, IndexSet};
 use serde_string_enum::DeserializeLabeledStringEnum;
@@ -24,7 +24,7 @@ pub type ProcessMap = IndexMap<ProcessID, Rc<Process>>;
 /// The value is calculated as availability multiplied by time slice length. The limits are given as
 /// ranges, depending on the user-specified limit type and value for availability.
 pub type ProcessActivityLimitsMap =
-    HashMap<(RegionID, u32), Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>>;
+    HashMap<(RegionID, u32), Rc<IndexMap<TimeSliceSelection, RangeInclusive<PerYear>>>>;
 
 /// A map of [`ProcessParameter`]s, keyed by region and year
 pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
