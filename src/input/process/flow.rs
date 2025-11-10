@@ -11,7 +11,7 @@ use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::iproduct;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -62,10 +62,11 @@ pub fn read_process_flows(
     model_dir: &Path,
     processes: &mut ProcessMap,
     commodities: &CommodityMap,
+    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessFlowsMap>> {
     let file_path = model_dir.join(PROCESS_FLOWS_FILE_NAME);
     let process_flow_csv = read_csv(&file_path)?;
-    read_process_flows_from_iter(process_flow_csv, processes, commodities)
+    read_process_flows_from_iter(process_flow_csv, processes, commodities, milestone_years)
         .with_context(|| input_err_msg(&file_path))
 }
 
@@ -74,6 +75,7 @@ fn read_process_flows_from_iter<I>(
     iter: I,
     processes: &mut ProcessMap,
     commodities: &CommodityMap,
+    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessFlowsMap>>
 where
     I: Iterator<Item = ProcessFlowRaw>,
@@ -134,8 +136,8 @@ where
         }
     }
 
-    validate_flows_and_update_primary_output(processes, &flows_map)?;
-    validate_secondary_flows(processes, &flows_map)?;
+    validate_flows_and_update_primary_output(processes, &flows_map, milestone_years)?;
+    validate_secondary_flows(processes, &flows_map, milestone_years)?;
 
     Ok(flows_map)
 }
@@ -143,29 +145,33 @@ where
 fn validate_flows_and_update_primary_output(
     processes: &mut ProcessMap,
     flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
+    milestone_years: &[u32],
 ) -> Result<()> {
     for (process_id, process) in processes.iter_mut() {
         let map = flows_map
             .get(process_id)
             .with_context(|| format!("Missing flows map for process {process_id}"))?;
 
-        ensure!(
-            map.len() == process.years.len() * process.regions.len(),
-            "Flows map for process {process_id} does not cover all regions and years"
-        );
+        let region_year: Vec<(&RegionID, &u32)> =
+            iproduct!(process.regions.iter(), milestone_years.iter()).collect();
 
-        let mut iter = iproduct!(process.years.iter(), process.regions.iter());
+        ensure!(
+            region_year
+                .iter()
+                .all(|(region_id, year)| map.contains_key(&((*region_id).clone(), **year))),
+            "Flows map for process {process_id} does not cover all regions and milestone years"
+        );
 
         let primary_output = if let Some(primary_output) = &process.primary_output {
             Some(primary_output.clone())
         } else {
-            let (year, region_id) = iter.next().unwrap();
+            let (region_id, year) = region_year[0];
             infer_primary_output(&map[&(region_id.clone(), *year)]).with_context(|| {
                 format!("Could not infer primary_output for process {process_id}")
             })?
         };
 
-        for (&year, region_id) in iter {
+        for (region_id, &year) in region_year {
             let flows = &map[&(region_id.clone(), year)];
 
             // Check that the process has flows for this region/year
@@ -236,11 +242,12 @@ fn check_flows_primary_output(
     Ok(())
 }
 
-/// Checks that non-primary io are defined for all years (within a region) and that
-/// they are only inputs or only outputs in all years.
+/// Checks that non-primary io are defined for all milestone years, at least, (within a region) and
+/// that they are only inputs or only outputs in all years.
 fn validate_secondary_flows(
     processes: &mut ProcessMap,
     flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
+    milestone_years: &[u32],
 ) -> Result<()> {
     for (process_id, process) in processes.iter() {
         // Get the flows for this process - there should be no error, as was checked already
@@ -251,7 +258,11 @@ fn validate_secondary_flows(
         // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
         let iter = iproduct!(process.years.iter(), process.regions.iter());
         let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
+        let mut years: HashMap<(CommodityID, RegionID), HashSet<u32>> = HashMap::new();
         for (&year, region_id) in iter {
+            if !map.contains_key(&(region_id.clone(), year)) {
+                continue;
+            }
             let flow = map[&(region_id.clone(), year)]
                 .iter()
                 .filter_map(|(commodity_id, flow)| {
@@ -260,17 +271,21 @@ fn validate_secondary_flows(
                 });
 
             for (key, value) in flow {
-                flows.entry(key).or_default().push(value);
+                flows.entry(key.clone()).or_default().push(value);
+                if milestone_years.contains(&year) {
+                    years.entry(key).or_default().insert(year);
+                }
             }
         }
 
         // Finally we check that the flows for a given commodity and region are defined for all
-        // years and that they are all inputs or all outputs
+        // milestone years and that they are all inputs or all outputs. This later check is done
+        // for all years, milestone or not.
         for ((commodity_id, region_id), value) in &flows {
             ensure!(
-                value.len() == process.years.len(),
+                years[&(commodity_id.clone(), region_id.clone())].len() == milestone_years.len(),
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
-                does not cover all years"
+                does not cover all milestone years"
             );
             let input_or_zero = value
                 .iter()
@@ -331,12 +346,16 @@ mod tests {
 
     #[rstest]
     fn single_output_infer_primary(#[from(svd_commodity)] commodity: Commodity, process: Process) {
+        let milestone_years = vec![2010, 2020];
         let commodity = Rc::new(commodity);
         let (mut processes, flows_map) = build_maps(
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
         );
-        assert!(validate_flows_and_update_primary_output(&mut processes, &flows_map).is_ok());
+        assert!(
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+                .is_ok()
+        );
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity.id.clone())
@@ -349,6 +368,7 @@ mod tests {
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
     ) {
+        let milestone_years = vec![2010, 2020];
         let commodity1 = Rc::new(commodity1);
         let commodity2 = Rc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
@@ -359,7 +379,8 @@ mod tests {
             ]
             .into_iter(),
         );
-        let res = validate_flows_and_update_primary_output(&mut processes, &flows_map);
+        let res =
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years);
         assert_error!(res, "Could not infer primary_output for process process1");
     }
 
@@ -369,6 +390,7 @@ mod tests {
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
     ) {
+        let milestone_years = vec![2010, 2020];
         let commodity1 = Rc::new(commodity1);
         let commodity2 = Rc::new(commodity2);
         let mut process = process;
@@ -381,7 +403,10 @@ mod tests {
             ]
             .into_iter(),
         );
-        assert!(validate_flows_and_update_primary_output(&mut processes, &flows_map).is_ok());
+        assert!(
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+                .is_ok()
+        );
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity2.id.clone())
@@ -394,6 +419,7 @@ mod tests {
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
     ) {
+        let milestone_years = vec![2010, 2020];
         let commodity1 = Rc::new(commodity1);
         let commodity2 = Rc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
@@ -404,7 +430,10 @@ mod tests {
             ]
             .into_iter(),
         );
-        assert!(validate_flows_and_update_primary_output(&mut processes, &flows_map).is_ok());
+        assert!(
+            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+                .is_ok()
+        );
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             None
