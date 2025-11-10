@@ -3,6 +3,7 @@ use crate::agent::AgentMap;
 use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::ProcessMap;
 use crate::region::{Region, RegionID, RegionMap};
+use crate::simulation::investment::InvestmentSet;
 use crate::time_slice::TimeSliceInfo;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -29,7 +30,7 @@ pub struct Model {
     /// Regions for the simulation
     pub regions: RegionMap,
     /// Commodity ordering for each region and year
-    pub commodity_order: HashMap<(RegionID, u32), Vec<CommodityID>>,
+    pub investment_order: HashMap<u32, Vec<InvestmentSet>>,
 }
 
 impl Model {
@@ -41,5 +42,14 @@ impl Model {
     /// Iterate over the model's regions (region IDs).
     pub fn iter_regions(&self) -> indexmap::map::Keys<'_, RegionID, Region> {
         self.regions.keys()
+    }
+
+    /// Iterate over all the markets in the model.
+    pub fn iter_markets(&self) -> impl Iterator<Item = (CommodityID, RegionID)> + '_ {
+        self.commodities.keys().flat_map(move |commodity_id| {
+            self.regions
+                .keys()
+                .map(move |region_id| (commodity_id.clone(), region_id.clone()))
+        })
     }
 }

@@ -1,8 +1,8 @@
 //! Common routines for handling input data.
 use crate::asset::AssetPool;
-use crate::graph::{
-    CommoditiesGraph, build_commodity_graphs_for_model, validate_commodity_graphs_for_model,
-};
+use crate::graph::investment::solve_investment_order_for_model;
+use crate::graph::validate::validate_commodity_graphs_for_model;
+use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
 use crate::region::RegionID;
@@ -83,7 +83,9 @@ pub fn read_csv_optional<'a, T: DeserializeOwned + 'a>(
 }
 
 fn read_csv_internal<'a, T: DeserializeOwned + 'a>(file_path: &'a Path) -> Result<Vec<T>> {
-    let vec = csv::Reader::from_path(file_path)
+    let vec = csv::ReaderBuilder::new()
+        .trim(csv::Trim::All)
+        .from_path(file_path)
         .with_context(|| input_err_msg(file_path))?
         .into_deserialize()
         .process_results(|iter| iter.collect_vec())
@@ -251,14 +253,16 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 
     // Build and validate commodity graphs for all regions and years
-    // This gives us the commodity order for each region/year which is passed to the model
-    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
-    let commodity_order = validate_commodity_graphs_for_model(
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
+    validate_commodity_graphs_for_model(
         &commodity_graphs,
         &processes,
         &commodities,
         &time_slice_info,
     )?;
+
+    // Solve investment order for each region/year
+    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities, years);
 
     let model_path = model_dir
         .as_ref()
@@ -272,7 +276,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         processes,
         time_slice_info,
         regions,
-        commodity_order,
+        investment_order,
     };
     Ok((model, AssetPool::new(assets)))
 }
@@ -286,7 +290,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 /// validation would fail, which may be helpful for debugging.
 pub fn load_commodity_graphs<P: AsRef<Path>>(
     model_dir: P,
-) -> Result<HashMap<(RegionID, u32), CommoditiesGraph>> {
+) -> Result<IndexMap<(RegionID, u32), CommoditiesGraph>> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
@@ -303,7 +307,7 @@ pub fn load_commodity_graphs<P: AsRef<Path>>(
         years,
     )?;
 
-    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years)?;
+    let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
     Ok(commodity_graphs)
 }
 
@@ -346,6 +350,24 @@ mod tests {
     fn test_read_csv() {
         let dir = tempdir().unwrap();
         let file_path = create_csv_file(dir.path(), "id,value\nhello,1\nworld,2\n");
+        let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
+        assert_eq!(
+            records,
+            &[
+                Record {
+                    id: "hello".into(),
+                    value: 1,
+                },
+                Record {
+                    id: "world".into(),
+                    value: 2,
+                }
+            ]
+        );
+
+        // File with leading/trailing whitespace
+        let dir = tempdir().unwrap();
+        let file_path = create_csv_file(dir.path(), "id  , value\t\n  hello\t ,1\n world ,2\n");
         let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
         assert_eq!(
             records,

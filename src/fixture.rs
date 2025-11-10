@@ -4,14 +4,17 @@ use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentCostLimitsMap, AgentID, AgentMap, AgentObjectiveMap,
     AgentSearchSpaceMap, DecisionRule,
 };
-use crate::asset::{Asset, AssetPool};
+use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
 use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::RegionID;
+use crate::simulation::investment::appraisal::{
+    AppraisalOutput, coefficients::ObjectiveCoefficients,
+};
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
-    ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerCapacityPerYear, Year,
+    Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
+    MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
 };
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
@@ -64,7 +67,8 @@ pub fn svd_commodity() -> Commodity {
         description: "".into(),
         kind: CommodityType::ServiceDemand,
         time_slice_level: TimeSliceLevel::DayNight,
-        levies: CommodityLevyMap::new(),
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
     }
 }
@@ -76,7 +80,8 @@ pub fn sed_commodity() -> Commodity {
         description: "Test SED commodity".into(),
         kind: CommodityType::SupplyEqualsDemand,
         time_slice_level: TimeSliceLevel::DayNight,
-        levies: CommodityLevyMap::new(),
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
     }
 }
@@ -88,7 +93,8 @@ pub fn other_commodity() -> Commodity {
         description: "Test other commodity".into(),
         kind: CommodityType::Other,
         time_slice_level: TimeSliceLevel::DayNight,
-        levies: CommodityLevyMap::new(),
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
     }
 }
@@ -235,5 +241,26 @@ pub fn time_slice_info2() -> TimeSliceInfo {
         ]
         .into_iter()
         .collect(),
+    }
+}
+
+#[fixture]
+pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
+    let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
+    let activity = indexmap! { time_slice.clone() => Activity(10.0) };
+    let demand = indexmap! { time_slice.clone() => Flow(100.0) };
+    let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
+    AppraisalOutput {
+        asset: AssetRef::from(asset),
+        capacity: Capacity(42.0),
+        coefficients: ObjectiveCoefficients {
+            capacity_coefficient: MoneyPerCapacity(3.14),
+            activity_coefficients,
+            unmet_demand_coefficient: MoneyPerFlow(10000.0),
+        },
+        activity,
+        demand,
+        unmet_demand,
+        metric: 4.14,
     }
 }

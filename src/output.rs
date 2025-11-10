@@ -8,9 +8,12 @@ use crate::simulation::CommodityPrices;
 use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
+use crate::units::{
+    Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow,
+};
 use anyhow::{Context, Result, ensure};
 use csv;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -32,23 +35,20 @@ const COMMODITY_PRICES_FILE_NAME: &str = "commodity_prices.csv";
 /// The output file name for assets
 const ASSETS_FILE_NAME: &str = "assets.csv";
 
-/// The output file name for raw activity
-const ACTIVITY_FILE_NAME: &str = "debug_activity.csv";
+/// Debug output file for asset dispatch
+const ACTIVITY_ASSET_DISPATCH: &str = "debug_dispatch_assets.csv";
 
 /// The output file name for commodity balance duals
 const COMMODITY_BALANCE_DUALS_FILE_NAME: &str = "debug_commodity_balance_duals.csv";
-
-/// The output file name for activity duals
-const ACTIVITY_DUALS_FILE_NAME: &str = "debug_activity_duals.csv";
-
-/// The output file name for column duals
-const COLUMN_DUALS_FILE_NAME: &str = "debug_column_duals.csv";
 
 /// The output file name for extra solver output values
 const SOLVER_VALUES_FILE_NAME: &str = "debug_solver.csv";
 
 /// The output file name for appraisal results
 const APPRAISAL_RESULTS_FILE_NAME: &str = "debug_appraisal_results.csv";
+
+/// The output file name for appraisal time slice results
+const APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME: &str = "debug_appraisal_results_time_slices.csv";
 
 /// The root folder in which commodity flow graphs will be created
 const GRAPHS_DIRECTORY_ROOT: &str = "muse2_graphs";
@@ -176,19 +176,9 @@ struct ActivityRow {
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
-    activity: Activity,
-}
-
-/// Represents the activity duals data in a row of the activity duals CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct ActivityDualsRow {
-    milestone_year: u32,
-    run_description: String,
-    asset_id: Option<AssetID>,
-    process_id: ProcessID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    value: MoneyPerActivity,
+    activity: Option<Activity>,
+    activity_dual: Option<MoneyPerActivity>,
+    column_dual: Option<MoneyPerActivity>,
 }
 
 /// Represents the commodity balance duals data in a row of the commodity balance duals CSV file
@@ -202,17 +192,6 @@ struct CommodityBalanceDualsRow {
     value: MoneyPerFlow,
 }
 
-/// Represents the column duals data in a row of the column duals CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct ColumnDualsRow {
-    milestone_year: u32,
-    run_description: String,
-    asset_id: Option<AssetID>,
-    process_id: ProcessID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    value: MoneyPerActivity,
-}
 /// Represents solver output values
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SolverValuesRow {
@@ -230,19 +209,33 @@ struct AppraisalResultsRow {
     process_id: ProcessID,
     region_id: RegionID,
     capacity: Capacity,
-    unmet_demand: Flow,
+    capacity_coefficient: MoneyPerCapacity,
     metric: f64,
+}
+
+/// Represents the appraisal results in a row of the appraisal results CSV file
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct AppraisalResultsTimeSliceRow {
+    milestone_year: u32,
+    run_description: String,
+    asset_id: Option<AssetID>,
+    process_id: ProcessID,
+    region_id: RegionID,
+    time_slice: TimeSliceID,
+    activity: Activity,
+    activity_coefficient: MoneyPerActivity,
+    demand: Flow,
+    unmet_demand: Flow,
 }
 
 /// For writing extra debug information about the model
 struct DebugDataWriter {
     context: Option<String>,
-    activity_writer: csv::Writer<File>,
     commodity_balance_duals_writer: csv::Writer<File>,
-    activity_duals_writer: csv::Writer<File>,
-    column_duals_writer: csv::Writer<File>,
     solver_values_writer: csv::Writer<File>,
     appraisal_results_writer: csv::Writer<File>,
+    appraisal_results_time_slice_writer: csv::Writer<File>,
+    dispatch_asset_writer: csv::Writer<File>,
 }
 
 impl DebugDataWriter {
@@ -259,12 +252,13 @@ impl DebugDataWriter {
 
         Ok(Self {
             context: None,
-            activity_writer: new_writer(ACTIVITY_FILE_NAME)?,
             commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
-            activity_duals_writer: new_writer(ACTIVITY_DUALS_FILE_NAME)?,
-            column_duals_writer: new_writer(COLUMN_DUALS_FILE_NAME)?,
             solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
             appraisal_results_writer: new_writer(APPRAISAL_RESULTS_FILE_NAME)?,
+            appraisal_results_time_slice_writer: new_writer(
+                APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME,
+            )?,
+            dispatch_asset_writer: new_writer(ACTIVITY_ASSET_DISPATCH)?,
         })
     }
 
@@ -284,37 +278,63 @@ impl DebugDataWriter {
         run_description: &str,
         solution: &Solution,
     ) -> Result<()> {
-        self.write_activity(milestone_year, run_description, solution.iter_activity())?;
-        self.write_activity_duals(
+        self.write_activity(
             milestone_year,
             run_description,
+            solution.iter_activity(),
             solution.iter_activity_duals(),
+            solution.iter_column_duals(),
         )?;
         self.write_commodity_balance_duals(
             milestone_year,
             run_description,
             solution.iter_commodity_balance_duals(),
         )?;
-        self.write_column_duals(
-            milestone_year,
-            run_description,
-            solution.iter_column_duals(),
-        )?;
         self.write_solver_values(milestone_year, run_description, solution.objective_value)?;
         Ok(())
     }
 
     // Write activity to file
-    fn write_activity<'a, I>(
+    fn write_activity<'a, I, J, K>(
         &mut self,
         milestone_year: u32,
         run_description: &str,
-        iter: I,
+        iter_activity: I,
+        iter_activity_duals: J,
+        iter_column_duals: K,
     ) -> Result<()>
     where
         I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+        J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
+        K: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
     {
-        for (asset, time_slice, activity) in iter {
+        // To account for different order of entries or missing ones, we first compile data in hash map
+        type CompiledActivityData = (
+            Option<Activity>,
+            Option<MoneyPerActivity>,
+            Option<MoneyPerActivity>,
+        );
+        let mut map: IndexMap<(&AssetRef, &TimeSliceID), CompiledActivityData> = IndexMap::new();
+
+        // For the activities
+        for (asset, time_slice, activity) in iter_activity {
+            map.entry((asset, time_slice)).or_default().0 = Some(activity);
+        }
+        // The activity duals
+        for (asset, time_slice, activity_dual) in iter_activity_duals {
+            map.entry((asset, time_slice)).or_default().1 = Some(activity_dual);
+        }
+        // And the column duals
+        for (asset, time_slice, column_dual) in iter_column_duals {
+            map.entry((asset, time_slice)).or_default().2 = Some(column_dual);
+        }
+
+        for (asset, time_slice, activity, activity_dual, column_dual) in
+            map.iter()
+                .map(|(&(agent, ts), &(activity, activity_dual, column_dual))| {
+                    (agent, ts, activity, activity_dual, column_dual)
+                })
+        {
             let row = ActivityRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
@@ -323,60 +343,10 @@ impl DebugDataWriter {
                 region_id: asset.region_id().clone(),
                 time_slice: time_slice.clone(),
                 activity,
+                activity_dual,
+                column_dual,
             };
-            self.activity_writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
-    /// Write activity duals to file
-    fn write_activity_duals<'a, I>(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        iter: I,
-    ) -> Result<()>
-    where
-        I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
-    {
-        for (asset, time_slice, value) in iter {
-            let row = ActivityDualsRow {
-                milestone_year,
-                run_description: self.with_context(run_description),
-                asset_id: asset.id(),
-                process_id: asset.process_id().clone(),
-                region_id: asset.region_id().clone(),
-                time_slice: time_slice.clone(),
-                value,
-            };
-            self.activity_duals_writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
-    /// Write column duals to file
-    fn write_column_duals<'a, I>(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        iter: I,
-    ) -> Result<()>
-    where
-        I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
-    {
-        for (asset, time_slice, value) in iter {
-            let row = ColumnDualsRow {
-                milestone_year,
-                run_description: self.with_context(run_description),
-                asset_id: asset.id(),
-                process_id: asset.process_id().clone(),
-                region_id: asset.region_id().clone(),
-                time_slice: time_slice.clone(),
-                value,
-            };
-            self.column_duals_writer.serialize(row)?;
+            self.dispatch_asset_writer.serialize(row)?;
         }
 
         Ok(())
@@ -440,7 +410,7 @@ impl DebugDataWriter {
                 process_id: result.asset.process_id().clone(),
                 region_id: result.asset.region_id().clone(),
                 capacity: result.capacity,
-                unmet_demand: result.unmet_demand.values().copied().sum(),
+                capacity_coefficient: result.coefficients.capacity_coefficient,
                 metric: result.metric,
             };
             self.appraisal_results_writer.serialize(row)?;
@@ -449,13 +419,44 @@ impl DebugDataWriter {
         Ok(())
     }
 
+    /// Write appraisal results to file
+    fn write_appraisal_time_slice_results(
+        &mut self,
+        milestone_year: u32,
+        run_description: &str,
+        appraisal_results: &[AppraisalOutput],
+    ) -> Result<()> {
+        for result in appraisal_results {
+            for (time_slice, activity) in &result.activity {
+                let activity_coefficient = result.coefficients.activity_coefficients[time_slice];
+                let demand = result.demand[time_slice];
+                let unmet_demand = result.unmet_demand[time_slice];
+                let row = AppraisalResultsTimeSliceRow {
+                    milestone_year,
+                    run_description: self.with_context(run_description),
+                    asset_id: result.asset.id(),
+                    process_id: result.asset.process_id().clone(),
+                    region_id: result.asset.region_id().clone(),
+                    time_slice: time_slice.clone(),
+                    activity: *activity,
+                    activity_coefficient,
+                    demand,
+                    unmet_demand,
+                };
+                self.appraisal_results_time_slice_writer.serialize(row)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
-        self.activity_writer.flush()?;
         self.commodity_balance_duals_writer.flush()?;
-        self.activity_duals_writer.flush()?;
         self.solver_values_writer.flush()?;
         self.appraisal_results_writer.flush()?;
+        self.appraisal_results_time_slice_writer.flush()?;
+        self.dispatch_asset_writer.flush()?;
 
         Ok(())
     }
@@ -523,6 +524,11 @@ impl DataWriter {
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug_writer {
             wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
+            wtr.write_appraisal_time_slice_results(
+                milestone_year,
+                run_description,
+                appraisal_results,
+            )?;
         }
 
         Ok(())
@@ -615,7 +621,8 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{assets, commodity_id, region_id, time_slice};
+    use crate::fixture::{appraisal_output, asset, assets, commodity_id, region_id, time_slice};
+    use crate::simulation::investment::appraisal::AppraisalOutput;
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
@@ -754,87 +761,53 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_activity_duals(assets: AssetPool, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let value = MoneyPerActivity(0.5);
-        let dir = tempdir().unwrap();
-        let asset = assets.iter_active().next().unwrap();
-
-        // Write activity dual
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_activity_duals(
-                    milestone_year,
-                    &run_description,
-                    iter::once((asset, &time_slice, value)),
-                )
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = ActivityDualsRow {
-            milestone_year,
-            run_description,
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            time_slice,
-            value,
-        };
-        let records: Vec<ActivityDualsRow> =
-            csv::Reader::from_path(dir.path().join(ACTIVITY_DUALS_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn test_write_column_duals(assets: AssetPool, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let value = MoneyPerActivity(0.5);
-        let dir = tempdir().unwrap();
-        let asset = assets.iter_active().next().unwrap();
-
-        // Write column dual
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_column_duals(
-                    milestone_year,
-                    &run_description,
-                    iter::once((asset, &time_slice, value)),
-                )
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = ColumnDualsRow {
-            milestone_year,
-            run_description,
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            time_slice,
-            value,
-        };
-        let records: Vec<ColumnDualsRow> =
-            csv::Reader::from_path(dir.path().join(COLUMN_DUALS_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
     fn test_write_activity(assets: AssetPool, time_slice: TimeSliceID) {
+        let milestone_year = 2020;
+        let run_description = "test_run".to_string();
+        let activity = Activity(100.5);
+        let activity_dual = MoneyPerActivity(-1.5);
+        let column_dual = MoneyPerActivity(5.0);
+        let dir = tempdir().unwrap();
+        let asset = assets.iter_active().next().unwrap();
+
+        // Write activity
+        {
+            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            writer
+                .write_activity(
+                    milestone_year,
+                    &run_description,
+                    iter::once((asset, &time_slice, activity)),
+                    iter::once((asset, &time_slice, activity_dual)),
+                    iter::once((asset, &time_slice, column_dual)),
+                )
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let expected = ActivityRow {
+            milestone_year,
+            run_description,
+            asset_id: asset.id(),
+            process_id: asset.process_id().clone(),
+            region_id: asset.region_id().clone(),
+            time_slice,
+            activity: Some(activity),
+            activity_dual: Some(activity_dual),
+            column_dual: Some(column_dual),
+        };
+        let records: Vec<ActivityRow> =
+            csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn test_write_activity_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let activity = Activity(100.5);
@@ -849,6 +822,8 @@ mod tests {
                     milestone_year,
                     &run_description,
                     iter::once((asset, &time_slice, activity)),
+                    iter::empty::<(&AssetRef, &TimeSliceID, MoneyPerActivity)>(),
+                    iter::empty::<(&AssetRef, &TimeSliceID, MoneyPerActivity)>(),
                 )
                 .unwrap();
             writer.flush().unwrap();
@@ -862,13 +837,16 @@ mod tests {
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice,
-            activity,
+            activity: Some(activity),
+            activity_dual: None,
+            column_dual: None,
         };
-        let records: Vec<ActivityRow> = csv::Reader::from_path(dir.path().join(ACTIVITY_FILE_NAME))
-            .unwrap()
-            .into_deserialize()
-            .try_collect()
-            .unwrap();
+        let records: Vec<ActivityRow> =
+            csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
         assert_equal(records, iter::once(expected));
     }
 
@@ -904,23 +882,16 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_appraisal_results(assets: AssetPool) {
+    fn test_write_appraisal_results(asset: Asset, appraisal_output: AppraisalOutput) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let dir = tempdir().unwrap();
-        let asset = assets.iter_active().next().unwrap();
 
         // Write appraisal results
         {
             let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            let appraisal = AppraisalOutput {
-                asset: asset.clone(),
-                capacity: Capacity(42.0),
-                unmet_demand: Default::default(),
-                metric: 4.14,
-            };
             writer
-                .write_appraisal_results(milestone_year, &run_description, &[appraisal])
+                .write_appraisal_results(milestone_year, &run_description, &[appraisal_output])
                 .unwrap();
             writer.flush().unwrap();
         }
@@ -929,15 +900,60 @@ mod tests {
         let expected = AppraisalResultsRow {
             milestone_year,
             run_description,
-            asset_id: asset.id(),
+            asset_id: None,
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             capacity: Capacity(42.0),
-            unmet_demand: Flow(0.0),
+            capacity_coefficient: MoneyPerCapacity(3.14),
             metric: 4.14,
         };
         let records: Vec<AppraisalResultsRow> =
             csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn test_write_appraisal_time_slice_results(
+        asset: Asset,
+        appraisal_output: AppraisalOutput,
+        time_slice: TimeSliceID,
+    ) {
+        let milestone_year = 2020;
+        let run_description = "test_run".to_string();
+        let dir = tempdir().unwrap();
+
+        // Write appraisal time slice results
+        {
+            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            writer
+                .write_appraisal_time_slice_results(
+                    milestone_year,
+                    &run_description,
+                    &[appraisal_output],
+                )
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let expected = AppraisalResultsTimeSliceRow {
+            milestone_year,
+            run_description,
+            asset_id: None,
+            process_id: asset.process_id().clone(),
+            region_id: asset.region_id().clone(),
+            time_slice: time_slice.clone(),
+            activity: Activity(10.0),
+            activity_coefficient: MoneyPerActivity(0.5),
+            demand: Flow(100.0),
+            unmet_demand: Flow(5.0),
+        };
+        let records: Vec<AppraisalResultsTimeSliceRow> =
+            csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME))
                 .unwrap()
                 .into_deserialize()
                 .try_collect()
