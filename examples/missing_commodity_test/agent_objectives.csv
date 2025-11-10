@@ -1,7 +1,0 @@
-agent_id,years,objective_type,decision_weight,decision_lexico_order
-A0_GEX,all,lcox,,
-A0_GPR,all,lcox,,
-A0_BPD,all,lcox,,
-A0_BPL,all,lcox,,
-A0_ELC,all,lcox,,
-A0_RES,all,npv,,
