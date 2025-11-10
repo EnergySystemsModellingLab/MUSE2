@@ -260,9 +260,6 @@ fn validate_secondary_flows(
         let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
         let mut years: HashMap<(CommodityID, RegionID), HashSet<u32>> = HashMap::new();
         for (&year, region_id) in iter {
-            if !map.contains_key(&(region_id.clone(), year)) {
-                continue;
-            }
             let flow = map[&(region_id.clone(), year)]
                 .iter()
                 .filter_map(|(commodity_id, flow)| {
