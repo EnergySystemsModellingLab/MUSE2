@@ -1023,8 +1023,8 @@ mod tests {
         let agent_id = AgentID("agent1".into());
         let region_id = RegionID("GBR".into());
         assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, Capacity(1.0), 2009),
-            "Process process1 does not operate in the year 2009"
+            Asset::new_future(agent_id, process.into(), region_id, Capacity(1.0), 2007),
+            "Process process1 does not operate in the year 2007"
         );
     }
 
