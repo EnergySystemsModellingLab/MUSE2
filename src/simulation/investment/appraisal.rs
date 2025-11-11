@@ -8,6 +8,7 @@ use crate::model::Model;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity};
 use anyhow::Result;
+use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 use std::cmp::Ordering;
 
@@ -17,7 +18,7 @@ mod costs;
 mod optimisation;
 use coefficients::ObjectiveCoefficients;
 use float_cmp::approx_eq;
-use optimisation::perform_optimisation;
+use optimisation::{VariableMap, perform_optimisation};
 
 /// The output of investment appraisal required to compare potential investment decisions
 pub struct AppraisalOutput {
@@ -60,6 +61,66 @@ impl AppraisalOutput {
     }
 }
 
+/// Add variables to the problem for LCOX appraisal.
+fn add_variables_to_lcox_problem(
+    problem: &mut Problem,
+    cost_coefficients: &ObjectiveCoefficients,
+) -> VariableMap {
+    // Create capacity variable
+    let capacity_var = problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
+
+    // Create activity variables
+    let mut activity_vars = IndexMap::new();
+    for (time_slice, cost) in &cost_coefficients.activity_coefficients {
+        let var = problem.add_column(cost.value(), 0.0..);
+        activity_vars.insert(time_slice.clone(), var);
+    }
+
+    // Create unmet demand variables
+    // One per time slice, all of which use the same coefficient
+    let mut unmet_demand_vars = IndexMap::new();
+    for time_slice in cost_coefficients.activity_coefficients.keys() {
+        let var = problem.add_column(cost_coefficients.unmet_demand_coefficient.value(), 0.0..);
+        unmet_demand_vars.insert(time_slice.clone(), var);
+    }
+
+    VariableMap {
+        capacity_var,
+        activity_vars,
+        unmet_demand_vars,
+    }
+}
+
+/// Add variables to the problem for npv appraisal.
+fn add_variables_to_npv_problem(
+    problem: &mut Problem,
+    cost_coefficients: &ObjectiveCoefficients,
+) -> VariableMap {
+    // Create capacity variable (zeroed coefficient - doesn't affect optimisation)
+    let capacity_var = problem.add_column(0.0, 0.0..);
+
+    // Create activity variables
+    let mut activity_vars = IndexMap::new();
+    for (time_slice, cost) in &cost_coefficients.activity_coefficients {
+        let var = problem.add_column(cost.value(), 0.0..);
+        activity_vars.insert(time_slice.clone(), var);
+    }
+
+    // Create unmet demand variables
+    // One per time slice, all of which use the same coefficient
+    let mut unmet_demand_vars = IndexMap::new();
+    for time_slice in cost_coefficients.activity_coefficients.keys() {
+        let var = problem.add_column(cost_coefficients.unmet_demand_coefficient.value(), 0.0..);
+        unmet_demand_vars.insert(time_slice.clone(), var);
+    }
+
+    VariableMap {
+        capacity_var,
+        activity_vars,
+        unmet_demand_vars,
+    }
+}
+
 /// Calculate LCOX for a hypothetical investment in the given asset.
 ///
 /// This is more commonly referred to as Levelised Cost of *Electricity*, but as the model can
@@ -72,15 +133,19 @@ fn calculate_lcox(
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
+    let mut problem = Problem::default();
+    let variables = add_variables_to_lcox_problem(&mut problem, coefficients);
+
     // Perform optimisation to calculate capacity, activity and unmet demand
     let results = perform_optimisation(
         asset,
         max_capacity,
         commodity,
-        coefficients,
         demand,
         &model.time_slice_info,
         highs::Sense::Minimise,
+        problem,
+        &variables,
     )?;
 
     // Calculate LCOX for the hypothetical investment
@@ -114,15 +179,19 @@ fn calculate_npv(
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
+    let mut problem = Problem::default();
+    let variables = add_variables_to_npv_problem(&mut problem, coefficients);
+
     // Perform optimisation to calculate capacity, activity and unmet demand
     let results = perform_optimisation(
         asset,
         max_capacity,
         commodity,
-        coefficients,
         demand,
         &model.time_slice_info,
         highs::Sense::Maximise,
+        problem,
+        &variables,
     )?;
 
     // Calculate profitability index for the hypothetical investment

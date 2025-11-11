@@ -1,6 +1,5 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
-use super::coefficients::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_capacity_constraint, add_demand_constraints,
 };
@@ -17,13 +16,13 @@ use indexmap::IndexMap;
 pub type Variable = highs::Col;
 
 /// Map storing variables for the optimisation problem
-struct VariableMap {
+pub struct VariableMap {
     /// Capacity variable
-    capacity_var: Variable,
+    pub capacity_var: Variable,
     /// Activity variables in each time slice
-    activity_vars: IndexMap<TimeSliceID, Variable>,
+    pub activity_vars: IndexMap<TimeSliceID, Variable>,
     // Unmet demand variables
-    unmet_demand_vars: IndexMap<TimeSliceID, Variable>,
+    pub unmet_demand_vars: IndexMap<TimeSliceID, Variable>,
 }
 
 /// Map containing optimisation results and coefficients
@@ -34,33 +33,6 @@ pub struct ResultsMap {
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// Unmet demand variables
     pub unmet_demand: DemandMap,
-}
-
-/// Add variables to the problem based on cost coefficients
-fn add_variables(problem: &mut Problem, cost_coefficients: &ObjectiveCoefficients) -> VariableMap {
-    // Create capacity variable
-    let capacity_var = problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
-
-    // Create activity variables
-    let mut activity_vars = IndexMap::new();
-    for (time_slice, cost) in &cost_coefficients.activity_coefficients {
-        let var = problem.add_column(cost.value(), 0.0..);
-        activity_vars.insert(time_slice.clone(), var);
-    }
-
-    // Create unmet demand variables
-    // One per time slice, all of which use the same coefficient
-    let mut unmet_demand_vars = IndexMap::new();
-    for time_slice in cost_coefficients.activity_coefficients.keys() {
-        let var = problem.add_column(cost_coefficients.unmet_demand_coefficient.value(), 0.0..);
-        unmet_demand_vars.insert(time_slice.clone(), var);
-    }
-
-    VariableMap {
-        capacity_var,
-        activity_vars,
-        unmet_demand_vars,
-    }
 }
 
 /// Adds constraints to the problem.
@@ -94,28 +66,25 @@ fn add_constraints(
 /// Performs optimisation for an asset, given the coefficients and demand.
 ///
 /// Will either maximise or minimise the objective function, depending on the `sense` parameter.
+#[allow(clippy::too_many_arguments)]
 pub fn perform_optimisation(
     asset: &AssetRef,
     max_capacity: Option<Capacity>,
     commodity: &Commodity,
-    coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
     sense: Sense,
+    mut problem: Problem,
+    variables: &VariableMap,
 ) -> Result<ResultsMap> {
     // Set up problem
-    let mut problem = Problem::default();
-
-    // Add variables
-    let variables = add_variables(&mut problem, coefficients);
-
     // Add constraints
     add_constraints(
         &mut problem,
         asset,
         max_capacity,
         commodity,
-        &variables,
+        variables,
         demand,
         time_slice_info,
     );
