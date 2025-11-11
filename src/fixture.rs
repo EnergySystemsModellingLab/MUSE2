@@ -148,13 +148,19 @@ pub fn process(
     region_ids: IndexSet<RegionID>,
     process_parameter_map: ProcessParameterMap,
 ) -> Process {
-    let years = vec![2010, 2015, 2020];
+    let milestone_years = vec![2010, 2015, 2020];
+    // The process start year is before the base year
+    let years = vec![2008, 2009]
+        .iter()
+        .chain(&milestone_years)
+        .cloned()
+        .collect();
 
     // Create maps with (empty) entries for every region/year combo
-    let activity_limits = iproduct!(region_ids.iter(), years.iter())
+    let activity_limits = iproduct!(region_ids.iter(), milestone_years.iter())
         .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(HashMap::new())))
         .collect();
-    let flows = iproduct!(region_ids.iter(), years.iter())
+    let flows = iproduct!(region_ids.iter(), milestone_years.iter())
         .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
         .collect();
     Process {
