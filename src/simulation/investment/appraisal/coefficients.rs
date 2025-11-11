@@ -93,9 +93,6 @@ pub fn calculate_coefficients_for_npv(
     // Capacity coefficient
     let capacity_coefficient = -annual_fixed_cost(asset);
 
-    // Small epsilon to ensure break-even assets are dispatched
-    let epsilon = MoneyPerActivity(1e-14);
-
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
     for time_slice in time_slice_info.iter_ids() {
