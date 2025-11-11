@@ -14,7 +14,7 @@ use anyhow::{Result, bail};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
@@ -273,9 +273,19 @@ impl Solution<'_> {
     }
 
     /// Keys and dual values for activity constraints.
+    ///
+    /// Note: if there are any flexible capacity assets, these will have two duals with identical
+    /// keys, and there will be no way to distinguish between them in the resulting iterator.
+    /// Recommended for now only to use this function when there are no flexible capacity assets.
     pub fn iter_activity_duals(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
+        if self.iter_capacity().next().is_some() {
+            warn!(
+                "Warning: iter_activity_duals called on solution of model with flexible capacity assets.
+                The resulting duals may be ambiguous."
+            );
+        }
         self.constraint_keys
             .activity_keys
             .zip_duals(self.solution.dual_rows())
@@ -359,6 +369,7 @@ pub struct DispatchRun<'model, 'run> {
     markets_to_allow_unmet_demand: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
+    capacity_margin: f64,
 }
 
 impl<'model, 'run> DispatchRun<'model, 'run> {
@@ -373,13 +384,19 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             markets_to_allow_unmet_demand: &[],
             input_prices: None,
             year,
+            capacity_margin: 0.0,
         }
     }
 
     /// Include the specified flexible capacity assets in the dispatch run
-    pub fn with_flexible_capacity_assets(self, flexible_capacity_assets: &'run [AssetRef]) -> Self {
+    pub fn with_flexible_capacity_assets(
+        self,
+        flexible_capacity_assets: &'run [AssetRef],
+        capacity_margin: f64,
+    ) -> Self {
         Self {
             flexible_capacity_assets,
+            capacity_margin,
             ..self
         }
     }
@@ -500,6 +517,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 &mut problem,
                 &mut variables.capacity_vars,
                 self.flexible_capacity_assets,
+                self.capacity_margin,
             );
         }
 
@@ -585,6 +603,7 @@ fn add_capacity_variables(
     problem: &mut Problem,
     variables: &mut CapacityVariableMap,
     assets: &[AssetRef],
+    capacity_margin: f64,
 ) -> Range<usize> {
     // This line **must** come before we add more variables
     let start = problem.num_cols();
@@ -601,7 +620,8 @@ fn add_capacity_variables(
         }
 
         let current_capacity = asset.capacity().value();
-        let bounds = 0.9 * current_capacity..=1.1 * current_capacity;
+        let bounds =
+            (1.0 - capacity_margin) * current_capacity..=(1.0 + capacity_margin) * current_capacity;
         let var = problem.add_column(0.0, bounds);
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");

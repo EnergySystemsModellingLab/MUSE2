@@ -211,8 +211,8 @@ fn add_activity_constraints(problem: &mut Problem, variables: &VariableMap) -> A
             problem.add_row(..=0.0, [(activity_var, -1.0), (capacity_var, lower_limit)]);
 
             // Store keys for retrieving duals later.
-            // TODO: bad idea to push identical keys twice. Safe for now so long as we don't use the
-            // activity duals for anything important when using flexible capacity assets.
+            // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
+            // use the activity duals for anything important when using flexible capacity assets.
             keys.push((asset.clone(), time_slice.clone()));
             keys.push((asset.clone(), time_slice.clone()));
         } else {
