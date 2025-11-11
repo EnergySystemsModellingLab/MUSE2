@@ -86,17 +86,21 @@ pub fn calculate_coefficients_for_npv(
     prices: &CommodityPrices,
     year: u32,
 ) -> ObjectiveCoefficients {
+    // Small constant added toeach activity coefficient to ensure break-even/slightly negative
+    // assets are still dispatched
+    const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(1e-14);
+
     // Capacity coefficient
     let capacity_coefficient = -annual_fixed_cost(asset);
-
-    // Small epsilon to ensure break-even assets are dispatched
-    let epsilon = MoneyPerActivity(1e-14);
 
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
     for time_slice in time_slice_info.iter_ids() {
         let coefficient = calculate_activity_coefficient_for_npv(asset, time_slice, prices, year);
-        activity_coefficients.insert(time_slice.clone(), coefficient + epsilon);
+        activity_coefficients.insert(
+            time_slice.clone(),
+            coefficient + EPSILON_ACTIVITY_COEFFICIENT,
+        );
     }
 
     // Unmet demand coefficient (we don't apply a cost to unmet demand, so we set this to zero)
