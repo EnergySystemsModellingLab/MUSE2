@@ -341,12 +341,15 @@ mod tests {
         process: Process,
         flows: I,
         years: Option<&Vec<u32>>,
+        years: Option<&Vec<u32>>,
     ) -> (ProcessMap, HashMap<ProcessID, ProcessFlowsMap>)
     where
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
         let years = years.unwrap_or(&process.years);
+        let years = years.unwrap_or(&process.years);
         let map: Rc<IndexMap<_, _>> = Rc::new(flows.clone().collect());
+        let flows_inner = iproduct!(&process.regions, years)
         let flows_inner = iproduct!(&process.regions, years)
             .map(|(region_id, year)| ((region_id.clone(), *year), map.clone()))
             .collect();
@@ -364,10 +367,6 @@ mod tests {
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
             None,
-        );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
         );
         assert!(
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
@@ -426,10 +425,6 @@ mod tests {
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
                 .is_ok()
         );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
-        );
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity2.id.clone())
@@ -453,10 +448,6 @@ mod tests {
             ]
             .into_iter(),
             None,
-        );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
         );
         assert!(
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
