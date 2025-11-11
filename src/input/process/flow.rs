@@ -11,7 +11,7 @@ use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::iproduct;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -152,14 +152,18 @@ fn validate_flows_and_update_primary_output(
             .get(process_id)
             .with_context(|| format!("Missing flows map for process {process_id}"))?;
 
+        // Flows are required for all milestone years within the process years of activity
+        let required_years = milestone_years
+            .iter()
+            .filter(|&y| process.years.contains(y));
         let region_year: Vec<(&RegionID, &u32)> =
-            iproduct!(process.regions.iter(), milestone_years.iter()).collect();
+            iproduct!(process.regions.iter(), required_years).collect();
 
         ensure!(
             region_year
                 .iter()
                 .all(|(region_id, year)| map.contains_key(&((*region_id).clone(), **year))),
-            "Flows map for process {process_id} does not cover all regions and milestone years"
+            "Flows map for process {process_id} does not cover all regions and required years"
         );
 
         let primary_output = if let Some(primary_output) = &process.primary_output {
@@ -255,10 +259,16 @@ fn validate_secondary_flows(
             .get(process_id)
             .with_context(|| format!("Missing flows map for process {process_id}"))?;
 
+        // Flows are required for all milestone years within the process years of activity
+        let required_years: Vec<&u32> = milestone_years
+            .iter()
+            .filter(|&y| process.years.contains(y))
+            .collect();
+
         // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
         let iter = iproduct!(process.years.iter(), process.regions.iter());
         let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
-        let mut years: HashMap<(CommodityID, RegionID), HashSet<u32>> = HashMap::new();
+        let mut number_of_years: HashMap<(CommodityID, RegionID), u32> = HashMap::new();
         for (&year, region_id) in iter {
             let flow = map[&(region_id.clone(), year)]
                 .iter()
@@ -269,20 +279,21 @@ fn validate_secondary_flows(
 
             for (key, value) in flow {
                 flows.entry(key.clone()).or_default().push(value);
-                if milestone_years.contains(&year) {
-                    years.entry(key).or_default().insert(year);
+                if required_years.contains(&&year) {
+                    *number_of_years.entry(key).or_default() += 1;
                 }
             }
         }
 
         // Finally we check that the flows for a given commodity and region are defined for all
         // milestone years and that they are all inputs or all outputs. This later check is done
-        // for all years, milestone or not.
+        // for all years in the process range, required or not.
         for ((commodity_id, region_id), value) in &flows {
             ensure!(
-                years[&(commodity_id.clone(), region_id.clone())].len() == milestone_years.len(),
+                number_of_years[&(commodity_id.clone(), region_id.clone())]
+                    == required_years.len().try_into().unwrap(),
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
-                does not cover all milestone years"
+                does not cover all milestone years within the process range of activity."
             );
             let input_or_zero = value
                 .iter()
