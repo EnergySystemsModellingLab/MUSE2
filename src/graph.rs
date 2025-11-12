@@ -1,6 +1,8 @@
 //! Module for creating and analysing commodity graphs
 use crate::commodity::CommodityID;
-use crate::process::{FlowDirection, ProcessID, ProcessMap};
+use crate::process::{
+    FlowDirection, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap, ProcessParameterMap,
+};
 use crate::region::RegionID;
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
@@ -13,6 +15,7 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
+use std::rc::Rc;
 
 pub mod investment;
 pub mod validate;
@@ -66,6 +69,35 @@ impl Display for GraphEdge {
     }
 }
 
+/// Helper function to return a possible flow operating in the requested year
+///
+/// It considers the lifetime of the process and returns the first flow that can operate in the
+/// target year and region. If no flow is found fulfilling that, None is returned.
+fn get_flow_for_year(
+    parameters: &ProcessParameterMap,
+    flows: ProcessFlowsMap,
+    target: (RegionID, u32),
+) -> Option<Rc<IndexMap<CommodityID, ProcessFlow>>> {
+    // If its already in the map, we return it
+    if flows.contains_key(&target) {
+        return flows.get(&target).cloned();
+    }
+
+    // Otherwise we try to find one that operates in the target year. It is assumed that
+    // parameters are defined in the same (region, year) combinations than flows, at least.
+    let (target_region, target_year) = target;
+    for ((region, year), value) in flows {
+        if region != target_region {
+            continue;
+        }
+        if year + parameters.get(&(region, year)).unwrap().lifetime >= target_year {
+            return Some(value);
+        }
+        return None;
+    }
+    None
+}
+
 /// Creates a directed graph of commodity flows for a given region and year.
 ///
 /// The graph contains nodes for all commodities that may be consumed/produced by processes in the
@@ -87,7 +119,9 @@ fn create_commodities_graph_for_region_year(
 
     let key = (region_id.clone(), year);
     for process in processes.values() {
-        let Some(flows) = process.flows.get(&key) else {
+        let Some(flows) =
+            get_flow_for_year(&process.parameters, process.flows.clone(), key.clone())
+        else {
             // Process doesn't operate in this region/year
             continue;
         };
