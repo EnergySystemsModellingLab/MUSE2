@@ -26,3 +26,8 @@ properties:
     notes: |
       This includes raw values such as commodity balance duals, which may be useful for debugging
       the model or understanding results in more detail.
+  results_root:
+    type: string
+    description: Root directory to output results
+    default: ""
+    notes: Defaults to a "results" folder within the current working directory.
