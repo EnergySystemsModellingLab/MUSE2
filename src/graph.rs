@@ -93,7 +93,6 @@ fn get_flow_for_year(
         if year + parameters.get(&(region, year)).unwrap().lifetime >= target_year {
             return Some(value);
         }
-        return None;
     }
     None
 }
