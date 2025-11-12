@@ -1,0 +1,8 @@
+id,description,regions,decision_rule,decision_lexico_tolerance
+A0_OAG,Oil and gas IOC,all,single,
+A0_ELC,Electricity generators,all,single,
+A0_RES,Residential consumer,all,single,
+A0_TRA,Consumer who drives,all,single,
+A0_BPD,Biomass producer,all,single,
+A0_BPL,Biomass pelletiser,all,single,
+A0_REF,Refiners,all,single,

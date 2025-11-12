@@ -14,7 +14,6 @@ use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
-use log::debug;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
@@ -329,19 +328,19 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
     }
 }
 
-/// Sanity check for input prices.
-///
-/// Input prices should only be provided for commodities for which there will be no commodity
-/// balance constraint.
-fn check_input_prices(input_prices: &CommodityPrices, markets: &[(CommodityID, RegionID)]) {
-    let markets_set: HashSet<_> = markets.iter().collect();
-    let has_prices_for_market_subset = input_prices.keys().any(|(commodity_id, region_id, _)| {
-        markets_set.contains(&(commodity_id.clone(), region_id.clone()))
-    });
-    assert!(
-        !has_prices_for_market_subset,
-        "Input prices were included for commodities that are being modelled, which is not allowed."
-    );
+/// Select prices for commodities not being balanced
+fn select_input_prices(
+    input_prices: &CommodityPrices,
+    markets: &[(CommodityID, RegionID)],
+) -> CommodityPrices {
+    let commodity_regions_set: HashSet<(&CommodityID, &RegionID)> =
+        markets.iter().map(|m| (&m.0, &m.1)).collect();
+    input_prices
+        .iter()
+        .filter(|(commodity_id, region_id, _, _)| {
+            !commodity_regions_set.contains(&(commodity_id, region_id))
+        })
+        .collect()
 }
 
 /// Provides the interface for running the dispatch optimisation.
@@ -446,18 +445,21 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         } else {
             self.markets_to_balance
         };
-        if let Some(input_prices) = self.input_prices {
-            check_input_prices(input_prices, markets_to_balance);
-        }
+
+        // Select prices for commodities not being balanced
+        let input_prices_owned = self
+            .input_prices
+            .map(|prices| select_input_prices(prices, markets_to_balance));
+        let input_prices = input_prices_owned.as_ref();
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
-        // track the unmet demand so we can report the offending regions/commodities to users
-        match self.run_without_unmet_demand(markets_to_balance) {
+        // track the unmet demand so we can report the offending markets to users
+        match self.run_without_unmet_demand(markets_to_balance, input_prices) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let markets = self
-                    .get_markets_with_unmet_demand(markets_to_balance)
+                    .get_markets_with_unmet_demand(markets_to_balance, input_prices)
                     .expect("Failed to run dispatch to calculate unmet demand");
 
                 ensure!(
@@ -480,16 +482,19 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_without_unmet_demand(
         &self,
         markets: &[(CommodityID, RegionID)],
+        input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(markets, /*allow_unmet_demand=*/ false)
+        self.run_internal(markets, /*allow_unmet_demand=*/ false, input_prices)
     }
 
     /// Run dispatch to diagnose which markets have unmet demand
     fn get_markets_with_unmet_demand(
         &self,
         markets: &[(CommodityID, RegionID)],
+        input_prices: Option<&CommodityPrices>,
     ) -> Result<IndexSet<(CommodityID, RegionID)>> {
-        let solution = self.run_internal(markets, /*allow_unmet_demand=*/ true)?;
+        let solution =
+            self.run_internal(markets, /*allow_unmet_demand=*/ true, input_prices)?;
         Ok(solution
             .iter_unmet_demand()
             .filter(|(_, _, _, flow)| *flow > Flow(0.0))
@@ -502,13 +507,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         &self,
         markets: &[(CommodityID, RegionID)],
         allow_unmet_demand: bool,
+        input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();
         let mut variables = VariableMap::new_with_activity_vars(
             &mut problem,
             self.model,
-            self.input_prices,
+            input_prices,
             self.existing_assets,
             self.candidate_assets,
             self.year,
@@ -552,15 +558,12 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // Solve model
         let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
 
-        let objective_value = Money(solution.objective_value());
-        debug!("Objective value: {objective_value}");
-
         Ok(Solution {
             solution: solution.get_solution(),
             variables,
             time_slice_info: &self.model.time_slice_info,
             constraint_keys,
-            objective_value,
+            objective_value: Money(solution.objective_value()),
         })
     }
 }
