@@ -148,8 +148,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///
 /// `condensed_graph` contains the SCCs detected in the original investment graph, stored as
 /// `Vec<InvestmentSet>` node weights. Single-element components are already acyclic, but components
-/// with multiple members still require an internal ordering so that subsequent processing can treat
-/// them as near-acyclic chains.
+/// with multiple members require an internal ordering so that the investment algorithm can treat
+/// them as near-acyclic chains, minimising potential disruption.
 ///
 /// To rank the members of each multi-node component, we construct a mixed integer linear program:
 ///
@@ -162,30 +162,34 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
 /// markets they precede). Sorting by this score — using the original index as a tiebreaker to keep
 /// relative order stable — yields the final sequence that replaces the SCC in the condensed graph.
+/// At least one pairwise mismatch is always inevitable (e.g. where A is solved before B, but B may
+/// consume A, so the demand for A cannot be guaranteed upfront).
 ///
 /// # Example
 ///
 /// Suppose five markets (A–E) form a cycle in the original graph with the following edges:
 ///
 /// ```text
-/// A → B → C → D → E → A
+/// A ← B ← C ← D ← E ← A
 /// ```
 ///
-/// Additionally, B has a secondary dependency on D (`B → D`). The MILP penalises any edge that points
+/// Additionally, B has a secondary dependency on D (`B ← D`). The MILP penalises any edge that points
 /// “forward” in the final order: if an edge goes from X to Y we prefer to place Y before X so the edge
 /// points backwards. On top of this, we give a small preference to markets that export outside the SCC,
 /// so nodes with outgoing edges beyond the cycle are pushed earlier. One low-cost sequence is:
 ///
 /// ```text
-/// A, E, D, C, B
+/// A, B, C, D, E
 /// ```
 ///
-/// * The primary cycle edges (A→B, B→C, C→D, D→E, E→A) guarantee at least one unavoidable forward
+/// * The primary cycle edges (A ← B, B ← C, C ← D, D ← E, E ← A) guarantee at least one unavoidable
 ///   violation.
-/// * By scheduling E and D before C and B, the edges D→E and B→D now incur no cost because their
+/// * By scheduling D and E before B and C, the edges D ← E and B ← D incur no cost because their
 ///   targets appear earlier than their sources.
-/// * If A also had an edge to an external market (e.g. `A → X`), the preference would keep A at the
-///   front so that this export edge points backwards as well.
+/// * If A also had an edge to an external market (e.g. `X ← A`), the preference would keep A at the
+///   front.
+/// * In this ordering, the only pairwise violation is between A and B, as B is solved before A, but
+///   A may consume B.
 ///
 /// The resulting order replaces the original `InvestmentSet::Cycle` entry inside the condensed
 /// graph, providing a deterministic processing sequence for downstream logic.
@@ -460,13 +464,13 @@ mod tests {
         let markets =
             ["A", "B", "C", "D", "E"].map(|id| InvestmentSet::Single((id.into(), "GBR".into())));
 
-        // Create graph with cycle edges plus an extra dependency B -> D (see doc comment)
+        // Create graph with cycle edges plus an extra dependency B ← D (see doc comment)
         let mut original = InvestmentGraph::new();
         let node_indices: Vec<_> = markets
             .iter()
             .map(|set| original.add_node(set.clone()))
             .collect();
-        for &(src, dst) in &[(0usize, 1usize), (1, 2), (2, 3), (3, 4), (4, 0), (1, 3)] {
+        for &(src, dst) in &[(1, 0), (2, 1), (3, 2), (4, 3), (0, 4), (3, 1)] {
             original.add_edge(
                 node_indices[src],
                 node_indices[dst],
@@ -489,7 +493,7 @@ mod tests {
 
         // Expected order corresponds to the example in the doc comment.
         // Note that A should be first, as it has an outgoing edge to the external market.
-        let expected = ["A", "E", "D", "C", "B"]
+        let expected = ["A", "B", "C", "D", "E"]
             .map(|id| InvestmentSet::Single((id.into(), "GBR".into())))
             .to_vec();
 
