@@ -185,19 +185,41 @@ fn order_sccs(
             remaining_pairs.iter().map(|(_, ni)| *ni).collect();
 
         // Greedy algorithm: pick the node with the fewest outgoing edges to other remaining nodes.
+        // Each iteration only considers nodes that have outgoing edges to nodes not in the remaining set.
         let mut ordered = Vec::with_capacity(remaining_pairs.len());
         while !remaining_pairs.is_empty() {
-            let (best_pos, _) = remaining_pairs
+            // Determine which positions are allowed this iteration:
+            // Only consider remaining nodes that have outgoing edges to nodes NOT in remaining_idx_set
+            let allowed_positions: Vec<usize> = remaining_pairs
                 .iter()
                 .enumerate()
-                .map(|(pos, (_, orig_idx))| {
-                    let count = original_graph
+                .filter(|(_, (_, orig_idx))| {
+                    original_graph
                         .neighbors_directed(*orig_idx, Direction::Outgoing)
+                        .any(|nbr| !remaining_idx_set.contains(&nbr))
+                })
+                .map(|(pos, _)| pos)
+                .collect();
+
+            // Compute outgoing-to-remaining counts for allowed positions
+            let counts: Vec<(usize, usize)> = allowed_positions
+                .iter()
+                .map(|&pos| {
+                    let orig_idx = remaining_pairs[pos].1;
+                    let count = original_graph
+                        .neighbors_directed(orig_idx, Direction::Outgoing)
                         .filter(|nbr| remaining_idx_set.contains(nbr))
                         .count();
                     (pos, count)
                 })
-                .min_by_key(|&(_, count)| count)
+                .collect();
+
+            // Pick the candidate position with the minimum outgoing-to-remaining count
+            // TODO: there may be ties; for now we just pick the first
+            let best_pos = counts
+                .iter()
+                .min_by_key(|&&(_, c)| c)
+                .map(|&(pos, _)| pos)
                 .expect("there should be at least one candidate");
 
             let (next_candidate, next_idx) = remaining_pairs.remove(best_pos);
