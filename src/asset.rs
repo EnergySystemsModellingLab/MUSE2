@@ -451,11 +451,14 @@ impl Asset {
         self.capacity
     }
 
-    /// Set the capacity for this asset (only for Candidate assets)
+    /// Set the capacity for this asset (only for Candidate or Selected assets)
     pub fn set_capacity(&mut self, capacity: Capacity) {
         assert!(
-            self.state == AssetState::Candidate,
-            "set_capacity can only be called on Candidate assets"
+            matches!(
+                self.state,
+                AssetState::Candidate | AssetState::Selected { .. }
+            ),
+            "set_capacity can only be called on Candidate or Selected assets"
         );
         assert!(capacity >= Capacity(0.0), "Capacity must be >= 0");
         self.capacity = capacity;
