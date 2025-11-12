@@ -11,9 +11,9 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, bail, ensure};
 use indexmap::IndexMap;
-use itertools::{Itertools, chain, iproduct};
-use log::debug;
-use std::collections::HashMap;
+use itertools::{Itertools, chain};
+use log::{debug, warn};
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
 
 pub mod appraisal;
@@ -57,6 +57,8 @@ impl InvestmentSet {
         demand: &AllDemandMap,
         existing_assets: &[AssetRef],
         prices: &CommodityPrices,
+        seen_markets: &[(CommodityID, RegionID)],
+        previously_selected_assets: &[AssetRef],
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
@@ -70,9 +72,20 @@ impl InvestmentSet {
                 prices,
                 writer,
             ),
-            InvestmentSet::Cycle(_) => bail!(
-                "Investment cycles are not yet supported. Found cycle for commodities: {self}"
-            ),
+            InvestmentSet::Cycle(markets) => {
+                debug!("Starting investment for cycle '{self}'");
+                select_assets_for_cycle(
+                    model,
+                    markets,
+                    year,
+                    demand,
+                    existing_assets,
+                    prices,
+                    seen_markets,
+                    previously_selected_assets,
+                    writer,
+                )
+            }
             InvestmentSet::Layer(investment_sets) => {
                 debug!("Starting asset selection for layer '{self}'");
                 let mut all_assets = Vec::new();
@@ -83,6 +96,8 @@ impl InvestmentSet {
                         demand,
                         existing_assets,
                         prices,
+                        seen_markets,
+                        previously_selected_assets,
                         writer,
                     )?;
                     all_assets.extend(assets);
@@ -103,7 +118,7 @@ impl Display for InvestmentSet {
             InvestmentSet::Cycle(markets) => {
                 write!(
                     f,
-                    "{}",
+                    "({})",
                     markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ")
                 )
             }
@@ -144,11 +159,6 @@ pub fn perform_agent_investment(
         investment_order.iter().join(" -> ")
     );
 
-    // External prices to be used in dispatch optimisation
-    // Once investments are performed for a market, the dispatch system will be able to produce
-    // endogenous prices for that market, so we'll gradually remove these external prices.
-    let mut external_prices = prices.clone();
-
     // Keep track of the markets that have been seen so far. This will be used to apply
     // balance constraints in the dispatch optimisation - we only apply balance constraints for
     // markets that have been seen so far.
@@ -163,6 +173,8 @@ pub fn perform_agent_investment(
             &net_demand,
             existing_assets,
             prices,
+            &seen_markets,
+            &all_selected_assets,
             writer,
         )?;
 
@@ -171,22 +183,11 @@ pub fn perform_agent_investment(
             seen_markets.push(market.clone());
         }
 
-        // Remove prices for already-seen markets. Markets which are produced by at
-        // least one asset in the dispatch run will have prices produced endogenously (via the
-        // commodity balance constraints), but markets for which investment has not yet been
-        // performed will, by definition, not have any producers. For these, we provide prices
-        // from the previous dispatch run otherwise they will appear to be free to the model.
-        for ((commodity_id, region_id), time_slice) in iproduct!(
-            investment_set.iter_markets(),
-            model.time_slice_info.iter_ids()
-        ) {
-            external_prices.remove(commodity_id, region_id, time_slice);
-        }
-
         // If no assets have been selected, skip dispatch optimisation
         // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
         if selected_assets.is_empty() {
+            debug!("No assets selected for '{investment_set}'");
             continue;
         }
 
@@ -202,7 +203,7 @@ pub fn perform_agent_investment(
         // their prices using external values so that they don't appear free
         let solution = DispatchRun::new(model, &all_selected_assets, year)
             .with_market_balance_subset(&seen_markets)
-            .with_input_prices(&external_prices)
+            .with_input_prices(prices)
             .run(&format!("post {investment_set} investment"), writer)?;
 
         // Update demand map with flows from newly added assets
@@ -279,6 +280,137 @@ fn select_assets_for_single_market(
     Ok(selected_assets)
 }
 
+#[allow(clippy::too_many_arguments)]
+fn select_assets_for_cycle(
+    model: &Model,
+    markets: &[(CommodityID, RegionID)],
+    year: u32,
+    demand: &AllDemandMap,
+    existing_assets: &[AssetRef],
+    prices: &CommodityPrices,
+    seen_markets: &[(CommodityID, RegionID)],
+    previously_selected_assets: &[AssetRef],
+    writer: &mut DataWriter,
+) -> Result<Vec<AssetRef>> {
+    const MAX_ITERATIONS: u32 = 5;
+    const CAPACITY_MARGIN: f64 = 0.1;
+
+    // Precompute a joined string for logging
+    let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
+
+    // Get markets to balance: all seen so far plus all in the cycle
+    let mut markets_to_balance = seen_markets.to_vec();
+    markets_to_balance.extend_from_slice(markets);
+
+    // Initialise queue of unbalanced markets: start with all markets in the cycle
+    // TODO: currently the order is unspecified, but we may be able to speed up convergence by
+    // pre-sorting this in some way
+    let mut unbalanced_markets = VecDeque::from(markets.to_vec());
+
+    // Keep track of the number of times we've visited each market in the cycle
+    let mut markets_visit_count: HashMap<(CommodityID, RegionID), u32> =
+        markets.iter().cloned().map(|m| (m, 0u32)).collect();
+
+    // Iterate while there are still markets in the queue, or until max iterations reached
+    let mut current_demand = demand.clone();
+    let mut assets_for_cycle = HashMap::new();
+    let mut last_solution = None;
+    while !unbalanced_markets.is_empty() {
+        // Pop the first market off the queue
+        let (commodity_id, region_id) = unbalanced_markets
+            .pop_front()
+            .expect("Already checked that the queue is non-empty");
+        let count = markets_visit_count
+            .get_mut(&(commodity_id.clone(), region_id.clone()))
+            .expect("Market must be in visit count map");
+
+        // Break if max iterations reached for this market
+        if *count == MAX_ITERATIONS {
+            warn!("Max cycle investment iterations reached. Unable to find stable solution");
+            break;
+        }
+
+        // Select/retain assets for this market
+        // This will replace any previously selected/retained assets for this market
+        let assets = select_assets_for_single_market(
+            model,
+            &commodity_id,
+            &region_id,
+            year,
+            &current_demand,
+            existing_assets,
+            prices,
+            writer,
+        )?;
+        assets_for_cycle.insert((commodity_id.clone(), region_id.clone()), assets.clone());
+
+        // If no assets were selected/retained, no need to run dispatch
+        if assets.is_empty() {
+            continue;
+        }
+
+        // Assemble full list of assets for dispatch
+        // This is all previously selected assets plus assets selected/retained as part of the cycle
+        let mut all_assets = previously_selected_assets.to_vec();
+        let assets_for_cycle_flat: Vec<_> = assets_for_cycle
+            .values()
+            .flat_map(|v| v.iter().cloned())
+            .collect();
+        all_assets.extend_from_slice(&assets_for_cycle_flat);
+
+        // We allow all `Selected` state assets to have flexible capacity
+        let flexible_capacity_assets: Vec<_> = assets_for_cycle_flat
+            .iter()
+            .filter(|asset| matches!(asset.state(), AssetState::Selected { .. }))
+            .cloned()
+            .collect();
+
+        // We allow unmet demand for all markets except the one we're currently balancing
+        let markets_to_allow_unmet_demand: Vec<_> = markets
+            .iter()
+            .filter(|m| *m != &(commodity_id.clone(), region_id.clone()))
+            .cloned()
+            .collect();
+
+        // Run dispatch
+        let solution = DispatchRun::new(model, &all_assets, year)
+            .with_market_balance_subset(&markets_to_balance)
+            .with_unmet_demand_vars(&markets_to_allow_unmet_demand)
+            .with_flexible_capacity_assets(&flexible_capacity_assets, CAPACITY_MARGIN)
+            .run(
+                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment (round {count})"),
+                writer,
+            )?;
+
+        // Find markets with unmet demand and add these to the queue if not already present
+        let coms = solution.get_markets_with_unmet_demand();
+        for market in coms {
+            if !unbalanced_markets.contains(&market) {
+                unbalanced_markets.push_back(market);
+            }
+        }
+
+        // Calculate new demand map including unmet demand from this solution
+        current_demand.clone_from(demand);
+        update_demand_map_with_unmet_demand(&mut current_demand, solution.iter_unmet_demand());
+        last_solution = Some(solution);
+        *count += 1;
+    }
+
+    // Finally, update flexible capacity assets based on the final solution
+    let mut all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
+    if let Some(solution) = last_solution {
+        let new_capacities: HashMap<_, _> = solution.iter_capacity().collect();
+        for asset in &mut all_cycle_assets {
+            if let Some(new_capacity) = new_capacities.get(asset) {
+                asset.make_mut().set_capacity(*new_capacity);
+            }
+        }
+    }
+
+    Ok(all_cycle_assets)
+}
+
 /// Flatten the preset commodity demands for a given year into a map of commodity, region and
 /// time slice to demand.
 ///
@@ -349,6 +481,25 @@ fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[A
                     .or_insert(-*flow);
             }
         }
+    }
+}
+
+/// Update demand map with unmmet demand from dispatch solution
+fn update_demand_map_with_unmet_demand<'a, I>(demand: &mut AllDemandMap, unmet_demand: I)
+where
+    I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, Flow)>,
+{
+    for (c_id, r_id, time_slice, flow) in unmet_demand {
+        // Only consider positive unmet demand
+        if flow <= Flow(0.0) {
+            continue;
+        }
+
+        let key = (c_id.clone(), r_id.clone(), time_slice.clone());
+        demand
+            .entry(key)
+            .and_modify(|value| *value += flow)
+            .or_insert(flow);
     }
 }
 
