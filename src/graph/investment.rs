@@ -9,7 +9,7 @@ use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{Directed, Direction};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 
@@ -46,7 +46,7 @@ fn solve_investment_order_for_year(
     // TODO: condense sibling commodities (commodities that share at least one producer)
 
     // Condense strongly connected components
-    investment_graph = compress_cycles(investment_graph);
+    investment_graph = compress_cycles(&investment_graph);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
@@ -115,9 +115,12 @@ fn init_investment_graph_for_year(
 }
 
 /// Compresses cycles into `InvestmentSet::Cycle` nodes
-fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
+fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
-    let condensed_graph = condensation(graph, true);
+    let mut condensed_graph = condensation(graph.clone(), true);
+
+    // Order nodes within each strongly connected component
+    order_sccs(&mut condensed_graph, graph);
 
     // Map to a new InvestmentGraph
     condensed_graph.map(
@@ -137,6 +140,73 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
     )
+}
+
+/// Performs a greedy algorithm to order nodes within strongly connected components.
+///
+/// This will be the order that investments are made within the cycle. The algorithm aims to
+/// minimise instances of X->Y, where X comes before Y in the ordering. Such a scenario means that
+/// investments will be made for X before knowing the outcome of investments for Y, which may in
+/// turn affect the demand profile for X. At least one such instance is inevitable in any cycle.
+///
+/// The greedy algorithm works by repeatedly selecting the node with the fewest outgoing edges to
+/// other remaining (yet to be ordered) nodes in the cycle, removing it from the set of remaining
+/// nodes, and adding it to the ordered list. This continues until all nodes have been ordered.
+///
+/// Arguments:
+/// * `condensed_graph` - The condensed graph containing strongly connected components. The output
+///   of `petgraph::algo::condensation` called on `original_graph`.
+/// * `original_graph` - The original investment graph before condensation.
+fn order_sccs(
+    condensed_graph: &mut Graph<Vec<InvestmentSet>, GraphEdge>,
+    original_graph: &InvestmentGraph,
+) {
+    for group in condensed_graph.node_indices() {
+        let scc = condensed_graph.node_weight(group).unwrap();
+        if scc.len() <= 1 {
+            continue;
+        }
+
+        // Map each InvestmentSet in the SCC to its corresponding NodeIndex in the original graph
+        let mut remaining_pairs: Vec<(InvestmentSet, NodeIndex)> = scc
+            .iter()
+            .cloned()
+            .map(|candidate| {
+                let original_idx = original_graph
+                    .node_indices()
+                    .find(|&ni| original_graph.node_weight(ni).unwrap() == &candidate)
+                    .expect("candidate must exist in original graph");
+                (candidate, original_idx)
+            })
+            .collect();
+
+        // Create HashSet for fast lookup of original indices of remaining nodes.
+        let mut remaining_idx_set: HashSet<NodeIndex> =
+            remaining_pairs.iter().map(|(_, ni)| *ni).collect();
+
+        // Greedy algorithm: pick the node with the fewest outgoing edges to other remaining nodes.
+        let mut ordered = Vec::with_capacity(remaining_pairs.len());
+        while !remaining_pairs.is_empty() {
+            let (best_pos, _) = remaining_pairs
+                .iter()
+                .enumerate()
+                .map(|(pos, (_, orig_idx))| {
+                    let count = original_graph
+                        .neighbors_directed(*orig_idx, Direction::Outgoing)
+                        .filter(|nbr| remaining_idx_set.contains(nbr))
+                        .count();
+                    (pos, count)
+                })
+                .min_by_key(|&(_, count)| count)
+                .expect("there should be at least one candidate");
+
+            let (next_candidate, next_idx) = remaining_pairs.remove(best_pos);
+            remaining_idx_set.remove(&next_idx);
+            ordered.push(next_candidate);
+        }
+
+        *condensed_graph.node_weight_mut(group).unwrap() = ordered;
+    }
 }
 
 /// Compute layers of investment sets from the topological order

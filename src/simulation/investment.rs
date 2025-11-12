@@ -27,7 +27,7 @@ type DemandMap = IndexMap<TimeSliceID, Flow>;
 type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
 /// Represents a set of markets which are invested in together.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum InvestmentSet {
     /// Assets are selected for a single market using `select_assets_for_single_market`
     Single((CommodityID, RegionID)),
