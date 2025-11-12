@@ -48,7 +48,7 @@ fn solve_investment_order_for_year(
     // TODO: condense sibling commodities (commodities that share at least one producer)
 
     // Condense strongly connected components
-    investment_graph = compress_cycles(investment_graph);
+    investment_graph = compress_cycles(&investment_graph);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
@@ -117,9 +117,12 @@ fn init_investment_graph_for_year(
 }
 
 /// Compresses cycles into `InvestmentSet::Cycle` nodes
-fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
+fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
-    let condensed_graph = condensation(graph, true);
+    let mut condensed_graph = condensation(graph.clone(), true);
+
+    // Order nodes within each strongly connected component
+    order_sccs(&mut condensed_graph, graph);
 
     // Map to a new InvestmentGraph
     condensed_graph.map(
