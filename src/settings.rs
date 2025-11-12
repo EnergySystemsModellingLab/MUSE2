@@ -5,6 +5,7 @@ use crate::log::DEFAULT_LOG_LEVEL;
 use anyhow::Result;
 use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
+use std::env::current_dir;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
@@ -47,6 +48,8 @@ pub struct Settings {
     pub overwrite: bool,
     /// Whether to write additional information to CSV files
     pub debug_model: bool,
+    /// Results root path to save simulation runs. Defaults to {pwd}/results.
+    pub results_root: PathBuf,
 }
 
 impl Default for Settings {
@@ -55,6 +58,7 @@ impl Default for Settings {
             log_level: DEFAULT_LOG_LEVEL.to_string(),
             overwrite: false,
             debug_model: false,
+            results_root: current_dir().unwrap().join("results"),
         }
     }
 }
@@ -141,7 +145,8 @@ mod tests {
             Settings {
                 log_level: "warn".to_string(),
                 debug_model: false,
-                overwrite: false
+                overwrite: false,
+                results_root: current_dir().unwrap().join("results")
             }
         );
     }

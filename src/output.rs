@@ -24,7 +24,7 @@ pub mod metadata;
 use metadata::write_metadata;
 
 /// The root folder in which model-specific output folders will be created
-const OUTPUT_DIRECTORY_ROOT: &str = "muse2_results";
+const OUTPUT_DIRECTORY_ROOT: &str = "outputs";
 
 /// The output file name for commodity flows
 const COMMODITY_FLOWS_FILE_NAME: &str = "commodity_flows.csv";
@@ -54,10 +54,10 @@ const APPRAISAL_RESULTS_FILE_NAME: &str = "debug_appraisal_results.csv";
 const APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME: &str = "debug_appraisal_results_time_slices.csv";
 
 /// The root folder in which commodity flow graphs will be created
-const GRAPHS_DIRECTORY_ROOT: &str = "muse2_graphs";
+const GRAPHS_DIRECTORY_ROOT: &str = "graphs";
 
 /// Get the default output directory for the model
-pub fn get_output_dir(model_dir: &Path) -> Result<PathBuf> {
+pub fn get_output_dir(model_dir: &Path, results_root: PathBuf) -> Result<PathBuf> {
     // Get the model name from the dir path. This ends up being convoluted because we need to check
     // for all possible errors. Ugh.
     let model_dir = model_dir
@@ -71,11 +71,17 @@ pub fn get_output_dir(model_dir: &Path) -> Result<PathBuf> {
         .context("Invalid chars in model dir name")?;
 
     // Construct path
-    Ok([OUTPUT_DIRECTORY_ROOT, model_name].iter().collect())
+    Ok([
+        results_root,
+        OUTPUT_DIRECTORY_ROOT.into(),
+        model_name.into(),
+    ]
+    .iter()
+    .collect())
 }
 
 /// Get the default output directory for commodity flow graphs for the model
-pub fn get_graphs_dir(model_dir: &Path) -> Result<PathBuf> {
+pub fn get_graphs_dir(model_dir: &Path, results_root: PathBuf) -> Result<PathBuf> {
     let model_dir = model_dir
         .canonicalize() // canonicalise in case the user has specified "."
         .context("Could not resolve path to model")?;
@@ -84,7 +90,13 @@ pub fn get_graphs_dir(model_dir: &Path) -> Result<PathBuf> {
         .context("Model cannot be in root folder")?
         .to_str()
         .context("Invalid chars in model dir name")?;
-    Ok([GRAPHS_DIRECTORY_ROOT, model_name].iter().collect())
+    Ok([
+        results_root,
+        GRAPHS_DIRECTORY_ROOT.into(),
+        model_name.into(),
+    ]
+    .iter()
+    .collect())
 }
 
 /// Create a new output directory for the model, optionally overwriting existing data
