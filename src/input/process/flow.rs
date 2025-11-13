@@ -390,7 +390,6 @@ mod tests {
             ]
             .into_iter(),
             None,
-            None,
         );
         let res =
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years);
