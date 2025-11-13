@@ -17,7 +17,7 @@ use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
-use log::{debug, warn};
+use log::debug;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
@@ -281,12 +281,6 @@ impl Solution<'_> {
     pub fn iter_activity_duals(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
-        if self.iter_capacity().next().is_some() {
-            warn!(
-                "Warning: iter_activity_duals called on solution of model with flexible capacity assets.
-                The resulting duals may be ambiguous."
-            );
-        }
         self.constraint_keys
             .activity_keys
             .zip_duals(self.solution.dual_rows())
