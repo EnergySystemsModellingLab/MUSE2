@@ -621,8 +621,9 @@ fn add_capacity_variables(
         }
 
         let current_capacity = asset.capacity().value();
-        let bounds =
-            (1.0 - capacity_margin) * current_capacity..=(1.0 + capacity_margin) * current_capacity;
+        let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
+        let upper = (1.0 + capacity_margin) * current_capacity;
+        let bounds = lower..=upper;
         let var = problem.add_column(0.0, bounds);
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");

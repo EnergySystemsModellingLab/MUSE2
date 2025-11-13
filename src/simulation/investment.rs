@@ -292,8 +292,6 @@ fn select_assets_for_cycle(
     previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    const CAPACITY_MARGIN: f64 = 0.5;
-
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
 
@@ -337,7 +335,11 @@ fn select_assets_for_cycle(
         // Run dispatch
         let solution = DispatchRun::new(model, &all_assets, year)
             .with_market_subset(&markets_to_balance)
-            .with_flexible_capacity_assets(&flexible_capacity_assets, CAPACITY_MARGIN)
+            .with_flexible_capacity_assets(
+                &flexible_capacity_assets,
+                // Gives newly selected cycle assets limited capacity wiggle-room; existing assets stay fixed.
+                model.parameters.capacity_margin,
+            )
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment",),
                 writer,
