@@ -8,6 +8,7 @@ use crate::model::Model;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity};
 use anyhow::Result;
+use costs::annual_fixed_cost;
 use indexmap::IndexMap;
 use std::cmp::Ordering;
 
@@ -126,7 +127,7 @@ fn calculate_npv(
     )?;
 
     // Calculate profitability index for the hypothetical investment
-    let annual_fixed_cost = -coefficients.capacity_coefficient;
+    let annual_fixed_cost = annual_fixed_cost(asset);
     let activity_surpluses = &coefficients.activity_coefficients;
     let profitability_index = profitability_index(
         results.capacity,

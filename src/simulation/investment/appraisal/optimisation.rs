@@ -1,6 +1,6 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
-use super::coefficients::ObjectiveCoefficients;
+use super::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_capacity_constraint, add_demand_constraints,
 };
@@ -22,7 +22,7 @@ struct VariableMap {
     capacity_var: Variable,
     /// Activity variables in each time slice
     activity_vars: IndexMap<TimeSliceID, Variable>,
-    // Unmet demand variables
+    /// Unmet demand variables
     unmet_demand_vars: IndexMap<TimeSliceID, Variable>,
 }
 
@@ -36,8 +36,10 @@ pub struct ResultsMap {
     pub unmet_demand: DemandMap,
 }
 
-/// Add variables to the problem based on cost coefficients
-fn add_variables(problem: &mut Problem, cost_coefficients: &ObjectiveCoefficients) -> VariableMap {
+fn add_variables_to_problem(
+    problem: &mut Problem,
+    cost_coefficients: &ObjectiveCoefficients,
+) -> VariableMap {
     // Create capacity variable
     let capacity_var = problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
 
@@ -105,9 +107,7 @@ pub fn perform_optimisation(
 ) -> Result<ResultsMap> {
     // Set up problem
     let mut problem = Problem::default();
-
-    // Add variables
-    let variables = add_variables(&mut problem, coefficients);
+    let variables = add_variables_to_problem(&mut problem, coefficients);
 
     // Add constraints
     add_constraints(
