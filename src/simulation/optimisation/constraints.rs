@@ -7,6 +7,7 @@ use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::UnitType;
 use highs::RowProblem as Problem;
+use indexmap::IndexMap;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -45,7 +46,7 @@ pub struct ConstraintKeys {
     pub activity_keys: ActivityKeys,
 }
 
-/// Add asset-level constraints
+/// Add constraints for the dispatch model.
 ///
 /// Note: the ordering of constraints is important, as the dual values of the constraints must later
 /// be retrieved to calculate commodity prices.
@@ -62,7 +63,7 @@ pub struct ConstraintKeys {
 /// # Returns
 ///
 /// Keys for the different constraints.
-pub fn add_asset_constraints<'a, I>(
+pub fn add_model_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
     model: &'a Model,
@@ -129,7 +130,7 @@ where
                 // If the commodity has a time slice level of season/annual, the constraint will
                 // cover multiple time slices
                 for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                    let var = variables.get_asset_var(asset, time_slice);
+                    let var = variables.get_activity_var(asset, time_slice);
                     terms.push((var, flow.coeff.value()));
                 }
             }
@@ -185,12 +186,34 @@ fn add_activity_constraints(problem: &mut Problem, variables: &VariableMap) -> A
     let offset = problem.num_rows();
 
     let mut keys = Vec::new();
-    for (asset, time_slice, var) in variables.iter_asset_vars() {
-        let limits = asset.get_activity_limits(time_slice);
-        let limits = limits.start().value()..=limits.end().value();
+    let capacity_vars: IndexMap<&AssetRef, highs::Col> = variables.iter_capacity_vars().collect();
+    for (asset, time_slice, activity_var) in variables.iter_activity_vars() {
+        if let Some(&capacity_var) = capacity_vars.get(asset) {
+            // Asset has flexible capacity.
+            let per_capacity_limits = asset.get_activity_per_capacity_limits(time_slice);
+            let lower_limit = per_capacity_limits.start().value();
+            let upper_limit = per_capacity_limits.end().value();
 
-        problem.add_row(limits, [(var, 1.0)]);
-        keys.push((asset.clone(), time_slice.clone()));
+            // Upper bound: activity ≤ capacity * upper_limit
+            problem.add_row(..=0.0, [(activity_var, 1.0), (capacity_var, -upper_limit)]);
+
+            // Lower bound: activity ≥ capacity * lower_limit
+            problem.add_row(..=0.0, [(activity_var, -1.0), (capacity_var, lower_limit)]);
+
+            // Store keys for retrieving duals later.
+            // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
+            // use the activity duals for anything important when using flexible capacity assets.
+            keys.push((asset.clone(), time_slice.clone()));
+            keys.push((asset.clone(), time_slice.clone()));
+        } else {
+            // Fixed-capacity asset: simple absolute activity limits.
+            let activity_limits = asset.get_activity_limits(time_slice);
+            let range = activity_limits.start().value()..=activity_limits.end().value();
+            problem.add_row(range, [(activity_var, 1.0)]);
+
+            // Store keys for retrieving duals later.
+            keys.push((asset.clone(), time_slice.clone()));
+        }
     }
 
     ActivityKeys { offset, keys }
