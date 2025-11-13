@@ -157,7 +157,9 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// * Antisymmetry constraints force each pair `(i, j)` to choose exactly one direction.
 /// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic.
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
-///   market to a later one), counted within the original SCC and treated as unit penalties.
+///   market to a later one), counted within the original SCC and treated as unit penalties. A small
+///   bias (<1) nudges exporters earlier without outweighing the main objective; a bias >1 would
+///   instead prioritise exporters even if it created extra conflicts in the final order.
 ///
 /// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
 /// markets they precede). Sorting by this score — using the original index as a tiebreaker to keep
@@ -248,13 +250,16 @@ fn order_sccs(
         // Bias: if market i has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
         for (i, has_external) in has_external_outgoing.iter().enumerate() {
             if *has_external {
-                for row in &mut penalties {
-                    row[i] += EXTERNAL_BIAS;
+                for (row_idx, row) in penalties.iter_mut().enumerate() {
+                    if row_idx != i {
+                        row[i] += EXTERNAL_BIAS;
+                    }
                 }
             }
         }
 
         // Build a MILP whose binary variables x[i][j] indicate "i is ordered before j".
+        // Objective: minimise Σ penalty[i][j] · x[i][j], so forward edges (and the export bias) add cost.
         let mut problem = RowProblem::default();
         let mut vars: Vec<Vec<Option<Col>>> = vec![vec![None; n]; n];
         for (i, row) in vars.iter_mut().enumerate() {
@@ -262,7 +267,6 @@ fn order_sccs(
                 if i == j {
                     continue;
                 }
-                // Minimise forward edges by penalising x[i][j] whenever any edge exists from i to j.
                 let cost = penalties[i][j];
                 *slot = Some(problem.add_integer_column(cost, 0..=1));
             }
@@ -279,7 +283,7 @@ fn order_sccs(
         }
 
         // Enforce transitivity to avoid 3-cycles: x[i][j] + x[j][k] + x[k][i] ≤ 2.
-        // i.e. if i comes before j and j comes before k, then i cannot come after k.
+        // i.e. if i comes before j and j comes before k, then k cannot come before i.
         for (i, row) in vars.iter().enumerate() {
             for (j, _) in row.iter().enumerate() {
                 if i == j {
