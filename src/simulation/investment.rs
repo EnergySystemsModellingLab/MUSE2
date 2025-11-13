@@ -9,7 +9,7 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Result, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
@@ -343,7 +343,14 @@ fn select_assets_for_cycle(
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment",),
                 writer,
-            )?;
+            )
+            .with_context(|| {
+                format!(
+                    "Cycle balancing failed for cycle ({markets_str}), capacity_margin: {}. \
+                     Try increasing the capacity_margin.",
+                    model.parameters.capacity_margin
+                )
+            })?;
 
         // TODO: if this fails, we will need to redo investments for some of the markets
         // How to find which markets need redoing and new demand profiles?
@@ -364,6 +371,12 @@ fn select_assets_for_cycle(
         let new_capacities: HashMap<_, _> = solution.iter_capacity().collect();
         for asset in &mut all_cycle_assets {
             if let Some(new_capacity) = new_capacities.get(asset) {
+                debug!(
+                    "Capacity of asset '{}' modified during cycle balancing ({} to {})",
+                    asset.process_id(),
+                    asset.capacity(),
+                    new_capacity
+                );
                 asset.make_mut().set_capacity(*new_capacity);
             }
         }
