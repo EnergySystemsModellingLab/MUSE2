@@ -96,7 +96,6 @@ fn add_constraints(
 /// Performs optimisation for an asset, given the coefficients and demand.
 ///
 /// Will either maximise or minimise the objective function, depending on the `sense` parameter.
-#[allow(clippy::too_many_arguments)]
 pub fn perform_optimisation(
     asset: &AssetRef,
     max_capacity: Option<Capacity>,
