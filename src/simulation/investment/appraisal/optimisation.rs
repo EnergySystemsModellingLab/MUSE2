@@ -19,11 +19,11 @@ pub type Variable = highs::Col;
 /// Map storing variables for the optimisation problem
 struct VariableMap {
     /// Capacity variable
-    pub capacity_var: Variable,
+    capacity_var: Variable,
     /// Activity variables in each time slice
-    pub activity_vars: IndexMap<TimeSliceID, Variable>,
-    // Unmet demand variables
-    pub unmet_demand_vars: IndexMap<TimeSliceID, Variable>,
+    activity_vars: IndexMap<TimeSliceID, Variable>,
+    /// Unmet demand variables
+    unmet_demand_vars: IndexMap<TimeSliceID, Variable>,
 }
 
 /// Map containing optimisation results and coefficients
