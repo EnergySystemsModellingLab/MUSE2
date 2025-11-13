@@ -49,6 +49,17 @@ impl InvestmentSet {
         }
     }
 
+    /// Selects assets for this investment set variant and passes through the shared
+    /// context needed by single-market, cycle, or layered selection.
+    ///
+    /// * `model` – Simulation model supplying parameters, processes, and dispatch.
+    /// * `year` – Planning year being solved.
+    /// * `demand` – Net demand profiles available to all markets before selection.
+    /// * `existing_assets` – Assets already commissioned in the system.
+    /// * `prices` – Commodity price assumptions to use when valuing investments.
+    /// * `seen_markets` – Markets whose demand-balancing has already been fixed.
+    /// * `previously_selected_assets` – Assets chosen in earlier investment sets.
+    /// * `writer` – Data sink used to log optimisation artefacts.
     #[allow(clippy::too_many_arguments)]
     fn select_assets(
         &self,
@@ -280,6 +291,20 @@ fn select_assets_for_single_market(
     Ok(selected_assets)
 }
 
+/// Iterates through the a pre-ordered set of markets forming a cycle, selecting assets for each
+/// market in turn.
+///
+/// Dispatch optimisation is performed after each market is visited to rebalance demand.
+/// While dispatching, newly selected (`Selected`) assets are given flexible capacity (bounded by
+/// `capacity_margin`) so small demand shifts caused by later markets can be absorbed. After all
+/// markets have been visited once, the final set of assets is returned, applying any capacity
+/// adjustments from the final full-system dispatch optimisation.
+///
+/// Dispatch may fail at any point if new demands are encountered for previously visited markets,
+/// and the `capacity_margin` is not sufficient to absorb the demand shift. At this point, the
+/// simulation is terminated with an error prompting the user to increase the `capacity_margin`.
+/// A longer-term solution (TODO) may be to trigger re-investment for the affected markets. Other
+/// yet-to-implement features may also help to stabilise the cycle, such as capacity growth limits.
 #[allow(clippy::too_many_arguments)]
 fn select_assets_for_cycle(
     model: &Model,
@@ -351,9 +376,6 @@ fn select_assets_for_cycle(
                     model.parameters.capacity_margin
                 )
             })?;
-
-        // TODO: if this fails, we will need to redo investments for some of the markets
-        // How to find which markets need redoing and new demand profiles?
 
         // Calculate new net demand map with all assets selected so far
         current_demand.clone_from(demand);
