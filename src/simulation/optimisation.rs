@@ -328,7 +328,10 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
     }
 }
 
-/// Select prices for commodities not being balanced
+/// Select prices for markets not being balanced
+///
+/// Markets being balanced (i.e. with commodity balance constraints) will have prices calculated
+/// internally by the solver, so we need to remove them to prevent double-counting.
 fn select_input_prices(
     input_prices: &CommodityPrices,
     markets: &[(CommodityID, RegionID)],
