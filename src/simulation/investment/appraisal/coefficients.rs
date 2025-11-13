@@ -86,7 +86,7 @@ pub fn calculate_coefficients_for_npv(
     prices: &CommodityPrices,
     year: u32,
 ) -> ObjectiveCoefficients {
-    // Small constant added toeach activity coefficient to ensure break-even/slightly negative
+    // Small constant added to each activity coefficient to ensure break-even/slightly negative
     // assets are still dispatched
     const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(f64::EPSILON * 100.0);
 
