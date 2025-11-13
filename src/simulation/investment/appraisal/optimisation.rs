@@ -1,5 +1,6 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
+use super::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_capacity_constraint, add_demand_constraints,
 };
@@ -16,7 +17,7 @@ use indexmap::IndexMap;
 pub type Variable = highs::Col;
 
 /// Map storing variables for the optimisation problem
-pub struct VariableMap {
+struct VariableMap {
     /// Capacity variable
     pub capacity_var: Variable,
     /// Activity variables in each time slice
@@ -33,6 +34,35 @@ pub struct ResultsMap {
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// Unmet demand variables
     pub unmet_demand: DemandMap,
+}
+
+fn add_variables_to_problem(
+    problem: &mut Problem,
+    cost_coefficients: &ObjectiveCoefficients,
+) -> VariableMap {
+    // Create capacity variable
+    let capacity_var = problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
+
+    // Create activity variables
+    let mut activity_vars = IndexMap::new();
+    for (time_slice, cost) in &cost_coefficients.activity_coefficients {
+        let var = problem.add_column(cost.value(), 0.0..);
+        activity_vars.insert(time_slice.clone(), var);
+    }
+
+    // Create unmet demand variables
+    // One per time slice, all of which use the same coefficient
+    let mut unmet_demand_vars = IndexMap::new();
+    for time_slice in cost_coefficients.activity_coefficients.keys() {
+        let var = problem.add_column(cost_coefficients.unmet_demand_coefficient.value(), 0.0..);
+        unmet_demand_vars.insert(time_slice.clone(), var);
+    }
+
+    VariableMap {
+        capacity_var,
+        activity_vars,
+        unmet_demand_vars,
+    }
 }
 
 /// Adds constraints to the problem.
@@ -71,20 +101,22 @@ pub fn perform_optimisation(
     asset: &AssetRef,
     max_capacity: Option<Capacity>,
     commodity: &Commodity,
+    coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
     sense: Sense,
-    mut problem: Problem,
-    variables: &VariableMap,
 ) -> Result<ResultsMap> {
     // Set up problem
+    let mut problem = Problem::default();
+    let variables = add_variables_to_problem(&mut problem, coefficients);
+
     // Add constraints
     add_constraints(
         &mut problem,
         asset,
         max_capacity,
         commodity,
-        variables,
+        &variables,
         demand,
         time_slice_info,
     );
