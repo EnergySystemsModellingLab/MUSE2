@@ -211,11 +211,15 @@ pub fn handle_save_graphs_command(
     settings: Option<Settings>,
 ) -> Result<()> {
     // Load program settings, if not provided
-    let settings = if let Some(settings) = settings {
+    let mut settings = if let Some(settings) = settings {
         settings
     } else {
         Settings::load().context("Failed to load settings.")?
     };
+
+    if opts.overwrite {
+        settings.overwrite = true;
+    }
 
     // Get path to output folder
     let pathbuf: PathBuf;
