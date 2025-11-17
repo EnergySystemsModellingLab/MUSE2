@@ -26,6 +26,42 @@ struct VariableMap {
     unmet_demand_vars: IndexMap<TimeSliceID, Variable>,
 }
 
+impl VariableMap {
+    /// Creates a new variable map by adding variables to the optimisation problem.
+    ///
+    /// # Arguments
+    /// * `problem` - The optimisation problem to add variables to
+    /// * `cost_coefficients` - Objective function coefficients for each variable
+    ///
+    /// # Returns
+    /// A new `VariableMap` containing all created decision variables
+    fn add_to_problem(problem: &mut Problem, cost_coefficients: &ObjectiveCoefficients) -> Self {
+        // Create capacity variable with its associated cost
+        let capacity_var =
+            problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
+
+        // Create activity variables for each time slice
+        let mut activity_vars = IndexMap::new();
+        for (time_slice, cost) in &cost_coefficients.activity_coefficients {
+            let var = problem.add_column(cost.value(), 0.0..);
+            activity_vars.insert(time_slice.clone(), var);
+        }
+
+        // Create unmet demand variables for each time slice
+        let mut unmet_demand_vars = IndexMap::new();
+        for time_slice in cost_coefficients.activity_coefficients.keys() {
+            let var = problem.add_column(cost_coefficients.unmet_demand_coefficient.value(), 0.0..);
+            unmet_demand_vars.insert(time_slice.clone(), var);
+        }
+
+        Self {
+            capacity_var,
+            activity_vars,
+            unmet_demand_vars,
+        }
+    }
+}
+
 /// Map containing optimisation results and coefficients
 pub struct ResultsMap {
     /// Capacity variable
@@ -34,35 +70,6 @@ pub struct ResultsMap {
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// Unmet demand variables
     pub unmet_demand: DemandMap,
-}
-
-fn add_variables_to_problem(
-    problem: &mut Problem,
-    cost_coefficients: &ObjectiveCoefficients,
-) -> VariableMap {
-    // Create capacity variable
-    let capacity_var = problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
-
-    // Create activity variables
-    let mut activity_vars = IndexMap::new();
-    for (time_slice, cost) in &cost_coefficients.activity_coefficients {
-        let var = problem.add_column(cost.value(), 0.0..);
-        activity_vars.insert(time_slice.clone(), var);
-    }
-
-    // Create unmet demand variables
-    // One per time slice, all of which use the same coefficient
-    let mut unmet_demand_vars = IndexMap::new();
-    for time_slice in cost_coefficients.activity_coefficients.keys() {
-        let var = problem.add_column(cost_coefficients.unmet_demand_coefficient.value(), 0.0..);
-        unmet_demand_vars.insert(time_slice.clone(), var);
-    }
-
-    VariableMap {
-        capacity_var,
-        activity_vars,
-        unmet_demand_vars,
-    }
 }
 
 /// Adds constraints to the problem.
@@ -105,9 +112,9 @@ pub fn perform_optimisation(
     time_slice_info: &TimeSliceInfo,
     sense: Sense,
 ) -> Result<ResultsMap> {
-    // Set up problem
+    // Create problem and add variables
     let mut problem = Problem::default();
-    let variables = add_variables_to_problem(&mut problem, coefficients);
+    let variables = VariableMap::add_to_problem(&mut problem, coefficients);
 
     // Add constraints
     add_constraints(

@@ -142,11 +142,11 @@ operational constraints (e.g., minimum load levels) and the balance level of the
   demand tranche it is being asked to serve.
 
   \\[
-    maximise \Big\\{ -AFC \* cap - \sum_t act_t \* AC_t
+    maximise \Big\\{ - \sum_t act_t \* AC_t
     \Big\\}
   \\]
 
-  Where \\( cap \\) and \\( act_t \\) are decision variables, and subject to:
+  Where \\( act_t \\) is a decision variable, and subject to:
 
   - The asset operational constraints (e.g., \\( avail_{LB}, avail_{EQ} \\), etc.), activity less
     than capacity, applied to its activity profile \\( act_t \\).
