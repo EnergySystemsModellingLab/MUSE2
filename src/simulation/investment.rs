@@ -12,7 +12,7 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain, iproduct};
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::fmt::Display;
 
@@ -542,23 +542,41 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Select the best investment option according to `AppraisalOutput::compare_metric`
-        let Some(best_output) = outputs_for_opts
+        // Get the top 2 options by metric
+        let top_two_assets: Vec<_> = outputs_for_opts
             .into_iter()
-            // Investment options with zero capacity are excluded. This may happen if the asset has
-            // zero activity limits for all time slices with demand. This can also happen due to a
-            // known issue with the NPV objective, for which we do not currently have a solution
-            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
             .filter(|output| output.capacity > Capacity(0.0))
-            .min_by(AppraisalOutput::compare_metric)
-        else {
-            // If None, this means all investment options have zero capacity. In this case, we
-            // cannot meet demand, so have to bail out.
+            .k_smallest_by(2, AppraisalOutput::compare_metric)
+            .collect();
+
+        // check if all options have zero capacity
+        if top_two_assets.is_empty() {
+            // In this case, we cannot meet demand, so have to bail out.
+            // This may happen if:
+            // - the asset has zero activity limits for all time slices with demand.
+            // - known issue with the NPV objective
+            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
             bail!(
                 "No feasible investment options for commodity '{}' after appraisal",
                 &commodity.id
             )
-        };
+        }
+
+        // Check if the top two options are equally good by the metric
+        if top_two_assets.len() >= 2
+            && AppraisalOutput::compare_metric(&top_two_assets[0], &top_two_assets[1])
+                == std::cmp::Ordering::Equal
+        {
+            warn!(
+                "At least two investment options with equal metrics for commodity '{}'. Selected '{}', Closest equal alternative: '{}'",
+                &commodity.id,
+                top_two_assets[0].asset.process_id(),
+                top_two_assets[1].asset.process_id()
+            );
+        }
+
+        // Take the first of the (possibly equal) top two options as the best option
+        let best_output = top_two_assets.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(
