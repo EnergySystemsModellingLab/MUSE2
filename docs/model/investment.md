@@ -139,10 +139,11 @@ operational constraints (e.g., minimum load levels) and the balance level of the
 
 - **Optimise capacity and dispatch to maximise annualised profit:** Solve a small optimisation
   sub-problem to maximise the asset’s surplus, subject to its operational rules and the specific
-  demand tranche it is being asked to serve.
+  demand tranche it is being asked to serve. \\(\varepsilon \approx 1×10^{-14}\\) is added to each
+  \\(AC_t \\) to allow assets which are breakeven (or very close to breakeven) to be dispatched.
 
   \\[
-    maximise \Big\\{ - \sum_t act_t \* AC_t
+    maximise \Big\\{ - \sum_t act_t \* (AC_t + \varepsilon)
     \Big\\}
   \\]
 
