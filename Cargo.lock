@@ -580,9 +580,9 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "highs"
-version = "1.12.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "122a64dffa53f13578cffd62fdf1cb2f83ac8a71a989dce5d9232049331fff28"
+checksum = "c9f739d4b9d063219b2dfa00705d8f2127fcead4d053867a5557c953dc3a4b99"
 dependencies = [
  "highs-sys",
  "log",
@@ -590,9 +590,9 @@ dependencies = [
 
 [[package]]
 name = "highs-sys"
-version = "1.11.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "908a51a57402b0616cf0026c0e7bf908cbee7bac13bd45778ba4f2e2ac6bb6db"
+checksum = "9c51d1e4e682c01dd882d2d0cd89b6725cd5805dd307d290aac0a37be6fe0c58"
 dependencies = [
  "bindgen",
  "cmake",
