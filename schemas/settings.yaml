@@ -28,6 +28,11 @@ properties:
       the model or understanding results in more detail.
   results_root:
     type: string
-    description: Root directory to output results
+    description: Results root path to save MUSE2 results
     default: ""
-    notes: Defaults to a "results" folder within the current working directory.
+    notes: Defaults to a "muse2_results" folder within the current working directory.
+  graph_results_root:
+    type: string
+    description: Results root path to save MUSE2 graph outputs
+    default: ""
+    notes: Defaults to a "muse2_graphs" folder within the current working directory.

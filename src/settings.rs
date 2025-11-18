@@ -48,8 +48,10 @@ pub struct Settings {
     pub overwrite: bool,
     /// Whether to write additional information to CSV files
     pub debug_model: bool,
-    /// Results root path to save simulation runs. Defaults to {pwd}/results.
+    /// Results root path to save MUSE2 results. Defaults to `{pwd}/muse2_results`.
     pub results_root: PathBuf,
+    /// Results root path to save MUSE2 graph outputs. Defaults to `{pwd}/muse2_graphs`.
+    pub graph_results_root: PathBuf,
 }
 
 impl Default for Settings {
@@ -58,7 +60,8 @@ impl Default for Settings {
             log_level: DEFAULT_LOG_LEVEL.to_string(),
             overwrite: false,
             debug_model: false,
-            results_root: current_dir().unwrap().join("results"),
+            results_root: current_dir().unwrap().join("muse2_results"),
+            graph_results_root: current_dir().unwrap().join("muse2_graphs"),
         }
     }
 }
@@ -146,7 +149,8 @@ mod tests {
                 log_level: "warn".to_string(),
                 debug_model: false,
                 overwrite: false,
-                results_root: current_dir().unwrap().join("results")
+                results_root: current_dir().unwrap().join("muse2_results"),
+                graph_results_root: current_dir().unwrap().join("muse2_graphs"),
             }
         );
     }
