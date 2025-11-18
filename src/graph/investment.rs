@@ -144,21 +144,31 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
     )
 }
 
-/// Order the members of each strongly connected component using a mixed-integer linear program (MILP).
+/// Order the members of each strongly connected component using a mixed-integer linear program.
 ///
 /// `condensed_graph` contains the SCCs detected in the original investment graph, stored as
 /// `Vec<InvestmentSet>` node weights. Single-element components are already acyclic, but components
 /// with multiple members require an internal ordering so that the investment algorithm can treat
 /// them as near-acyclic chains, minimising potential disruption.
 ///
-/// To rank the members of each multi-node component, we construct a mixed integer linear program:
+/// To rank the members of each multi-node component, we construct a mixed integer linear program
+/// (MILP). This ordering MILP is a direct instance of the classical Linear Ordering Problem, using
+/// binary precedence variables with antisymmetry and transitivity constraints to enforce an acyclic
+/// total order. For background, see:
 ///
+///   Reinelt, G. (1985).
+///   *The Linear Ordering Problem: Algorithms and Applications*.
+///   Springer, Lecture Notes in Economics and Mathematical Systems, Vol. 237.
+///
+/// The main features of the MILP are:
 /// * Binary variables `x[i][j]` represent whether market `i` should appear before market `j`.
-/// * Antisymmetry constraints force each pair `(i, j)` to choose exactly one direction.
-/// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic.
+/// * Antisymmetry constraints force each pair `(i, j)` to choose exactly one direction (i.e. if
+///   `i` comes before `j`, then `j` cannot be before `i`).
+/// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic (i.e. if
+///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
 ///   market to a later one), counted within the original SCC and treated as unit penalties. A small
-///   bias (<1) nudges exporters earlier without outweighing the main objective; a bias >1 would
+///   bias nudges exporters earlier without outweighing the main objective; a bias >1 would
 ///   instead prioritise exporters even if it created extra conflicts in the final order.
 ///
 /// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
