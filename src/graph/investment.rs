@@ -164,8 +164,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
 /// markets they precede). Sorting by this score — using the original index as a tiebreaker to keep
 /// relative order stable — yields the final sequence that replaces the SCC in the condensed graph.
-/// At least one pairwise mismatch is always inevitable (e.g. where A is solved before B, but B may
-/// consume A, so the demand for A cannot be guaranteed upfront).
+/// At least one pairwise mismatch is always inevitable (e.g. where X is solved before Y, but Y may
+/// consume X, so the demand for X cannot be guaranteed upfront).
 ///
 /// # Example
 ///
@@ -175,10 +175,11 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// A ← B ← C ← D ← E ← A
 /// ```
 ///
-/// Additionally, B has a secondary dependency on D (`B ← D`). The MILP penalises any edge that points
-/// “forward” in the final order: if an edge goes from X to Y we prefer to place Y before X so the edge
-/// points backwards. On top of this, we give a small preference to markets that export outside the SCC,
-/// so nodes with outgoing edges beyond the cycle are pushed earlier. One low-cost sequence is:
+/// Additionally, B has a secondary dependency on D (`B ← D`), and E has an outgoing edge to a node
+/// outside the cycle. The MILP penalises any edge that points “forward” in the final order: if an
+/// edge goes from X to Y we prefer to place Y before X so the edge points backwards. On top of
+/// this, we give a small preference to markets that export outside the SCC, so nodes with outgoing
+/// edges beyond the cycle are pushed earlier. The lowest-cost sequence for this SCC is:
 ///
 /// ```text
 /// E, A, B, C, D
@@ -186,10 +187,9 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///
 /// * The primary cycle edges (A ← B, B ← C, C ← D, D ← E, E ← A) guarantee at least one unavoidable
 ///   violation.
-/// * By scheduling D and E before B and C, the edges D ← E and B ← D incur no cost because their
-///   targets appear earlier than their sources.
-/// * If E also had an edge to an external market (e.g. `X ← E`), the preference would keep E at the
-///   front.
+/// * By scheduling A and B before C and D, the edges A ← B, B ← C, B ← D and C ← D incur no cost
+///   because their targets appear earlier than their sources.
+/// * The preference towards having exporter markets early in the order keeps E at the front.
 /// * In this ordering, the only pairwise violation is between E and D, as E is solved before D, but
 ///   D may consume E.
 ///
