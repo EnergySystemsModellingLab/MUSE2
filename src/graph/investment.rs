@@ -181,17 +181,17 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// so nodes with outgoing edges beyond the cycle are pushed earlier. One low-cost sequence is:
 ///
 /// ```text
-/// A, B, C, D, E
+/// E, A, B, C, D
 /// ```
 ///
 /// * The primary cycle edges (A ← B, B ← C, C ← D, D ← E, E ← A) guarantee at least one unavoidable
 ///   violation.
 /// * By scheduling D and E before B and C, the edges D ← E and B ← D incur no cost because their
 ///   targets appear earlier than their sources.
-/// * If A also had an edge to an external market (e.g. `X ← A`), the preference would keep A at the
+/// * If E also had an edge to an external market (e.g. `X ← E`), the preference would keep E at the
 ///   front.
-/// * In this ordering, the only pairwise violation is between A and B, as B is solved before A, but
-///   A may consume B.
+/// * In this ordering, the only pairwise violation is between E and D, as E is solved before D, but
+///   D may consume E.
 ///
 /// The resulting order replaces the original `InvestmentSet::Cycle` entry inside the condensed
 /// graph, providing a deterministic processing sequence for downstream logic.
@@ -481,10 +481,10 @@ mod tests {
                 GraphEdge::Primary("process1".into()),
             );
         }
-        // External market receiving exports from A; encourages A to appear early.
+        // External market receiving exports from E; encourages E to appear early.
         let external = original.add_node(InvestmentSet::Single(("X".into(), "GBR".into())));
         original.add_edge(
-            node_indices[0],
+            node_indices[4],
             external,
             GraphEdge::Primary("process2".into()),
         );
@@ -496,8 +496,8 @@ mod tests {
         order_sccs(&mut condensed, &original);
 
         // Expected order corresponds to the example in the doc comment.
-        // Note that A should be first, as it has an outgoing edge to the external market.
-        let expected = ["A", "B", "C", "D", "E"]
+        // Note that E should be first, as it has an outgoing edge to the external market.
+        let expected = ["E", "A", "B", "C", "D"]
             .map(|id| InvestmentSet::Single((id.into(), "GBR".into())))
             .to_vec();
 
