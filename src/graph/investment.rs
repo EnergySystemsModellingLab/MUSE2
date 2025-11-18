@@ -144,7 +144,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
     )
 }
 
-/// Order the members of each strongly connected component using a MILP.
+/// Order the members of each strongly connected component using a mixed-integer linear program (MILP).
 ///
 /// `condensed_graph` contains the SCCs detected in the original investment graph, stored as
 /// `Vec<InvestmentSet>` node weights. Single-element components are already acyclic, but components
@@ -169,29 +169,59 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///
 /// # Example
 ///
-/// Suppose five markets (A–E) form a cycle in the original graph with the following edges:
+/// Suppose three markets (A, B and C) form a cycle in the original graph with the following edges:
 ///
 /// ```text
-/// A ← B ← C ← D ← E ← A
+/// A ← B ← C ← A
 /// ```
 ///
-/// Additionally, B has a secondary dependency on D (`B ← D`), and E has an outgoing edge to a node
-/// outside the cycle. The MILP penalises any edge that points “forward” in the final order: if an
-/// edge goes from X to Y we prefer to place Y before X so the edge points backwards. On top of
-/// this, we give a small preference to markets that export outside the SCC, so nodes with outgoing
-/// edges beyond the cycle are pushed earlier. The lowest-cost sequence for this SCC is:
+/// Additionally, C has an outgoing edge to a node outside the cycle.
+///
+/// The costs matrix in the MILP is set up to penalise any edge that points “forward” in the final
+/// order: if there's an edge from X to Y we prefer to place Y before X so the edge points backwards:
 ///
 /// ```text
-/// E, A, B, C, D
+///    |   | A | B | C |
+///    | A | 0 | 0 | 1 |
+///    | B | 1 | 0 | 0 |
+///    | C | 0 | 1 | 0 |
 /// ```
 ///
-/// * The primary cycle edges (A ← B, B ← C, C ← D, D ← E, E ← A) guarantee at least one unavoidable
-///   violation.
-/// * By scheduling A and B before C and D, the edges A ← B, B ← C, B ← D and C ← D incur no cost
-///   because their targets appear earlier than their sources.
-/// * The preference towards having exporter markets early in the order keeps E at the front.
-/// * In this ordering, the only pairwise violation is between E and D, as E is solved before D, but
-///   D may consume E.
+/// On top of this, we give a small preference to markets that export outside the SCC, so nodes with
+/// outgoing edges beyond the cycle are pushed earlier. This is done via an `EXTERNAL_BIAS`
+/// parameter (B) applied to the cost matrix:
+///
+/// ```text
+///    |   | A | B | C     |
+///    | A | 0 | 0 | 1 + B |  i.e. extra penalty for putting A before C
+///    | B | 1 | 0 | 0 + B |  i.e. extra penalty for putting B before C
+///    | C | 0 | 1 | 0     |
+/// ```
+///
+/// Solving this problem with binary decision variables for each x[i][j], and constraints to enforce
+/// antisymmetry and transitivity, yields optimal decision variables of:
+///
+/// ```text
+///    x[A][B] = 1 (A before B)
+///    x[A][C] = 0 (C before A)
+///    x[B][A] = 0 (A before B)
+///    x[B][C] = 0 (C before B)
+///    x[C][A] = 1 (C before A)
+///    x[C][B] = 1 (C before B)
+/// ```
+///
+/// From these, summing the number of times each market is preferred over another gives an optimal
+/// order of:
+///
+/// ```text
+/// C, A, B
+/// ```
+///
+/// * By scheduling C before A before B, the edges C ← A and A ← B incur no cost because their
+///   targets appear earlier than their sources.
+/// * The preference towards having exporter markets early in the order keeps C at the front.
+/// * As with any SCC, at least one pairwise violation is guaranteed. In this ordering, the only
+///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
 ///
 /// The resulting order replaces the original `InvestmentSet::Cycle` entry inside the condensed
 /// graph, providing a deterministic processing sequence for downstream logic.
@@ -238,21 +268,27 @@ fn order_sccs(
         let mut penalties = vec![vec![0.0f64; n]; n];
         let mut has_external_outgoing = vec![false; n];
         for (i, &idx) in original_indices.iter().enumerate() {
+            // Loop over the edges going out of this node
             for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
+                // If the target j is inside this SCC, record a penalty for putting i before j
                 if let Some(&j) = index_position.get(&edge.target()) {
                     penalties[i][j] = 1.0;
+
+                // Otherwise, mark that i has an outgoing edge to outside the SCC
                 } else {
                     has_external_outgoing[i] = true;
                 }
             }
         }
 
-        // Bias: if market i has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
-        for (i, has_external) in has_external_outgoing.iter().enumerate() {
+        // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
+        for (j, has_external) in has_external_outgoing.iter().enumerate() {
             if *has_external {
                 for (row_idx, row) in penalties.iter_mut().enumerate() {
-                    if row_idx != i {
-                        row[i] += EXTERNAL_BIAS;
+                    // Add a small bias to all entries in column j, except the diagonal
+                    // i.e. penalise putting any other market before market j
+                    if row_idx != j {
+                        row[j] += EXTERNAL_BIAS;
                     }
                 }
             }
@@ -268,6 +304,8 @@ fn order_sccs(
                     continue;
                 }
                 let cost = penalties[i][j];
+
+                // Create binary variable x[i][j]
                 *slot = Some(problem.add_integer_column(cost, 0..=1));
             }
         }
@@ -465,8 +503,7 @@ mod tests {
 
     #[test]
     fn test_order_sccs_simple_cycle() {
-        let markets =
-            ["A", "B", "C", "D", "E"].map(|id| InvestmentSet::Single((id.into(), "GBR".into())));
+        let markets = ["A", "B", "C"].map(|id| InvestmentSet::Single((id.into(), "GBR".into())));
 
         // Create graph with cycle edges plus an extra dependency B ← D (see doc comment)
         let mut original = InvestmentGraph::new();
@@ -474,17 +511,17 @@ mod tests {
             .iter()
             .map(|set| original.add_node(set.clone()))
             .collect();
-        for &(src, dst) in &[(1, 0), (2, 1), (3, 2), (4, 3), (0, 4), (3, 1)] {
+        for &(src, dst) in &[(1, 0), (2, 1), (0, 2)] {
             original.add_edge(
                 node_indices[src],
                 node_indices[dst],
                 GraphEdge::Primary("process1".into()),
             );
         }
-        // External market receiving exports from E; encourages E to appear early.
+        // External market receiving exports from C; encourages C to appear early.
         let external = original.add_node(InvestmentSet::Single(("X".into(), "GBR".into())));
         original.add_edge(
-            node_indices[4],
+            node_indices[2],
             external,
             GraphEdge::Primary("process2".into()),
         );
@@ -496,8 +533,8 @@ mod tests {
         order_sccs(&mut condensed, &original);
 
         // Expected order corresponds to the example in the doc comment.
-        // Note that E should be first, as it has an outgoing edge to the external market.
-        let expected = ["E", "A", "B", "C", "D"]
+        // Note that C should be first, as it has an outgoing edge to the external market.
+        let expected = ["C", "A", "B"]
             .map(|id| InvestmentSet::Single((id.into(), "GBR".into())))
             .to_vec();
 
