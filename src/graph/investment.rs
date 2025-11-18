@@ -152,7 +152,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// them as near-acyclic chains, minimising potential disruption.
 ///
 /// To rank the members of each multi-node component, we construct a mixed integer linear program
-/// (MILP). This ordering MILP is a direct instance of the classical Linear Ordering Problem, using
+/// (MILP). This ordering MILP is adapted from the classical Linear Ordering Problem, using
 /// binary precedence variables with antisymmetry and transitivity constraints to enforce an acyclic
 /// total order. For background, see:
 ///
