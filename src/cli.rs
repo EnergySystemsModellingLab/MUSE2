@@ -226,7 +226,7 @@ pub fn handle_save_graphs_command(
     let output_path = if let Some(p) = opts.output_dir.as_deref() {
         p
     } else {
-        pathbuf = get_graphs_dir(model_path, settings.results_root)?;
+        pathbuf = get_graphs_dir(model_path, settings.graph_results_root)?;
         &pathbuf
     };
 
