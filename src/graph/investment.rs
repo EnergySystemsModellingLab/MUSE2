@@ -152,11 +152,11 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// them as near-acyclic chains, minimising potential disruption.
 ///
 /// To rank the members of each multi-node component, we construct a mixed integer linear program
-/// (MILP). This ordering MILP is adapted from the classical Linear Ordering Problem:
+/// (MILP). This MILP is adapted from the classical Linear Ordering Problem:
 ///
-///   Reinelt, G. (1985).
-///   *The Linear Ordering Problem: Algorithms and Applications*.
-///   Springer, Lecture Notes in Economics and Mathematical Systems, Vol. 237.
+/// Marti, Rafael, and G Reinelt.
+/// The Linear Ordering Problem: Exact and Heuristic Methods in Combinatorial Optimization.
+/// 1st ed. 2011. Berlin: Springer-Verlag, 2011. Web.
 ///
 /// The main features of the MILP are:
 /// * Binary variables `x[i][j]` represent whether market `i` should appear before market `j`.
@@ -166,8 +166,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
 ///   market to a later one), counted within the original SCC and treated as unit penalties. A small
-///   bias nudges exporters earlier without outweighing the main objective; a bias >1 would
-///   instead prioritise exporters even if it created extra conflicts in the final order.
+///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
+///   >1 would instead prioritise exporters even if it created extra conflicts in the final order).
 ///
 /// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
 /// markets they precede). Sorting by this score — using the original index as a tiebreaker to keep
