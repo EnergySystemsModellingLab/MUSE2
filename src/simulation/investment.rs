@@ -564,8 +564,7 @@ fn select_best_assets(
 
         // Check if the top two options are equally good by the metric
         if top_two_assets.len() >= 2
-            && AppraisalOutput::compare_metric(&top_two_assets[0], &top_two_assets[1])
-                == std::cmp::Ordering::Equal
+            && AppraisalOutput::compare_metric(&top_two_assets[0], &top_two_assets[1]).is_eq()
         {
             warn!(
                 "At least two investment options with equal metrics for commodity '{}'. Selected '{}', Closest equal alternative: '{}'",
