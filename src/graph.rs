@@ -1,8 +1,6 @@
 //! Module for creating and analysing commodity graphs
 use crate::commodity::CommodityID;
-use crate::process::{
-    FlowDirection, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap, ProcessParameterMap,
-};
+use crate::process::{FlowDirection, Process, ProcessFlow, ProcessID, ProcessMap};
 use crate::region::RegionID;
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
@@ -71,27 +69,37 @@ impl Display for GraphEdge {
 
 /// Helper function to return a possible flow operating in the requested year
 ///
-/// It considers the lifetime of the process and returns the first flow that can operate in the
-/// target year and region. If no flow is found fulfilling that, None is returned.
+/// We are interested only on the flows direction, which are always the same for all years. So this
+/// function checks if the process can be operating in the target year and region and, if so, it
+/// returns its flows. It considers not only when the process can be commissioned, but also the
+/// lifetime of the process, since a process can be opperating many years after the commission time
+/// window is over. If the process cannot be opperating in the target year and region, None is
+/// returned.
 fn get_flow_for_year(
-    parameters: &ProcessParameterMap,
-    flows: ProcessFlowsMap,
+    process: &Process,
     target: (RegionID, u32),
 ) -> Option<Rc<IndexMap<CommodityID, ProcessFlow>>> {
     // If its already in the map, we return it
-    if flows.contains_key(&target) {
-        return flows.get(&target).cloned();
+    if process.flows.contains_key(&target) {
+        return process.flows.get(&target).cloned();
     }
 
     // Otherwise we try to find one that operates in the target year. It is assumed that
     // parameters are defined in the same (region, year) combinations than flows, at least.
     let (target_region, target_year) = target;
-    for ((region, year), value) in flows {
-        if region != target_region {
+    for ((region, year), value) in &process.flows {
+        if *region != target_region {
             continue;
         }
-        if year + parameters.get(&(region, year)).unwrap().lifetime >= target_year {
-            return Some(value);
+        if year
+            + process
+                .parameters
+                .get(&(region.clone(), *year))
+                .unwrap()
+                .lifetime
+            >= target_year
+        {
+            return Some(value.clone());
         }
     }
     None
@@ -118,9 +126,7 @@ fn create_commodities_graph_for_region_year(
 
     let key = (region_id.clone(), year);
     for process in processes.values() {
-        let Some(flows) =
-            get_flow_for_year(&process.parameters, process.flows.clone(), key.clone())
-        else {
+        let Some(flows) = get_flow_for_year(process, key.clone()) else {
             // Process doesn't operate in this region/year
             continue;
         };
