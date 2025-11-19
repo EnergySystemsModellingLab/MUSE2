@@ -318,7 +318,7 @@ fn order_sccs(
             }
         }
 
-        // Enforce antisymmetry: for each pair (i, j), exactly one of x[i][j] and `x[j][i]`` is 1.
+        // Enforce antisymmetry: for each pair (i, j), exactly one of x[i][j] and x[j][i] is 1.
         // i.e. if i comes before j, then j cannot come before i.
         for (i, row) in vars.iter().enumerate() {
             for (j, _) in row.iter().enumerate().skip(i + 1) {
