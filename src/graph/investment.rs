@@ -206,7 +206,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///    | C | 0 | 1 | 0     |
 /// ```
 ///
-/// Solving this problem with binary decision variables for each x[i][j], and constraints to enforce
+/// Solving this problem with binary decision variables for each x\[i\]\[j\], and constraints to enforce
 /// antisymmetry and transitivity, yields optimal decision variables of:
 ///
 /// ```text
