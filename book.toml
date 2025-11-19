@@ -1,7 +1,6 @@
 [book]
 authors = ["Alex Dewar"]
 language = "en"
-multilingual = false
 src = "docs"
 title = "MUSE2"
 
