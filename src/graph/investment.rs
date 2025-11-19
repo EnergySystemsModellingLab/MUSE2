@@ -3,7 +3,9 @@ use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
+use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
+use log::warn;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
@@ -46,7 +48,7 @@ fn solve_investment_order_for_year(
     // TODO: condense sibling commodities (commodities that share at least one producer)
 
     // Condense strongly connected components
-    investment_graph = compress_cycles(investment_graph);
+    investment_graph = compress_cycles(&investment_graph);
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
@@ -115,9 +117,12 @@ fn init_investment_graph_for_year(
 }
 
 /// Compresses cycles into `InvestmentSet::Cycle` nodes
-fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
+fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
-    let condensed_graph = condensation(graph, true);
+    let mut condensed_graph = condensation(graph.clone(), true);
+
+    // Order nodes within each strongly connected component
+    order_sccs(&mut condensed_graph, graph);
 
     // Map to a new InvestmentGraph
     condensed_graph.map(
@@ -137,6 +142,252 @@ fn compress_cycles(graph: InvestmentGraph) -> InvestmentGraph {
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
     )
+}
+
+/// Order the members of each strongly connected component using a mixed-integer linear program.
+///
+/// `condensed_graph` contains the SCCs detected in the original investment graph, stored as
+/// `Vec<InvestmentSet>` node weights. Single-element components are already acyclic, but components
+/// with multiple members require an internal ordering so that the investment algorithm can treat
+/// them as near-acyclic chains, minimising potential disruption.
+///
+/// To rank the members of each multi-node component, we construct a mixed integer linear program
+/// (MILP). This MILP is adapted from the classical Linear Ordering Problem:
+///
+/// Marti, Rafael, and G Reinelt.
+/// The Linear Ordering Problem: Exact and Heuristic Methods in Combinatorial Optimization.
+/// 1st ed. 2011. Berlin: Springer-Verlag, 2011. Web.
+///
+/// The main features of the MILP are:
+/// * Binary variables `x[i][j]` represent whether market `i` should appear before market `j`.
+/// * Antisymmetry constraints force each pair `(i, j)` to choose exactly one direction (i.e. if
+///   `i` comes before `j`, then `j` cannot be before `i`).
+/// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic (i.e. if
+///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
+/// * The objective minimises the number of “forward” edges (edges that would point from an earlier
+///   market to a later one), counted within the original SCC and treated as unit penalties. A small
+///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
+///   >1 would instead prioritise exporters even if it created extra conflicts in the final order).
+///
+/// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
+/// markets they precede). Sorting by this score — using the original index as a tiebreaker to keep
+/// relative order stable — yields the final sequence that replaces the SCC in the condensed graph.
+/// At least one pairwise mismatch is always inevitable (e.g. where X is solved before Y, but Y may
+/// consume X, so the demand for X cannot be guaranteed upfront).
+///
+/// # Example
+///
+/// Suppose three markets (A, B and C) form a cycle in the original graph with the following edges:
+///
+/// ```text
+/// A ← B ← C ← A
+/// ```
+///
+/// Additionally, C has an outgoing edge to a node outside the cycle.
+///
+/// The costs matrix in the MILP is set up to penalise any edge that points “forward” in the final
+/// order: if there's an edge from X to Y we prefer to place Y before X so the edge points backwards:
+///
+/// ```text
+///    |   | A | B | C |
+///    | A | 0 | 0 | 1 |
+///    | B | 1 | 0 | 0 |
+///    | C | 0 | 1 | 0 |
+/// ```
+///
+/// On top of this, we give a small preference to markets that export outside the SCC, so nodes with
+/// outgoing edges beyond the cycle are pushed earlier. This is done via an `EXTERNAL_BIAS`
+/// parameter (B) applied to the cost matrix:
+///
+/// ```text
+///    |   | A | B | C     |
+///    | A | 0 | 0 | 1 + B |  i.e. extra penalty for putting A before C
+///    | B | 1 | 0 | 0 + B |  i.e. extra penalty for putting B before C
+///    | C | 0 | 1 | 0     |
+/// ```
+///
+/// Solving this problem with binary decision variables for each `x[i][j]`, and constraints to enforce
+/// antisymmetry and transitivity, yields optimal decision variables of:
+///
+/// ```text
+///    x[A][B] = 1 (A before B)
+///    x[A][C] = 0 (C before A)
+///    x[B][A] = 0 (A before B)
+///    x[B][C] = 0 (C before B)
+///    x[C][A] = 1 (C before A)
+///    x[C][B] = 1 (C before B)
+/// ```
+///
+/// From these, summing the number of times each market is preferred over another gives an optimal
+/// order of:
+///
+/// ```text
+/// C, A, B
+/// ```
+///
+/// * By scheduling C before A before B, the edges C ← A and A ← B incur no cost because their
+///   targets appear earlier than their sources.
+/// * The preference towards having exporter markets early in the order keeps C at the front.
+/// * As with any SCC, at least one pairwise violation is guaranteed. In this ordering, the only
+///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
+///
+/// The resulting order replaces the original `InvestmentSet::Cycle` entry inside the condensed
+/// graph, providing a deterministic processing sequence for downstream logic.
+#[allow(clippy::too_many_lines)]
+fn order_sccs(
+    condensed_graph: &mut Graph<Vec<InvestmentSet>, GraphEdge>,
+    original_graph: &InvestmentGraph,
+) {
+    const EXTERNAL_BIAS: f64 = 0.1;
+
+    // Map each investment set back to the node index in the original graph so we can inspect edges.
+    let node_lookup: HashMap<InvestmentSet, NodeIndex> = original_graph
+        .node_indices()
+        .map(|idx| (original_graph.node_weight(idx).unwrap().clone(), idx))
+        .collect();
+
+    // Work through each SCC; groups with just one investment set don't need to be ordered.
+    for group in condensed_graph.node_indices() {
+        let scc = condensed_graph.node_weight_mut(group).unwrap();
+        let n = scc.len();
+        if n <= 1 {
+            continue;
+        }
+
+        // Capture current order and resolve each investment set back to its original graph index.
+        let original_order = scc.clone();
+        let original_indices = original_order
+            .iter()
+            .map(|set| {
+                node_lookup
+                    .get(set)
+                    .copied()
+                    .expect("Condensed SCC node must exist in the original graph")
+            })
+            .collect::<Vec<_>>();
+
+        // Build a fast lookup from original node index to its position in the SCC slice.
+        let mut index_position = HashMap::new();
+        for (pos, idx) in original_indices.iter().copied().enumerate() {
+            index_position.insert(idx, pos);
+        }
+
+        // Record whether any edge inside the original SCC goes from market i to market j; these become penalties.
+        let mut penalties = vec![vec![0.0f64; n]; n];
+        let mut has_external_outgoing = vec![false; n];
+        for (i, &idx) in original_indices.iter().enumerate() {
+            // Loop over the edges going out of this node
+            for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
+                // If the target j is inside this SCC, record a penalty for putting i before j
+                if let Some(&j) = index_position.get(&edge.target()) {
+                    penalties[i][j] = 1.0;
+
+                // Otherwise, mark that i has an outgoing edge to outside the SCC
+                } else {
+                    has_external_outgoing[i] = true;
+                }
+            }
+        }
+
+        // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
+        for (j, has_external) in has_external_outgoing.iter().enumerate() {
+            if *has_external {
+                for (row_idx, row) in penalties.iter_mut().enumerate() {
+                    // Add a small bias to all entries in column j, except the diagonal
+                    // i.e. penalise putting any other market before market j
+                    if row_idx != j {
+                        row[j] += EXTERNAL_BIAS;
+                    }
+                }
+            }
+        }
+
+        // Build a MILP whose binary variables x[i][j] indicate "i is ordered before j".
+        // Objective: minimise Σ penalty[i][j] · x[i][j], so forward edges (and the export bias) add cost.
+        let mut problem = RowProblem::default();
+        let mut vars: Vec<Vec<Option<Col>>> = vec![vec![None; n]; n];
+        for (i, row) in vars.iter_mut().enumerate() {
+            for (j, slot) in row.iter_mut().enumerate() {
+                if i == j {
+                    continue;
+                }
+                let cost = penalties[i][j];
+
+                // Create binary variable x[i][j]
+                *slot = Some(problem.add_integer_column(cost, 0..=1));
+            }
+        }
+
+        // Enforce antisymmetry: for each pair (i, j), exactly one of x[i][j] and x[j][i] is 1.
+        // i.e. if i comes before j, then j cannot come before i.
+        for (i, row) in vars.iter().enumerate() {
+            for (j, _) in row.iter().enumerate().skip(i + 1) {
+                let Some(x_ij) = vars[i][j] else { continue };
+                let Some(x_ji) = vars[j][i] else { continue };
+                problem.add_row(1.0..=1.0, [(x_ij, 1.0), (x_ji, 1.0)]);
+            }
+        }
+
+        // Enforce transitivity to avoid 3-cycles: x[i][j] + x[j][k] + x[k][i] ≤ 2.
+        // i.e. if i comes before j and j comes before k, then k cannot come before i.
+        for (i, row) in vars.iter().enumerate() {
+            for (j, _) in row.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                for (k, _) in vars.iter().enumerate() {
+                    if i == k || j == k {
+                        continue;
+                    }
+                    let Some(x_ij) = vars[i][j] else { continue };
+                    let Some(x_jk) = vars[j][k] else { continue };
+                    let Some(x_ki) = vars[k][i] else { continue };
+                    problem.add_row(..=2.0, [(x_ij, 1.0), (x_jk, 1.0), (x_ki, 1.0)]);
+                }
+            }
+        }
+
+        let mut model = problem.optimise(Sense::Minimise);
+        model.make_quiet();
+        let solved = match model.try_solve() {
+            Ok(solved) => solved,
+            Err(status) => {
+                warn!("HiGHS failed while ordering an SCC: {status:?}");
+                continue;
+            }
+        };
+
+        if solved.status() != HighsModelStatus::Optimal {
+            let status = solved.status();
+            warn!("HiGHS returned a non-optimal status while ordering an SCC: {status:?}");
+            continue;
+        }
+
+        let solution = solved.get_solution();
+        // Score each market by the number of "wins" it achieves (times it must precede another).
+        let mut wins = vec![0usize; n];
+        for (i, row) in vars.iter().enumerate() {
+            for (j, var) in row.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                if var.is_some_and(|col| solution[col] > 0.5) {
+                    wins[i] += 1;
+                }
+            }
+        }
+
+        // Sort by descending win count; break ties on the original index so equal-score nodes keep
+        // their relative order.
+        let mut order: Vec<usize> = (0..n).collect();
+        order.sort_by(|&a, &b| wins[b].cmp(&wins[a]).then_with(|| a.cmp(&b)));
+
+        // Rewrite the SCC in the new order
+        *scc = order
+            .into_iter()
+            .map(|idx| original_order[idx].clone())
+            .collect();
+    }
 }
 
 /// Compute layers of investment sets from the topological order
@@ -257,6 +508,46 @@ mod tests {
     use petgraph::graph::Graph;
     use rstest::rstest;
     use std::rc::Rc;
+
+    #[test]
+    fn test_order_sccs_simple_cycle() {
+        let markets = ["A", "B", "C"].map(|id| InvestmentSet::Single((id.into(), "GBR".into())));
+
+        // Create graph with cycle edges plus an extra dependency B ← D (see doc comment)
+        let mut original = InvestmentGraph::new();
+        let node_indices: Vec<_> = markets
+            .iter()
+            .map(|set| original.add_node(set.clone()))
+            .collect();
+        for &(src, dst) in &[(1, 0), (2, 1), (0, 2)] {
+            original.add_edge(
+                node_indices[src],
+                node_indices[dst],
+                GraphEdge::Primary("process1".into()),
+            );
+        }
+        // External market receiving exports from C; encourages C to appear early.
+        let external = original.add_node(InvestmentSet::Single(("X".into(), "GBR".into())));
+        original.add_edge(
+            node_indices[2],
+            external,
+            GraphEdge::Primary("process2".into()),
+        );
+
+        // Single SCC containing all markets.
+        let mut condensed: Graph<Vec<InvestmentSet>, GraphEdge> = Graph::new();
+        let component = condensed.add_node(markets.to_vec());
+
+        order_sccs(&mut condensed, &original);
+
+        // Expected order corresponds to the example in the doc comment.
+        // Note that C should be first, as it has an outgoing edge to the external market.
+        let expected = ["C", "A", "B"]
+            .map(|id| InvestmentSet::Single((id.into(), "GBR".into())))
+            .to_vec();
+
+        assert_eq!(condensed.node_weight(component).unwrap(), &expected);
+    }
 
     #[rstest]
     fn test_solve_investment_order_linear_graph(
