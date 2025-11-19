@@ -17,7 +17,6 @@ use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
-use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -331,20 +330,20 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
     }
 }
 
-/// Select prices for markets not being balanced
+/// Filter prices data to only include prices for markets not being balanced
 ///
 /// Markets being balanced (i.e. with commodity balance constraints) will have prices calculated
 /// internally by the solver, so we need to remove them to prevent double-counting.
-fn select_input_prices(
+fn filter_input_prices(
     input_prices: &CommodityPrices,
-    markets: &[(CommodityID, RegionID)],
+    markets_to_balance: &[(CommodityID, RegionID)],
 ) -> CommodityPrices {
-    let commodity_regions_set: HashSet<(&CommodityID, &RegionID)> =
-        markets.iter().map(|m| (&m.0, &m.1)).collect();
     input_prices
         .iter()
         .filter(|(commodity_id, region_id, _, _)| {
-            !commodity_regions_set.contains(&(commodity_id, region_id))
+            !markets_to_balance
+                .iter()
+                .any(|(c, r)| c == *commodity_id && r == *region_id)
         })
         .collect()
 }
@@ -452,10 +451,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.markets_to_balance
         };
 
-        // Select prices for commodities not being balanced
+        // Select prices for markets not being balanced
         let input_prices_owned = self
             .input_prices
-            .map(|prices| select_input_prices(prices, markets_to_balance));
+            .map(|prices| filter_input_prices(prices, markets_to_balance));
         let input_prices = input_prices_owned.as_ref();
 
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
@@ -616,15 +615,11 @@ fn add_capacity_variables(
     let start = problem.num_cols();
 
     for asset in assets {
-        // Can only have flexible capacity for Candidate or Selected assets
-        if !matches!(
-            asset.state(),
-            AssetState::Candidate | AssetState::Selected { .. }
-        ) {
-            panic!(
-                "Flexible capacity can only be assigned to Candidate or Selected assets. Offending asset: {asset:?}"
-            );
-        }
+        // Can only have flexible capacity for `Selected` assets
+        assert!(
+            matches!(asset.state(), AssetState::Selected { .. }),
+            "Flexible capacity can only be assigned to `Selected` type assets. Offending asset: {asset:?}"
+        );
 
         let current_capacity = asset.capacity().value();
         let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
