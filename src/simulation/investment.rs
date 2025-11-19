@@ -214,7 +214,7 @@ pub fn perform_agent_investment(
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
         let solution = DispatchRun::new(model, &all_selected_assets, year)
-            .with_market_subset(&seen_markets)
+            .with_market_balance_subset(&seen_markets)
             .with_input_prices(prices)
             .run(&format!("post {investment_set} investment"), writer)?;
 
@@ -368,7 +368,7 @@ fn select_assets_for_cycle(
 
         // Run dispatch
         let solution = DispatchRun::new(model, &all_assets, year)
-            .with_market_subset(&markets_to_balance)
+            .with_market_balance_subset(&markets_to_balance)
             .with_flexible_capacity_assets(
                 &flexible_capacity_assets,
                 // Gives newly selected cycle assets limited capacity wiggle-room; existing assets stay fixed.

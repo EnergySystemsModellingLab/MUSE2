@@ -57,7 +57,7 @@ pub struct ConstraintKeys {
 /// * `variables` - The variables in the problem
 /// * `model` - The model
 /// * `assets` - The asset pool
-/// * `markets` - The subset of markets to apply constraints to
+/// * `markets_to_balance` - The subset of markets to apply balance constraints to
 /// * `year` - Current milestone year
 ///
 /// # Returns
@@ -68,14 +68,20 @@ pub fn add_model_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [(CommodityID, RegionID)],
+    markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
 ) -> ConstraintKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
 {
-    let commodity_balance_keys =
-        add_commodity_balance_constraints(problem, variables, model, assets, markets, year);
+    let commodity_balance_keys = add_commodity_balance_constraints(
+        problem,
+        variables,
+        model,
+        assets,
+        markets_to_balance,
+        year,
+    );
 
     let activity_keys = add_activity_constraints(problem, variables);
 
@@ -98,7 +104,7 @@ fn add_commodity_balance_constraints<'a, I>(
     variables: &VariableMap,
     model: &'a Model,
     assets: &I,
-    markets: &'a [(CommodityID, RegionID)],
+    markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
 ) -> CommodityBalanceKeys
 where
@@ -109,7 +115,7 @@ where
 
     let mut keys = Vec::new();
     let mut terms = Vec::new();
-    for (commodity_id, region_id) in markets {
+    for (commodity_id, region_id) in markets_to_balance {
         let commodity = &model.commodities[commodity_id];
         if !matches!(
             commodity.kind,

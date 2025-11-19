@@ -118,9 +118,9 @@ impl VariableMap {
         &mut self,
         problem: &mut Problem,
         model: &Model,
-        markets: &[(CommodityID, RegionID)],
+        markets_to_allow_unmet_demand: &[(CommodityID, RegionID)],
     ) {
-        assert!(!markets.is_empty());
+        assert!(!markets_to_allow_unmet_demand.is_empty());
 
         // This line **must** come before we add more variables
         let start = problem.num_cols();
@@ -128,13 +128,15 @@ impl VariableMap {
         // Add variables
         let voll = model.parameters.value_of_lost_load;
         self.unmet_demand_vars.extend(
-            iproduct!(markets.iter(), model.time_slice_info.iter_ids()).map(
-                |((commodity_id, region_id), time_slice)| {
-                    let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-                    let var = problem.add_column(voll.value(), 0.0..);
-                    (key, var)
-                },
-            ),
+            iproduct!(
+                markets_to_allow_unmet_demand.iter(),
+                model.time_slice_info.iter_ids()
+            )
+            .map(|((commodity_id, region_id), time_slice)| {
+                let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
+                let var = problem.add_column(voll.value(), 0.0..);
+                (key, var)
+            }),
         );
 
         self.unmet_demand_var_idx = start..problem.num_cols();
@@ -404,11 +406,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Only apply commodity balance constraints to the specified subset of markets
-    pub fn with_market_subset(self, markets: &'run [(CommodityID, RegionID)]) -> Self {
-        assert!(!markets.is_empty());
+    pub fn with_market_balance_subset(
+        self,
+        markets_to_balance: &'run [(CommodityID, RegionID)],
+    ) -> Self {
+        assert!(!markets_to_balance.is_empty());
 
         Self {
-            markets_to_balance: markets,
+            markets_to_balance,
             ..self
         }
     }
@@ -460,7 +465,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // Try running dispatch. If it fails because the model is infeasible, it is likely that this
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
         // track the unmet demand so we can report the offending markets to users
-        match self.run_without_unmet_demand(markets_to_balance, input_prices) {
+        match self.run_without_unmet_demand_variables(markets_to_balance, input_prices) {
             Ok(solution) => Ok(solution),
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 let markets = self
@@ -475,7 +480,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 bail!(
                     "The solver has indicated that the problem is infeasible, probably because \
                     the supplied assets could not meet the required demand. Demand was not met \
-                    for the following region and commodity pairs: {}",
+                    for the following markets: {}",
                     format_items_with_cap(markets)
                 )
             }
@@ -484,22 +489,32 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Run dispatch without unmet demand variables
-    fn run_without_unmet_demand(
+    fn run_without_unmet_demand_variables(
         &self,
-        markets: &[(CommodityID, RegionID)],
+        markets_to_balance: &[(CommodityID, RegionID)],
         input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(markets, /*allow_unmet_demand=*/ false, input_prices)
+        self.run_internal(
+            markets_to_balance,
+            /*allow_unmet_demand=*/ false,
+            input_prices,
+        )
     }
 
     /// Run dispatch to diagnose which markets have unmet demand
     fn get_markets_with_unmet_demand(
         &self,
-        markets: &[(CommodityID, RegionID)],
+        markets_to_balance: &[(CommodityID, RegionID)],
         input_prices: Option<&CommodityPrices>,
     ) -> Result<IndexSet<(CommodityID, RegionID)>> {
-        let solution =
-            self.run_internal(markets, /*allow_unmet_demand=*/ true, input_prices)?;
+        // Run dispatch including unmet demand variables for all markets being balanced
+        let solution = self.run_internal(
+            markets_to_balance,
+            /*allow_unmet_demand=*/ true,
+            input_prices,
+        )?;
+
+        // Collect markets with unmet demand
         Ok(solution
             .iter_unmet_demand()
             .filter(|(_, _, _, flow)| *flow > Flow(0.0))
@@ -507,10 +522,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             .collect())
     }
 
-    /// Run dispatch for specified commodities, optionally including unmet demand variables
+    /// Run dispatch to balance the specified markets, optionally including unmet demand variables
     fn run_internal(
         &self,
-        markets: &[(CommodityID, RegionID)],
+        markets_to_balance: &[(CommodityID, RegionID)],
         allow_unmet_demand: bool,
         input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
@@ -526,9 +541,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         );
 
         // If unmet demand is enabled for this dispatch run (and is allowed by the model param) then
-        // we add variables representing unmet demand
+        // we add variables representing unmet demand for all markets being balanced
         if allow_unmet_demand {
-            variables.add_unmet_demand_variables(&mut problem, self.model, markets);
+            variables.add_unmet_demand_variables(&mut problem, self.model, markets_to_balance);
         }
 
         // Check flexible capacity assets is a subset of existing assets
@@ -556,7 +571,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &variables,
             self.model,
             &all_assets,
-            markets,
+            markets_to_balance,
             self.year,
         );
 
