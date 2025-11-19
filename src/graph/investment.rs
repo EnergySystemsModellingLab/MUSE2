@@ -301,8 +301,7 @@ fn order_sccs(
             }
         }
 
-        let mut model = problem.optimise(Sense::Minimise);
-        model.make_quiet();
+        let model = problem.optimise(Sense::Minimise);
         let solved = match model.try_solve() {
             Ok(solved) => solved,
             Err(status) => {
