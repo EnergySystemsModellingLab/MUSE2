@@ -3,13 +3,16 @@
 //! This is used to calculate commodity flows and prices.
 use crate::asset::{Asset, AssetRef, AssetState};
 use crate::commodity::CommodityID;
+use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
+use crate::units::{
+    Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow, Year,
+};
 use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
@@ -593,7 +596,7 @@ fn add_activity_variables(
     let start = problem.num_cols();
 
     for (asset, time_slice) in iproduct!(assets.iter(), time_slice_info.iter_ids()) {
-        let coeff = calculate_cost_coefficient(asset, year, time_slice, input_prices);
+        let coeff = calculate_activity_coefficient(asset, year, time_slice, input_prices);
         let var = problem.add_column(coeff.value(), 0.0..);
         let key = (asset.clone(), time_slice.clone());
         let existing = variables.insert(key, var).is_some();
@@ -626,8 +629,8 @@ fn add_capacity_variables(
         let current_capacity = asset.capacity().value();
         let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
         let upper = (1.0 + capacity_margin) * current_capacity;
-        let bounds = lower..=upper;
-        let var = problem.add_column(0.0, bounds);
+        let coeff = calculate_capacity_coefficient(asset);
+        let var = problem.add_column(coeff.value(), lower..=upper);
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");
     }
@@ -635,7 +638,7 @@ fn add_capacity_variables(
     start..problem.num_cols()
 }
 
-/// Calculate the cost coefficient for a decision variable.
+/// Calculate the cost coefficient for an activity variable.
 ///
 /// Normally, the cost coefficient is the same as the asset's operating costs for the given year and
 /// time slice. If `input_prices` is provided then those prices are added to the flow costs for the
@@ -651,7 +654,7 @@ fn add_capacity_variables(
 /// # Returns
 ///
 /// The cost coefficient to be used for the relevant decision variable.
-fn calculate_cost_coefficient(
+fn calculate_activity_coefficient(
     asset: &Asset,
     year: u32,
     time_slice: &TimeSliceID,
@@ -662,4 +665,14 @@ fn calculate_cost_coefficient(
         .map(|prices| asset.get_input_cost_from_prices(prices, time_slice))
         .unwrap_or_default();
     opex + input_cost
+}
+
+/// Calculate the cost coefficient for a capacity variable (for flexible capacity assets only).
+///
+/// This includes both the annual fixed operating cost and the annual capital cost.
+fn calculate_capacity_coefficient(asset: &AssetRef) -> MoneyPerCapacity {
+    let param = asset.process_parameter();
+    let annual_fixed_operating_cost = param.fixed_operating_cost * Year(1.0);
+    annual_fixed_operating_cost
+        + annual_capital_cost(param.capital_cost, param.lifetime, param.discount_rate)
 }
