@@ -3,6 +3,7 @@ use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
+use crate::model::ALLOW_BROKEN_OPTION_NAME;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
@@ -319,6 +320,14 @@ fn select_assets_for_cycle(
 ) -> Result<Vec<AssetRef>> {
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
+
+    if !model.parameters.allow_broken_options {
+        bail!(
+            "Detected cycle for markets ({markets_str}). \
+            Cyclic investment sets are currently experimental. \
+            To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
+        );
+    }
 
     // Iterate over the markets to select assets
     let mut current_demand = demand.clone();
