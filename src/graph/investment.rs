@@ -303,7 +303,7 @@ fn order_sccs(
         }
 
         // Build a MILP whose binary variables x[i][j] indicate "i is ordered before j".
-        // Objective: minimise `Σ penalty[i][j] · x[i][j]`, so forward edges (and the export bias) add cost.
+        // Objective: minimise Σ penalty[i][j] · x[i][j], so forward edges (and the export bias) add cost.
         let mut problem = RowProblem::default();
         let mut vars: Vec<Vec<Option<Col>>> = vec![vec![None; n]; n];
         for (i, row) in vars.iter_mut().enumerate() {
@@ -328,7 +328,7 @@ fn order_sccs(
             }
         }
 
-        // Enforce transitivity to avoid 3-cycles: `x[i][j]` + x[j][k] + x[k][i] ≤ 2.
+        // Enforce transitivity to avoid 3-cycles: x[i][j] + x[j][k] + x[k][i] ≤ 2.
         // i.e. if i comes before j and j comes before k, then k cannot come before i.
         for (i, row) in vars.iter().enumerate() {
             for (j, _) in row.iter().enumerate() {
