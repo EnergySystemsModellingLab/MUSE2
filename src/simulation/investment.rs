@@ -490,16 +490,16 @@ fn select_from_assets_with_equal_metric(
         .join(", ");
 
     // Return the first of the equally good options
-    let asset_choice_iter = equally_good_assets.into_iter().next();
+    let asset_choice = equally_good_assets.into_iter().next().unwrap();
 
     warn!(
         "Multiple investment options with equal metrics for commodity '{}'. Options: [{}]. Selected: '{}'",
         &commodity_id,
         asset_names,
-        asset_choice_iter.as_ref().unwrap().asset.process_id()
+        asset_choice.asset.process_id()
     );
 
-    asset_choice_iter.unwrap()
+    asset_choice
 }
 
 /// Get the best assets for meeting demand for the given commodity
