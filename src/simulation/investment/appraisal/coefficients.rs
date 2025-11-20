@@ -90,9 +90,6 @@ pub fn calculate_coefficients_for_npv(
     // assets are still dispatched
     const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(f64::EPSILON * 100.0);
 
-    // Capacity coefficient
-    let capacity_coefficient = -annual_fixed_cost(asset);
-
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
     for time_slice in time_slice_info.iter_ids() {
@@ -107,7 +104,7 @@ pub fn calculate_coefficients_for_npv(
     let unmet_demand_coefficient = MoneyPerFlow(0.0);
 
     ObjectiveCoefficients {
-        capacity_coefficient,
+        capacity_coefficient: MoneyPerCapacity(0.0),
         activity_coefficients,
         unmet_demand_coefficient,
     }
