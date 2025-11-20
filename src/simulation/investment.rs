@@ -480,6 +480,28 @@ fn get_candidate_assets<'a>(
         })
 }
 
+fn select_from_assets_with_equal_metric(
+    commodity_id: &CommodityID,
+    equally_good_assets: Vec<AppraisalOutput>,
+) -> AppraisalOutput {
+    let asset_names = equally_good_assets
+        .iter()
+        .map(|output| output.asset.process_id())
+        .join(", ");
+
+    // Return the first of the equally good options
+    let asset_choice_iter = equally_good_assets.into_iter().next();
+
+    warn!(
+        "Multiple investment options with equal metrics for commodity '{}'. Options: [{}]. Selected: '{}'",
+        &commodity_id,
+        asset_names,
+        asset_choice_iter.as_ref().unwrap().asset.process_id()
+    );
+
+    asset_choice_iter.unwrap()
+}
+
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
 fn select_best_assets(
@@ -542,15 +564,15 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Get the top 2 options by metric
-        let top_two_assets: Vec<_> = outputs_for_opts
+        // Sort assets by appraisal metric
+        let assets_sorted_by_metric: Vec<_> = outputs_for_opts
             .into_iter()
             .filter(|output| output.capacity > Capacity(0.0))
-            .k_smallest_by(2, AppraisalOutput::compare_metric)
+            .sorted_by(AppraisalOutput::compare_metric)
             .collect();
 
         // check if all options have zero capacity
-        if top_two_assets.is_empty() {
+        if assets_sorted_by_metric.is_empty() {
             // In this case, we cannot meet demand, so have to bail out.
             // This may happen if:
             // - the asset has zero activity limits for all time slices with demand.
@@ -562,20 +584,32 @@ fn select_best_assets(
             )
         }
 
-        // Check if the top two options are equally good by the metric
-        if top_two_assets.len() >= 2
-            && AppraisalOutput::compare_metric(&top_two_assets[0], &top_two_assets[1]).is_eq()
-        {
-            warn!(
-                "At least two investment options with equal metrics for commodity '{}'. Selected '{}', Closest equal alternative: '{}'",
-                &commodity.id,
-                top_two_assets[0].asset.process_id(),
-                top_two_assets[1].asset.process_id()
-            );
-        }
+        // Determine the best asset based on whether multiple equally-good options exist
+        let best_output = match assets_sorted_by_metric.len() {
+            // there are multiple equally good assets
+            n if n >= 2
+                && AppraisalOutput::compare_metric(
+                    &assets_sorted_by_metric[0],
+                    &assets_sorted_by_metric[1],
+                )
+                .is_eq() =>
+            {
+                // Count how many assets have the same metric as the best one
+                let count = assets_sorted_by_metric
+                    .iter()
+                    .take_while(|output| {
+                        AppraisalOutput::compare_metric(&assets_sorted_by_metric[0], output).is_eq()
+                    })
+                    .count();
 
-        // Take the first of the (possibly equal) top two options as the best option
-        let best_output = top_two_assets.into_iter().next().unwrap();
+                // select from all equally good assets
+                let equally_good_assets: Vec<_> =
+                    assets_sorted_by_metric.into_iter().take(count).collect();
+                select_from_assets_with_equal_metric(&commodity.id, equally_good_assets)
+            }
+            // there is a single best asset
+            _ => assets_sorted_by_metric.into_iter().next().unwrap(),
+        };
 
         // Log the selected asset
         debug!(
