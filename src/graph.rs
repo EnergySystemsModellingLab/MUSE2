@@ -1,6 +1,6 @@
 //! Module for creating and analysing commodity graphs
 use crate::commodity::CommodityID;
-use crate::process::{FlowDirection, ProcessID, ProcessMap};
+use crate::process::{FlowDirection, Process, ProcessFlow, ProcessID, ProcessMap};
 use crate::region::RegionID;
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
@@ -13,6 +13,7 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
+use std::rc::Rc;
 
 pub mod investment;
 pub mod validate;
@@ -66,6 +67,44 @@ impl Display for GraphEdge {
     }
 }
 
+/// Helper function to return a possible flow operating in the requested year
+///
+/// We are interested only on the flows direction, which are always the same for all years. So this
+/// function checks if the process can be operating in the target year and region and, if so, it
+/// returns its flows. It considers not only when the process can be commissioned, but also the
+/// lifetime of the process, since a process can be opperating many years after the commission time
+/// window is over. If the process cannot be opperating in the target year and region, None is
+/// returned.
+fn get_flow_for_year(
+    process: &Process,
+    target: (RegionID, u32),
+) -> Option<Rc<IndexMap<CommodityID, ProcessFlow>>> {
+    // If its already in the map, we return it
+    if process.flows.contains_key(&target) {
+        return process.flows.get(&target).cloned();
+    }
+
+    // Otherwise we try to find one that operates in the target year. It is assumed that
+    // parameters are defined in the same (region, year) combinations than flows, at least.
+    let (target_region, target_year) = target;
+    for ((region, year), value) in &process.flows {
+        if *region != target_region {
+            continue;
+        }
+        if year
+            + process
+                .parameters
+                .get(&(region.clone(), *year))
+                .unwrap()
+                .lifetime
+            >= target_year
+        {
+            return Some(value.clone());
+        }
+    }
+    None
+}
+
 /// Creates a directed graph of commodity flows for a given region and year.
 ///
 /// The graph contains nodes for all commodities that may be consumed/produced by processes in the
@@ -87,7 +126,7 @@ fn create_commodities_graph_for_region_year(
 
     let key = (region_id.clone(), year);
     for process in processes.values() {
-        let Some(flows) = process.flows.get(&key) else {
+        let Some(flows) = get_flow_for_year(process, key.clone()) else {
             // Process doesn't operate in this region/year
             continue;
         };
