@@ -487,22 +487,26 @@ fn select_from_assets_with_equal_metric(
     commodity_id: &CommodityID,
     equally_good_assets: Vec<AppraisalOutput>,
 ) -> AppraisalOutput {
-    let asset_names = equally_good_assets
+    // Format asset details for diagnostic logging
+    let asset_details = equally_good_assets
         .iter()
-        .map(|output| output.asset.process_id())
+        .map(|output| {
+            format!(
+                "'{}' (state: {}, commission year: {})",
+                output.asset.process_id(),
+                output.asset.state(),
+                output.asset.commission_year()
+            )
+        })
+        .collect::<Vec<_>>()
         .join(", ");
 
-    // Return the first of the equally good options
-    let asset_choice = equally_good_assets.into_iter().next().unwrap();
-
     warn!(
-        "Multiple investment options with equal metrics for commodity '{}'. Options: [{}]. Selected: '{}'",
-        &commodity_id,
-        asset_names,
-        asset_choice.asset.process_id()
+        "Multiple investment options with equal metrics for commodity '{commodity_id}'. Options: [{asset_details}]. Selecting first option."
     );
 
-    asset_choice
+    // Select the first asset from the equally performing options
+    equally_good_assets.into_iter().next().unwrap()
 }
 
 /// Get the best assets for meeting demand for the given commodity
