@@ -47,6 +47,10 @@ properties:
     type: number
     description: The relative tolerance for price convergence in the ironing out loop
     default: 1e-6
+  capacity_margin:
+    type: number
+    description: Slack proportion for assets selected during cycle balancing to absorb small demand shifts
+    default: 0.2
   please_give_me_broken_results:
     type: boolean
     description: |

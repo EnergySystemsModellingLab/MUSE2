@@ -48,6 +48,7 @@ define_unit_param_default!(default_capacity_limit_factor, Dimensionless, 0.1);
 define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
 define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
 define_param_default!(default_max_ironing_out_iterations, u32, 10);
+define_param_default!(default_capacity_margin, f64, 0.2);
 
 /// Model parameters as defined in the `model.toml` file.
 ///
@@ -85,6 +86,13 @@ pub struct ModelParameters {
     /// The relative tolerance for price convergence in the ironing out loop
     #[serde(default = "default_price_tolerance")]
     pub price_tolerance: Dimensionless,
+    /// Slack applied during cycle balancing, allowing newly selected assets to flex their capacity
+    /// by this proportion.
+    ///
+    /// Existing assets remain fixed; this gives newly selected assets the wiggle-room to absorb
+    /// small demand changes before we would otherwise need to break for re-investment.
+    #[serde(default = "default_capacity_margin")]
+    pub capacity_margin: f64,
 }
 
 /// The strategy used for calculating commodity prices
@@ -133,6 +141,16 @@ fn check_price_tolerance(value: Dimensionless) -> Result<()> {
     ensure!(
         value.is_finite() && value >= Dimensionless(0.0),
         "price_tolerance must be a finite number greater than or equal to zero"
+    );
+
+    Ok(())
+}
+
+/// Check that the `capacity_margin` parameter is valid
+fn check_capacity_margin(value: f64) -> Result<()> {
+    ensure!(
+        value.is_finite() && value >= 0.0,
+        "capacity_margin must be a finite number greater than or equal to zero"
     );
 
     Ok(())
@@ -207,6 +225,9 @@ impl ModelParameters {
 
         // price_tolerance
         check_price_tolerance(self.price_tolerance)?;
+
+        // capacity_margin
+        check_capacity_margin(self.capacity_margin)?;
 
         Ok(())
     }
@@ -332,6 +353,25 @@ mod tests {
             expected_valid,
             value,
             "price_tolerance must be a finite number greater than or equal to zero",
+        );
+    }
+
+    #[rstest]
+    #[case(0.0, true)] // Valid minimum value
+    #[case(0.2, true)] // Valid default value
+    #[case(10.0, true)] // Valid large value
+    #[case(-1e-6, false)] // Invalid: negative margin
+    #[case(f64::INFINITY, false)] // Invalid: infinite value
+    #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
+    #[case(f64::NAN, false)] // Invalid: NaN value
+    fn test_check_capacity_margin(#[case] value: f64, #[case] expected_valid: bool) {
+        let result = check_capacity_margin(value);
+
+        assert_validation_result(
+            result,
+            expected_valid,
+            value,
+            "capacity_margin must be a finite number greater than or equal to zero",
         );
     }
 }
