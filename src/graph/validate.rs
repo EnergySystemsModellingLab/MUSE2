@@ -1,9 +1,9 @@
 //! Module for validating commodity graphs
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
-use crate::process::ProcessMap;
+use crate::process::{Process, ProcessMap};
 use crate::region::RegionID;
-use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -44,14 +44,7 @@ fn prepare_commodities_graph_for_validation(
         // Check if the process has availability > 0 in any time slice in the selection
         time_slice_selection
             .iter(time_slice_info)
-            .any(|(time_slice, _)| {
-                let Some(limits_map) = process.activity_limits.get(&key) else {
-                    return false;
-                };
-                limits_map
-                    .get(time_slice)
-                    .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
-            })
+            .any(|(time_slice, _)| can_be_active(process, &key, time_slice))
     });
 
     // Add demand edges
@@ -76,6 +69,35 @@ fn prepare_commodities_graph_for_validation(
     }
 
     filtered_graph
+}
+
+/// Checks if a process can be active for a particular timeslice in a given year and region
+///
+/// It considers all commission years that can lead to a running process in the target region and
+/// year, accounting for the process lifetime, and then checks if, for any of those, the process
+/// is active in the required timeslice. In other words, this checks if there is the _possibility_
+/// of having an active process, although there is no guarantee of that happening since it depends
+/// on the investment.
+fn can_be_active(process: &Process, target: &(RegionID, u32), time_slice: &TimeSliceID) -> bool {
+    let (target_region, target_year) = target;
+
+    for ((region, year), value) in &process.parameters {
+        if region != target_region {
+            continue;
+        }
+        if year + value.lifetime >= *target_year {
+            let Some(limits_map) = process.activity_limits.get(target) else {
+                continue;
+            };
+            if limits_map
+                .get(time_slice)
+                .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Validates that the commodity graph follows the rules for different commodity types.
