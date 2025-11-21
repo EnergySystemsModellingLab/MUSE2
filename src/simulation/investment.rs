@@ -492,7 +492,7 @@ fn select_from_assets_with_equal_metric(
         .iter()
         .map(|output| {
             format!(
-                "'{}' (state: {}{}{}{})",
+                "Process id: '{}' (State: {} Region id: {}{}{})",
                 output.asset.process_id(),
                 output.asset.state(),
                 output.asset.region_id(),
