@@ -502,7 +502,7 @@ fn select_from_assets_with_equal_metric(
         .join(", ");
 
     warn!(
-        "Multiple investment options with equal metrics for commodity '{commodity_id}'. Options: [{asset_details}]. Selecting first option."
+        "Could not resolve deadlock between equally good appraisals for commodity: '{commodity_id}'. Options: [{asset_details}]. Selecting first option."
     );
 
     // Select the first asset from the equally performing options
