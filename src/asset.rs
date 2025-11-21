@@ -972,7 +972,7 @@ mod tests {
             parameters: process_parameter_map,
             regions: indexset! {region_id.clone()},
             primary_output: Some(commodity_id.clone()),
-            years: vec![2020],
+            years: 2020..=2020,
             activity_limits,
             capacity_to_activity: ActivityPerCapacity(1.0),
         });
@@ -1063,7 +1063,7 @@ mod tests {
         let process = Rc::new(Process {
             id: "process1".into(),
             description: "Description".into(),
-            years: vec![2010, 2020],
+            years: 2010..=2020,
             activity_limits,
             flows,
             parameters: process_parameter_map,
@@ -1118,7 +1118,7 @@ mod tests {
         Process {
             id: "process1".into(),
             description: "Description".into(),
-            years: vec![2010, 2020],
+            years: 2010..=2020,
             activity_limits,
             flows,
             parameters: process_parameter_map,

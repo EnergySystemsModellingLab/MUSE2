@@ -137,9 +137,9 @@ where
             })?;
 
         // Get years
-        let process_years = &process.years;
+        let process_years: Vec<u32> = process.years.clone().collect();
         let record_years =
-            parse_year_str(&record.commission_years, process_years).with_context(|| {
+            parse_year_str(&record.commission_years, &process_years).with_context(|| {
                 format!("Invalid year for process {id}. Valid years are {process_years:?}")
             })?;
 
@@ -197,11 +197,7 @@ fn check_missing_milestone_years(
     map_for_process: &ProcessActivityLimitsMap,
     base_year: u32,
 ) -> Result<()> {
-    let process_milestone_years = process
-        .years
-        .iter()
-        .copied()
-        .filter(|&year| year >= base_year);
+    let process_milestone_years = process.years.clone().filter(|&year| year >= base_year);
     let mut missing = Vec::new();
     for (region_id, year) in iproduct!(&process.regions, process_milestone_years) {
         if !map_for_process.contains_key(&(region_id.clone(), year)) {
@@ -227,7 +223,7 @@ fn check_missing_time_slices(
     time_slice_info: &TimeSliceInfo,
 ) -> Result<()> {
     let mut missing = Vec::new();
-    for (region_id, &year) in iproduct!(&process.regions, &process.years) {
+    for (region_id, year) in iproduct!(&process.regions, process.years.clone()) {
         if let Some(map_for_region_year) = map_for_process.get(&(region_id.clone(), year)) {
             // There are at least some entries for this region/year combo; check if there are
             // any time slices not covered

@@ -150,11 +150,7 @@ pub fn process(
 ) -> Process {
     let milestone_years = vec![2010, 2015, 2020];
     // The process start year is before the base year
-    let years = vec![2008, 2009]
-        .iter()
-        .chain(&milestone_years)
-        .cloned()
-        .collect();
+    let years = 2008..=*milestone_years.last().unwrap();
 
     // Create maps with (empty) entries for every region/year combo
     let activity_limits = iproduct!(region_ids.iter(), milestone_years.iter())
