@@ -6,7 +6,7 @@ use crate::id::IDCollection;
 use crate::process::ProcessMap;
 use crate::region::RegionID;
 use crate::units::Capacity;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -77,6 +77,31 @@ where
             .get(asset.process_id.as_str())
             .with_context(|| format!("Invalid process ID: {}", &asset.process_id))?;
         let region_id = region_ids.get_id(&asset.region_id)?;
+
+        // Validate commission year. It should be within the process valid range...
+        ensure!(
+            process.years.contains(&asset.commission_year),
+            "Agent {} has asset with commission year {}, not within process {} commission years: {:?}",
+            asset.agent_id,
+            asset.commission_year,
+            asset.process_id,
+            process.years
+        );
+        // ... and also have associated process parameters and flows
+        ensure!(
+            process.parameters.contains_key(&(region_id.clone(), asset.commission_year)),
+            "Parameters for process {} do not contain entry for year {}, required for asset in agent {}",
+            asset.process_id,
+            asset.commission_year,
+            asset.agent_id,
+        );
+        ensure!(
+            process.flows.contains_key(&(region_id.clone(), asset.commission_year)),
+            "Flows for process {} do not contain entry for year {}, required for asset in agent {}",
+            asset.process_id,
+            asset.commission_year,
+            asset.agent_id,
+        );
 
         Asset::new_future_with_max_decommission(
             agent_id.clone(),
