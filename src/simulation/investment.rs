@@ -605,7 +605,7 @@ fn select_best_assets(
 
         // Determine the best asset based on whether multiple equally-good options exist
         let best_output = match appraisal_comparison_method {
-            // there are multiple equally good assets
+            // there are multiple equally good assets by metric
             AppraisalComparisonMethod::EqualMetrics => {
                 // Count how many assets have the same metric as the best one
                 let count = assets_sorted_by_metric
@@ -620,7 +620,7 @@ fn select_best_assets(
                     assets_sorted_by_metric.into_iter().take(count).collect();
                 select_from_assets_with_equal_metric(&commodity.id, equally_good_assets)
             }
-            // there is a single best asset
+            // there is a single best asset by metric
             AppraisalComparisonMethod::Metric => {
                 assets_sorted_by_metric.into_iter().next().unwrap()
             }
