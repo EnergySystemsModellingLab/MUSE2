@@ -1,6 +1,6 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::Agent;
+use crate::agent::{Agent, AgentID};
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
@@ -484,6 +484,7 @@ fn get_candidate_assets<'a>(
 }
 
 fn select_from_assets_with_equal_metric(
+    agent_id: &AgentID,
     commodity_id: &CommodityID,
     equally_good_assets: Vec<AppraisalOutput>,
 ) -> AppraisalOutput {
@@ -492,7 +493,7 @@ fn select_from_assets_with_equal_metric(
         .iter()
         .map(|output| {
             format!(
-                "Process id: '{}' (State: {}, {})",
+                "Process id: '{}' (State: {}{})",
                 output.asset.process_id(),
                 output.asset.state(),
                 output
@@ -505,12 +506,7 @@ fn select_from_assets_with_equal_metric(
         .collect::<Vec<_>>()
         .join(", ");
     let warning_message = format!(
-        "Could not resolve deadlock between equally good appraisals for{}Commodity: '{commodity_id}', Region: {}. Options: [{asset_details}]. Selecting first option.",
-        equally_good_assets[0]
-            .asset
-            .agent_id()
-            .map(|id| format!(" Agent id: {id}, "))
-            .unwrap_or_default(),
+        "Could not resolve deadlock between equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', Region: {}. Options: [{asset_details}]. Selecting first option.",
         equally_good_assets[0].asset.region_id()
     );
     warn!("{warning_message}");
@@ -619,7 +615,7 @@ fn select_best_assets(
                 // select from all equally good assets
                 let equally_good_assets: Vec<_> =
                     assets_sorted_by_metric.into_iter().take(count).collect();
-                select_from_assets_with_equal_metric(&commodity.id, equally_good_assets)
+                select_from_assets_with_equal_metric(&agent.id, &commodity.id, equally_good_assets)
             }
             // there is a single best asset by metric
             AppraisalComparisonMethod::Metric => {
