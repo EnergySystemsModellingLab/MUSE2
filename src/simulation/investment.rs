@@ -492,19 +492,21 @@ fn select_from_assets_with_equal_metric(
         .iter()
         .map(|output| {
             format!(
-                "'{}' (state: {}, commission year: {})",
+                "'{}' (state: {}{})",
                 output.asset.process_id(),
                 output.asset.state(),
-                output.asset.commission_year()
+                output
+                    .asset
+                    .id()
+                    .map(|id| format!(", Asset id: {id}"))
+                    .unwrap_or_default()
             )
         })
         .collect::<Vec<_>>()
         .join(", ");
-
     warn!(
         "Could not resolve deadlock between equally good appraisals for commodity: '{commodity_id}'. Options: [{asset_details}]. Selecting first option."
     );
-
     // Select the first asset from the equally performing options
     equally_good_assets.into_iter().next().unwrap()
 }
