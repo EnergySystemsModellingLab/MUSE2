@@ -284,6 +284,7 @@ fn select_assets_for_single_market(
             opt_assets,
             commodity,
             agent,
+            region_id,
             prices,
             demand_portion_for_market,
             year,
@@ -621,6 +622,7 @@ fn get_candidate_assets<'a>(
 }
 
 fn select_from_assets_with_equal_metric(
+    region_id: &RegionID,
     agent_id: &AgentID,
     commodity_id: &CommodityID,
     equally_good_assets: Vec<AppraisalOutput>,
@@ -643,8 +645,7 @@ fn select_from_assets_with_equal_metric(
         .collect::<Vec<_>>()
         .join(", ");
     let warning_message = format!(
-        "Could not resolve deadlock between equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', Region: {}. Options: [{asset_details}]. Selecting first option.",
-        equally_good_assets[0].asset.region_id()
+        "Could not resolve deadlock between equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
     );
     warn!("{warning_message}");
     // Select the first asset arbitrarily from the equally performing options
@@ -658,6 +659,7 @@ fn select_best_assets(
     mut opt_assets: Vec<AssetRef>,
     commodity: &Commodity,
     agent: &Agent,
+    region_id: &RegionID,
     prices: &CommodityPrices,
     mut demand: DemandMap,
     year: u32,
@@ -752,7 +754,12 @@ fn select_best_assets(
                 // select from all equally good assets
                 let equally_good_assets: Vec<_> =
                     assets_sorted_by_metric.into_iter().take(count).collect();
-                select_from_assets_with_equal_metric(&agent.id, &commodity.id, equally_good_assets)
+                select_from_assets_with_equal_metric(
+                    region_id,
+                    &agent.id,
+                    &commodity.id,
+                    equally_good_assets,
+                )
             }
             // there is a single best asset by metric
             AppraisalComparisonMethod::Metric => {
