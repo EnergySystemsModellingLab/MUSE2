@@ -18,7 +18,10 @@ use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{AppraisalOutput, appraise_investment};
+use appraisal::{
+    AppraisalComparisonMethod, AppraisalOutput, appraise_investment,
+    classify_appraisal_comparison_method,
+};
 
 /// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -584,16 +587,14 @@ fn select_best_assets(
             )
         }
 
+        let appraisal_comparison_method = classify_appraisal_comparison_method(
+            &assets_sorted_by_metric.iter().collect::<Vec<_>>(),
+        );
+
         // Determine the best asset based on whether multiple equally-good options exist
-        let best_output = match assets_sorted_by_metric.len() {
+        let best_output = match appraisal_comparison_method {
             // there are multiple equally good assets
-            n if n >= 2
-                && AppraisalOutput::compare_metric(
-                    &assets_sorted_by_metric[0],
-                    &assets_sorted_by_metric[1],
-                )
-                .is_eq() =>
-            {
+            AppraisalComparisonMethod::EqualMetrics => {
                 // Count how many assets have the same metric as the best one
                 let count = assets_sorted_by_metric
                     .iter()
@@ -608,7 +609,9 @@ fn select_best_assets(
                 select_from_assets_with_equal_metric(&commodity.id, equally_good_assets)
             }
             // there is a single best asset
-            _ => assets_sorted_by_metric.into_iter().next().unwrap(),
+            AppraisalComparisonMethod::Metric => {
+                assets_sorted_by_metric.into_iter().next().unwrap()
+            }
         };
 
         // Log the selected asset
