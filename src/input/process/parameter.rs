@@ -86,18 +86,18 @@ impl ProcessParameterRaw {
 pub fn read_process_parameters(
     model_dir: &Path,
     processes: &ProcessMap,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessParameterMap>> {
     let file_path = model_dir.join(PROCESS_PARAMETERS_FILE_NAME);
     let iter = read_csv::<ProcessParameterRaw>(&file_path)?;
-    read_process_parameters_from_iter(iter, processes, base_year)
+    read_process_parameters_from_iter(iter, processes, milestone_years)
         .with_context(|| input_err_msg(&file_path))
 }
 
 fn read_process_parameters_from_iter<I>(
     iter: I,
     processes: &ProcessMap,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessParameterMap>>
 where
     I: Iterator<Item = ProcessParameterRaw>,
@@ -110,8 +110,8 @@ where
             .with_context(|| format!("Process {} not found", param_raw.process_id))?;
 
         // Get years
-        let process_years = &process.years;
-        let parameter_years = parse_year_str(&param_raw.commission_years, process_years)
+        let process_years: Vec<u32> = process.years.clone().collect();
+        let parameter_years = parse_year_str(&param_raw.commission_years, &process_years)
             .with_context(|| {
                 format!("Invalid year for process {id}. Valid years are {process_years:?}")
             })?;
@@ -133,7 +133,7 @@ where
         }
     }
 
-    check_process_parameters(processes, &map, base_year)?;
+    check_process_parameters(processes, &map, milestone_years)?;
 
     Ok(map)
 }
@@ -142,22 +142,25 @@ where
 fn check_process_parameters(
     processes: &ProcessMap,
     map: &HashMap<ProcessID, ProcessParameterMap>,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<()> {
     for (process_id, process) in processes {
         let parameters = map
             .get(process_id)
             .with_context(|| format!("Missing parameters for process {process_id}"))?;
 
-        let reference_years = &process.years;
         let reference_regions = &process.regions;
 
-        // Only give an error for missing parameters >=base_year, so that users are not obliged to
-        // supply them for every valid year before the time horizon
+        // Only give an error for missing parameters in milestone years, so that users are not
+        // obliged to supply them for every valid year before the time horizon
         let mut missing_keys = Vec::new();
-        for year in reference_years.iter().filter(|year| **year >= base_year) {
+        for year in process
+            .years
+            .clone()
+            .filter(|y| milestone_years.contains(y))
+        {
             for region in reference_regions {
-                let key = (region.clone(), *year);
+                let key = (region.clone(), year);
                 if !parameters.contains_key(&key) {
                     missing_keys.push(key);
                 }
@@ -232,10 +235,10 @@ mod tests {
     ) {
         let mut param_map: HashMap<ProcessID, ProcessParameterMap> = HashMap::new();
         let process_id = processes.keys().next().unwrap().clone();
-        let base_year = 2010;
+        let milestone_years: Vec<u32> = vec![2010, 2020];
 
         param_map.insert(process_id, process_parameter_map.clone());
-        let result = check_process_parameters(&processes, &param_map, base_year);
+        let result = check_process_parameters(&processes, &param_map, &milestone_years);
         assert!(result.is_ok());
     }
 
@@ -247,13 +250,13 @@ mod tests {
     ) {
         let mut param_map: HashMap<ProcessID, ProcessParameterMap> = HashMap::new();
         let process_id = processes.keys().next().unwrap().clone();
-        let base_year = 2015;
+        let milestone_years: Vec<u32> = vec![2015, 2020];
 
         // Remove one entry before base_year
         process_parameter_map.remove(&(region_id, 2012)).unwrap();
         param_map.insert(process_id, process_parameter_map);
 
-        let result = check_process_parameters(&processes, &param_map, base_year);
+        let result = check_process_parameters(&processes, &param_map, &milestone_years);
         assert!(result.is_ok());
     }
 
@@ -265,13 +268,13 @@ mod tests {
     ) {
         let mut param_map: HashMap<ProcessID, ProcessParameterMap> = HashMap::new();
         let process_id = processes.keys().next().unwrap().clone();
-        let base_year = 2010;
+        let milestone_years: Vec<u32> = vec![2010, 2020];
 
         // Remove one region-year key to simulate missing parameter
         process_parameter_map.remove(&(region_id, 2010)).unwrap();
         param_map.insert(process_id, process_parameter_map);
 
-        let result = check_process_parameters(&processes, &param_map, base_year);
+        let result = check_process_parameters(&processes, &param_map, &milestone_years);
         assert_error!(
             result,
             "Process process1 is missing parameters for the following regions and years: \

@@ -97,9 +97,9 @@ where
             })?;
 
         // Get years
-        let process_years = &process.years;
+        let process_years: Vec<u32> = process.years.clone().collect();
         let record_years =
-            parse_year_str(&record.commission_years, process_years).with_context(|| {
+            parse_year_str(&record.commission_years, &process_years).with_context(|| {
                 format!("Invalid year for process {id}. Valid years are {process_years:?}")
             })?;
 
@@ -266,21 +266,21 @@ fn validate_secondary_flows(
             .collect();
 
         // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
-        let iter = iproduct!(process.years.iter(), process.regions.iter());
+        let iter = iproduct!(process.years.clone(), process.regions.iter());
         let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
         let mut number_of_years: HashMap<(CommodityID, RegionID), u32> = HashMap::new();
-        for (&year, region_id) in iter {
-            let flow = map[&(region_id.clone(), year)]
-                .iter()
-                .filter_map(|(commodity_id, flow)| {
+        for (year, region_id) in iter {
+            if let Some(commodity_map) = map.get(&(region_id.clone(), year)) {
+                let flow = commodity_map.iter().filter_map(|(commodity_id, flow)| {
                     (Some(commodity_id) != process.primary_output.as_ref())
                         .then_some(((commodity_id.clone(), region_id.clone()), flow))
                 });
 
-            for (key, value) in flow {
-                flows.entry(key.clone()).or_default().push(value);
-                if required_years.contains(&&year) {
-                    *number_of_years.entry(key).or_default() += 1;
+                for (key, value) in flow {
+                    flows.entry(key.clone()).or_default().push(value);
+                    if required_years.contains(&&year) {
+                        *number_of_years.entry(key).or_default() += 1;
+                    }
                 }
             }
         }
@@ -338,15 +338,15 @@ mod tests {
     fn build_maps<I>(
         process: Process,
         flows: I,
-        years: Option<&Vec<u32>>,
+        years: Option<Vec<u32>>,
     ) -> (ProcessMap, HashMap<ProcessID, ProcessFlowsMap>)
     where
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
-        let years = years.unwrap_or(&process.years);
+        let years = years.unwrap_or(process.years.clone().collect());
         let map: Rc<IndexMap<_, _>> = Rc::new(flows.clone().collect());
         let flows_inner = iproduct!(&process.regions, years)
-            .map(|(region_id, year)| ((region_id.clone(), *year), map.clone()))
+            .map(|(region_id, year)| ((region_id.clone(), year), map.clone()))
             .collect();
         let flows = hash_map! {process.id.clone() => flows_inner};
         let processes = iter::once((process.id.clone(), process.into())).collect();
@@ -379,7 +379,7 @@ mod tests {
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
     ) {
-        let milestone_years = vec![2010, 2020];
+        let milestone_years: Vec<u32> = vec![2010, 2020];
         let commodity1 = Rc::new(commodity1);
         let commodity2 = Rc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
@@ -471,7 +471,7 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), 2.0)),
             ]
             .into_iter(),
-            Some(&flow_years),
+            Some(flow_years),
         );
         let res =
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years);
@@ -497,7 +497,7 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), -2.0)),
             ]
             .into_iter(),
-            Some(&milestone_years),
+            Some(milestone_years.clone()),
         );
         assert!(
             validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
