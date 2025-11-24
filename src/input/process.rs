@@ -56,10 +56,9 @@ pub fn read_processes(
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
 ) -> Result<ProcessMap> {
-    let base_year = milestone_years[0];
     let mut processes = read_processes_file(model_dir, milestone_years, region_ids, commodities)?;
     let mut activity_limits =
-        read_process_availabilities(model_dir, &processes, time_slice_info, base_year)?;
+        read_process_availabilities(model_dir, &processes, time_slice_info, milestone_years)?;
     let mut flows = read_process_flows(model_dir, &mut processes, commodities, milestone_years)?;
     let mut parameters = read_process_parameters(model_dir, &processes, milestone_years)?;
 

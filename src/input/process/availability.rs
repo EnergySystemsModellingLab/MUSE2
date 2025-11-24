@@ -75,7 +75,7 @@ enum LimitType {
 /// * `model_dir` - Folder containing model configuration files
 /// * `processes` - Map of processes
 /// * `time_slice_info` - Information about seasons and times of day
-/// * `base_year` - First milestone year of simulation
+/// * `milestone_years` - Milestone years of simulation
 ///
 /// # Returns
 ///
@@ -85,7 +85,7 @@ pub fn read_process_availabilities(
     model_dir: &Path,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessActivityLimitsMap>> {
     let file_path = model_dir.join(PROCESS_AVAILABILITIES_FILE_NAME);
     let process_availabilities_csv = read_csv(&file_path)?;
@@ -93,7 +93,7 @@ pub fn read_process_availabilities(
         process_availabilities_csv,
         processes,
         time_slice_info,
-        base_year,
+        milestone_years,
     )
     .with_context(|| input_err_msg(&file_path))
 }
@@ -105,7 +105,7 @@ pub fn read_process_availabilities(
 /// * `iter` - Iterator of raw process availability records
 /// * `processes` - Map of processes
 /// * `time_slice_info` - Information about seasons and times of day
-/// * `base_year` - First milestone year of simulation
+/// * `milestone_years` - Milestone years of simulation
 ///
 /// # Returns
 ///
@@ -115,7 +115,7 @@ fn read_process_availabilities_from_iter<I>(
     iter: I,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<HashMap<ProcessID, ProcessActivityLimitsMap>>
 where
     I: Iterator<Item = ProcessAvailabilityRaw>,
@@ -162,7 +162,7 @@ where
         }
     }
 
-    validate_activity_limits_maps(&map, processes, time_slice_info, base_year)?;
+    validate_activity_limits_maps(&map, processes, time_slice_info, milestone_years)?;
 
     Ok(map)
 }
@@ -172,7 +172,7 @@ fn validate_activity_limits_maps(
     all_availabilities: &HashMap<ProcessID, ProcessActivityLimitsMap>,
     processes: &ProcessMap,
     time_slice_info: &TimeSliceInfo,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<()> {
     for (process_id, process) in processes {
         // A map of maps: the outer map is keyed by region and year; the inner one by time slice
@@ -180,7 +180,7 @@ fn validate_activity_limits_maps(
             .get(process_id)
             .with_context(|| format!("Missing availabilities for process {process_id}"))?;
 
-        check_missing_milestone_years(process, map_for_process, base_year)?;
+        check_missing_milestone_years(process, map_for_process, milestone_years)?;
         check_missing_time_slices(process, map_for_process, time_slice_info)?;
     }
 
@@ -195,11 +195,10 @@ fn validate_activity_limits_maps(
 fn check_missing_milestone_years(
     process: &Process,
     map_for_process: &ProcessActivityLimitsMap,
-    base_year: u32,
+    milestone_years: &[u32],
 ) -> Result<()> {
-    let process_milestone_years = process.years.clone().filter(|&year| year >= base_year);
     let mut missing = Vec::new();
-    for (region_id, year) in iproduct!(&process.regions, process_milestone_years) {
+    for (region_id, &year) in iproduct!(&process.regions, milestone_years) {
         if !map_for_process.contains_key(&(region_id.clone(), year)) {
             missing.push((region_id, year));
         }
