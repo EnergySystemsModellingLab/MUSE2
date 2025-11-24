@@ -34,7 +34,7 @@ jobs:
           - os: macos-latest
             osname: macos_arm
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install extra dependencies on Linux
         if: ${{ matrix.osname == 'linux' }}
         run: |
