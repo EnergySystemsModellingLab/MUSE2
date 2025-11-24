@@ -197,8 +197,12 @@ fn check_missing_milestone_years(
     map_for_process: &ProcessActivityLimitsMap,
     milestone_years: &[u32],
 ) -> Result<()> {
+    let process_milestone_years = process
+        .years
+        .clone()
+        .filter(|year| milestone_years.contains(year));
     let mut missing = Vec::new();
-    for (region_id, &year) in iproduct!(&process.regions, milestone_years) {
+    for (region_id, year) in iproduct!(&process.regions, process_milestone_years) {
         if !map_for_process.contains_key(&(region_id.clone(), year)) {
             missing.push((region_id, year));
         }
