@@ -17,7 +17,10 @@ fields:
   - name: years
     type: string
     description: The milestone year(s) to which this entry applies
-    notes: One or more milestone years separated by semicolons or `all`
+    notes: One or more milestone years separated by semicolons, `all` to select all years or a year
+      range in the form 'start..end' to select all valid years within range, inclusive. Either 'start'
+      'end' or both can be omitted, which will set the corresponding limit to the minimum or maximum
+      valid year, respectively.
   - name: time_slice
     type: string
     description: The time slices(s) to which this entry applies
