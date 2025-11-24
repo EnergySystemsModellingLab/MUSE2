@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - uses: ./.github/actions/generate-docs
       - name: Setup pages
         uses: actions/configure-pages@v5
