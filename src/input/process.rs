@@ -10,6 +10,7 @@ use crate::time_slice::TimeSliceInfo;
 use crate::units::ActivityPerCapacity;
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::IndexSet;
+use log::warn;
 use serde::Deserialize;
 use std::path::Path;
 use std::rc::Rc;
@@ -99,10 +100,21 @@ where
 {
     let mut processes = ProcessMap::new();
     for process_raw in iter {
-        let start_year = process_raw.start_year.unwrap_or(milestone_years[0]);
-        let end_year = process_raw
-            .end_year
-            .unwrap_or(*milestone_years.last().unwrap());
+        let start_year = process_raw.start_year.unwrap_or_else(|| {
+            warn!(
+                "Using default start year {} for process {}.",
+                milestone_years[0], process_raw.id
+            );
+            milestone_years[0]
+        });
+        let end_year = process_raw.end_year.unwrap_or_else(|| {
+            warn!(
+                "Using default end year {} for process {}.",
+                milestone_years.last().unwrap(),
+                process_raw.id
+            );
+            *milestone_years.last().unwrap()
+        });
 
         // Check year range is valid
         ensure!(
@@ -110,9 +122,6 @@ where
             "Error in parameter for process {}: start_year > end_year",
             process_raw.id
         );
-
-        // Select process years. It is possible for assets to have been commissioned before the
-        // simulation's time horizon, so assume that all years >=start_year are valid too.
         let years = start_year..=end_year;
 
         // Parse region ID
