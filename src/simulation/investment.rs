@@ -1,6 +1,6 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::Agent;
+use crate::agent::{Agent, AgentID};
 use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::ALLOW_BROKEN_OPTION_NAME;
@@ -13,13 +13,16 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{AppraisalOutput, appraise_investment};
+use appraisal::{
+    AppraisalComparisonMethod, AppraisalOutput, appraise_investment,
+    classify_appraisal_comparison_method,
+};
 
 /// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -281,6 +284,7 @@ fn select_assets_for_single_market(
             opt_assets,
             commodity,
             agent,
+            region_id,
             prices,
             demand_portion_for_market,
             year,
@@ -617,6 +621,37 @@ fn get_candidate_assets<'a>(
         })
 }
 
+fn select_from_assets_with_equal_metric(
+    region_id: &RegionID,
+    agent_id: &AgentID,
+    commodity_id: &CommodityID,
+    equally_good_assets: Vec<AppraisalOutput>,
+) -> AppraisalOutput {
+    // Format asset details for diagnostic logging
+    let asset_details = equally_good_assets
+        .iter()
+        .map(|output| {
+            format!(
+                "Process id: '{}' (State: {}{})",
+                output.asset.process_id(),
+                output.asset.state(),
+                output
+                    .asset
+                    .id()
+                    .map(|id| format!(", Asset id: {id}"))
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let warning_message = format!(
+        "Could not resolve deadlock between equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
+    );
+    warn!("{warning_message}");
+    // Select the first asset arbitrarily from the equally performing options
+    equally_good_assets.into_iter().next().unwrap()
+}
+
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
 fn select_best_assets(
@@ -624,6 +659,7 @@ fn select_best_assets(
     mut opt_assets: Vec<AssetRef>,
     commodity: &Commodity,
     agent: &Agent,
+    region_id: &RegionID,
     prices: &CommodityPrices,
     mut demand: DemandMap,
     year: u32,
@@ -679,22 +715,56 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Select the best investment option according to `AppraisalOutput::compare_metric`
-        let Some(best_output) = outputs_for_opts
+        // Sort assets by appraisal metric
+        let assets_sorted_by_metric: Vec<_> = outputs_for_opts
             .into_iter()
-            // Investment options with zero capacity are excluded. This may happen if the asset has
-            // zero activity limits for all time slices with demand. This can also happen due to a
-            // known issue with the NPV objective, for which we do not currently have a solution
-            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
             .filter(|output| output.capacity > Capacity(0.0))
-            .min_by(AppraisalOutput::compare_metric)
-        else {
-            // If None, this means all investment options have zero capacity. In this case, we
-            // cannot meet demand, so have to bail out.
+            .sorted_by(AppraisalOutput::compare_metric)
+            .collect();
+
+        // check if all options have zero capacity
+        if assets_sorted_by_metric.is_empty() {
+            // In this case, we cannot meet demand, so have to bail out.
+            // This may happen if:
+            // - the asset has zero activity limits for all time slices with demand.
+            // - known issue with the NPV objective
+            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
             bail!(
                 "No feasible investment options for commodity '{}' after appraisal",
                 &commodity.id
             )
+        }
+
+        let appraisal_comparison_method = classify_appraisal_comparison_method(
+            &assets_sorted_by_metric.iter().collect::<Vec<_>>(),
+        );
+
+        // Determine the best asset based on whether multiple equally-good options exist
+        let best_output = match appraisal_comparison_method {
+            // there are multiple equally good assets by metric
+            AppraisalComparisonMethod::EqualMetrics => {
+                // Count how many assets have the same metric as the best one
+                let count = assets_sorted_by_metric
+                    .iter()
+                    .take_while(|output| {
+                        AppraisalOutput::compare_metric(&assets_sorted_by_metric[0], output).is_eq()
+                    })
+                    .count();
+
+                // select from all equally good assets
+                let equally_good_assets: Vec<_> =
+                    assets_sorted_by_metric.into_iter().take(count).collect();
+                select_from_assets_with_equal_metric(
+                    region_id,
+                    &agent.id,
+                    &commodity.id,
+                    equally_good_assets,
+                )
+            }
+            // there is a single best asset by metric
+            AppraisalComparisonMethod::Metric => {
+                assets_sorted_by_metric.into_iter().next().unwrap()
+            }
         };
 
         // Log the selected asset
