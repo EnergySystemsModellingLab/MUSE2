@@ -3,7 +3,7 @@
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{Season, TimeSliceID};
 use crate::units::{
     ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, MoneyPerFlow,
@@ -20,11 +20,7 @@ define_id_type! {ProcessID}
 pub type ProcessMap = IndexMap<ProcessID, Rc<Process>>;
 
 /// A map indicating activity limits for a [`Process`] throughout the year.
-///
-/// The value is calculated as availability multiplied by time slice length. The limits are given as
-/// ranges, depending on the user-specified limit type and value for availability.
-pub type ProcessActivityLimitsMap =
-    HashMap<(RegionID, u32), Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>>;
+pub type ProcessActivityLimitsMap = HashMap<(RegionID, u32), Rc<ProcessAvailabilities>>;
 
 /// A map of [`ProcessParameter`]s, keyed by region and year
 pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
@@ -66,6 +62,24 @@ impl Process {
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
     }
+}
+
+// Defines the availability limits for a process in a given region and year
+///
+/// Values are calculated as availability multiplied by time slice/season length. The limits are
+/// given as ranges, depending on the user-specified limit type and value for availability.
+///
+/// All time slices must have an entry in `time_slice_limits`. Seasonal and annual limits may be
+/// present if provided by the user, and only if they provide an extra level of constraint on top of
+/// the time slice limits.
+#[derive(PartialEq, Debug, Clone, Default)]
+pub struct ProcessAvailabilities {
+    /// Optional annual limit
+    pub annual_limit: Option<RangeInclusive<Dimensionless>>,
+    /// Optional limits for each season
+    pub seasonal_limits: IndexMap<Season, RangeInclusive<Dimensionless>>,
+    /// Limits for each time slice (mandatory for all time slices)
+    pub time_slice_limits: IndexMap<TimeSliceID, RangeInclusive<Dimensionless>>,
 }
 
 /// Represents a maximum annual commodity coeff for a given process

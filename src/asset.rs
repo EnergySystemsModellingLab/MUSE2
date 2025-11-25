@@ -1,17 +1,18 @@
 //! Assets are instances of a process which are owned and invested in by agents.
 use crate::agent::AgentID;
 use crate::commodity::CommodityID;
-use crate::process::{FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter};
+use crate::process::{
+    FlowDirection, Process, ProcessAvailabilities, ProcessFlow, ProcessID, ProcessParameter,
+};
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity};
+use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -84,7 +85,7 @@ pub struct Asset {
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
     /// Activity limits for this asset
-    activity_limits: Rc<HashMap<TimeSliceID, RangeInclusive<Dimensionless>>>,
+    activity_limits: Rc<ProcessAvailabilities>,
     /// The commodity flows for this asset
     flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
@@ -276,7 +277,7 @@ impl Asset {
 
     /// Get the activity limits for this asset in a particular time slice
     pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<Activity> {
-        let limits = &self.activity_limits[time_slice];
+        let limits = &self.activity_limits.time_slice_limits[time_slice];
         let max_act = self.max_activity();
 
         // limits in real units (which are user defined)
@@ -288,7 +289,7 @@ impl Asset {
         &self,
         time_slice: &TimeSliceID,
     ) -> RangeInclusive<ActivityPerCapacity> {
-        let limits = &self.activity_limits[time_slice];
+        let limits = &self.activity_limits.time_slice_limits[time_slice];
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }

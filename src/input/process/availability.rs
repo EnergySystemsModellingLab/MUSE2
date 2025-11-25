@@ -1,6 +1,8 @@
 //! Code for reading process availabilities CSV file
 use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
-use crate::process::{Process, ProcessActivityLimitsMap, ProcessID, ProcessMap};
+use crate::process::{
+    Process, ProcessActivityLimitsMap, ProcessAvailabilities, ProcessID, ProcessMap,
+};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
@@ -153,11 +155,15 @@ where
         for (region_id, year) in iproduct!(&record_regions, &record_years) {
             let limits_map_inner = limits_map
                 .entry((region_id.clone(), *year))
-                .or_insert_with(|| Rc::new(HashMap::new()));
+                .or_insert_with(|| Rc::new(ProcessAvailabilities::default()));
             let limits_map_inner = Rc::get_mut(limits_map_inner).unwrap();
             for (time_slice, ts_length) in ts_selection.iter(time_slice_info) {
                 let bounds = record.to_bounds(ts_length);
-                try_insert(limits_map_inner, time_slice, bounds.clone())?;
+                try_insert(
+                    &mut limits_map_inner.time_slice_limits,
+                    time_slice,
+                    bounds.clone(),
+                )?;
             }
         }
     }
@@ -233,7 +239,7 @@ fn check_missing_time_slices(
             missing.extend(
                 time_slice_info
                     .iter_ids()
-                    .filter(|ts| !map_for_region_year.contains_key(ts))
+                    .filter(|ts| !map_for_region_year.time_slice_limits.contains_key(*ts))
                     .map(|ts| (region_id, year, ts)),
             );
         }
