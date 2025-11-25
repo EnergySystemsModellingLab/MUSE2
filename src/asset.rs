@@ -275,21 +275,14 @@ impl Asset {
         self.max_decommission_year
     }
 
-    /// Get the activity limits for this asset in a particular time slice
-    pub fn get_activity_limits(&self, time_slice: &TimeSliceID) -> RangeInclusive<Activity> {
-        let limits = &self.activity_limits.time_slice_limits[time_slice];
-        let max_act = self.max_activity();
-
-        // limits in real units (which are user defined)
-        (max_act * *limits.start())..=(max_act * *limits.end())
-    }
-
     /// Get the activity limits per unit of capacity for this asset in a particular time slice
     pub fn get_activity_per_capacity_limits(
         &self,
         time_slice: &TimeSliceID,
     ) -> RangeInclusive<ActivityPerCapacity> {
-        let limits = &self.activity_limits.time_slice_limits[time_slice];
+        let limits = &self
+            .activity_limits
+            .get_availability_limit_for_time_slice(time_slice);
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }
