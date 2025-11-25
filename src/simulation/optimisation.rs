@@ -165,13 +165,6 @@ impl VariableMap {
             .expect("No unmet demand variable for given params")
     }
 
-    /// Iterate over the activity variables
-    fn iter_activity_vars(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Variable)> {
-        self.activity_vars
-            .iter()
-            .map(|((asset, time_slice), var)| (asset, time_slice, *var))
-    }
-
     /// Iterate over the keys for activity variables
     fn activity_var_keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
         self.activity_vars.keys()
@@ -278,13 +271,22 @@ impl Solution<'_> {
     /// Note: if there are any flexible capacity assets, these will have two duals with identical
     /// keys, and there will be no way to distinguish between them in the resulting iterator.
     /// Recommended for now only to use this function when there are no flexible capacity assets.
+    ///
+    /// Also note: this excludes seasonal and annual constraints. Recommended for now not to use
+    /// this for models that include seasonal or annual availability constraints.
     pub fn iter_activity_duals(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
         self.constraint_keys
             .activity_keys
             .zip_duals(self.solution.dual_rows())
-            .map(|((asset, time_slice), dual)| (asset, time_slice, dual))
+            .filter_map(move |((asset, ts_selection), dual)| {
+                let mut it = ts_selection.iter(self.time_slice_info);
+                match (it.next(), it.next()) {
+                    (Some((time_slice, _)), None) => Some((asset, time_slice, dual)),
+                    _ => None,
+                }
+            })
     }
 
     /// Keys and values for column duals.
