@@ -89,10 +89,7 @@ fn can_be_active(process: &Process, target: &(RegionID, u32), time_slice: &TimeS
             let Some(limits_map) = process.activity_limits.get(target) else {
                 continue;
             };
-            if limits_map
-                .get(time_slice)
-                .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
-            {
+            if limits_map.time_slice_limits[time_slice].end() > &Dimensionless(0.0) {
                 return true;
             }
         }
