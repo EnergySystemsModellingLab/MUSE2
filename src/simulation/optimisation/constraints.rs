@@ -4,7 +4,7 @@ use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::time_slice::{TimeSliceID, TimeSliceSelection};
+use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
 use crate::units::UnitType;
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
@@ -36,7 +36,7 @@ impl<T> KeysWithOffset<T> {
 pub type CommodityBalanceKeys = KeysWithOffset<(CommodityID, RegionID, TimeSliceSelection)>;
 
 /// Indicates the asset ID and time slice covered by each activity constraint
-pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceID)>;
+pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceSelection)>;
 
 /// The keys for different constraints
 pub struct ConstraintKeys {
@@ -83,7 +83,8 @@ where
         year,
     );
 
-    let activity_keys = add_activity_constraints(problem, variables);
+    let activity_keys =
+        add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
     // Return constraint keys
     ConstraintKeys {
@@ -187,38 +188,63 @@ where
 /// See description in [the dispatch optimisation documentation][1].
 ///
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
-fn add_activity_constraints(problem: &mut Problem, variables: &VariableMap) -> ActivityKeys {
+fn add_activity_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    time_slice_info: &TimeSliceInfo,
+    assets: I,
+) -> ActivityKeys
+where
+    I: Iterator<Item = &'a AssetRef> + 'a,
+{
     // Row offset in problem. This line **must** come before we add more constraints.
     let offset = problem.num_rows();
 
     let mut keys = Vec::new();
     let capacity_vars: IndexMap<&AssetRef, highs::Col> = variables.iter_capacity_vars().collect();
-    for (asset, time_slice, activity_var) in variables.iter_activity_vars() {
+
+    // Create constraints for each asset
+    for asset in assets {
         if let Some(&capacity_var) = capacity_vars.get(asset) {
-            // Asset has flexible capacity.
-            let per_capacity_limits = asset.get_activity_per_capacity_limits(time_slice);
-            let lower_limit = per_capacity_limits.start().value();
-            let upper_limit = per_capacity_limits.end().value();
+            // Asset with flexible capacity
+            for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
+                // Create constraints for this time slice selection
+                let upper_limit = limits.end().value();
+                let lower_limit = limits.start().value();
+                let mut terms_upper = vec![(capacity_var, -upper_limit)];
+                let mut terms_lower = vec![(capacity_var, lower_limit)];
+                for (time_slice, _) in ts_selection.iter(time_slice_info) {
+                    let var = variables.get_activity_var(asset, time_slice);
+                    terms_upper.push((var, 1.0));
+                    terms_lower.push((var, -1.0));
+                }
 
-            // Upper bound: activity ≤ capacity * upper_limit
-            problem.add_row(..=0.0, [(activity_var, 1.0), (capacity_var, -upper_limit)]);
+                // Upper bound: activity ≤ capacity * upper_limit
+                problem.add_row(..=0.0, &terms_upper);
 
-            // Lower bound: activity ≥ capacity * lower_limit
-            problem.add_row(..=0.0, [(activity_var, -1.0), (capacity_var, lower_limit)]);
+                // Lower bound: activity ≥ capacity * lower_limit
+                problem.add_row(..=0.0, &terms_lower);
 
-            // Store keys for retrieving duals later.
-            // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
-            // use the activity duals for anything important when using flexible capacity assets.
-            keys.push((asset.clone(), time_slice.clone()));
-            keys.push((asset.clone(), time_slice.clone()));
+                // Store keys for retrieving duals later.
+                // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
+                // use the activity duals for anything important when using flexible capacity assets.
+                keys.push((asset.clone(), ts_selection.clone()));
+                keys.push((asset.clone(), ts_selection.clone()));
+            }
         } else {
             // Fixed-capacity asset: simple absolute activity limits.
-            let activity_limits = asset.get_activity_limits(time_slice);
-            let range = activity_limits.start().value()..=activity_limits.end().value();
-            problem.add_row(range, [(activity_var, 1.0)]);
+            for (ts_selection, limits) in asset.iter_activity_limits() {
+                // Create constraint for this time slice selection
+                let limits = limits.start().value()..=limits.end().value();
+                let vars = ts_selection
+                    .iter(time_slice_info)
+                    .map(|(time_slice, _)| (variables.get_activity_var(asset, time_slice), 1.0))
+                    .collect::<Vec<_>>();
+                problem.add_row(limits, &vars);
 
-            // Store keys for retrieving duals later.
-            keys.push((asset.clone(), time_slice.clone()));
+                // Store keys for retrieving duals later.
+                keys.push((asset.clone(), ts_selection.clone()));
+            }
         }
     }
 
