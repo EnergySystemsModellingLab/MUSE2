@@ -75,25 +75,32 @@ pub fn parse_year_str(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
 /// the first and last years of the `valid_years`. If both limits are missing, this is equivalent to
 /// passing all.
 fn parse_years_range(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
+    // Require exactly one ".." separator so only forms start..end, start.. or ..end are allowed.
+    let parts: Vec<&str> = s.split("..").collect();
+    ensure!(
+        parts.len() == 2,
+        "Year range must be of the form 'start..end', 'start..' or '..end'. Invalid: {s}"
+    );
+    let left = parts[0].trim();
+    let right = parts[1].trim();
+
     // If the range start is open, we assign the first valid year
-    let start = if s.starts_with("..") {
+    let start = if left.is_empty() {
         valid_years[0]
     } else {
-        let y = s.split("..").next().unwrap();
-        y.trim()
-            .parse::<u32>()
+        left.parse::<u32>()
             .ok()
-            .with_context(|| format!("Invalid year: {y}"))?
+            .with_context(|| format!("Invalid start year in range: {left}"))?
     };
+
     // If the range end is open, we assign the last valid year
-    let end = if s.ends_with("..") {
+    let end = if right.is_empty() {
         *valid_years.last().unwrap()
     } else {
-        let y = s.split("..").last().unwrap();
-        y.trim()
+        right
             .parse::<u32>()
             .ok()
-            .with_context(|| format!("Invalid year: {y}"))?
+            .with_context(|| format!("Invalid end year in range: {right}"))?
     };
 
     ensure!(
@@ -142,6 +149,8 @@ mod tests {
     #[case("2021;2020..2021", &[2020, 2021],"Both ';' and '..' found in year string 2021;2020..2021. Discrete years and ranges cannot be mixed.")]
     #[case("2021..2020", &[2020, 2021],"End year must be biger than start year in range 2021..2020")] // out of order
     #[case("2021..2024", &[2020,2025], "No valid years found in year range string 2021..2024")]
+    #[case("..2020..2025", &[2020,2025], "Year range must be of the form 'start..end', 'start..' or '..end'. Invalid: ..2020..2025")]
+    #[case("2020...2025", &[2020,2025], "Invalid end year in range: .2025")]
     fn test_parse_year_str_invalid(
         #[case] input: &str,
         #[case] milestone_years: &[u32],
