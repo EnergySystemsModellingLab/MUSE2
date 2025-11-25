@@ -3,7 +3,7 @@
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
-use crate::time_slice::{Season, TimeSliceID};
+use crate::time_slice::{Season, TimeSliceID, TimeSliceSelection};
 use crate::units::{
     ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, MoneyPerFlow,
@@ -86,6 +86,55 @@ pub struct ProcessAvailabilities {
     pub seasonal_limits: IndexMap<Season, RangeInclusive<Dimensionless>>,
     /// Limits for each time slice (mandatory for all time slices)
     pub time_slice_limits: IndexMap<TimeSliceID, RangeInclusive<Dimensionless>>,
+}
+
+impl ProcessAvailabilities {
+    /// Check if the availability limits allow activity in the given time slice
+    pub fn has_availability(&self, time_slice: &TimeSliceID) -> bool {
+        // Check limit for this specific time slice
+        self.time_slice_limits[time_slice].end() > &Dimensionless(0.0)
+
+        // Also need to check seasonal and annual limits, if present
+            && self
+                .seasonal_limits
+                .get(&time_slice.season)
+                .is_none_or(|seasonal_limit| seasonal_limit.end() > &Dimensionless(0.0))
+            && self
+                .annual_limit
+                .as_ref()
+                .is_none_or(|annual_limit| annual_limit.end() > &Dimensionless(0.0))
+    }
+
+    /// Iterate over all time slice availability limits
+    ///
+    /// This first iterates over all individual timeslice limits, followed by seasonal limits (if
+    /// any), and finally the annual limit (if any).
+    pub fn iter_availability_limits(
+        &self,
+    ) -> impl Iterator<Item = (TimeSliceSelection, &RangeInclusive<Dimensionless>)> {
+        // Iterate over all time slice limits
+        let time_slice_limits = self
+            .time_slice_limits
+            .iter()
+            .map(|(ts_id, limit)| (TimeSliceSelection::Single(ts_id.clone()), limit));
+
+        // Then seasonal limits, if any
+        let seasonal_limits = self
+            .seasonal_limits
+            .iter()
+            .map(|(season, limit)| (TimeSliceSelection::Season(season.clone()), limit));
+
+        // Then annual limit, if any
+        let annual_limits = self
+            .annual_limit
+            .as_ref()
+            .map(|limit| (TimeSliceSelection::Annual, limit));
+
+        // Chain all limits together
+        time_slice_limits
+            .chain(seasonal_limits)
+            .chain(annual_limits)
+    }
 }
 
 /// Represents a maximum annual commodity coeff for a given process
