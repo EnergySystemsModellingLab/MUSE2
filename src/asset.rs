@@ -6,7 +6,7 @@ use crate::process::{
 };
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -292,6 +292,36 @@ impl Asset {
         let limits = &self.activity_limits.time_slice_limits[time_slice];
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
+    }
+
+    /// Iterate over activity limits for this asset
+    pub fn iter_activity_limits(
+        &self,
+    ) -> impl Iterator<Item = (TimeSliceSelection, RangeInclusive<Activity>)> + '_ {
+        let max_act = self.max_activity();
+        self.activity_limits
+            .iter_availability_limits()
+            .map(move |(ts_sel, limit)| {
+                (
+                    ts_sel,
+                    (max_act * *limit.start())..=(max_act * *limit.end()),
+                )
+            })
+    }
+
+    /// Iterate over activity per capacity limits for this asset
+    pub fn iter_activity_per_capacity_limits(
+        &self,
+    ) -> impl Iterator<Item = (TimeSliceSelection, RangeInclusive<ActivityPerCapacity>)> + '_ {
+        let cap2act = self.process.capacity_to_activity;
+        self.activity_limits
+            .iter_availability_limits()
+            .map(move |(ts_sel, limit)| {
+                (
+                    ts_sel,
+                    (cap2act * *limit.start())..=(cap2act * *limit.end()),
+                )
+            })
     }
 
     /// Get the operating cost for this asset in a given year and time slice
