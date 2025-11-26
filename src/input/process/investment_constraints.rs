@@ -1,6 +1,5 @@
 //! Code for reading process investment constraints CSV file
 use super::super::input_err_msg;
-use super::availability::LimitType;
 use crate::input::read_csv_optional;
 use crate::process::{
     InvestmentConstraintValue, ProcessID, ProcessInvestmentConstraint,
@@ -21,18 +20,10 @@ const PROCESS_INVESTMENT_CONSTRAINTS_FILE_NAME: &str = "process_investment_const
 struct ProcessInvestmentConstraintRaw {
     constraint_name: String,
     process_id: String,
-    #[serde(default = "default_region")]
     regions: String,
     commission_years: u32,
-    limit_type: LimitType,
     constraint_type: ConstraintType,
-    growth_constraint_seed: Option<f64>,
     value: f64,
-}
-
-/// Default value for region field when not specified
-fn default_region() -> String {
-    "ALL".to_string()
 }
 
 impl ProcessInvestmentConstraintRaw {
@@ -52,6 +43,15 @@ impl ProcessInvestmentConstraintRaw {
             "Constraint value must be finite for constraint '{}'",
             self.constraint_name
         );
+
+        if matches!(self.constraint_type, ConstraintType::Addition) {
+            // For addition constraints, value must be non-negative
+            ensure!(
+                self.value >= 0.0,
+                "Addition constraint value must be non-negative for constraint '{}'",
+                self.constraint_name
+            );
+        }
 
         Ok(())
     }
@@ -158,34 +158,20 @@ where
         for region in &record_regions {
             let constraint_value = match record.constraint_type {
                 ConstraintType::Addition => InvestmentConstraintValue::Addition {
-                    addition_limit: record.value,
+                    addition_limit: Some(record.value),
                 },
-                ConstraintType::Growth => InvestmentConstraintValue::Growth {
-                    growth_constraint_seed: record.growth_constraint_seed.unwrap(),
-                },
+                ConstraintType::Growth => InvestmentConstraintValue::Growth {},
                 ConstraintType::Limit => InvestmentConstraintValue::Limit {},
-            };
-
-            let limit_type_str = match record.limit_type {
-                LimitType::LowerBound => "LowerBound",
-                LimitType::UpperBound => "UpperBound",
-                LimitType::Equality => "Equality",
             };
 
             let constraint = ProcessInvestmentConstraint {
                 constraint_name: record.constraint_name.clone(),
                 constraint_value,
-                limit_type: limit_type_str.to_string(),
             };
-
             let process_map = map.entry(process_id.clone()).or_default();
-            let constraints_vec = process_map
+            process_map
                 .entry((region.clone(), record.commission_years))
-                .or_insert_with(|| Rc::new(Vec::new()));
-
-            let constraints_mut = Rc::get_mut(constraints_vec)
-                .expect("Should have exclusive access during construction");
-            constraints_mut.push(constraint);
+                .or_insert_with(|| Rc::new(constraint));
         }
     }
 
@@ -201,19 +187,17 @@ fn validate_constraint_consistency(
     map: &HashMap<ProcessID, ProcessInvestmentConstraintsMap>,
 ) -> Result<()> {
     for (process_id, constraints_map) in map {
-        for ((region_id, year), constraints) in constraints_map {
+        for ((region_id, year), constraint) in constraints_map {
             // Check for duplicate constraint names
             let mut seen = HashSet::new();
-            for constraint in constraints.iter() {
-                if !seen.insert(&constraint.constraint_name) {
-                    bail!(
-                        "Duplicate constraint name '{}' for process '{}', region '{}', year {}",
-                        constraint.constraint_name,
-                        process_id,
-                        region_id,
-                        year
-                    );
-                }
+            if !seen.insert(&constraint.constraint_name) {
+                bail!(
+                    "Duplicate constraint name '{}' for process '{}', region '{}', year {}",
+                    constraint.constraint_name,
+                    process_id,
+                    region_id,
+                    year
+                );
             }
         }
     }
@@ -227,18 +211,14 @@ mod tests {
 
     fn create_raw_constraint(
         constraint_type: ConstraintType,
-        limit_type: LimitType,
         value: f64,
-        growth_constraint_seed: Option<f64>,
     ) -> ProcessInvestmentConstraintRaw {
         ProcessInvestmentConstraintRaw {
             constraint_name: "test_constraint".into(),
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: 2030,
-            limit_type,
             constraint_type,
-            growth_constraint_seed,
             value,
         }
     }
@@ -246,12 +226,7 @@ mod tests {
     #[test]
     fn test_validate_growth_not_supported() {
         // Growth constraints should fail with "not supported yet" message
-        let constraint = create_raw_constraint(
-            ConstraintType::Growth,
-            LimitType::UpperBound,
-            0.1,
-            Some(100.0),
-        );
+        let constraint = create_raw_constraint(ConstraintType::Growth, 0.1);
         let result = constraint.validate();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not supported"));
@@ -260,8 +235,7 @@ mod tests {
     #[test]
     fn test_validate_limit_not_supported() {
         // Limit constraints should fail with "not supported yet" message
-        let constraint =
-            create_raw_constraint(ConstraintType::Limit, LimitType::UpperBound, 100.0, None);
+        let constraint = create_raw_constraint(ConstraintType::Limit, 100.0);
         let result = constraint.validate();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not supported"));
@@ -270,39 +244,26 @@ mod tests {
     #[test]
     fn test_validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
-        let valid =
-            create_raw_constraint(ConstraintType::Addition, LimitType::UpperBound, 10.0, None);
+        let valid = create_raw_constraint(ConstraintType::Addition, 10.0);
         assert!(valid.validate().is_ok());
 
         // Valid: addition constraint with zero value
-        let valid =
-            create_raw_constraint(ConstraintType::Addition, LimitType::UpperBound, 0.0, None);
+        let valid = create_raw_constraint(ConstraintType::Addition, 0.0);
         assert!(valid.validate().is_ok());
 
-        // Valid: addition constraint with negative value (constraint allows this)
-        let valid =
-            create_raw_constraint(ConstraintType::Addition, LimitType::LowerBound, -10.0, None);
-        assert!(valid.validate().is_ok());
+        // Not valid: addition constraint with negative value
+        let valid = create_raw_constraint(ConstraintType::Addition, -10.0);
+        assert!(valid.validate().is_err());
     }
 
     #[test]
     fn test_validate_addition_rejects_infinite() {
         // Invalid: infinite value
-        let invalid = create_raw_constraint(
-            ConstraintType::Addition,
-            LimitType::UpperBound,
-            f64::INFINITY,
-            None,
-        );
+        let invalid = create_raw_constraint(ConstraintType::Addition, f64::INFINITY);
         assert!(invalid.validate().is_err());
 
         // Invalid: NaN value
-        let invalid = create_raw_constraint(
-            ConstraintType::Addition,
-            LimitType::UpperBound,
-            f64::NAN,
-            None,
-        );
+        let invalid = create_raw_constraint(ConstraintType::Addition, f64::NAN);
         assert!(invalid.validate().is_err());
     }
 }
