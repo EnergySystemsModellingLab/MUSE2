@@ -72,17 +72,92 @@ impl Process {
 /// All time slices must have an entry in `time_slice_limits`. Seasonal and annual limits may be
 /// present if provided by the user, and only if they provide an extra level of constraint on top of
 /// the time slice limits.
-#[derive(PartialEq, Debug, Clone, Default)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ProcessAvailabilities {
     /// Optional annual limit
-    pub annual_limit: Option<RangeInclusive<Dimensionless>>,
+    annual_limit: Option<RangeInclusive<Dimensionless>>,
     /// Optional limits for each season
-    pub seasonal_limits: IndexMap<Season, RangeInclusive<Dimensionless>>,
+    seasonal_limits: IndexMap<Season, RangeInclusive<Dimensionless>>,
     /// Limits for each time slice (mandatory for all time slices)
-    pub time_slice_limits: IndexMap<TimeSliceID, RangeInclusive<Dimensionless>>,
+    time_slice_limits: IndexMap<TimeSliceID, RangeInclusive<Dimensionless>>,
 }
 
 impl ProcessAvailabilities {
+    /// Create a new `ProcessAvailabilities` with full availability for all time slices
+    fn new_with_full_availability(time_slice_info: &TimeSliceInfo) -> Self {
+        // Initialize time slice limits to full availability
+        let mut ts_limits = IndexMap::new();
+        for (ts_id, ts_length) in time_slice_info.iter() {
+            ts_limits.insert(
+                ts_id.clone(),
+                Dimensionless(0.0)..=Dimensionless(ts_length.value()),
+            );
+        }
+
+        ProcessAvailabilities {
+            annual_limit: None,
+            seasonal_limits: IndexMap::new(),
+            time_slice_limits: ts_limits,
+        }
+    }
+
+    /// Create a new `ProcessAvailabilities` from a map of limits for time slice selections
+    pub fn new_from_limits(
+        limits: &HashMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
+        time_slice_info: &TimeSliceInfo,
+    ) -> Self {
+        let mut availabilities = ProcessAvailabilities::new_with_full_availability(time_slice_info);
+
+        // Add time slice limits first
+        for (ts_selection, limit) in limits {
+            if let TimeSliceSelection::Single(ts_id) = ts_selection {
+                availabilities.insert_time_slice_limit(ts_id.clone(), limit.clone());
+            }
+        }
+
+        // Then add seasonal limits
+        for (ts_selection, limit) in limits {
+            if let TimeSliceSelection::Season(season) = ts_selection {
+                availabilities.insert_seasonal_limit(season.clone(), limit.clone());
+            }
+        }
+
+        // Then add annual limit
+        if let Some(limit) = limits.get(&TimeSliceSelection::Annual) {
+            availabilities.insert_annual_limit(limit.clone());
+        }
+
+        availabilities
+    }
+
+    fn insert_time_slice_limit(
+        &mut self,
+        ts_id: TimeSliceID,
+        limit: RangeInclusive<Dimensionless>,
+    ) {
+        self.time_slice_limits.insert(ts_id, limit);
+    }
+
+    fn insert_seasonal_limit(&mut self, season: Season, limit: RangeInclusive<Dimensionless>) {
+        // Get current limit for the season
+        let current_limit = self.get_availability_limit_for_season(&season);
+
+        // Only insert the seasonal limit if it provides an extra level of constraint
+        if *limit.start() > *current_limit.start() || *limit.end() < *current_limit.end() {
+            self.seasonal_limits.insert(season, limit);
+        }
+    }
+
+    fn insert_annual_limit(&mut self, limit: RangeInclusive<Dimensionless>) {
+        // Get current limit for the year
+        let current_limit = self.get_availability_limit_for_year(&TimeSliceInfo::default());
+
+        // Only insert the annual limit if it provides an extra level of constraint
+        if *limit.start() > *current_limit.start() || *limit.end() < *current_limit.end() {
+            self.annual_limit = Some(limit);
+        }
+    }
+
     /// Get the availability limit for a given time slice selection
     pub fn get_availability_limit(
         &self,
@@ -106,7 +181,7 @@ impl ProcessAvailabilities {
         let ts_lower = *ts_limit.start();
         let ts_upper = *ts_limit.end();
 
-        // Time slice availability cannot exceed seasonal or annual limits, if specified
+        // Time slice availability cannot exceed upper limit for the season/year, if specified
         let seasonal_upper = self
             .seasonal_limits
             .get(&time_slice.season)
@@ -138,7 +213,7 @@ impl ProcessAvailabilities {
             total_upper = total_upper.min(*seasonal_limit.end());
         }
 
-        // Seasonal availability cannot exceed the upper annual limit, if specified
+        // Seasonal availability cannot exceed the upper limit for the year, if specified
         if let Some(annual_limit) = &self.annual_limit {
             total_upper = total_upper.min(*annual_limit.end());
         }
