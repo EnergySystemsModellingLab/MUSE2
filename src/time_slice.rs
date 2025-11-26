@@ -338,6 +338,12 @@ impl TimeSliceInfo {
         Some(iter)
     }
 
+    /// Calculate the total length of a selection of time slices.
+    pub fn length_for_selection(&self, selection: &TimeSliceSelection) -> Result<Year> {
+        let length: Year = selection.iter(self).map(|(_, duration)| duration).sum();
+        Ok(length)
+    }
+
     /// Share a value between a subset of time slices in proportion to their lengths.
     ///
     /// For instance, you could use this function to compute how demand is distributed between the
