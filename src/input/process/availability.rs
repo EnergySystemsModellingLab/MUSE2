@@ -8,7 +8,6 @@ use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
 use serde::Deserialize;
-use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::Path;
@@ -23,46 +22,70 @@ struct ProcessAvailabilityRaw {
     regions: String,
     commission_years: String,
     time_slice: String,
-    limit_type: LimitType,
-    value: Dimensionless,
+    limits: String,
 }
 
 impl ProcessAvailabilityRaw {
-    fn validate(&self) -> Result<()> {
-        // Check availability value
-        ensure!(
-            self.value >= Dimensionless(0.0) && self.value <= Dimensionless(1.0),
-            "Value for availability must be between 0 and 1 inclusive"
-        );
-
-        Ok(())
-    }
-
     /// Calculate fraction of annual energy as availability multiplied by time slice length.
     ///
     /// The resulting limits are max/min energy produced/consumed in each time slice per
     /// `capacity_to_activity` units of capacity.
-    fn to_bounds(&self, ts_length: Year) -> RangeInclusive<Dimensionless> {
+    fn to_bounds(&self, ts_length: Year) -> Result<RangeInclusive<Dimensionless>> {
+        // Parse availability_range string
+        let availability_range = parse_availabilities_string(&self.limits)?;
+
         // We know ts_length also represents a fraction of a year, so this is ok.
         let ts_frac = ts_length / Year(1.0);
-        let value = self.value * ts_frac;
-        match self.limit_type {
-            LimitType::LowerBound => value..=ts_frac,
-            LimitType::UpperBound => Dimensionless(0.0)..=value,
-            LimitType::Equality => value..=value,
-        }
+        let start = *availability_range.start() * ts_frac;
+        let end = *availability_range.end() * ts_frac;
+        Ok(start..=end)
     }
 }
 
-/// The type of limit given for availability
-#[derive(DeserializeLabeledStringEnum)]
-enum LimitType {
-    #[string = "lo"]
-    LowerBound,
-    #[string = "up"]
-    UpperBound,
-    #[string = "fx"]
-    Equality,
+fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>> {
+    // Require exactly one ".." separator so only forms start..end, start.. or ..end are allowed.
+    let parts: Vec<&str> = s.split("..").collect();
+    ensure!(
+        parts.len() == 2,
+        "Availability range must be of the form 'start..end', 'start..' or '..end'. Invalid: {s}"
+    );
+    let left = parts[0].trim();
+    let right = parts[1].trim();
+
+    // Create range
+    let start = if left.is_empty() {
+        Dimensionless(0.0)
+    } else {
+        left.parse::<f64>()
+            .ok()
+            .with_context(|| format!("Invalid lower availability limit: {left}"))?
+            .into()
+    };
+    let end = if right.is_empty() {
+        Dimensionless(1.0)
+    } else {
+        right
+            .parse::<f64>()
+            .ok()
+            .with_context(|| format!("Invalid upper availability limit: {right}"))?
+            .into()
+    };
+
+    // Validation checks
+    ensure!(
+        end >= start,
+        "Upper availability limit must be greater than or equal to lower limit. Invalid: {s}"
+    );
+    ensure!(
+        start >= Dimensionless(0.0),
+        "Lower availability limit must be >= 0. Invalid: {s}"
+    );
+    ensure!(
+        end <= Dimensionless(1.0),
+        "Upper availability limit must be <= 1. Invalid: {s}"
+    );
+
+    Ok(start..=end)
 }
 
 /// Read the process availabilities CSV file.
@@ -119,8 +142,6 @@ where
         .collect();
 
     for record in iter {
-        record.validate()?;
-
         // Get process
         let (id, process) = processes
             .get_key_value(record.process_id.as_str())
@@ -153,7 +174,7 @@ where
             try_insert(
                 entries_for_process_region_year,
                 &ts_selection,
-                record.to_bounds(length),
+                record.to_bounds(length)?,
             )?;
         }
     }
