@@ -84,7 +84,7 @@ pub struct ProcessAvailabilities {
 
 impl ProcessAvailabilities {
     /// Create a new `ProcessAvailabilities` with full availability for all time slices
-    fn new_with_full_availability(time_slice_info: &TimeSliceInfo) -> Self {
+    pub fn new_with_full_availability(time_slice_info: &TimeSliceInfo) -> Self {
         // Initialize time slice limits to full availability
         let mut ts_limits = IndexMap::new();
         for (ts_id, ts_length) in time_slice_info.iter() {
@@ -130,7 +130,8 @@ impl ProcessAvailabilities {
         availabilities
     }
 
-    fn insert_time_slice_limit(
+    /// Insert a limit for a specific time slice
+    pub fn insert_time_slice_limit(
         &mut self,
         ts_id: TimeSliceID,
         limit: RangeInclusive<Dimensionless>,

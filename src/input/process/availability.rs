@@ -43,11 +43,14 @@ impl ProcessAvailabilityRaw {
 }
 
 fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>> {
-    // Require exactly one ".." separator so only forms start..end, start.. or ..end are allowed.
+    // Disallow empty string
+    ensure!(!s.trim().is_empty(), "Availability range cannot be empty");
+
+    // Require exactly one ".." separator so only forms lower..upper, lower.. or ..upper are allowed.
     let parts: Vec<&str> = s.split("..").collect();
     ensure!(
         parts.len() == 2,
-        "Availability range must be of the form 'start..end', 'start..' or '..end'. Invalid: {s}"
+        "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: {s}"
     );
     let left = parts[0].trim();
     let right = parts[1].trim();
@@ -201,74 +204,69 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixture::assert_error;
+    use float_cmp::assert_approx_eq;
+    use rstest::rstest;
 
-    fn create_process_availability_raw(
-        limit_type: LimitType,
-        value: Dimensionless,
-    ) -> ProcessAvailabilityRaw {
+    fn create_process_availability_raw(limits: String) -> ProcessAvailabilityRaw {
         ProcessAvailabilityRaw {
             process_id: "process".into(),
             regions: "region".into(),
             commission_years: "2010".into(),
             time_slice: "day".into(),
-            limit_type,
-            value,
+            limits,
         }
     }
 
-    #[test]
-    fn test_validate() {
-        // Valid
-        let valid = create_process_availability_raw(LimitType::LowerBound, Dimensionless(0.5));
-        assert!(valid.validate().is_ok());
-        let valid = create_process_availability_raw(LimitType::LowerBound, Dimensionless(0.0));
-        assert!(valid.validate().is_ok());
-        let valid = create_process_availability_raw(LimitType::LowerBound, Dimensionless(1.0));
-        assert!(valid.validate().is_ok());
-
-        // Invalid: negative value
-        let invalid = create_process_availability_raw(LimitType::LowerBound, Dimensionless(-0.5));
-        assert!(invalid.validate().is_err());
-
-        // Invalid: value greater than 1
-        let invalid = create_process_availability_raw(LimitType::LowerBound, Dimensionless(1.5));
-        assert!(invalid.validate().is_err());
-
-        // Invalid: infinity value
-        let invalid =
-            create_process_availability_raw(LimitType::LowerBound, Dimensionless(f64::INFINITY));
-        assert!(invalid.validate().is_err());
-
-        // Invalid: negative infinity value
-        let invalid = create_process_availability_raw(
-            LimitType::LowerBound,
-            Dimensionless(f64::NEG_INFINITY),
-        );
-        assert!(invalid.validate().is_err());
-
-        // Invalid: NaN value
-        let invalid =
-            create_process_availability_raw(LimitType::LowerBound, Dimensionless(f64::NAN));
-        assert!(invalid.validate().is_err());
+    #[rstest]
+    #[case("0.1..0.9", Dimensionless(0.1)..=Dimensionless(0.9))]
+    #[case("..0.9", Dimensionless(0.0)..=Dimensionless(0.9))] // Empty lower
+    #[case("0.1..", Dimensionless(0.1)..=Dimensionless(1.0))] // Empty upper
+    #[case("0.5..0.5", Dimensionless(0.5)..=Dimensionless(0.5))] // Equality
+    fn test_parse_availabilities_string_valid(
+        #[case] input: &str,
+        #[case] expected: RangeInclusive<Dimensionless>,
+    ) {
+        assert_eq!(parse_availabilities_string(input).unwrap(), expected);
     }
 
-    #[test]
-    fn test_to_bounds() {
-        let ts_length = Year(0.1);
+    #[rstest]
+    #[case("", "Availability range cannot be empty")]
+    #[case(
+        "0.6..0.5",
+        "Upper availability limit must be greater than or equal to lower limit. Invalid: 0.6..0.5"
+    )]
+    #[case(
+        "..0.1..0.9",
+        "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: ..0.1..0.9"
+    )]
+    #[case("0.1...0.9", "Invalid upper availability limit: .0.9")]
+    #[case(
+        "-0.1..0.5",
+        "Lower availability limit must be >= 0. Invalid: -0.1..0.5"
+    )]
+    #[case("0.1..1.5", "Upper availability limit must be <= 1. Invalid: 0.1..1.5")]
+    #[case("abc..0.5", "Invalid lower availability limit: abc")]
+    #[case(
+        "0.5",
+        "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: 0.5"
+    )]
+    fn test_parse_availabilities_string_invalid(#[case] input: &str, #[case] error_msg: &str) {
+        assert_error!(parse_availabilities_string(input), error_msg);
+    }
 
-        // Lower bound
-        let raw = create_process_availability_raw(LimitType::LowerBound, Dimensionless(0.5));
-        let bounds = raw.to_bounds(ts_length);
-        assert_eq!(bounds, Dimensionless(0.05)..=Dimensionless(0.1));
-
-        // Upper bound
-        let raw = create_process_availability_raw(LimitType::UpperBound, Dimensionless(0.5));
-        let bounds = raw.to_bounds(ts_length);
-        assert_eq!(bounds, Dimensionless(0.0)..=Dimensionless(0.05));
-
-        // Equality
-        let raw = create_process_availability_raw(LimitType::Equality, Dimensionless(0.5));
-        let bounds = raw.to_bounds(ts_length);
-        assert_eq!(bounds, Dimensionless(0.05)..=Dimensionless(0.05));
+    #[rstest]
+    #[case("0.1..", Year(0.1), Dimensionless(0.01)..=Dimensionless(0.1))] // Lower bound
+    #[case("..0.5", Year(0.1), Dimensionless(0.0)..=Dimensionless(0.05))] // Upper bound
+    #[case("0.5..0.5", Year(0.1), Dimensionless(0.05)..=Dimensionless(0.05))] // Equality
+    fn test_to_bounds(
+        #[case] limits: &str,
+        #[case] ts_length: Year,
+        #[case] expected: RangeInclusive<Dimensionless>,
+    ) {
+        let raw = create_process_availability_raw(limits.into());
+        let bounds = raw.to_bounds(ts_length).unwrap();
+        assert_approx_eq!(Dimensionless, *bounds.start(), *expected.start());
+        assert_approx_eq!(Dimensionless, *bounds.end(), *expected.end());
     }
 }

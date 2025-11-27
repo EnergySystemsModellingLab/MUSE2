@@ -6,7 +6,10 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
-use crate::process::{Process, ProcessMap, ProcessParameter, ProcessParameterMap};
+use crate::process::{
+    Process, ProcessActivityLimitsMap, ProcessAvailabilities, ProcessFlow, ProcessFlowsMap,
+    ProcessMap, ProcessParameter, ProcessParameterMap,
+};
 use crate::region::RegionID;
 use crate::simulation::investment::appraisal::{
     AppraisalOutput, coefficients::ObjectiveCoefficients,
@@ -18,7 +21,7 @@ use crate::units::{
 };
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
-use itertools::{Itertools, iproduct};
+use itertools::Itertools;
 use rstest::fixture;
 use std::collections::HashMap;
 use std::iter;
@@ -127,15 +130,23 @@ pub fn assets(asset: Asset) -> AssetPool {
 }
 
 #[fixture]
-pub fn process_parameter_map(region_ids: IndexSet<RegionID>) -> ProcessParameterMap {
-    let parameter = Rc::new(ProcessParameter {
+pub fn process_parameter() -> ProcessParameter {
+    ProcessParameter {
         capital_cost: MoneyPerCapacity(0.0),
         fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
         variable_operating_cost: MoneyPerActivity(0.0),
         lifetime: 5,
         discount_rate: Dimensionless(1.0),
-    });
+    }
+}
 
+#[fixture]
+/// Create a ProcessParameterMap with the specified parameters for each region and year
+pub fn process_parameter_map(
+    region_ids: IndexSet<RegionID>,
+    process_parameter: ProcessParameter,
+) -> ProcessParameterMap {
+    let parameter = Rc::new(process_parameter);
     region_ids
         .into_iter()
         .cartesian_product(2010..=2020)
@@ -144,27 +155,57 @@ pub fn process_parameter_map(region_ids: IndexSet<RegionID>) -> ProcessParameter
 }
 
 #[fixture]
+/// Create a ProcessAvailabilities with full availability for all time slices
+pub fn process_activity_limits(time_slice_info: TimeSliceInfo) -> ProcessAvailabilities {
+    ProcessAvailabilities::new_with_full_availability(&time_slice_info)
+}
+
+#[fixture]
+/// Create a ProcessActivityLimitsMap with full availability for each region and year
+pub fn process_activity_limits_map(
+    region_ids: IndexSet<RegionID>,
+    process_activity_limits: ProcessAvailabilities,
+) -> ProcessActivityLimitsMap {
+    region_ids
+        .into_iter()
+        .cartesian_product(2010..=2020)
+        .map(|(region_id, year)| ((region_id, year), Rc::new(process_activity_limits.clone())))
+        .collect()
+}
+
+#[fixture]
+/// Create an empty set of ProcessFlows for a given region/year
+pub fn process_flows() -> Rc<IndexMap<CommodityID, ProcessFlow>> {
+    Rc::new(IndexMap::new())
+}
+
+#[fixture]
+/// Create a ProcessFlowsMap with the provided flows for each region/year
+pub fn process_flows_map(
+    region_ids: IndexSet<RegionID>,
+    process_flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
+) -> ProcessFlowsMap {
+    region_ids
+        .into_iter()
+        .cartesian_product(2010..=2020)
+        .map(|(region_id, year)| ((region_id, year), process_flows.clone()))
+        .collect()
+}
+
+#[fixture]
+/// Create a Process with the given components
 pub fn process(
     region_ids: IndexSet<RegionID>,
     process_parameter_map: ProcessParameterMap,
+    process_activity_limits_map: ProcessActivityLimitsMap,
+    process_flows_map: ProcessFlowsMap,
 ) -> Process {
-    let milestone_years = vec![2010, 2015, 2020];
-    // The process start year is before the base year
-    let years = 2008..=*milestone_years.last().unwrap();
-
-    // Create maps with (empty) entries for every region/year combo
-    let activity_limits = iproduct!(region_ids.iter(), milestone_years.iter())
-        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(HashMap::new())))
-        .collect();
-    let flows = iproduct!(region_ids.iter(), milestone_years.iter())
-        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
-        .collect();
     Process {
         id: "process1".into(),
         description: "Description".into(),
-        years,
-        activity_limits,
-        flows,
+        years: 2010..=2020,
+        activity_limits: process_activity_limits_map,
+        flows: process_flows_map,
         parameters: process_parameter_map,
         regions: region_ids,
         primary_output: None,
