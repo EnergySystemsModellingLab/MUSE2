@@ -1,6 +1,6 @@
 //! Code for reading process availabilities CSV file
 use super::super::{input_err_msg, read_csv, try_insert};
-use crate::process::{ProcessActivityLimitsMap, ProcessAvailabilities, ProcessID, ProcessMap};
+use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
@@ -26,22 +26,23 @@ struct ProcessAvailabilityRaw {
 }
 
 impl ProcessAvailabilityRaw {
-    /// Calculate fraction of annual energy as availability multiplied by time slice length.
+    /// Calculate fraction of annual energy as availability multiplied by the length of time covered.
     ///
-    /// The resulting limits are max/min energy produced/consumed in each time slice per
+    /// The resulting limits are max/min energy produced/consumed in the covered time period per
     /// `capacity_to_activity` units of capacity.
-    fn to_bounds(&self, ts_length: Year) -> Result<RangeInclusive<Dimensionless>> {
+    fn to_bounds(&self, length: Year) -> Result<RangeInclusive<Dimensionless>> {
         // Parse availability_range string
         let availability_range = parse_availabilities_string(&self.limits)?;
 
-        // We know ts_length also represents a fraction of a year, so this is ok.
-        let ts_frac = ts_length / Year(1.0);
+        // Convert to bounds based on fraction of the year covered
+        let ts_frac = length / Year(1.0);
         let start = *availability_range.start() * ts_frac;
         let end = *availability_range.end() * ts_frac;
         Ok(start..=end)
     }
 }
 
+/// Parse a string representing availability limits into a range.
 fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>> {
     // Disallow empty string
     ensure!(!s.trim().is_empty(), "Availability range cannot be empty");
@@ -55,8 +56,8 @@ fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>>
     let left = parts[0].trim();
     let right = parts[1].trim();
 
-    // Create range
-    let start = if left.is_empty() {
+    // Parse lower limit
+    let lower = if left.is_empty() {
         Dimensionless(0.0)
     } else {
         left.parse::<f64>()
@@ -64,7 +65,9 @@ fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>>
             .with_context(|| format!("Invalid lower availability limit: {left}"))?
             .into()
     };
-    let end = if right.is_empty() {
+
+    // Parse upper limit
+    let upper = if right.is_empty() {
         Dimensionless(1.0)
     } else {
         right
@@ -76,19 +79,20 @@ fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>>
 
     // Validation checks
     ensure!(
-        end >= start,
+        upper >= lower,
         "Upper availability limit must be greater than or equal to lower limit. Invalid: {s}"
     );
     ensure!(
-        start >= Dimensionless(0.0),
+        lower >= Dimensionless(0.0),
         "Lower availability limit must be >= 0. Invalid: {s}"
     );
     ensure!(
-        end <= Dimensionless(1.0),
+        upper <= Dimensionless(1.0),
         "Upper availability limit must be <= 1. Invalid: {s}"
     );
 
-    Ok(start..=end)
+    // Return range
+    Ok(lower..=upper)
 }
 
 /// Read the process availabilities CSV file.
@@ -183,7 +187,7 @@ where
     }
 
     // Create `ProcessActivityLimitsMap`s
-    let mut map: HashMap<ProcessID, ProcessActivityLimitsMap> = HashMap::new();
+    let mut map = HashMap::new();
     for (process_id, process) in processes {
         let mut inner_map = HashMap::new();
         let entries_for_process = &entries[process_id];
@@ -192,7 +196,7 @@ where
                 .get(&(region_id.clone(), year))
                 .cloned()
                 .unwrap_or_default();
-            let availabilities = ProcessAvailabilities::new_from_limits(&limits, time_slice_info);
+            let availabilities = ActivityLimits::new_from_limits(&limits, time_slice_info)?;
             inner_map.insert((region_id.clone(), year), Rc::new(availabilities));
         }
         map.insert(process_id.clone(), inner_map);

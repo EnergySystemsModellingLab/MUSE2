@@ -7,8 +7,8 @@ use crate::agent::{
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
 use crate::process::{
-    Process, ProcessActivityLimitsMap, ProcessAvailabilities, ProcessFlow, ProcessFlowsMap,
-    ProcessMap, ProcessParameter, ProcessParameterMap,
+    ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessMap,
+    ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
 use crate::simulation::investment::appraisal::{
@@ -156,15 +156,15 @@ pub fn process_parameter_map(
 
 #[fixture]
 /// Create a ProcessAvailabilities with full availability for all time slices
-pub fn process_activity_limits(time_slice_info: TimeSliceInfo) -> ProcessAvailabilities {
-    ProcessAvailabilities::new_with_full_availability(&time_slice_info)
+pub fn process_activity_limits(time_slice_info: TimeSliceInfo) -> ActivityLimits {
+    ActivityLimits::new_with_full_availability(&time_slice_info)
 }
 
 #[fixture]
 /// Create a ProcessActivityLimitsMap with full availability for each region and year
 pub fn process_activity_limits_map(
     region_ids: IndexSet<RegionID>,
-    process_activity_limits: ProcessAvailabilities,
+    process_activity_limits: ActivityLimits,
 ) -> ProcessActivityLimitsMap {
     region_ids
         .into_iter()

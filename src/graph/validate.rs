@@ -93,7 +93,7 @@ fn can_be_active(
                 continue;
             };
             if limits_map
-                .get_availability_limit(time_slice_selection, time_slice_info)
+                .get_limit(time_slice_selection, time_slice_info)
                 .end()
                 > &Dimensionless(0.0)
             {

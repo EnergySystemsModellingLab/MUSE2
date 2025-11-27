@@ -2,7 +2,7 @@
 use crate::agent::AgentID;
 use crate::commodity::CommodityID;
 use crate::process::{
-    FlowDirection, Process, ProcessAvailabilities, ProcessFlow, ProcessID, ProcessParameter,
+    ActivityLimits, FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter,
 };
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
@@ -85,7 +85,7 @@ pub struct Asset {
     /// The [`Process`] that this asset corresponds to
     process: Rc<Process>,
     /// Activity limits for this asset
-    activity_limits: Rc<ProcessAvailabilities>,
+    activity_limits: Rc<ActivityLimits>,
     /// The commodity flows for this asset
     flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
@@ -280,9 +280,7 @@ impl Asset {
         &self,
         time_slice: &TimeSliceID,
     ) -> RangeInclusive<ActivityPerCapacity> {
-        let limits = &self
-            .activity_limits
-            .get_availability_limit_for_time_slice(time_slice);
+        let limits = &self.activity_limits.get_limit_for_time_slice(time_slice);
         let cap2act = self.process.capacity_to_activity;
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }
@@ -293,7 +291,7 @@ impl Asset {
     ) -> impl Iterator<Item = (TimeSliceSelection, RangeInclusive<Activity>)> + '_ {
         let max_act = self.max_activity();
         self.activity_limits
-            .iter_availability_limits()
+            .iter_limits()
             .map(move |(ts_sel, limit)| {
                 (
                     ts_sel,
@@ -308,7 +306,7 @@ impl Asset {
     ) -> impl Iterator<Item = (TimeSliceSelection, RangeInclusive<ActivityPerCapacity>)> + '_ {
         let cap2act = self.process.capacity_to_activity;
         self.activity_limits
-            .iter_availability_limits()
+            .iter_limits()
             .map(move |(ts_sel, limit)| {
                 (
                     ts_sel,
@@ -1062,8 +1060,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) -> Process {
         // Add activity limits to the process
-        let mut activity_limits =
-            ProcessAvailabilities::new_with_full_availability(&time_slice_info);
+        let mut activity_limits = ActivityLimits::new_with_full_availability(&time_slice_info);
         activity_limits
             .insert_time_slice_limit(time_slice, Dimensionless(0.1)..=Dimensionless(0.5));
         process.activity_limits =
