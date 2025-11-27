@@ -10,6 +10,7 @@ use crate::units::{
 };
 use anyhow::{Result, ensure};
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -140,7 +141,8 @@ impl ActivityLimits {
                 .collect::<Vec<_>>();
             ensure!(
                 missing.is_empty(),
-                "Missing availability limits for time slices: {missing:?}. Please provide",
+                "Missing availability limits for time slices: [{}]. Please provide",
+                missing.iter().join(", ")
             );
         }
 
@@ -162,7 +164,8 @@ impl ActivityLimits {
                 .collect::<Vec<_>>();
             ensure!(
                 missing.is_empty(),
-                "Missing availability limits for seasons: {missing:?}. Please provide",
+                "Missing availability limits for seasons: [{}]. Please provide",
+                missing.iter().join(", "),
             );
         }
 
@@ -451,9 +454,12 @@ pub struct ProcessParameter {
 mod tests {
     use super::*;
     use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap};
-    use crate::fixture::{region_id, time_slice};
+    use crate::fixture::{assert_error, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
+    use crate::time_slice::TimeSliceSelection;
+    use float_cmp::assert_approx_eq;
     use rstest::{fixture, rstest};
+    use std::collections::HashMap;
     use std::rc::Rc;
 
     #[fixture]
@@ -932,5 +938,90 @@ mod tests {
         assert!(flow_in.direction() == FlowDirection::Input);
         assert!(flow_out.direction() == FlowDirection::Output);
         assert!(flow_zero.direction() == FlowDirection::Zero);
+    }
+
+    #[rstest]
+    fn test_new_with_full_availability(time_slice_info2: TimeSliceInfo) {
+        let limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
+
+        // Each timeslice from the info should be present in the limits
+        for (ts_id, ts_len) in time_slice_info2.iter() {
+            let l = limits.get_limit_for_time_slice(&ts_id);
+            // Lower bound should be zero and upper bound equal to timeslice length
+            assert_eq!(*l.start(), Dimensionless(0.0));
+            assert_eq!(*l.end(), Dimensionless(ts_len.value()));
+        }
+
+        // Annual limit should be 0..1
+        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual, &time_slice_info2);
+        assert_approx_eq!(Dimensionless, *annual_limit.start(), Dimensionless(0.0));
+        assert_approx_eq!(Dimensionless, *annual_limit.end(), Dimensionless(1.0));
+    }
+
+    #[rstest]
+    fn test_new_from_limits_with_seasonal_limit_applied(time_slice_info2: TimeSliceInfo) {
+        let mut limits = HashMap::new();
+
+        // Set a seasonal upper limit that is stricter than the sum of timeslices
+        limits.insert(
+            TimeSliceSelection::Season("winter".into()),
+            Dimensionless(0.0)..=Dimensionless(0.01),
+        );
+
+        let result = ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap();
+
+        // Each timeslice upper bound should be capped by the seasonal upper bound (0.01)
+        for (ts_id, _ts_len) in time_slice_info2.iter() {
+            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            assert_eq!(*ts_limit.end(), Dimensionless(0.01));
+        }
+
+        // The seasonal limit should reflect the given bound
+        let season_limit = result.get_limit(
+            &TimeSliceSelection::Season("winter".into()),
+            &time_slice_info2,
+        );
+        assert_eq!(*season_limit.end(), Dimensionless(0.01));
+    }
+
+    #[rstest]
+    fn test_new_from_limits_missing_timeslices_error(time_slice_info2: TimeSliceInfo) {
+        let mut limits = HashMap::new();
+
+        // Add a single timeslice limit but do not provide limits for all timeslices
+        let first_ts = time_slice_info2.iter().next().unwrap().0.clone();
+        limits.insert(
+            TimeSliceSelection::Single(first_ts),
+            Dimensionless(0.0)..=Dimensionless(0.1),
+        );
+
+        assert_error!(
+            ActivityLimits::new_from_limits(&limits, &time_slice_info2),
+            "Missing availability limits for time slices: [winter.night]. Please provide"
+        );
+    }
+
+    #[rstest]
+    fn test_new_from_limits_incompatible_limits(time_slice_info2: TimeSliceInfo) {
+        let mut limits = HashMap::new();
+
+        // Time slice limits capping activity to 0.1 in each ts
+        for (ts_id, _ts_len) in time_slice_info2.iter() {
+            limits.insert(
+                TimeSliceSelection::Single(ts_id.clone()),
+                Dimensionless(0.0)..=Dimensionless(0.1),
+            );
+        }
+
+        // Seasonal limit that is incompatible (lower limit above the sum of time slice upper limits)
+        limits.insert(
+            TimeSliceSelection::Season("winter".into()),
+            Dimensionless(0.99)..=Dimensionless(1.0),
+        );
+
+        assert_error!(
+            ActivityLimits::new_from_limits(&limits, &time_slice_info2),
+            "Availability limit for season winter clashes with time slice limits"
+        );
     }
 }
