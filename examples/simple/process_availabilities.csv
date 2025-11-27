@@ -2,8 +2,6 @@ process_id,regions,commission_years,time_slice,limits
 GASDRV,all,all,annual,..0.9
 GASPRC,all,all,annual,..0.9
 GASCGT,all,all,annual,..0.9
-RGASBR,all,all,annual,..1.0
-RELCHP,all,all,annual,..1.0
 WNDFRM,all,all,winter.night,..0.486418015
 WNDFRM,all,all,winter.day,..0.543166784
 WNDFRM,all,all,winter.peak,..0.504433498
