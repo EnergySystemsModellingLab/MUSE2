@@ -857,7 +857,7 @@ mod tests {
         asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
         time_slice_info, time_slice_info2,
     };
-    use crate::process::{FlowType, Process, ProcessAvailabilities, ProcessFlow};
+    use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
     use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
@@ -920,7 +920,7 @@ mod tests {
         process.flows = process_flows_map;
 
         // Add activity limits for the process
-        let mut limits = ProcessAvailabilities::new_with_full_availability(&time_slice_info2);
+        let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
         limits
             .insert_time_slice_limit(time_slice1.clone(), Dimensionless(0.0)..=Dimensionless(0.2));
         limits
