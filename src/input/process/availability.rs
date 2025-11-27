@@ -1,5 +1,5 @@
 //! Code for reading process availabilities CSV file
-use super::super::{input_err_msg, read_csv, try_insert};
+use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
@@ -117,7 +117,7 @@ pub fn read_process_availabilities(
     time_slice_info: &TimeSliceInfo,
 ) -> Result<HashMap<ProcessID, ProcessActivityLimitsMap>> {
     let file_path = model_dir.join(PROCESS_AVAILABILITIES_FILE_NAME);
-    let process_availabilities_csv = read_csv(&file_path)?;
+    let process_availabilities_csv = read_csv_optional(&file_path)?;
     read_process_availabilities_from_iter(process_availabilities_csv, processes, time_slice_info)
         .with_context(|| input_err_msg(&file_path))
 }
