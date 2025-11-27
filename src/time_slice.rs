@@ -283,6 +283,11 @@ impl TimeSliceInfo {
         self.time_slices.keys()
     }
 
+    /// Iterate over all seasons
+    pub fn iter_seasons(&self) -> indexmap::map::Keys<'_, Season, Year> {
+        self.seasons.keys()
+    }
+
     /// Iterate over all time slices
     pub fn iter(&self) -> impl Iterator<Item = (&TimeSliceID, Year)> {
         self.time_slices

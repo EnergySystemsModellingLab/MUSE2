@@ -130,18 +130,46 @@ impl ActivityLimits {
         let mut result = ActivityLimits::new_with_full_availability(time_slice_info);
 
         // Add time slice limits first
+        let mut time_slices_added = IndexSet::new();
         for (ts_selection, limit) in limits {
             if let TimeSliceSelection::Single(ts_id) = ts_selection {
                 result.add_time_slice_limit(ts_id.clone(), limit.clone());
+                time_slices_added.insert(ts_id.clone());
             }
+        }
+
+        // Check that limits have been added for all/no time slices
+        if !time_slices_added.is_empty() {
+            let missing = time_slice_info
+                .iter_ids()
+                .filter(|ts_id| !time_slices_added.contains(*ts_id))
+                .collect::<Vec<_>>();
+            ensure!(
+                missing.is_empty(),
+                "Missing availability limits for time slices: {missing:?}. Please provide",
+            );
         }
 
         // Then add seasonal limits
         // Error will be raised if seasonal limits are incompatible with time slice limits
+        let mut seasons_added = IndexSet::new();
         for (ts_selection, limit) in limits {
             if let TimeSliceSelection::Season(season) = ts_selection {
                 result.add_seasonal_limit(season.clone(), limit.clone())?;
+                seasons_added.insert(season.clone());
             }
+        }
+
+        // Check that limits have been added for all/no seasons
+        if !seasons_added.is_empty() {
+            let missing = time_slice_info
+                .iter_seasons()
+                .filter(|season| !seasons_added.contains(*season))
+                .collect::<Vec<_>>();
+            ensure!(
+                missing.is_empty(),
+                "Missing availability limits for seasons: {missing:?}. Please provide",
+            );
         }
 
         // Then add annual limit
