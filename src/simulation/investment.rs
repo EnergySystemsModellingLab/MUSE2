@@ -921,10 +921,8 @@ mod tests {
 
         // Add activity limits for the process
         let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
-        limits
-            .insert_time_slice_limit(time_slice1.clone(), Dimensionless(0.0)..=Dimensionless(0.2));
-        limits
-            .insert_time_slice_limit(time_slice2.clone(), Dimensionless(0.0)..=Dimensionless(0.0));
+        limits.add_time_slice_limit(time_slice1.clone(), Dimensionless(0.0)..=Dimensionless(0.2));
+        limits.add_time_slice_limit(time_slice2.clone(), Dimensionless(0.0)..=Dimensionless(0.0));
         let limits_map = process_activity_limits_map(process.regions.clone(), limits);
         process.activity_limits = limits_map;
 
