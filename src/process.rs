@@ -121,12 +121,12 @@ impl ActivityLimits {
         limits: &HashMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
         time_slice_info: &TimeSliceInfo,
     ) -> Result<Self> {
-        let mut availabilities = ActivityLimits::new_with_full_availability(time_slice_info);
+        let mut result = ActivityLimits::new_with_full_availability(time_slice_info);
 
         // Add time slice limits first
         for (ts_selection, limit) in limits {
             if let TimeSliceSelection::Single(ts_id) = ts_selection {
-                availabilities.insert_time_slice_limit(ts_id.clone(), limit.clone());
+                result.add_time_slice_limit(ts_id.clone(), limit.clone());
             }
         }
 
@@ -134,59 +134,47 @@ impl ActivityLimits {
         // Error will be raised if seasonal limits are incompatible with time slice limits
         for (ts_selection, limit) in limits {
             if let TimeSliceSelection::Season(season) = ts_selection {
-                availabilities.insert_seasonal_limit(season.clone(), limit.clone())?;
+                result.add_seasonal_limit(season.clone(), limit.clone())?;
             }
         }
 
         // Then add annual limit
         // Error will be raised if annual limit is incompatible with time slice/seasonal limits
         if let Some(limit) = limits.get(&TimeSliceSelection::Annual) {
-            availabilities.insert_annual_limit(limit.clone())?;
+            result.add_annual_limit(limit.clone())?;
         }
 
-        Ok(availabilities)
+        Ok(result)
     }
 
-    /// Sanity check to make sure a limit is valid
-    ///
-    /// In theory, all limits should already be validated when read from input data, but this is an
-    /// extra safeguard.
-    fn check_limit(limit: &RangeInclusive<Dimensionless>) {
-        assert!(
-            *limit.start() >= Dimensionless(0.0)
-                && *limit.end() <= Dimensionless(1.0)
-                && *limit.start() <= *limit.end(),
-            "Invalid activity limit: {limit:?}. Must be within [0.0, 1.0] and start <= end.",
-        );
-    }
-
-    /// Insert a limit for a specific time slice
-    pub fn insert_time_slice_limit(
+    /// Add a limit for a specific time slice
+    pub fn add_time_slice_limit(
         &mut self,
         ts_id: TimeSliceID,
         limit: RangeInclusive<Dimensionless>,
     ) {
-        Self::check_limit(&limit);
         self.time_slice_limits.insert(ts_id, limit);
     }
 
-    fn insert_seasonal_limit(
+    /// Add a limit for a specific season
+    fn add_seasonal_limit(
         &mut self,
         season: Season,
         limit: RangeInclusive<Dimensionless>,
     ) -> Result<()> {
-        Self::check_limit(&limit);
-
         // Get current limit for the season
         let current_limit = self.get_limit_for_season(&season);
 
         // Ensure that the new limit is compatible with the current limit
         ensure!(
             *limit.start() <= *current_limit.end() && *limit.end() >= *current_limit.start(),
-            "Incompatible limit {limit:?} for season {season:?}",
+            "Availability limit for season {season} clashes with time slice limits",
         );
 
-        // Only insert the seasonal limit if it provides an extra level of constraint
+        // Only insert the seasonal limit if it provides an extra level of constraint above the
+        // existing time slice limits. This is to minimize the number of seasonal limits stored and
+        // returned by `iter_limits()`, therefore preventing unnecessary constraints from being
+        // added to the optimization model.
         if *limit.start() > *current_limit.start() || *limit.end() < *current_limit.end() {
             self.seasonal_limits.insert(season, limit);
         }
@@ -194,19 +182,20 @@ impl ActivityLimits {
         Ok(())
     }
 
-    fn insert_annual_limit(&mut self, limit: RangeInclusive<Dimensionless>) -> Result<()> {
-        Self::check_limit(&limit);
-
+    /// Add an annual limit
+    fn add_annual_limit(&mut self, limit: RangeInclusive<Dimensionless>) -> Result<()> {
         // Get current limit for the year
         let current_limit = self.get_limit_for_year(&TimeSliceInfo::default());
 
         // Ensure that the new limit is compatible with the current limit
         ensure!(
             *limit.start() <= *current_limit.end() && *limit.end() >= *current_limit.start(),
-            "Incompatible annual limit {limit:?}",
+            "Annual availability limit clashes with time slice/seasonal limits",
         );
 
-        // Only insert the annual limit if it provides an extra level of constraint
+        // Only insert the annual limit if it provides an extra level of constraint above the
+        // existing time slice/seasonal limits. This prevents unnecessary constraints from being
+        // stored and added to the optimization model.
         if *limit.start() > *current_limit.start() || *limit.end() < *current_limit.end() {
             self.annual_limit = Some(limit);
         }

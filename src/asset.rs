@@ -1061,8 +1061,7 @@ mod tests {
     ) -> Process {
         // Add activity limits to the process
         let mut activity_limits = ActivityLimits::new_with_full_availability(&time_slice_info);
-        activity_limits
-            .insert_time_slice_limit(time_slice, Dimensionless(0.1)..=Dimensionless(0.5));
+        activity_limits.add_time_slice_limit(time_slice, Dimensionless(0.1)..=Dimensionless(0.5));
         process.activity_limits =
             process_activity_limits_map(process.regions.clone(), activity_limits);
 

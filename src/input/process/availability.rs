@@ -196,7 +196,10 @@ where
                 .get(&(region_id.clone(), year))
                 .cloned()
                 .unwrap_or_default();
-            let availabilities = ActivityLimits::new_from_limits(&limits, time_slice_info)?;
+            let availabilities = ActivityLimits::new_from_limits(&limits, time_slice_info)
+                .with_context(|| {
+                    format!("Error creating activity limits for process {process_id}")
+                })?;
             inner_map.insert((region_id.clone(), year), Rc::new(availabilities));
         }
         map.insert(process_id.clone(), inner_map);
