@@ -5,12 +5,6 @@ GASPRC,all,all,annual,..0.9
 OILREF,all,all,annual,..0.9
 OILRF2,all,all,annual,..0.9
 GASCGT,all,all,annual,..0.9
-TPETCR,all,all,annual,..1
-TDIECR,all,all,annual,..1
-TELCCR,all,all,annual,..1
-THYBCR,all,all,annual,..1
-RGASBR,all,all,annual,..1
-RELCHP,all,all,annual,..1
 WNDFRM,all,all,winter.night,..0.486418015
 WNDFRM,all,all,winter.day,..0.543166784
 WNDFRM,all,all,winter.peak,..0.504433498
@@ -27,6 +21,4 @@ WNDFRM,all,all,autumn.night,..0.3513019
 WNDFRM,all,all,autumn.day,..0.460745954
 WNDFRM,all,all,autumn.peak,..0.396340605
 WNDFRM,all,all,autumn.evening,..0.364813512
-BIOPRO,all,all,annual,..1.0
 BIOPLL,all,all,annual,..0.95
-RBIOBL,all,all,annual,..1.0
