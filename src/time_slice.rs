@@ -283,6 +283,11 @@ impl TimeSliceInfo {
         self.time_slices.keys()
     }
 
+    /// Iterate over all seasons
+    pub fn iter_seasons(&self) -> indexmap::map::Keys<'_, Season, Year> {
+        self.seasons.keys()
+    }
+
     /// Iterate over all time slices
     pub fn iter(&self) -> impl Iterator<Item = (&TimeSliceID, Year)> {
         self.time_slices
@@ -336,6 +341,12 @@ impl TimeSliceInfo {
             .into_iter()
             .map(move |(selection, duration)| (selection, duration / total_duration));
         Some(iter)
+    }
+
+    /// Calculate the total length of a selection of time slices.
+    pub fn length_for_selection(&self, selection: &TimeSliceSelection) -> Result<Year> {
+        let length: Year = selection.iter(self).map(|(_, duration)| duration).sum();
+        Ok(length)
     }
 
     /// Share a value between a subset of time slices in proportion to their lengths.

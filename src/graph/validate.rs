@@ -3,7 +3,7 @@ use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::process::{Process, ProcessMap};
 use crate::region::RegionID;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -42,9 +42,7 @@ fn prepare_commodities_graph_for_validation(
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
-        time_slice_selection
-            .iter(time_slice_info)
-            .any(|(time_slice, _)| can_be_active(process, &key, time_slice))
+        can_be_active(process, &key, time_slice_selection, time_slice_info)
     });
 
     // Add demand edges
@@ -78,7 +76,12 @@ fn prepare_commodities_graph_for_validation(
 /// is active in the required timeslice. In other words, this checks if there is the _possibility_
 /// of having an active process, although there is no guarantee of that happening since it depends
 /// on the investment.
-fn can_be_active(process: &Process, target: &(RegionID, u32), time_slice: &TimeSliceID) -> bool {
+fn can_be_active(
+    process: &Process,
+    target: &(RegionID, u32),
+    time_slice_selection: &TimeSliceSelection,
+    time_slice_info: &TimeSliceInfo,
+) -> bool {
     let (target_region, target_year) = target;
 
     for ((region, year), value) in &process.parameters {
@@ -90,8 +93,9 @@ fn can_be_active(process: &Process, target: &(RegionID, u32), time_slice: &TimeS
                 continue;
             };
             if limits_map
-                .get(time_slice)
-                .is_some_and(|avail| *avail.end() > Dimensionless(0.0))
+                .get_limit(time_slice_selection, time_slice_info)
+                .end()
+                > &Dimensionless(0.0)
             {
                 return true;
             }
