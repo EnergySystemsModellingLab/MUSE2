@@ -78,7 +78,8 @@ impl Process {
 /// can be undertaken in each time slice, season, or the year as a whole. The limits stored and
 /// returned by this struct are dimensionless; to convert to actual activity limits for an asset,
 /// multiply by the capacity to activity factor of the process and the installed capacity of the
-/// asset.
+/// asset. In other words, the limits stored and returned by this struct are the absolute limits on
+/// activity per `1/capacity_to_activity` units of capacity.
 ///
 /// All time slices must have an entry in `self.time_slice_limits`. If no specific availability limit
 /// is provided for a time slice, this will just represent the length of the time slice as a
@@ -124,6 +125,25 @@ impl ActivityLimits {
     /// Create a new `ActivityLimits` from a map of limits for time slice selections
     ///
     /// The limits provided here may be for individual time slices, seasons, or the entire year.
+    /// Provided limits must reflect the fraction of potential annual activity available in the
+    /// given time slice selection. In other words, these are the absolute limits on activity per
+    /// `1/capacity_to_activity` units of capacity.
+    ///
+    /// It is not mandatory to provide any limits; if no limits are provided, full availability
+    /// will be assumed for all time slices (limited only by time slice lengths). However, if
+    /// limits are provided for any individual time slices, they must be provided for ALL time
+    /// slices. Similarly, if limits are provided for any seasons, they must be provided for ALL
+    /// seasons.
+    ///
+    /// No calculations are done here to account for time slice lengths; this must be handled by the
+    /// user when providing the limits. For example, a limit of 0..=0.1 for a time slice indicates
+    /// that 10% of the potential annual activity can be undertaken in that time slice. If the time
+    /// slice is 10% of the year, then this provides no additional constraint.
+    ///
+    /// Checks are done to ensure that provided limits are compatible with each other. For example,
+    /// a limit of "..0.01" for "winter" would be incompatible with a limit of "0.2.." for
+    /// "winter.day" (i.e. if activity must be >0.2 in "winter.night", then if cannot possibly be
+    /// ≤0.01 in winter as a whole).
     pub fn new_from_limits(
         limits: &HashMap<TimeSliceSelection, RangeInclusive<Dimensionless>>,
         time_slice_info: &TimeSliceInfo,
@@ -139,7 +159,7 @@ impl ActivityLimits {
             }
         }
 
-        // Check that limits have been added for all/no time slices
+        // Check that limits have been added for all or no time slices
         if !time_slices_added.is_empty() {
             let missing = time_slice_info
                 .iter_ids()
@@ -162,7 +182,7 @@ impl ActivityLimits {
             }
         }
 
-        // Check that limits have been added for all/no seasons
+        // Check that limits have been added for all or no seasons
         if !seasons_added.is_empty() {
             let missing = time_slice_info
                 .iter_seasons()

@@ -37,5 +37,6 @@ fields:
     description: Lower and upper limits on the availability of the process within the specified time slice(s)
     notes:
       A string in the format `min..max`, where `min` and `max` are decimal numbers between 0 and 1
-      (inclusive). 0 represents no availability, and 1 represents full availability. Either `min`
-      or `max` can be omitted, which will set the corresponding limit to 0 or 1, respectively.
+      inclusive (e.g. "0.2..0.9"). 0 represents no availability, and 1 represents full availability.
+      Either `min` or `max` can be omitted (e.g "0.2.." or "..0.9"), which will set the
+      corresponding limit to 0 or 1, respectively.

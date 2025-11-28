@@ -208,22 +208,24 @@ where
         if let Some(&capacity_var) = capacity_vars.get(asset) {
             // Asset with flexible capacity
             for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
-                // Create constraints for this time slice selection
                 let upper_limit = limits.end().value();
                 let lower_limit = limits.start().value();
+
+                // Collect capacity and activity terms
+                // We have a single capacity term, and activity terms for all time slices in the selection
                 let mut terms_upper = vec![(capacity_var, -upper_limit)];
-                let mut terms_lower = vec![(capacity_var, lower_limit)];
+                let mut terms_lower = vec![(capacity_var, -lower_limit)];
                 for (time_slice, _) in ts_selection.iter(time_slice_info) {
                     let var = variables.get_activity_var(asset, time_slice);
                     terms_upper.push((var, 1.0));
-                    terms_lower.push((var, -1.0));
+                    terms_lower.push((var, 1.0));
                 }
 
-                // Upper bound: activity ≤ capacity * upper_limit
+                // Upper bound: sum(activity) - (capacity * upper_limit_per_capacity) ≤ 0
                 problem.add_row(..=0.0, &terms_upper);
 
-                // Lower bound: activity ≥ capacity * lower_limit
-                problem.add_row(..=0.0, &terms_lower);
+                // Lower bound: sum(activity) - (capacity * lower_limit_per_capacity) ≥ 0
+                problem.add_row(0.0.., &terms_lower);
 
                 // Store keys for retrieving duals later.
                 // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
@@ -234,13 +236,16 @@ where
         } else {
             // Fixed-capacity asset: simple absolute activity limits.
             for (ts_selection, limits) in asset.iter_activity_limits() {
-                // Create constraint for this time slice selection
                 let limits = limits.start().value()..=limits.end().value();
-                let vars = ts_selection
+
+                // Collect activity terms for the time slices in this selection
+                let terms = ts_selection
                     .iter(time_slice_info)
                     .map(|(time_slice, _)| (variables.get_activity_var(asset, time_slice), 1.0))
                     .collect::<Vec<_>>();
-                problem.add_row(limits, &vars);
+
+                // Constraint: sum of activities in selection within limits
+                problem.add_row(limits, &terms);
 
                 // Store keys for retrieving duals later.
                 keys.push((asset.clone(), ts_selection.clone()));

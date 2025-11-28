@@ -9,7 +9,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
     Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow, Year,
 };
@@ -281,10 +281,12 @@ impl Solution<'_> {
             .activity_keys
             .zip_duals(self.solution.dual_rows())
             .filter_map(move |((asset, ts_selection), dual)| {
-                let mut it = ts_selection.iter(self.time_slice_info);
-                match (it.next(), it.next()) {
-                    (Some((time_slice, _)), None) => Some((asset, time_slice, dual)),
-                    _ => None,
+                if matches!(ts_selection, TimeSliceSelection::Single(_)) {
+                    // `iter(...).next()` is safe here because we just matched Single(_)
+                    let (time_slice, _) = ts_selection.iter(self.time_slice_info).next().unwrap();
+                    Some((asset, time_slice, dual))
+                } else {
+                    None
                 }
             })
     }

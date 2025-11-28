@@ -80,13 +80,14 @@ fn add_activity_constraints_for_existing(
 ) {
     for (ts_selection, limits) in asset.iter_activity_limits() {
         let limits = limits.start().value()..=limits.end().value();
+
+        // Collect activity terms for the time slices in this selection
         let terms = ts_selection
             .iter(time_slice_info)
-            .map(|(time_slice, _)| {
-                let var = *activity_vars.get(time_slice).unwrap();
-                (var, 1.0)
-            })
+            .map(|(time_slice, _)| (*activity_vars.get(time_slice).unwrap(), 1.0))
             .collect::<Vec<_>>();
+
+        // Constraint: sum of activities in selection within limits
         problem.add_row(limits, &terms);
     }
 }
@@ -102,19 +103,21 @@ fn add_activity_constraints_for_candidate(
         let upper_limit = limits.end().value();
         let lower_limit = limits.start().value();
 
+        // Collect capacity and activity terms
+        // We have a single capacity term, and activity terms for all time slices in the selection
         let mut terms_upper = vec![(capacity_var, -upper_limit)];
-        let mut terms_lower = vec![(capacity_var, lower_limit)];
+        let mut terms_lower = vec![(capacity_var, -lower_limit)];
         for (time_slice, _) in ts_selection.iter(time_slice_info) {
             let var = *activity_vars.get(time_slice).unwrap();
             terms_upper.push((var, 1.0));
-            terms_lower.push((var, -1.0));
+            terms_lower.push((var, 1.0));
         }
 
-        // Upper bound: activity ≤ capacity * upper_limit
+        // Upper bound: sum(activity) - (capacity * upper_limit_per_capacity) ≤ 0
         problem.add_row(..=0.0, &terms_upper);
 
-        // Lower bound: activity ≥ capacity * lower_limit
-        problem.add_row(..=0.0, &terms_lower);
+        // Lower bound: sum(activity) - (capacity * lower_limit_per_capacity) ≥ 0
+        problem.add_row(0.0.., &terms_lower);
     }
 }
 
