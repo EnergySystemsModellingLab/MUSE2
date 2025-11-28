@@ -142,7 +142,7 @@ fn read_process_availabilities_from_iter<I>(
 where
     I: Iterator<Item = ProcessAvailabilityRaw>,
 {
-    // Collect all entries
+    // Collect entries for all processes
     let mut entries: HashMap<ProcessID, _> = processes
         .iter()
         .map(|(id, _)| (id.clone(), HashMap::new()))
@@ -186,7 +186,10 @@ where
         }
     }
 
-    // Create `ProcessActivityLimitsMap`s
+    // Create `ProcessActivityLimitsMap`s for each process.
+    // Maps are created for all regions and years defined for each process, gathering the limits
+    // defined in the entries above, or using default limits (full availability) if none were
+    // defined.
     let mut map = HashMap::new();
     for (process_id, process) in processes {
         let mut inner_map = HashMap::new();
