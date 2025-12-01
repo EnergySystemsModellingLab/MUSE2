@@ -55,8 +55,8 @@ impl ProcessAvailabilityRaw {
 }
 
 /// The type of limit given for availability
-#[derive(DeserializeLabeledStringEnum)]
-enum LimitType {
+#[derive(DeserializeLabeledStringEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LimitType {
     #[string = "lo"]
     LowerBound,
     #[string = "up"]

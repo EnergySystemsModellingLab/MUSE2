@@ -34,6 +34,10 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
 /// The value is actually a map itself, keyed by commodity ID.
 pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
 
+/// Map of process investment constraints, keyed by region and year
+pub type ProcessInvestmentConstraintsMap =
+    HashMap<(RegionID, u32), Rc<Vec<ProcessInvestmentConstraint>>>;
+
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug)]
 pub struct Process {
@@ -59,6 +63,8 @@ pub struct Process {
     /// if capacity is measured in GW and energy is measured in PJ, the `capacity_to_activity` for the
     /// process is 31.536 because 1 GW of capacity can produce 31.536 PJ energy output in a year.
     pub capacity_to_activity: ActivityPerCapacity,
+    /// Investment constraints for this process
+    pub investment_constraints: ProcessInvestmentConstraintsMap,
 }
 
 impl Process {
@@ -165,6 +171,36 @@ pub struct ProcessParameter {
     pub lifetime: u32,
     /// Process-specific discount rate
     pub discount_rate: Dimensionless,
+}
+
+/// Value specification for different possible types of investment constraints
+#[derive(Debug, Clone, PartialEq)]
+pub enum InvestmentConstraintValue {
+    /// Addition constraint: Yearly limit an agent can invest
+    /// in the process, shared according to the agent's
+    /// proportion of the processes primary commodity demand
+    Addition {
+        /// constraint value to apply
+        addition_limit: f64,
+    },
+    /// Growth constraint: Not implemented yet
+    Growth {
+        /// growth constraint seed value
+        growth_constraint_seed: f64,
+    },
+    /// Limit constraint: Not implemented yet
+    Limit {},
+}
+
+/// A constraint imposed on investments in the process
+#[derive(PartialEq, Debug, Clone)]
+pub struct ProcessInvestmentConstraint {
+    /// The name of the investment constraint
+    pub constraint_name: String,
+    /// The parameters value required to impose the constraint
+    pub constraint_value: InvestmentConstraintValue,
+    /// The limit type for the constraint
+    pub limit_type: String,
 }
 
 #[cfg(test)]

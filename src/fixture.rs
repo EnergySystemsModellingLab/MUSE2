@@ -159,6 +159,10 @@ pub fn process(
     let flows = iproduct!(region_ids.iter(), milestone_years.iter())
         .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(IndexMap::new())))
         .collect();
+    let investment_constraints = iproduct!(region_ids.iter(), milestone_years.iter())
+        .map(|(region_id, year)| ((region_id.clone(), *year), Rc::new(Vec::new())))
+        .collect();
+
     Process {
         id: "process1".into(),
         description: "Description".into(),
@@ -169,6 +173,7 @@ pub fn process(
         regions: region_ids,
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
+        investment_constraints: investment_constraints,
     }
 }
 

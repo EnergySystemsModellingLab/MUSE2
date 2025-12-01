@@ -907,7 +907,7 @@ mod tests {
     };
     use crate::process::{
         FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
-        ProcessParameter, ProcessParameterMap,
+        ProcessInvestmentConstraintsMap, ProcessParameter, ProcessParameterMap,
     };
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceLevel};
@@ -968,6 +968,9 @@ mod tests {
         // Create empty activity limits map
         let activity_limits = hash_map! {(region_id.clone(), 2020) => Rc::new(HashMap::new())};
 
+        // Create empty constraints map
+        let investment_constraints = hash_map! {(region_id.clone(), 2020) => Rc::new(Vec::new())};
+
         let process = Rc::new(Process {
             id: ProcessID::from("PROC1"),
             description: "Test process".to_string(),
@@ -978,6 +981,7 @@ mod tests {
             years: 2020..=2020,
             activity_limits,
             capacity_to_activity: ActivityPerCapacity(1.0),
+            investment_constraints: investment_constraints,
         });
 
         // Create asset
@@ -1063,6 +1067,10 @@ mod tests {
             .iter()
             .map(|&year| ((region_id.clone(), year), Rc::new(IndexMap::new())))
             .collect();
+        let investment_constraints = years
+            .iter()
+            .map(|&year| ((region_id.clone(), year), Rc::new(Vec::new())))
+            .collect();
         let process = Rc::new(Process {
             id: "process1".into(),
             description: "Description".into(),
@@ -1073,6 +1081,7 @@ mod tests {
             regions: IndexSet::from(["GBR".into()]),
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(1.0),
+            investment_constraints: investment_constraints,
         });
         let future = [2020, 2010]
             .map(|year| {
@@ -1112,6 +1121,7 @@ mod tests {
         let fraction_limits = Dimensionless(1.0)..=Dimensionless(2.0);
         let mut flows = ProcessFlowsMap::new();
         let mut activity_limits = ProcessActivityLimitsMap::new();
+        let investment_constraints = ProcessInvestmentConstraintsMap::new();
         let limit_map = Rc::new(hash_map! {time_slice => fraction_limits});
         for year in [2010, 2020] {
             // empty flows map, but this is fine for our purposes
@@ -1128,6 +1138,7 @@ mod tests {
             regions: IndexSet::from([region_id]),
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(3.0),
+            investment_constraints: investment_constraints,
         }
     }
 
