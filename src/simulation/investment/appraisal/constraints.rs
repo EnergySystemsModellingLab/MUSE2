@@ -51,13 +51,20 @@ pub fn add_activity_constraints(
     asset: &AssetRef,
     capacity_var: Variable,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
+    time_slice_info: &TimeSliceInfo,
 ) {
     match asset.state() {
         AssetState::Commissioned { .. } => {
-            add_activity_constraints_for_existing(problem, asset, activity_vars);
+            add_activity_constraints_for_existing(problem, asset, activity_vars, time_slice_info);
         }
         AssetState::Candidate => {
-            add_activity_constraints_for_candidate(problem, asset, capacity_var, activity_vars);
+            add_activity_constraints_for_candidate(
+                problem,
+                asset,
+                capacity_var,
+                activity_vars,
+                time_slice_info,
+            );
         }
         _ => panic!(
             "add_activity_constraints should only be called with Commissioned or Candidate assets"
@@ -69,11 +76,19 @@ fn add_activity_constraints_for_existing(
     problem: &mut Problem,
     asset: &AssetRef,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
+    time_slice_info: &TimeSliceInfo,
 ) {
-    for (time_slice, var) in activity_vars {
-        let limits = asset.get_activity_limits(time_slice);
+    for (ts_selection, limits) in asset.iter_activity_limits() {
         let limits = limits.start().value()..=limits.end().value();
-        problem.add_row(limits, [(*var, 1.0)]);
+
+        // Collect activity terms for the time slices in this selection
+        let terms = ts_selection
+            .iter(time_slice_info)
+            .map(|(time_slice, _)| (*activity_vars.get(time_slice).unwrap(), 1.0))
+            .collect::<Vec<_>>();
+
+        // Constraint: sum of activities in selection within limits
+        problem.add_row(limits, &terms);
     }
 }
 
@@ -82,17 +97,27 @@ fn add_activity_constraints_for_candidate(
     asset: &AssetRef,
     capacity_var: Variable,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
+    time_slice_info: &TimeSliceInfo,
 ) {
-    for (time_slice, activity_var) in activity_vars {
-        let limits = asset.get_activity_per_capacity_limits(time_slice);
-        let lower_limit = limits.start().value();
+    for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
         let upper_limit = limits.end().value();
+        let lower_limit = limits.start().value();
 
-        // Upper bound: activity ≤ capacity * upper_limit
-        problem.add_row(..=0.0, [(*activity_var, 1.0), (capacity_var, -upper_limit)]);
+        // Collect capacity and activity terms
+        // We have a single capacity term, and activity terms for all time slices in the selection
+        let mut terms_upper = vec![(capacity_var, -upper_limit)];
+        let mut terms_lower = vec![(capacity_var, -lower_limit)];
+        for (time_slice, _) in ts_selection.iter(time_slice_info) {
+            let var = *activity_vars.get(time_slice).unwrap();
+            terms_upper.push((var, 1.0));
+            terms_lower.push((var, 1.0));
+        }
 
-        // Lower bound: activity ≥ capacity * lower_limit
-        problem.add_row(..=0.0, [(*activity_var, -1.0), (capacity_var, lower_limit)]);
+        // Upper bound: sum(activity) - (capacity * upper_limit_per_capacity) ≤ 0
+        problem.add_row(..=0.0, &terms_upper);
+
+        // Lower bound: sum(activity) - (capacity * lower_limit_per_capacity) ≥ 0
+        problem.add_row(0.0.., &terms_lower);
     }
 }
 

@@ -8,6 +8,11 @@ echo Building MUSE2
 examples=$(cargo run example list 2> /dev/null)
 
 for example in $examples; do
+    # Skip the circularity example
+    if [ "$example" = circularity ]; then
+        continue
+    fi
+
     echo Generating data for example: $example
 
     # We only need debug files for the simple model

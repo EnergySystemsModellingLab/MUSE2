@@ -1,10 +1,15 @@
 $schema: https://specs.frictionlessdata.io/schemas/table-schema.json
 description: |
-  Defines how much of a process's capacity is available throughout the year.
+  Defines constraints on process availabilities throughout the year.
 
 notes:
-  - Must be provided for every process.
-  - Only one type of limit can be supplied for each combination of process/region/year/time slice.
+  - Limits can be combined across multiple time periods. For example, users could provide a limit
+    of "..0.9" for "winter.day" and "..0.5" for "winter", indicating that the activity can reach
+    up to 90% during winter days, so long as activity does not exceed 50% across winter as a whole.
+  - Incompatible limits will be flagged at the input validation stage. For example, a limit of
+    "..0.01" for "winter" would likely be incompatible with a limit of "0.9.." for "winter.day".
+  - If a limit is provided for any time slice (or season) for a particular process/region/year, it
+    must be provided for all time slices (or seasons).
 
 fields:
   - name: process_id
@@ -25,15 +30,13 @@ fields:
     type: string
     description: The time slices(s) to which this entry applies
     notes: |
-      Can be a single time slice (e.g. `winter.day`), a whole season (e.g. `winter`) or `annual`,
-      representing the whole year
-  - name: limit_type
+      Can be a single time slice (e.g. `winter.day`), a season (e.g. `winter`) or `annual`. If a
+      season or `annual`, this means that limit will apply to the season/year as a whole.
+  - name: limits
     type: string
-    description: The type of limit
-    notes: |
-      Can be `lo` (a lower bound), `up` (an upper bound) or `fx` (indicating that the availability
-      is constant)
-  - name: value
-    type: number
-    description: The proportion of capacity which is available
-    notes: Must be >0 and <=1
+    description: Lower and upper limits on the availability of the process within the specified time slice(s)
+    notes:
+      A string in the format `min..max`, where `min` and `max` are decimal numbers between 0 and 1
+      inclusive (e.g. "0.2..0.9"). 0 represents no availability, and 1 represents full availability.
+      Either `min` or `max` can be omitted (e.g "0.2.." or "..0.9"), which will set the
+      corresponding limit to 0 or 1, respectively.

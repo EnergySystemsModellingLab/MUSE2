@@ -854,27 +854,24 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        asset, process, process_parameter_map, region_id, svd_commodity, time_slice,
+        asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
         time_slice_info, time_slice_info2,
     };
-    use crate::process::{FlowType, ProcessFlow};
-    use crate::region::RegionID;
+    use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-    use crate::units::{Dimensionless, Flow, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
-    use itertools::Itertools;
-    use map_macro::hash_map;
     use rstest::rstest;
     use std::rc::Rc;
 
     #[rstest]
     fn test_get_demand_limiting_capacity(
         time_slice: TimeSliceID,
-        region_id: RegionID,
         time_slice_info: TimeSliceInfo,
         svd_commodity: Commodity,
+        mut process: Process,
     ) {
-        // Create a process flow using the existing commodity fixture
+        // Add flows for the process using the existing commodity fixture
         let commodity_rc = Rc::new(svd_commodity);
         let process_flow = ProcessFlow {
             commodity: Rc::clone(&commodity_rc),
@@ -882,28 +879,9 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-
-        // Create a process with the flows and activity limits
-        let mut process = process(
-            [region_id.clone()].into_iter().collect(),
-            process_parameter_map([region_id.clone()].into_iter().collect()),
-        );
-
-        // Add the flow to the process
-        process.flows.insert(
-            (region_id.clone(), 2015), // Using default commission year from fixture
-            Rc::new(
-                [(commodity_rc.id.clone(), process_flow)]
-                    .into_iter()
-                    .collect(),
-            ),
-        );
-
-        // Add activity limits
-        process.activity_limits.insert(
-            (region_id.clone(), 2015),
-            Rc::new(hash_map! {time_slice.clone() => Dimensionless(0.0)..=Dimensionless(1.0)}),
-        );
+        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+        process.flows = process_flows_map;
 
         // Create asset with the configured process
         let asset = asset(process);
@@ -924,13 +902,12 @@ mod tests {
     fn test_get_demand_limiting_capacity_multiple_time_slices(
         time_slice_info2: TimeSliceInfo,
         svd_commodity: Commodity,
-        region_id: RegionID,
+        mut process: Process,
     ) {
-        // Create time slices from the fixture (day and night)
         let (time_slice1, time_slice2) =
             time_slice_info2.time_slices.keys().collect_tuple().unwrap();
 
-        // Create a process flow using the existing commodity fixture
+        // Add flows for the process using the existing commodity fixture
         let commodity_rc = Rc::new(svd_commodity);
         let process_flow = ProcessFlow {
             commodity: Rc::clone(&commodity_rc),
@@ -938,40 +915,23 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
+        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+        process.flows = process_flows_map;
 
-        // Create a process with the flows and activity limits
-        let mut process = process(
-            [region_id.clone()].into_iter().collect(),
-            process_parameter_map([region_id.clone()].into_iter().collect()),
-        );
-
-        // Add the flow to the process
-        process.flows.insert(
-            (region_id.clone(), 2015), // Using default commission year from fixture
-            Rc::new(
-                [(commodity_rc.id.clone(), process_flow)]
-                    .into_iter()
-                    .collect(),
-            ),
-        );
-
-        // Add activity limits for both time slices with different limits
-        let limits = hash_map! {
-            // Higher limit for day
-            time_slice1.clone() => Dimensionless(0.0)..=Dimensionless(2.0),
-            // Zero limit for night - should be skipped
-            time_slice2.clone() => Dimensionless(0.0)..=Dimensionless(0.0)
-        };
-        process
-            .activity_limits
-            .insert((region_id.clone(), 2015), limits.into());
+        // Add activity limits for the process
+        let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
+        limits.add_time_slice_limit(time_slice1.clone(), Dimensionless(0.0)..=Dimensionless(0.2));
+        limits.add_time_slice_limit(time_slice2.clone(), Dimensionless(0.0)..=Dimensionless(0.0));
+        let limits_map = process_activity_limits_map(process.regions.clone(), limits);
+        process.activity_limits = limits_map;
 
         // Create asset with the configured process
         let asset = asset(process);
 
         // Create demand map with different demands for each time slice
         let demand = indexmap! {
-            time_slice1.clone() => Flow(4.0), // Requires capacity of 4.0/2.0 = 2.0
+            time_slice1.clone() => Flow(4.0), // Requires capacity of 4.0/0.2 = 20.0
             time_slice2.clone() => Flow(3.0), // Would require infinite capacity, but should be skipped
         };
 
@@ -980,9 +940,9 @@ mod tests {
             get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
 
         // Expected: maximum of the capacity requirements across time slices (excluding zero limit)
-        // Time slice 1: demand (4.0) / (activity_limit (2.0) * coeff (1.0)) = 2.0
+        // Time slice 1: demand (4.0) / (activity_limit (0.2) * coeff (1.0)) = 20.0
         // Time slice 2: skipped due to zero activity limit
-        // Maximum = 2.0
-        assert_eq!(result, Capacity(2.0));
+        // Maximum = 20.0
+        assert_eq!(result, Capacity(20.0));
     }
 }

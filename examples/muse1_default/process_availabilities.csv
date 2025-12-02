@@ -1,6 +1,4 @@
-process_id,regions,commission_years,time_slice,limit_type,value
-gassupply1,R1,all,annual,up,0.9
-gasCCGT,R1,all,annual,up,0.9
-windturbine,R1,all,annual,up,0.4
-gasboiler,R1,all,annual,up,1.0
-heatpump,R1,all,annual,up,1.0
+process_id,regions,commission_years,time_slice,limits
+gassupply1,R1,all,annual,..0.9
+gasCCGT,R1,all,annual,..0.9
+windturbine,R1,all,annual,..0.4
