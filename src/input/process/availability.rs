@@ -60,21 +60,23 @@ fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>>
     let lower = if left.is_empty() {
         Dimensionless(0.0)
     } else {
-        left.parse::<f64>()
-            .ok()
-            .with_context(|| format!("Invalid lower availability limit: {left}"))?
-            .into()
+        Dimensionless(
+            left.parse::<f64>()
+                .ok()
+                .with_context(|| format!("Invalid lower availability limit: {left}"))?,
+        )
     };
 
     // Parse upper limit
     let upper = if right.is_empty() {
         Dimensionless(1.0)
     } else {
-        right
-            .parse::<f64>()
-            .ok()
-            .with_context(|| format!("Invalid upper availability limit: {right}"))?
-            .into()
+        Dimensionless(
+            right
+                .parse::<f64>()
+                .ok()
+                .with_context(|| format!("Invalid upper availability limit: {right}"))?,
+        )
     };
 
     // Validation checks

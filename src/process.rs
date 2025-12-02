@@ -216,7 +216,8 @@ impl ActivityLimits {
         // Get current limit for the season
         let current_limit = self.get_limit_for_season(&season);
 
-        // Ensure that the new limit is compatible with the current limit
+        // Ensure that the new limit overlaps with the current limit
+        // If not, it's impossible to satisfy both limits, so we must exit with an error
         ensure!(
             *limit.start() <= *current_limit.end() && *limit.end() >= *current_limit.start(),
             "Availability limit for season {season} clashes with time slice limits",
@@ -238,7 +239,8 @@ impl ActivityLimits {
         // Get current limit for the year
         let current_limit = self.get_limit_for_year(&TimeSliceInfo::default());
 
-        // Ensure that the new limit is compatible with the current limit
+        // Ensure that the new limit overlaps with the current limit
+        // If not, it's impossible to satisfy both limits, so we must exit with an error
         ensure!(
             *limit.start() <= *current_limit.end() && *limit.end() >= *current_limit.start(),
             "Annual availability limit clashes with time slice/seasonal limits",
