@@ -1,7 +1,7 @@
 //! Code for updating the simulation state.
 use crate::asset::AssetRef;
-use crate::commodity::CommodityID;
-use crate::model::{Model, PricingStrategy};
+use crate::commodity::{CommodityID, PricingStrategy};
+use crate::model::Model;
 use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
@@ -19,15 +19,32 @@ use std::collections::{BTreeMap, HashMap, btree_map};
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
 pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
+    // Get raw data needed to calculate prices
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
-    match model.parameters.pricing_strategy {
-        // Use raw shadow prices
-        PricingStrategy::ShadowPrices => shadow_prices,
-        // Adjust prices for scarcity
-        PricingStrategy::ScarcityAdjusted => shadow_prices
-            .clone()
-            .with_scarcity_adjustment(solution.iter_activity_duals()),
+    let highest_activity_duals = get_highest_activity_duals(solution.iter_activity_duals());
+
+    // Set up empty commodity prices map
+    let mut prices = CommodityPrices::default();
+
+    // Calculate prices for all markets for which we have a shadow price
+    for (commodity_id, region_id, time_slice, shadow_price) in shadow_prices.iter() {
+        let commodity = &model.commodities[commodity_id];
+        let price = match commodity.pricing_strategy {
+            PricingStrategy::ShadowPrices => shadow_price,
+            PricingStrategy::ScarcityAdjusted => {
+                // Get highest activity dual for this commodity/region/time slice
+                let highest_dual = highest_activity_duals
+                    [&(commodity_id.clone(), region_id.clone(), time_slice.clone())];
+
+                // Add highest activity dual to shadow price
+                // highest_dual is in units of MoneyPerActivity, but this is correct according to Adam
+                shadow_price + MoneyPerFlow(highest_dual.value())
+            }
+        };
+        prices.insert(commodity_id, region_id, time_slice, price);
     }
+
+    prices
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
@@ -35,37 +52,6 @@ pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
 pub struct CommodityPrices(BTreeMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
 impl CommodityPrices {
-    /// Remove the impact of scarcity on prices.
-    ///
-    /// # Arguments
-    ///
-    /// * `activity_duals` - Value of activity duals from solution
-    fn with_scarcity_adjustment<'a, I>(mut self, activity_duals: I) -> Self
-    where
-        I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
-    {
-        let highest_duals = get_highest_activity_duals(activity_duals);
-
-        // Add the highest activity dual for each commodity/region/time slice to each commodity
-        // balance dual
-        for (key, highest) in &highest_duals {
-            if let Some(price) = self.0.get_mut(key) {
-                // highest is in units of MoneyPerActivity, but this is correct according to Adam
-                *price += MoneyPerFlow(highest.value());
-            }
-        }
-
-        self
-    }
-
-    /// Extend the prices map, possibly overwriting values
-    pub fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
-    {
-        self.0.extend(iter);
-    }
-
     /// Insert a price for the given commodity, region and time slice
     pub fn insert(
         &mut self,
@@ -106,17 +92,6 @@ impl CommodityPrices {
     /// Iterate over the price map's keys
     pub fn keys(&self) -> btree_map::Keys<'_, (CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
         self.0.keys()
-    }
-
-    /// Remove the specified entry from the map
-    pub fn remove(
-        &mut self,
-        commodity_id: &CommodityID,
-        region_id: &RegionID,
-        time_slice: &TimeSliceID,
-    ) -> Option<MoneyPerFlow> {
-        self.0
-            .remove(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
     }
 
     /// Calculate time slice-weighted average prices for each commodity-region pair

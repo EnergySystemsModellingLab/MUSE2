@@ -33,9 +33,12 @@ pub fn read_commodities(
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
 ) -> Result<CommodityMap> {
+    // Read commodities table
     let commodities =
         read_csv_id_file::<Commodity, CommodityID>(&model_dir.join(COMMODITY_FILE_NAME))?;
     let commodity_ids = commodities.keys().cloned().collect();
+
+    // Read costs table
     let mut costs = read_commodity_levies(
         model_dir,
         &commodity_ids,
@@ -44,6 +47,7 @@ pub fn read_commodities(
         milestone_years,
     )?;
 
+    // Read demand table
     let mut demand = read_demand(
         model_dir,
         &commodities,

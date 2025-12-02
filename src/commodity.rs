@@ -4,7 +4,9 @@ use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::de::Error;
+use serde::de::value::StrDeserializer;
+use serde::{Deserialize, Deserializer};
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -35,6 +37,9 @@ pub struct Commodity {
     pub kind: CommodityType,
     /// The time slice level for commodity balance
     pub time_slice_level: TimeSliceLevel,
+    /// Defines the strategy used for calculating commodity prices
+    #[serde(deserialize_with = "deserialize_pricing_strategy")]
+    pub pricing_strategy: PricingStrategy,
     /// Production levies for this commodity for different combinations of region, year and time slice.
     ///
     /// May be empty if there are no production levies for this commodity, otherwise there must be
@@ -87,6 +92,32 @@ pub enum CommodityType {
     /// This represents a commodity which can either be produced or consumed, but not both.
     #[string = "oth"]
     Other,
+}
+
+/// The strategy used for calculating commodity prices
+#[derive(Debug, PartialEq, Clone, DeserializeLabeledStringEnum)]
+pub enum PricingStrategy {
+    /// Take commodity prices directly from the shadow prices
+    #[string = "shadow_prices"]
+    ShadowPrices,
+    /// Adjust shadow prices for scarcity
+    #[string = "scarcity_adjusted"]
+    ScarcityAdjusted,
+}
+
+fn deserialize_pricing_strategy<'de, D>(deserializer: D) -> Result<PricingStrategy, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s.as_deref() {
+        None | Some("") => Ok(PricingStrategy::ShadowPrices),
+        Some(other) => PricingStrategy::deserialize(StrDeserializer::<D::Error>::new(other)).map_err(|_| {
+            D::Error::custom(format!(
+                "Invalid pricing_strategy '{other}'; Expected 'shadow_prices' or 'scarcity_adjusted'"
+            ))
+        }),
+    }
 }
 
 #[cfg(test)]
