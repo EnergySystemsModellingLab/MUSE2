@@ -560,6 +560,11 @@ impl Asset {
         check_capacity_valid_for_asset(self.capacity).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
+
+    /// Sets the `unused_years` parameter to zero
+    pub fn reseat_unused_years(&mut self) {
+        self.unused_years = 0;
+    }
 }
 
 #[allow(clippy::missing_fields_in_debug)]
