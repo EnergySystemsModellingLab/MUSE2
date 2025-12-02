@@ -125,7 +125,7 @@ pub fn asset(process: Process) -> Asset {
 pub fn assets(asset: Asset) -> AssetPool {
     let year = asset.commission_year();
     let mut assets = AssetPool::new(iter::once(asset).collect());
-    assets.update_for_year(year);
+    assets.update_for_year(year, u32::MAX);
     assets
 }
 

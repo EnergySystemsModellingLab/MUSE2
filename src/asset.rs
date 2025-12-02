@@ -561,6 +561,11 @@ impl Asset {
         self.state = AssetState::Selected { agent_id };
     }
 
+    /// Increase unused years by 1
+    pub fn increase_unused_years(&mut self) {
+        self.unused_years += 1;
+    }
+
     /// Sets the `unused_years` parameter to zero
     pub fn reseat_unused_years(&mut self) {
         self.unused_years = 0;
@@ -737,9 +742,11 @@ impl AssetPool {
         &self.active
     }
 
-    /// Decommission assets whose lifetime has passed and commission new assets
-    pub fn update_for_year(&mut self, year: u32) {
+    /// Decommission assets whose lifetime has passed or have been unused for too long,
+    /// and commission new assets
+    pub fn update_for_year(&mut self, year: u32, mothball_years: u32) {
         self.decommission_old(year);
+        self.decommission_unused(year, mothball_years);
         self.commission_new(year);
     }
 
@@ -782,6 +789,22 @@ impl AssetPool {
         for mut asset in to_decommission {
             // Set `decommission_year` and move to `self.decommissioned`
             asset.make_mut().decommission(year, "end of life");
+            self.decommissioned.push(asset);
+        }
+    }
+
+    /// Decomission assets unused for more than mothball years
+    fn decommission_unused(&mut self, year: u32, mothball_years: u32) {
+        // Remove assets which are due for decommissioning
+        let to_decommission = self
+            .active
+            .extract_if(.., |asset| asset.unused_years >= mothball_years);
+
+        for mut asset in to_decommission {
+            // Set `decommission_year` and move to `self.decommissioned`
+            asset
+                .make_mut()
+                .decommission(year, &format!("Unused for at least {mothball_years} years"));
             self.decommissioned.push(asset);
         }
     }
@@ -1140,7 +1163,7 @@ mod tests {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new(vec![asset]);
         assert!(asset_pool.active.is_empty());
-        asset_pool.update_for_year(year);
+        asset_pool.update_for_year(year, u32::MAX);
         assert!(asset_pool.active.is_empty());
     }
 
@@ -1394,6 +1417,29 @@ mod tests {
         assert_eq!(asset_pool.active.len(), 1); // Active pool unchanged
         assert_eq!(asset_pool.decommissioned.len(), 1);
         assert_eq!(asset_pool.decommissioned[0].id(), removed_asset.id());
+        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2025));
+    }
+
+    #[rstest]
+    fn test_asset_pool_decommission_unused(mut asset_pool: AssetPool) {
+        // Commission some assets
+        asset_pool.commission_new(2020);
+        assert_eq!(asset_pool.active.len(), 2);
+        assert_eq!(asset_pool.decommissioned.len(), 0);
+
+        // Make an asset unused for a few years
+        let mothball_years: u32 = 10;
+        for _ in 0..mothball_years {
+            asset_pool.active[0].make_mut().increase_unused_years();
+        }
+        assert_eq!(asset_pool.active[0].unused_years, mothball_years);
+
+        // Decomission unused assets
+        asset_pool.decommission_unused(2025, mothball_years);
+
+        // Only the removed asset should be decommissioned (since it's not in active pool)
+        assert_eq!(asset_pool.active.len(), 1); // Active pool unchanged
+        assert_eq!(asset_pool.decommissioned.len(), 1);
         assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2025));
     }
 
