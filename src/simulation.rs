@@ -142,6 +142,9 @@ pub fn run(
         let (flow_map, new_prices) =
             run_dispatch_for_year(model, assets.as_slice(), &candidates, year, &mut writer)?;
 
+        // Increase counter of unused assets
+        assets.track_unused_assets(&flow_map);
+
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;
         writer.write_prices(year, &new_prices)?;

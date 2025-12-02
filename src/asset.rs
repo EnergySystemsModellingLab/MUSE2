@@ -6,6 +6,7 @@ use crate::process::{
 };
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
+use crate::simulation::optimisation::FlowMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
@@ -13,6 +14,7 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -841,6 +843,36 @@ impl AssetPool {
             asset.make_mut().decommission(year, "not selected");
             self.decommissioned.push(asset);
         }
+    }
+
+    /// Increase the unused years counter for active assets that are not used that year
+    ///
+    /// The flow map after the final dispatch optimisation is used, and that compared with the pool
+    /// of active assets, increasing the counter on those in the later that have a zero flow in the
+    /// former or that don't appear there. If they are used, the counter is reset.
+    pub fn track_unused_assets(&mut self, flow_map: &FlowMap) {
+        let used = flow_map
+            .into_iter()
+            .filter_map(|((asset, _, _), &flow)| {
+                if flow.value() == 0.0 {
+                    None
+                } else {
+                    Some(asset.clone())
+                }
+            })
+            .collect::<HashSet<AssetRef>>();
+
+        let _ = self
+            .active
+            .iter_mut()
+            .map(|asset| {
+                if used.contains(asset) {
+                    asset.make_mut().reseat_unused_years();
+                } else {
+                    asset.make_mut().increase_unused_years();
+                }
+            })
+            .collect::<Vec<_>>();
     }
 
     /// Get an asset with the specified ID.
