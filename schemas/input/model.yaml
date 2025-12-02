@@ -55,5 +55,9 @@ properties:
     type: boolean
     description: |
       Allows other options that are known to be broken to be used. Please don't ever enable this.
+  mothball_years:
+    type: integer
+    description: |
+      Number of years an asset can remain unused before being decommissioned. Disabled (infinite) by default.
 
 required: [milestone_years]
