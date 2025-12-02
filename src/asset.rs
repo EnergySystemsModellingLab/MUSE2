@@ -98,6 +98,8 @@ pub struct Asset {
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
+    /// Numbers of continuous years not being used
+    unused_years: u32,
 }
 
 impl Asset {
@@ -247,6 +249,9 @@ impl Asset {
             "Max decommission year must be after/same as commission year"
         );
 
+        // All assets start with 0 unused years
+        let unused_years = 0;
+
         Ok(Self {
             state,
             process,
@@ -257,6 +262,7 @@ impl Asset {
             capacity,
             commission_year,
             max_decommission_year,
+            unused_years,
         })
     }
 
