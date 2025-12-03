@@ -475,7 +475,7 @@ pub struct ProcessParameter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap};
+    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap, PricingStrategy};
     use crate::fixture::{assert_error, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
     use crate::time_slice::TimeSliceSelection;
@@ -539,6 +539,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::ShadowPrices,
             levies_prod: levies_prod,
             levies_cons: levies_cons,
             demand: DemandMap::new(),
@@ -558,6 +559,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::ShadowPrices,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: levies,
             demand: DemandMap::new(),
@@ -577,6 +579,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::ShadowPrices,
             levies_prod: levies,
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -598,6 +601,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::ShadowPrices,
             levies_prod: levies_prod,
             levies_cons: levies_cons,
             demand: DemandMap::new(),
@@ -611,6 +615,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::ShadowPrices,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -625,6 +630,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::ShadowPrices,
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -646,6 +652,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::ShadowPrices,
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -667,6 +674,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::ShadowPrices,
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -933,6 +941,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::ShadowPrices,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),

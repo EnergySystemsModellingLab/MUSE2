@@ -274,12 +274,11 @@ where
 
     // Add this to the shadow price
     let mut scarcity_prices = HashMap::new();
-    for ((commodity, region, time_slice), dual) in &highest_duals {
+    for ((commodity, region, time_slice), highest_dual) in &highest_duals {
         let shadow_price = shadow_prices.get(commodity, region, time_slice).unwrap();
-
-        // Add highest activity dual to shadow price
-        // highest_dual is in units of MoneyPerActivity, but this is correct according to Adam
-        let scarcity_price = shadow_price + MoneyPerFlow(dual.value());
+        // highest_dual is in units of MoneyPerActivity, and shadow_price is in MoneyPerFlow, but
+        // this is correct according to Adam
+        let scarcity_price = shadow_price + MoneyPerFlow(highest_dual.value());
         scarcity_prices.insert(
             (commodity.clone(), region.clone(), time_slice.clone()),
             scarcity_price,
