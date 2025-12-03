@@ -19,14 +19,15 @@ use std::collections::{BTreeMap, HashMap, btree_map};
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
 pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> CommodityPrices {
-    // Get raw data needed to calculate prices
+    // Calculate prices for each method
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
-    let highest_activity_duals = get_highest_activity_duals(solution.iter_activity_duals());
-    let highest_marginal_costs =
-        get_highest_marginal_costs(solution.iter_activity_keys(), &shadow_prices, year);
+    let scarcity_adjusted_prices =
+        calculate_scarcity_adjusted_prices(solution.iter_activity_duals(), &shadow_prices);
+    let marginal_cost_prices =
+        calculate_marginal_cost_prices(solution.iter_activity_keys(), &shadow_prices, year);
     let annual_activities = get_annual_activities(solution.iter_activity());
-    let highest_full_costs = get_highest_full_costs(
-        solution.iter_activity(),
+    let full_cost_prices = calculate_full_cost_prices(
+        solution.iter_activity_keys(),
         &annual_activities,
         &shadow_prices,
         year,
@@ -35,26 +36,20 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
     // Set up empty commodity prices map
     let mut prices = CommodityPrices::default();
 
-    // Calculate prices for all markets/time slices for which we have a shadow price
+    // Fill in prices according to each commodity's pricing strategy
     for (commodity_id, region_id, time_slice, shadow_price) in shadow_prices.iter() {
         let commodity = &model.commodities[commodity_id];
         let price = match commodity.pricing_strategy {
             PricingStrategy::ShadowPrices => shadow_price,
             PricingStrategy::ScarcityAdjusted => {
-                // Get highest activity dual for this commodity/region/time slice
-                let highest_dual = highest_activity_duals
-                    [&(commodity_id.clone(), region_id.clone(), time_slice.clone())];
-
-                // Add highest activity dual to shadow price
-                // highest_dual is in units of MoneyPerActivity, but this is correct according to Adam
-                shadow_price + MoneyPerFlow(highest_dual.value())
-            }
-            PricingStrategy::MarginalCost => {
-                highest_marginal_costs
+                scarcity_adjusted_prices
                     [&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
             }
+            PricingStrategy::MarginalCost => {
+                marginal_cost_prices[&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
+            }
             PricingStrategy::FullCost => {
-                highest_full_costs[&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
+                full_cost_prices[&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
             }
         };
         prices.insert(commodity_id, region_id, time_slice, price);
@@ -91,6 +86,14 @@ impl CommodityPrices {
         self.0
             .iter()
             .map(|((commodity_id, region_id, ts), price)| (commodity_id, region_id, ts, *price))
+    }
+
+    /// Extend the prices map, possibly overwriting values
+    pub fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
+    {
+        self.0.extend(iter);
     }
 
     /// Get the price for the specified commodity for a given region and time slice
@@ -200,9 +203,10 @@ impl IntoIterator for CommodityPrices {
     }
 }
 
-fn get_highest_activity_duals<'a, I>(
+fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerActivity>
+    shadow_prices: &CommodityPrices,
+) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
 {
@@ -230,10 +234,24 @@ where
         }
     }
 
-    highest_duals
+    // Add this to the shadow price
+    let mut scarcity_prices = HashMap::new();
+    for ((commodity, region, time_slice), dual) in &highest_duals {
+        let shadow_price = shadow_prices.get(commodity, region, time_slice).unwrap();
+
+        // Add highest activity dual to shadow price
+        // highest_dual is in units of MoneyPerActivity, but this is correct according to Adam
+        let scarcity_price = shadow_price + MoneyPerFlow(dual.value());
+        scarcity_prices.insert(
+            (commodity.clone(), region.clone(), time_slice.clone()),
+            scarcity_price,
+        );
+    }
+
+    scarcity_prices
 }
 
-fn get_highest_marginal_costs<'a, I>(
+fn calculate_marginal_cost_prices<'a, I>(
     activity_keys: I,
     shadow_prices: &CommodityPrices,
     year: u32,
@@ -267,39 +285,39 @@ where
             .or_insert(marginal_cost);
     }
 
+    // Marginal cost prices are just the highest marginal costs for each commodity/region/time slice
+    // across all assets
     highest_costs
 }
 
-fn get_annual_activities<'a, I>(activity: I) -> HashMap<AssetRef, Activity>
+/// Calculated annual activities for each asset by summing across all time slices
+fn get_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
 where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
-    // Calculate annual activity for each asset
-    let mut annual_activities = HashMap::new();
-    for (asset, _time_slice, activity) in activity {
-        annual_activities
-            .entry(asset.clone())
-            .and_modify(|existing_activity| {
-                *existing_activity += activity;
-            })
-            .or_insert(activity);
-    }
-
-    annual_activities
+    activities
+        .into_iter()
+        .map(|(asset, _ts, activity)| (asset.clone(), activity))
+        .fold(HashMap::new(), |mut acc, (asset, activity)| {
+            acc.entry(asset)
+                .and_modify(|e| *e += activity)
+                .or_insert(activity);
+            acc
+        })
 }
 
-fn get_highest_full_costs<'a, I>(
-    activity: I,
+fn calculate_full_cost_prices<'a, I>(
+    activity_keys: I,
     annual_activities: &HashMap<AssetRef, Activity>,
     shadow_prices: &CommodityPrices,
     year: u32,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: Iterator<Item = &'a (AssetRef, TimeSliceID)>,
 {
     // Calculate highest full cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
-    for (asset, time_slice, _) in activity {
+    for (asset, time_slice) in activity_keys {
         // Skip assets that have no primary output
         let primary_output_id = match asset.primary_output() {
             Some(output) => &output.commodity.id,
@@ -327,6 +345,8 @@ where
             .or_insert(full_cost);
     }
 
+    // Full cost prices are just the highest full costs for each commodity/region/time slice
+    // across all assets
     highest_costs
 }
 
