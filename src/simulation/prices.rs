@@ -1,12 +1,15 @@
 //! Code for updating the simulation state.
+use crate::ISSUES_URL;
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, PricingStrategy};
-use crate::model::Model;
+use crate::model::{ALLOW_BROKEN_OPTION_NAME, Model};
 use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
+use anyhow::{Result, ensure};
+use log::warn;
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
 /// Calculate commodity prices.
@@ -19,7 +22,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
 /// * `year` - The year for which prices are being calculated
-pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> CommodityPrices {
+pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<CommodityPrices> {
     // Compute shadow prices for all SED/SVD commodities (needed by all strategies)
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
 
@@ -68,6 +71,16 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
 
     // Update prices for scarcity-adjusted commodities
     if !scarcity_set.is_empty() {
+        ensure!(
+            model.parameters.allow_broken_options,
+            "The `scarcity` pricing strategy is known to be broken. \
+            To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
+        );
+        warn!(
+            "The pricing strategy for commodities {scarcity_set:?} is set to 'scarcity'. Commodity \
+            prices may be incorrect if assets have more than one output commodity. \
+            See: {ISSUES_URL}/677",
+        );
         let scarcity_prices = calculate_scarcity_adjusted_prices(
             solution.iter_activity_duals(),
             &shadow_prices,
@@ -101,7 +114,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
     }
 
     // Return the completed prices map
-    result
+    Ok(result)
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)

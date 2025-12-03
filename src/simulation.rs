@@ -191,6 +191,7 @@ fn run_dispatch_for_year(
     // If not, return empty maps.
     let prices = solution_for_prices
         .map(|solution| calculate_prices(model, &solution, year))
+        .transpose()?
         .unwrap_or_default();
 
     Ok((flow_map, prices))
