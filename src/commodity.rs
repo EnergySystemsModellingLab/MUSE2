@@ -106,6 +106,9 @@ pub enum PricingStrategy {
     /// Use marginal cost of highest-cost active asset producing the commodity
     #[string = "marginal_cost"]
     MarginalCost,
+    /// Use full cost of highest-cost active asset producing the commodity
+    #[string = "full_cost"]
+    FullCost,
 }
 
 fn deserialize_pricing_strategy<'de, D>(deserializer: D) -> Result<PricingStrategy, D::Error>

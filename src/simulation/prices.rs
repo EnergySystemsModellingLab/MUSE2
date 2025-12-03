@@ -6,7 +6,7 @@ use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
+use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use std::collections::{BTreeMap, HashMap, btree_map};
 
 /// Calculate commodity prices.
@@ -24,11 +24,18 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
     let highest_activity_duals = get_highest_activity_duals(solution.iter_activity_duals());
     let highest_marginal_costs =
         get_highest_marginal_costs(solution.iter_activity_keys(), &shadow_prices, year);
+    let annual_activities = get_annual_activities(solution.iter_activity());
+    let highest_full_costs = get_highest_full_costs(
+        solution.iter_activity(),
+        &annual_activities,
+        &shadow_prices,
+        year,
+    );
 
     // Set up empty commodity prices map
     let mut prices = CommodityPrices::default();
 
-    // Calculate prices for all markets for which we have a shadow price
+    // Calculate prices for all markets/time slices for which we have a shadow price
     for (commodity_id, region_id, time_slice, shadow_price) in shadow_prices.iter() {
         let commodity = &model.commodities[commodity_id];
         let price = match commodity.pricing_strategy {
@@ -43,9 +50,11 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
                 shadow_price + MoneyPerFlow(highest_dual.value())
             }
             PricingStrategy::MarginalCost => {
-                // Get highest marginal cost for this commodity/region/time slice
                 highest_marginal_costs
                     [&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
+            }
+            PricingStrategy::FullCost => {
+                highest_full_costs[&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
             }
         };
         prices.insert(commodity_id, region_id, time_slice, price);
@@ -256,6 +265,66 @@ where
                 }
             })
             .or_insert(marginal_cost);
+    }
+
+    highest_costs
+}
+
+fn get_annual_activities<'a, I>(activity: I) -> HashMap<AssetRef, Activity>
+where
+    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+{
+    // Calculate annual activity for each asset
+    let mut annual_activities = HashMap::new();
+    for (asset, _time_slice, activity) in activity {
+        annual_activities
+            .entry(asset.clone())
+            .and_modify(|existing_activity| {
+                *existing_activity += activity;
+            })
+            .or_insert(activity);
+    }
+
+    annual_activities
+}
+
+fn get_highest_full_costs<'a, I>(
+    activity: I,
+    annual_activities: &HashMap<AssetRef, Activity>,
+    shadow_prices: &CommodityPrices,
+    year: u32,
+) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+where
+    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+{
+    // Calculate highest full cost for each commodity/region/time slice
+    let mut highest_costs = HashMap::new();
+    for (asset, time_slice, _) in activity {
+        // Skip assets that have no primary output
+        let primary_output_id = match asset.primary_output() {
+            Some(output) => &output.commodity.id,
+            None => continue,
+        };
+        let full_cost = asset.get_full_cost_of_primary_output(
+            shadow_prices,
+            year,
+            time_slice,
+            annual_activities[asset],
+        );
+
+        // Update the highest full cost for this commodity/time slice
+        highest_costs
+            .entry((
+                primary_output_id.clone(),
+                asset.region_id().clone(),
+                time_slice.clone(),
+            ))
+            .and_modify(|current_cost| {
+                if full_cost > *current_cost {
+                    *current_cost = full_cost;
+                }
+            })
+            .or_insert(full_cost);
     }
 
     highest_costs
