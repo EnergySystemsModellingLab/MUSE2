@@ -103,6 +103,9 @@ pub enum PricingStrategy {
     /// Adjust shadow prices for scarcity
     #[string = "scarcity_adjusted"]
     ScarcityAdjusted,
+    /// Use marginal cost of highest-cost active asset producing the commodity
+    #[string = "marginal_cost"]
+    MarginalCost,
 }
 
 fn deserialize_pricing_strategy<'de, D>(deserializer: D) -> Result<PricingStrategy, D::Error>

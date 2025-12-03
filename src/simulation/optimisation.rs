@@ -209,8 +209,7 @@ impl Solution<'_> {
 
     /// Activity for each existing asset
     pub fn iter_activity(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
-        self.variables
-            .activity_var_keys()
+        self.iter_activity_keys()
             .zip(self.solution.columns())
             .map(|((asset, time_slice), activity)| (asset, time_slice, Activity(*activity)))
     }
@@ -220,8 +219,7 @@ impl Solution<'_> {
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         let cols = &self.solution.columns()[self.variables.existing_asset_var_idx.clone()];
-        self.variables
-            .activity_var_keys()
+        self.iter_activity_keys()
             .skip(self.variables.existing_asset_var_idx.start)
             .zip(cols.iter())
             .map(|((asset, time_slice), &value)| (asset, time_slice, Activity(value)))
@@ -295,10 +293,14 @@ impl Solution<'_> {
     pub fn iter_column_duals(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, MoneyPerActivity)> {
-        self.variables
-            .activity_var_keys()
+        self.iter_activity_keys()
             .zip(self.solution.dual_columns())
             .map(|((asset, time_slice), dual)| (asset, time_slice, MoneyPerActivity(*dual)))
+    }
+
+    /// Iterate over activity variable keys
+    pub fn iter_activity_keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
+        self.variables.activity_var_keys()
     }
 }
 

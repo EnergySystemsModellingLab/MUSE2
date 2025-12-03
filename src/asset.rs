@@ -7,7 +7,7 @@ use crate::process::{
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
-use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
+use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -387,6 +387,26 @@ impl Asset {
                         .unwrap_or_default()
             })
             .sum()
+    }
+
+    /// Get the marginal cost of the primary output for this asset.
+    pub fn get_marginal_cost_of_primary_output(
+        &self,
+        input_prices: &CommodityPrices,
+        year: u32,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerFlow {
+        // Get overall cost per activity
+        let operating_cost = self.get_operating_cost(year, time_slice);
+        let revenue = self.get_revenue_from_flows_excluding_primary(input_prices, time_slice);
+        let cost_per_activity = operating_cost + revenue;
+
+        // Get coefficient of the primary output
+        let primary_output_flow = self.primary_output().expect(
+            "Cannot calculate marginal cost of primary output for an asset with no primary output",
+        );
+
+        cost_per_activity / primary_output_flow.coeff
     }
 
     /// Maximum activity for this asset

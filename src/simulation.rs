@@ -190,7 +190,7 @@ fn run_dispatch_for_year(
     // If there were either existing or candidate assets, we can calculate prices.
     // If not, return empty maps.
     let prices = solution_for_prices
-        .map(|solution| calculate_prices(model, &solution))
+        .map(|solution| calculate_prices(model, &solution, year))
         .unwrap_or_default();
 
     Ok((flow_map, prices))

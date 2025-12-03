@@ -18,10 +18,12 @@ use std::collections::{BTreeMap, HashMap, btree_map};
 ///
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
-pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
+pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> CommodityPrices {
     // Get raw data needed to calculate prices
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
     let highest_activity_duals = get_highest_activity_duals(solution.iter_activity_duals());
+    let highest_marginal_costs =
+        get_highest_marginal_costs(solution.iter_activity_keys(), &shadow_prices, year);
 
     // Set up empty commodity prices map
     let mut prices = CommodityPrices::default();
@@ -39,6 +41,11 @@ pub fn calculate_prices(model: &Model, solution: &Solution) -> CommodityPrices {
                 // Add highest activity dual to shadow price
                 // highest_dual is in units of MoneyPerActivity, but this is correct according to Adam
                 shadow_price + MoneyPerFlow(highest_dual.value())
+            }
+            PricingStrategy::MarginalCost => {
+                // Get highest marginal cost for this commodity/region/time slice
+                highest_marginal_costs
+                    [&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
             }
         };
         prices.insert(commodity_id, region_id, time_slice, price);
@@ -215,6 +222,43 @@ where
     }
 
     highest_duals
+}
+
+fn get_highest_marginal_costs<'a, I>(
+    activity_keys: I,
+    shadow_prices: &CommodityPrices,
+    year: u32,
+) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+where
+    I: Iterator<Item = &'a (AssetRef, TimeSliceID)>,
+{
+    // Calculate highest marginal cost for each commodity/region/time slice
+    let mut highest_costs = HashMap::new();
+    for (asset, time_slice) in activity_keys {
+        // Skip assets that have no primary output
+        let primary_output_id = match asset.primary_output() {
+            Some(output) => &output.commodity.id,
+            None => continue,
+        };
+        let marginal_cost =
+            asset.get_marginal_cost_of_primary_output(shadow_prices, year, time_slice);
+
+        // Update the highest marginal cost for this commodity/time slice
+        highest_costs
+            .entry((
+                primary_output_id.clone(),
+                asset.region_id().clone(),
+                time_slice.clone(),
+            ))
+            .and_modify(|current_cost| {
+                if marginal_cost > *current_cost {
+                    *current_cost = marginal_cost;
+                }
+            })
+            .or_insert(marginal_cost);
+    }
+
+    highest_costs
 }
 
 #[cfg(test)]
