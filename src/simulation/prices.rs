@@ -7,55 +7,81 @@ use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
-use std::collections::{BTreeMap, HashMap, btree_map};
+use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
 /// Calculate commodity prices.
 ///
-/// Note that the behaviour will be different depending on the [`PricingStrategy`] the user has
-/// selected.
+/// Note that the behaviour will be different depending on the [`PricingStrategy`] for each
+/// commodity.
 ///
 /// # Arguments
 ///
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
+/// * `year` - The year for which prices are being calculated
 pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> CommodityPrices {
-    // Calculate prices for each method
+    // Compute shadow prices for all commodities (needed by all strategies)
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
-    let scarcity_adjusted_prices =
-        calculate_scarcity_adjusted_prices(solution.iter_activity_duals(), &shadow_prices);
-    let marginal_cost_prices =
-        calculate_marginal_cost_prices(solution.iter_activity_keys(), &shadow_prices, year);
-    let annual_activities = get_annual_activities(solution.iter_activity());
-    let full_cost_prices = calculate_full_cost_prices(
-        solution.iter_activity_keys(),
-        &annual_activities,
-        &shadow_prices,
-        year,
-    );
 
-    // Set up empty commodity prices map
-    let mut prices = CommodityPrices::default();
-
-    // Fill in prices according to each commodity's pricing strategy
-    for (commodity_id, region_id, time_slice, shadow_price) in shadow_prices.iter() {
-        let commodity = &model.commodities[commodity_id];
-        let price = match commodity.pricing_strategy {
-            PricingStrategy::ShadowPrices => shadow_price,
+    // Partition commodities by pricing strategy
+    let mut scarcity_set = HashSet::new();
+    let mut marginal_set = HashSet::new();
+    let mut fullcost_set = HashSet::new();
+    for (commodity_id, commodity) in &model.commodities {
+        match commodity.pricing_strategy {
             PricingStrategy::ScarcityAdjusted => {
-                scarcity_adjusted_prices
-                    [&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
+                scarcity_set.insert(commodity_id.clone());
             }
             PricingStrategy::MarginalCost => {
-                marginal_cost_prices[&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
+                marginal_set.insert(commodity_id.clone());
             }
             PricingStrategy::FullCost => {
-                full_cost_prices[&(commodity_id.clone(), region_id.clone(), time_slice.clone())]
+                fullcost_set.insert(commodity_id.clone());
             }
-        };
-        prices.insert(commodity_id, region_id, time_slice, price);
+            PricingStrategy::ShadowPrices => { /* nothing else required */ }
+        }
     }
 
-    prices
+    // Set up prices map
+    // We will start with a clone of the shadow prices map and replace values as needed
+    let mut result = shadow_prices.clone();
+
+    // Add scarcity adjusted prices for the relevant commodities
+    if !scarcity_set.is_empty() {
+        let scarcity_prices = calculate_scarcity_adjusted_prices(
+            solution.iter_activity_duals(),
+            &shadow_prices,
+            &scarcity_set,
+        );
+        result.extend(scarcity_prices);
+    }
+
+    // Add marginal cost prices for the relevant commodities
+    if !marginal_set.is_empty() {
+        let marginal_cost_prices = calculate_marginal_cost_prices(
+            solution.iter_activity_keys(),
+            &shadow_prices,
+            year,
+            &marginal_set,
+        );
+        result.extend(marginal_cost_prices);
+    }
+
+    // Add full cost prices for the relevant commodities
+    if !fullcost_set.is_empty() {
+        let annual_activities = calculate_annual_activities(solution.iter_activity());
+        let full_cost_prices = calculate_full_cost_prices(
+            solution.iter_activity_keys(),
+            &annual_activities,
+            &shadow_prices,
+            year,
+            &fullcost_set,
+        );
+        result.extend(full_cost_prices);
+    }
+
+    // Return the completed prices map
+    result
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
@@ -203,9 +229,16 @@ impl IntoIterator for CommodityPrices {
     }
 }
 
+/// Calculate scarcity-adjusted prices for a set of commodities.
+///
+/// # Arguments
+/// * `activity_duals` - Iterator over activity duals from optimisation solution
+/// * `shadow_prices` - Shadow prices for all commodities
+/// * `commodities_to_price` - Set of commodity IDs to calculate scarcity-adjusted prices for
 fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
     shadow_prices: &CommodityPrices,
+    commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
@@ -218,6 +251,11 @@ where
             .iter_flows()
             .filter(|flow| flow.direction() == FlowDirection::Output)
         {
+            // Skip commodities that are not in the set to price
+            if !commodities_to_price.contains(&flow.commodity.id) {
+                continue;
+            }
+
             // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
@@ -251,10 +289,17 @@ where
     scarcity_prices
 }
 
+/// Calculate marginal cost prices for a set of commodities.
+///
+/// # Arguments
+/// * `activity_keys` - Iterator over activity keys from optimisation solution
+/// * `shadow_prices` - Shadow prices for all commodities
+/// * `year` - The year for which prices are being calculated
 fn calculate_marginal_cost_prices<'a, I>(
     activity_keys: I,
     shadow_prices: &CommodityPrices,
     year: u32,
+    commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = &'a (AssetRef, TimeSliceID)>,
@@ -267,6 +312,12 @@ where
             Some(output) => &output.commodity.id,
             None => continue,
         };
+
+        // Skip commodities that are not in the set to price
+        if !commodities_to_price.contains(primary_output_id) {
+            continue;
+        }
+
         let marginal_cost =
             asset.get_marginal_cost_of_primary_output(shadow_prices, year, time_slice);
 
@@ -291,7 +342,7 @@ where
 }
 
 /// Calculated annual activities for each asset by summing across all time slices
-fn get_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
+fn calculate_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
 where
     I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
@@ -306,11 +357,20 @@ where
         })
 }
 
+/// Calculate full cost prices for a set of commodities.
+///
+/// # Arguments
+/// * `activity_keys` - Iterator over activity keys from optimisation solution
+/// * `annual_activities` - Map of annual activities for each asset computed by `calculate_annual_activities`
+/// * `shadow_prices` - Shadow prices for all commodities
+/// * `year` - The year for which prices are being calculated
+/// * `commodities_to_price` - Set of commodity IDs to calculate full cost prices for
 fn calculate_full_cost_prices<'a, I>(
     activity_keys: I,
     annual_activities: &HashMap<AssetRef, Activity>,
     shadow_prices: &CommodityPrices,
     year: u32,
+    commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = &'a (AssetRef, TimeSliceID)>,
@@ -323,6 +383,12 @@ where
             Some(output) => &output.commodity.id,
             None => continue,
         };
+
+        // Skip commodities that are not in the set to price
+        if !commodities_to_price.contains(primary_output_id) {
+            continue;
+        }
+
         let full_cost = asset.get_full_cost_of_primary_output(
             shadow_prices,
             year,
