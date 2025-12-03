@@ -4,9 +4,7 @@ use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
-use serde::de::Error;
-use serde::de::value::StrDeserializer;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -38,7 +36,6 @@ pub struct Commodity {
     /// The time slice level for commodity balance
     pub time_slice_level: TimeSliceLevel,
     /// Defines the strategy used for calculating commodity prices
-    #[serde(deserialize_with = "deserialize_pricing_strategy")]
     pub pricing_strategy: PricingStrategy,
     /// Production levies for this commodity for different combinations of region, year and time slice.
     ///
@@ -95,38 +92,26 @@ pub enum CommodityType {
 }
 
 /// The strategy used for calculating commodity prices
-#[derive(Debug, PartialEq, Clone, DeserializeLabeledStringEnum)]
+#[derive(Debug, PartialEq, Clone, Deserialize)]
 pub enum PricingStrategy {
     /// Take commodity prices directly from the shadow prices
-    #[string = "shadow"]
+    #[serde(rename = "shadow")]
     Shadow,
     /// Adjust shadow prices for scarcity
-    #[string = "scarcity"]
+    #[serde(rename = "scarcity")]
     ScarcityAdjusted,
     /// Use marginal cost of highest-cost active asset producing the commodity
-    #[string = "marginal"]
+    #[serde(rename = "marginal")]
     MarginalCost,
     /// Use full cost of highest-cost active asset producing the commodity
-    #[string = "full"]
+    #[serde(rename = "full")]
     FullCost,
     /// Commodities that should not have prices calculated
-    #[string = "unpriced"]
+    #[serde(rename = "unpriced")]
     Unpriced,
-}
-
-fn deserialize_pricing_strategy<'de, D>(deserializer: D) -> Result<PricingStrategy, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    match s.as_deref() {
-        None | Some("") => Ok(PricingStrategy::Shadow),
-        Some(other) => PricingStrategy::deserialize(StrDeserializer::<D::Error>::new(other)).map_err(|_| {
-            D::Error::custom(format!(
-                "Invalid pricing_strategy '{other}'; Expected one of 'shadow', 'scarcity', 'marginal', 'full', 'unpriced'"
-            ))
-        }),
-    }
+    /// Default pricing strategy depending on the commodity type (placeholder during data loading)
+    #[serde(rename = "default")]
+    Default,
 }
 
 #[cfg(test)]

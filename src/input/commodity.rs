@@ -1,6 +1,8 @@
 //! Code for reading in commodity-related data from CSV files.
 use super::read_csv_id_file;
-use crate::commodity::{BalanceType, Commodity, CommodityID, CommodityMap};
+use crate::commodity::{
+    BalanceType, Commodity, CommodityID, CommodityMap, CommodityType, PricingStrategy,
+};
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
 use anyhow::Result;
@@ -34,9 +36,14 @@ pub fn read_commodities(
     milestone_years: &[u32],
 ) -> Result<CommodityMap> {
     // Read commodities table
-    let commodities =
+    let mut commodities =
         read_csv_id_file::<Commodity, CommodityID>(&model_dir.join(COMMODITY_FILE_NAME))?;
     let commodity_ids = commodities.keys().cloned().collect();
+
+    // Validate commodities
+    for commodity in commodities.values_mut() {
+        validate_commodity(commodity);
+    }
 
     // Read costs table
     let mut costs = read_commodity_levies(
@@ -75,4 +82,39 @@ pub fn read_commodities(
             (id, commodity.into())
         })
         .collect())
+}
+
+fn validate_commodity(commodity: &mut Commodity) {
+    // Set default pricing strategy if needed
+    if commodity.pricing_strategy == PricingStrategy::Default {
+        commodity.pricing_strategy = match commodity.kind {
+            CommodityType::Other => PricingStrategy::Unpriced,
+            CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand => {
+                PricingStrategy::Shadow
+            }
+        };
+    }
+
+    // Check that OTH commodities are unpriced
+    if commodity.kind == CommodityType::Other {
+        assert_eq!(
+            commodity.pricing_strategy,
+            PricingStrategy::Unpriced,
+            "Commodity {} of type Other and must be unpriced. Update its pricing strategy to 'unpriced' or 'default'.",
+            commodity.id
+        );
+    }
+
+    // Check that SED and SVD commodities are not unpriced
+    if commodity.kind == CommodityType::SupplyEqualsDemand
+        || commodity.kind == CommodityType::ServiceDemand
+    {
+        assert_ne!(
+            commodity.pricing_strategy,
+            PricingStrategy::Unpriced,
+            "Commodity {} of type {:?} cannot be unpriced. Update its pricing strategy to a valid option.",
+            commodity.id,
+            commodity.kind
+        );
+    }
 }

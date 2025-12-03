@@ -43,6 +43,11 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
                 unpriced_set.insert(commodity_id.clone());
             }
             PricingStrategy::Shadow => { /* nothing else required */ }
+            PricingStrategy::Default => {
+                unreachable!(
+                    "Default pricing strategy should have been resolved during data loading"
+                )
+            }
         }
     }
 
