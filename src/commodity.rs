@@ -98,17 +98,20 @@ pub enum CommodityType {
 #[derive(Debug, PartialEq, Clone, DeserializeLabeledStringEnum)]
 pub enum PricingStrategy {
     /// Take commodity prices directly from the shadow prices
-    #[string = "shadow_prices"]
-    ShadowPrices,
+    #[string = "shadow"]
+    Shadow,
     /// Adjust shadow prices for scarcity
-    #[string = "scarcity_adjusted"]
+    #[string = "scarcity"]
     ScarcityAdjusted,
     /// Use marginal cost of highest-cost active asset producing the commodity
-    #[string = "marginal_cost"]
+    #[string = "marginal"]
     MarginalCost,
     /// Use full cost of highest-cost active asset producing the commodity
-    #[string = "full_cost"]
+    #[string = "full"]
     FullCost,
+    /// Commodities that should not have prices calculated
+    #[string = "unpriced"]
+    Unpriced,
 }
 
 fn deserialize_pricing_strategy<'de, D>(deserializer: D) -> Result<PricingStrategy, D::Error>
@@ -117,10 +120,10 @@ where
 {
     let s: Option<String> = Option::deserialize(deserializer)?;
     match s.as_deref() {
-        None | Some("") => Ok(PricingStrategy::ShadowPrices),
+        None | Some("") => Ok(PricingStrategy::Shadow),
         Some(other) => PricingStrategy::deserialize(StrDeserializer::<D::Error>::new(other)).map_err(|_| {
             D::Error::custom(format!(
-                "Invalid pricing_strategy '{other}'; Expected 'shadow_prices' or 'scarcity_adjusted'"
+                "Invalid pricing_strategy '{other}'; Expected one of 'shadow', 'scarcity', 'marginal', 'full', 'unpriced'"
             ))
         }),
     }

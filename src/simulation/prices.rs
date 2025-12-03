@@ -20,13 +20,14 @@ use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 /// * `solution` - Solution to dispatch optimisation
 /// * `year` - The year for which prices are being calculated
 pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> CommodityPrices {
-    // Compute shadow prices for all commodities (needed by all strategies)
+    // Compute shadow prices for all SED/SVD commodities (needed by all strategies)
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
 
     // Partition commodities by pricing strategy
     let mut scarcity_set = HashSet::new();
     let mut marginal_set = HashSet::new();
     let mut fullcost_set = HashSet::new();
+    let mut unpriced_set = HashSet::new();
     for (commodity_id, commodity) in &model.commodities {
         match commodity.pricing_strategy {
             PricingStrategy::ScarcityAdjusted => {
@@ -38,25 +39,39 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
             PricingStrategy::FullCost => {
                 fullcost_set.insert(commodity_id.clone());
             }
-            PricingStrategy::ShadowPrices => { /* nothing else required */ }
+            PricingStrategy::Unpriced => {
+                unpriced_set.insert(commodity_id.clone());
+            }
+            PricingStrategy::Shadow => { /* nothing else required */ }
         }
     }
 
     // Set up prices map
-    // We will start with a clone of the shadow prices map and replace values as needed
+    // We will start with a clone of the shadow prices map and replace/remove values as needed
     let mut result = shadow_prices.clone();
 
-    // Add scarcity adjusted prices for the relevant commodities
+    // Remove prices for unpriced commodities
+    // For now, there should be no shadow prices for unpriced commodities, so let's panic if there
+    // are any, just as a sanity check. In the future we may need up with shadow prices for unpriced
+    // commodities, so this will need to be revisitied.
+    for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
+        if unpriced_set.contains(commodity_id) {
+            result.remove(commodity_id, region_id, time_slice);
+            panic!("Shadow price found for unpriced commodity");
+        }
+    }
+
+    // Update prices for scarcity-adjusted commodities
     if !scarcity_set.is_empty() {
         let scarcity_prices = calculate_scarcity_adjusted_prices(
             solution.iter_activity_duals(),
             &shadow_prices,
             &scarcity_set,
         );
-        result.extend(scarcity_prices);
+        result.update(scarcity_prices);
     }
 
-    // Add marginal cost prices for the relevant commodities
+    // Update prices for marginal cost commodities
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
             solution.iter_activity_keys(),
@@ -64,10 +79,10 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
             year,
             &marginal_set,
         );
-        result.extend(marginal_cost_prices);
+        result.update(marginal_cost_prices);
     }
 
-    // Add full cost prices for the relevant commodities
+    // Update prices for full cost commodities
     if !fullcost_set.is_empty() {
         let annual_activities = calculate_annual_activities(solution.iter_activity());
         let full_cost_prices = calculate_full_cost_prices(
@@ -77,7 +92,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Commod
             year,
             &fullcost_set,
         );
-        result.extend(full_cost_prices);
+        result.update(full_cost_prices);
     }
 
     // Return the completed prices map
@@ -122,6 +137,22 @@ impl CommodityPrices {
         self.0.extend(iter);
     }
 
+    /// Update the prices map with the given iterator of entries
+    ///
+    /// If a price doesn't already exist for a given commodity/region/time slice, it will panic.
+    pub fn update<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
+    {
+        for (key, price) in iter {
+            let previous = self.0.insert(key, price);
+            assert!(
+                previous.is_some(),
+                "Attempted to update price for non-existent commodity/region/time slice"
+            );
+        }
+    }
+
     /// Get the price for the specified commodity for a given region and time slice
     pub fn get(
         &self,
@@ -132,6 +163,17 @@ impl CommodityPrices {
         self.0
             .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
             .copied()
+    }
+
+    /// Remove the specified entry from the map
+    pub fn remove(
+        &mut self,
+        commodity_id: &CommodityID,
+        region_id: &RegionID,
+        time_slice: &TimeSliceID,
+    ) -> Option<MoneyPerFlow> {
+        self.0
+            .remove(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
     }
 
     /// Iterate over the price map's keys
