@@ -7,9 +7,7 @@ use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{
-    Activity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerFlow, Year,
-};
+use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use anyhow::{Result, ensure};
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
@@ -71,6 +69,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     }
 
     // Update prices for scarcity-adjusted commodities
+    // Any markets for which scarcity pricing cannot be calculated will retain their shadow prices
     if !scarcity_set.is_empty() {
         ensure!(
             model.parameters.allow_broken_options,
@@ -88,6 +87,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     }
 
     // Update prices for marginal cost commodities
+    // Any markets for which marginal cost pricing cannot be calculated will retain their shadow prices
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
             solution.iter_activity(),
@@ -99,6 +99,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     }
 
     // Update prices for full cost commodities
+    // Any markets for which full cost pricing cannot be calculated will retain their shadow prices
     if !fullcost_set.is_empty() {
         let annual_activities = calculate_annual_activities(solution.iter_activity());
         let full_cost_prices = calculate_full_cost_prices(
@@ -143,14 +144,6 @@ impl CommodityPrices {
         self.0
             .iter()
             .map(|((commodity_id, region_id, ts), price)| (commodity_id, region_id, ts, *price))
-    }
-
-    /// Extend the prices map, possibly overwriting values
-    pub fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
-    {
-        self.0.extend(iter);
     }
 
     /// Update the prices map with the given iterator of entries
@@ -304,16 +297,12 @@ where
     // Calculate highest activity dual for each commodity/region/time slice
     let mut highest_duals = HashMap::new();
     for (asset, time_slice, dual) in activity_duals {
-        // Iterate over all output flows
-        for flow in asset
-            .iter_flows()
-            .filter(|flow| flow.direction() == FlowDirection::Output)
-        {
-            // Skip commodities that are not in the set to price
-            if !commodities_to_price.contains(&flow.commodity.id) {
-                continue;
-            }
-
+        // Iterate over the output flows of this asset
+        // Only consider flows for commodities we are pricing
+        for flow in asset.iter_flows().filter(|flow| {
+            flow.direction() == FlowDirection::Output
+                && commodities_to_price.contains(&flow.commodity.id)
+        }) {
             // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
@@ -330,9 +319,11 @@ where
         }
     }
 
-    // Add this to the shadow price
+    // Add this to the shadow price for each commodity/region/time slice
     let mut scarcity_prices = HashMap::new();
     for ((commodity, region, time_slice), highest_dual) in &highest_duals {
+        // There should always be a shadow price for commodities we are considering here, so it
+        // should be safe to unwrap
         let shadow_price = shadow_prices.get(commodity, region, time_slice).unwrap();
         // highest_dual is in units of MoneyPerActivity, and shadow_price is in MoneyPerFlow, but
         // this is correct according to Adam
@@ -379,21 +370,13 @@ where
             asset.get_marginal_cost_per_activity(shadow_prices, year, time_slice);
 
         // Iterate over the output flows of this asset
-        for flow in asset
-            .iter_flows()
-            .filter(|flow| flow.direction() == FlowDirection::Output)
-        {
-            // Skip commodities that are not in the set to price
-            if !commodities_to_price.contains(&flow.commodity.id) {
-                continue;
-            }
-
-            // Skip if flow coefficient is zero/very small
-            if flow.coeff <= FlowPerActivity(f64::EPSILON) {
-                continue;
-            }
-
+        // Only consider flows for commodities we are pricing
+        for flow in asset.iter_flows().filter(|flow| {
+            flow.direction() == FlowDirection::Output
+                && commodities_to_price.contains(&flow.commodity.id)
+        }) {
             // Get the marginal cost per unit of flow for this output
+            // FlowDirection::Output excludes zero-coeff outputs so no risk of division by zero
             let marginal_cost = marginal_cost_per_activity / flow.coeff;
 
             // Update the highest marginal cost for this commodity/time slice
@@ -471,21 +454,13 @@ where
         );
 
         // Iterate over the output flows of this asset
-        for flow in asset
-            .iter_flows()
-            .filter(|flow| flow.direction() == FlowDirection::Output)
-        {
-            // Skip commodities that are not in the set to price
-            if !commodities_to_price.contains(&flow.commodity.id) {
-                continue;
-            }
-
-            // Skip if flow coefficient is zero/very small
-            if flow.coeff <= FlowPerActivity(f64::EPSILON) {
-                continue;
-            }
-
+        // Only consider flows for commodities we are pricing
+        for flow in asset.iter_flows().filter(|flow| {
+            flow.direction() == FlowDirection::Output
+                && commodities_to_price.contains(&flow.commodity.id)
+        }) {
             // Get the full cost per unit of flow for this output
+            // FlowDirection::Output excludes zero-coeff outputs so no risk of division by zero
             let full_cost = full_cost_per_activity / flow.coeff;
 
             // Update the highest full cost for this commodity/time slice
