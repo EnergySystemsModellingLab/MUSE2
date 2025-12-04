@@ -124,7 +124,7 @@ pub fn run(
         assets.extend(selected_assets);
 
         // Decommission unused assets
-        assets.decommission_if_not_active(existing_assets, year);
+        assets.mothball_unretained(existing_assets, year);
 
         // Write assets
         writer.write_assets(assets.iter_all())?;
@@ -141,9 +141,6 @@ pub fn run(
         info!("Running final dispatch optimisation for year {year}...");
         let (flow_map, new_prices) =
             run_dispatch_for_year(model, assets.as_slice(), &candidates, year, &mut writer)?;
-
-        // Increase counter of unused assets
-        assets.track_unused_assets(&flow_map);
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;

@@ -6,7 +6,6 @@ use crate::process::{
 };
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
-use crate::simulation::optimisation::FlowMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
 use anyhow::{Context, Result, ensure};
@@ -14,7 +13,6 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -100,8 +98,8 @@ pub struct Asset {
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
-    /// Numbers of continuous years not being used
-    unused_years: u32,
+    /// Year in which the asset was mothballed. None, if it is not mothballed
+    mothballed_year: Option<u32>,
 }
 
 impl Asset {
@@ -251,8 +249,8 @@ impl Asset {
             "Max decommission year must be after/same as commission year"
         );
 
-        // All assets start with 0 unused years
-        let unused_years = 0;
+        // All assets start without a mothballed year
+        let mothballed_year: Option<u32> = None;
 
         Ok(Self {
             state,
@@ -264,7 +262,7 @@ impl Asset {
             capacity,
             commission_year,
             max_decommission_year,
-            unused_years,
+            mothballed_year,
         })
     }
 
@@ -563,14 +561,14 @@ impl Asset {
         self.state = AssetState::Selected { agent_id };
     }
 
-    /// Increase unused years by 1
-    pub fn increase_unused_years(&mut self) {
-        self.unused_years += 1;
+    /// Set the year this asset was mothballed
+    pub fn mothball(&mut self, year: u32) {
+        self.mothballed_year = Some(year);
     }
 
-    /// Sets the `unused_years` parameter to zero
-    pub fn reseat_unused_years(&mut self) {
-        self.unused_years = 0;
+    /// Remove the mothballed year - presumably because the asset has been used
+    pub fn unmothball(&mut self) {
+        self.mothballed_year = None;
     }
 }
 
@@ -748,7 +746,7 @@ impl AssetPool {
     /// and commission new assets
     pub fn update_for_year(&mut self, year: u32, mothball_years: u32) {
         self.decommission_old(year);
-        self.decommission_unused(year, mothball_years);
+        self.decommission_mothballed(year, mothball_years);
         self.commission_new(year);
     }
 
@@ -795,12 +793,12 @@ impl AssetPool {
         }
     }
 
-    /// Decomission assets unused for more than mothball years
-    fn decommission_unused(&mut self, year: u32, mothball_years: u32) {
+    /// Decomission mothballed assets if mothballed long enough
+    fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
         // Remove assets which are due for decommissioning
-        let to_decommission = self
-            .active
-            .extract_if(.., |asset| asset.unused_years >= mothball_years);
+        let to_decommission = self.active.extract_if(.., |asset| {
+            asset.mothballed_year.is_some() && asset.mothballed_year <= Some(year - mothball_years)
+        });
 
         for mut asset in to_decommission {
             // Set `decommission_year` and move to `self.decommissioned`
@@ -811,68 +809,31 @@ impl AssetPool {
         }
     }
 
-    /// Decommission the specified assets if they are no longer in the active pool.
+    /// Mothball the specified assets if they are no longer in the active pool and put them back again.
     ///
     /// # Arguments
     ///
-    /// * `assets` - Assets to possibly decommission
-    /// * `year` - Decommissioning year
+    /// * `assets` - Assets to possibly mothball
+    /// * `year` - Mothball year
     ///
     /// # Panics
     ///
     /// Panics if any of the provided assets was never commissioned or has already been
     /// decommissioned.
-    pub fn decommission_if_not_active<I>(&mut self, assets: I, year: u32)
+    pub fn mothball_unretained<I>(&mut self, assets: I, year: u32)
     where
         I: IntoIterator<Item = AssetRef>,
     {
-        let to_decommission = assets.into_iter().filter(|asset| {
-            // Get ID of the asset
-            let AssetState::Commissioned { id, .. } = &asset.state else {
-                panic!("Cannot decommission asset that has not been commissioned")
-            };
-
-            // Return true if asset **not** in active pool
-            !self.active.iter().any(|a| match &a.state {
-                AssetState::Commissioned { id: active_id, .. } => active_id == id,
-                _ => panic!("Active pool should only contain commissioned assets"),
-            })
-        });
-
-        for mut asset in to_decommission {
-            asset.make_mut().decommission(year, "not selected");
-            self.decommissioned.push(asset);
+        for mut asset in assets {
+            if match asset.state {
+                AssetState::Commissioned { .. } => !self.active.contains(&asset),
+                _ => panic!("Cannot mothball asset that has not been commissioned"),
+            } {
+                asset.make_mut().mothball(year);
+                self.active.push(asset);
+            }
         }
-    }
-
-    /// Increase the unused years counter for active assets that are not used that year
-    ///
-    /// The flow map after the final dispatch optimisation is used, and that compared with the pool
-    /// of active assets, increasing the counter on those in the later that have a zero flow in the
-    /// former or that don't appear there. If they are used, the counter is reset.
-    pub fn track_unused_assets(&mut self, flow_map: &FlowMap) {
-        let used = flow_map
-            .into_iter()
-            .filter_map(|((asset, _, _), &flow)| {
-                if flow.value() == 0.0 {
-                    None
-                } else {
-                    Some(asset.clone())
-                }
-            })
-            .collect::<HashSet<AssetRef>>();
-
-        let _ = self
-            .active
-            .iter_mut()
-            .map(|asset| {
-                if used.contains(asset) {
-                    asset.make_mut().reseat_unused_years();
-                } else {
-                    asset.make_mut().increase_unused_years();
-                }
-            })
-            .collect::<Vec<_>>();
+        self.active.sort();
     }
 
     /// Get an asset with the specified ID.
@@ -924,7 +885,10 @@ impl AssetPool {
         // Check all assets are either Commissioned or Selected, and, if the latter,
         // then commission them
         let assets = assets.into_iter().map(|mut asset| match &asset.state {
-            AssetState::Commissioned { .. } => asset,
+            AssetState::Commissioned { .. } => {
+                asset.make_mut().unmothball();
+                asset
+            }
             AssetState::Selected { .. } => {
                 asset
                     .make_mut()
@@ -1431,25 +1395,22 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_decommission_if_not_active(mut asset_pool: AssetPool) {
+    fn test_asset_pool_mothball_unretained(mut asset_pool: AssetPool) {
         // Commission some assets
         asset_pool.commission_new(2020);
         assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.decommissioned.len(), 0);
 
         // Remove one asset from the active pool (simulating it being removed elsewhere)
         let removed_asset = asset_pool.active.remove(0);
         assert_eq!(asset_pool.active.len(), 1);
 
-        // Try to decommission both the removed asset (not in active) and an active asset
+        // Try to mothball both the removed asset (not in active) and an active asset
         let assets_to_check = vec![removed_asset.clone(), asset_pool.active[0].clone()];
-        asset_pool.decommission_if_not_active(assets_to_check, 2025);
+        asset_pool.mothball_unretained(assets_to_check, 2025);
 
-        // Only the removed asset should be decommissioned (since it's not in active pool)
-        assert_eq!(asset_pool.active.len(), 1); // Active pool unchanged
-        assert_eq!(asset_pool.decommissioned.len(), 1);
-        assert_eq!(asset_pool.decommissioned[0].id(), removed_asset.id());
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2025));
+        // Only the removed asset should be mothballed (since it's not in active pool)
+        assert_eq!(asset_pool.active.len(), 2); // And should be back into the pool
+        assert_eq!(asset_pool.active[0].mothballed_year, Some(2025));
     }
 
     #[rstest]
@@ -1461,34 +1422,22 @@ mod tests {
 
         // Make an asset unused for a few years
         let mothball_years: u32 = 10;
-        for _ in 0..mothball_years {
-            asset_pool.active[0].make_mut().increase_unused_years();
-        }
-        assert_eq!(asset_pool.active[0].unused_years, mothball_years);
+        asset_pool.active[0]
+            .make_mut()
+            .mothball(2025 - mothball_years);
+
+        assert_eq!(
+            asset_pool.active[0].mothballed_year,
+            Some(2025 - mothball_years)
+        );
 
         // Decomission unused assets
-        asset_pool.decommission_unused(2025, mothball_years);
+        asset_pool.decommission_mothballed(2025, mothball_years);
 
         // Only the removed asset should be decommissioned (since it's not in active pool)
         assert_eq!(asset_pool.active.len(), 1); // Active pool unchanged
         assert_eq!(asset_pool.decommissioned.len(), 1);
         assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2025));
-    }
-
-    #[rstest]
-    fn test_asset_pool_decommission_if_not_active_all_active(mut asset_pool: AssetPool) {
-        // Commission some assets
-        asset_pool.commission_new(2020);
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.decommissioned.len(), 0);
-
-        // Try to decommission assets that are all still in the active pool
-        let assets_to_check = asset_pool.active.clone();
-        asset_pool.decommission_if_not_active(assets_to_check, 2025);
-
-        // Nothing should be decommissioned since all assets are still active
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.decommissioned.len(), 0);
     }
 
     #[rstest]
@@ -1500,20 +1449,19 @@ mod tests {
         // Clear the active pool (simulating all assets being removed)
         asset_pool.active.clear();
 
-        // Try to decommission the assets that are no longer active
-        asset_pool.decommission_if_not_active(all_assets.clone(), 2025);
+        // Try to mothball the assets that are no longer active
+        asset_pool.mothball_unretained(all_assets.clone(), 2025);
 
-        // All assets should be decommissioned since none are in active pool
-        assert_eq!(asset_pool.active.len(), 0);
-        assert_eq!(asset_pool.decommissioned.len(), 2);
-        assert_eq!(asset_pool.decommissioned[0].id(), all_assets[0].id());
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2025));
-        assert_eq!(asset_pool.decommissioned[1].id(), all_assets[1].id());
-        assert_eq!(asset_pool.decommissioned[1].decommission_year(), Some(2025));
+        // All assets should be mothballed
+        assert_eq!(asset_pool.active.len(), 2);
+        assert_eq!(asset_pool.active[0].id(), all_assets[0].id());
+        assert_eq!(asset_pool.active[0].mothballed_year, Some(2025));
+        assert_eq!(asset_pool.active[1].id(), all_assets[1].id());
+        assert_eq!(asset_pool.active[1].mothballed_year, Some(2025));
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot decommission asset that has not been commissioned")]
+    #[should_panic(expected = "Cannot mothball asset that has not been commissioned")]
     fn test_asset_pool_decommission_if_not_active_non_commissioned_asset(
         mut asset_pool: AssetPool,
         process: Process,
@@ -1530,7 +1478,7 @@ mod tests {
         .into();
 
         // This should panic because the asset was never commissioned
-        asset_pool.decommission_if_not_active(vec![non_commissioned_asset], 2025);
+        asset_pool.mothball_unretained(vec![non_commissioned_asset], 2025);
     }
 
     #[rstest]
