@@ -1,13 +1,15 @@
 //! Code for updating the simulation state.
 use crate::ISSUES_URL;
-use crate::asset::AssetRef;
+use crate::asset::{AssetRef, AssetState};
 use crate::commodity::{CommodityID, PricingStrategy};
 use crate::model::{ALLOW_BROKEN_OPTION_NAME, Model};
 use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
+use crate::units::{
+    Activity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerFlow, Year,
+};
 use anyhow::{Result, ensure};
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
@@ -362,42 +364,54 @@ where
     // Calculate highest marginal cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
     for (asset, time_slice, activity) in activity {
+        // Skip candidate assets
+        if asset.state() == &AssetState::Candidate {
+            continue;
+        }
+
         // Skip if activity is zero/very small
         if activity < Activity(f64::EPSILON) {
             continue;
         }
 
-        // Skip assets that have no primary output
-        let primary_output_id = match asset.primary_output() {
-            Some(output) => &output.commodity.id,
-            None => continue,
-        };
+        // Get the marginal cost per unit of activity
+        let marginal_cost_per_activity =
+            asset.get_marginal_cost_per_activity(shadow_prices, year, time_slice);
 
-        // Skip commodities that are not in the set to price
-        if !commodities_to_price.contains(primary_output_id) {
-            continue;
+        // Iterate over the output flows of this asset
+        for flow in asset
+            .iter_flows()
+            .filter(|flow| flow.direction() == FlowDirection::Output)
+        {
+            // Skip commodities that are not in the set to price
+            if !commodities_to_price.contains(&flow.commodity.id) {
+                continue;
+            }
+
+            // Skip if flow coefficient is zero/very small
+            if flow.coeff <= FlowPerActivity(f64::EPSILON) {
+                continue;
+            }
+
+            // Get the marginal cost per unit of flow for this output
+            let marginal_cost = marginal_cost_per_activity / flow.coeff;
+
+            // Update the highest marginal cost for this commodity/time slice
+            highest_costs
+                .entry((
+                    flow.commodity.id.clone(),
+                    asset.region_id().clone(),
+                    time_slice.clone(),
+                ))
+                .and_modify(|current_cost| {
+                    if marginal_cost > *current_cost {
+                        *current_cost = marginal_cost;
+                    }
+                })
+                .or_insert(marginal_cost);
         }
-
-        let marginal_cost =
-            asset.get_marginal_cost_per_primary_output(shadow_prices, year, time_slice);
-
-        // Update the highest marginal cost for this commodity/time slice
-        highest_costs
-            .entry((
-                primary_output_id.clone(),
-                asset.region_id().clone(),
-                time_slice.clone(),
-            ))
-            .and_modify(|current_cost| {
-                if marginal_cost > *current_cost {
-                    *current_cost = marginal_cost;
-                }
-            })
-            .or_insert(marginal_cost);
     }
 
-    // Marginal cost prices are just the highest marginal costs for each commodity/region/time slice
-    // across all assets
     highest_costs
 }
 
@@ -438,46 +452,58 @@ where
     // Calculate highest full cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
     for (asset, time_slice, activity) in activity {
+        // Skip candidate assets
+        if asset.state() == &AssetState::Candidate {
+            continue;
+        }
+
         // Skip if activity is zero/very small
         if activity < Activity(f64::EPSILON) {
             continue;
         }
 
-        // Skip assets that have no primary output
-        let primary_output_id = match asset.primary_output() {
-            Some(output) => &output.commodity.id,
-            None => continue,
-        };
-
-        // Skip commodities that are not in the set to price
-        if !commodities_to_price.contains(primary_output_id) {
-            continue;
-        }
-
-        let full_cost = asset.get_full_cost_per_primary_output(
+        // Get the full cost per unit of activity
+        let full_cost_per_activity = asset.get_full_cost_per_activity(
             shadow_prices,
             year,
             time_slice,
             annual_activities[asset],
         );
 
-        // Update the highest full cost for this commodity/time slice
-        highest_costs
-            .entry((
-                primary_output_id.clone(),
-                asset.region_id().clone(),
-                time_slice.clone(),
-            ))
-            .and_modify(|current_cost| {
-                if full_cost > *current_cost {
-                    *current_cost = full_cost;
-                }
-            })
-            .or_insert(full_cost);
+        // Iterate over the output flows of this asset
+        for flow in asset
+            .iter_flows()
+            .filter(|flow| flow.direction() == FlowDirection::Output)
+        {
+            // Skip commodities that are not in the set to price
+            if !commodities_to_price.contains(&flow.commodity.id) {
+                continue;
+            }
+
+            // Skip if flow coefficient is zero/very small
+            if flow.coeff <= FlowPerActivity(f64::EPSILON) {
+                continue;
+            }
+
+            // Get the full cost per unit of flow for this output
+            let full_cost = full_cost_per_activity / flow.coeff;
+
+            // Update the highest full cost for this commodity/time slice
+            highest_costs
+                .entry((
+                    flow.commodity.id.clone(),
+                    asset.region_id().clone(),
+                    time_slice.clone(),
+                ))
+                .and_modify(|current_cost| {
+                    if full_cost > *current_cost {
+                        *current_cost = full_cost;
+                    }
+                })
+                .or_insert(full_cost);
+        }
     }
 
-    // Full cost prices are just the highest full costs for each commodity/region/time slice
-    // across all assets
     highest_costs
 }
 

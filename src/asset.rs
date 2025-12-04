@@ -9,10 +9,7 @@ use crate::process::{
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
-use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerFlow,
-};
+use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -407,24 +404,6 @@ impl Asset {
         operating_cost - revenue
     }
 
-    /// Get the marginal cost per flow of the primary output for this asset.
-    pub fn get_marginal_cost_per_primary_output(
-        &self,
-        prices: &CommodityPrices,
-        year: u32,
-        time_slice: &TimeSliceID,
-    ) -> MoneyPerFlow {
-        let cost_per_activity = self.get_marginal_cost_per_activity(prices, year, time_slice);
-        let primary_output_flow = self.primary_output().expect(
-            "Cannot calculate marginal cost of primary output for an asset with no primary output",
-        );
-        assert!(
-            primary_output_flow.coeff > FlowPerActivity(f64::EPSILON),
-            "Flow coefficient must be >0 to calculate marginal cost per primary output"
-        );
-        cost_per_activity / primary_output_flow.coeff
-    }
-
     /// Get the annual capital cost per unit of capacity for this asset
     pub fn get_annual_capital_cost_per_capacity(&self) -> MoneyPerCapacity {
         let capital_cost = self.process_parameter().capital_cost;
@@ -458,26 +437,6 @@ impl Asset {
     ) -> MoneyPerActivity {
         self.get_marginal_cost_per_activity(prices, year, time_slice)
             + self.get_annual_capital_cost_per_activity(annual_activity)
-    }
-
-    /// Get the full cost per flow of the primary output for this asset
-    pub fn get_full_cost_per_primary_output(
-        &self,
-        prices: &CommodityPrices,
-        year: u32,
-        time_slice: &TimeSliceID,
-        annual_activity: Activity,
-    ) -> MoneyPerFlow {
-        let full_cost_per_activity =
-            self.get_full_cost_per_activity(prices, year, time_slice, annual_activity);
-        let primary_output_flow = self.primary_output().expect(
-            "Cannot calculate full cost of primary output for an asset with no primary output",
-        );
-        assert!(
-            primary_output_flow.coeff > FlowPerActivity(f64::EPSILON),
-            "Flow coefficient must be >0 to calculate full cost per primary output"
-        );
-        full_cost_per_activity / primary_output_flow.coeff
     }
 
     /// Maximum activity for this asset
