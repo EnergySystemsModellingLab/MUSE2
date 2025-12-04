@@ -9,7 +9,6 @@ use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use anyhow::{Result, ensure};
-use log::warn;
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
 /// Calculate commodity prices.
@@ -60,7 +59,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
     // Remove prices for unpriced commodities
     // For now, there should be no shadow prices for unpriced commodities, so let's panic if there
-    // are any, just as a sanity check. In the future we may need up with shadow prices for unpriced
+    // are any, just as a sanity check. In the future we may end up with shadow prices for unpriced
     // commodities, so this will need to be revisitied.
     for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
         if unpriced_set.contains(commodity_id) {
@@ -74,12 +73,9 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         ensure!(
             model.parameters.allow_broken_options,
             "The `scarcity` pricing strategy is known to be broken. \
+            Commodity prices may be incorrect if assets have more than one output commodity. \
+            See: {ISSUES_URL}/677. \
             To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
-        );
-        warn!(
-            "The pricing strategy for commodities {scarcity_set:?} is set to 'scarcity'. Commodity \
-            prices may be incorrect if assets have more than one output commodity. \
-            See: {ISSUES_URL}/677",
         );
         let scarcity_prices = calculate_scarcity_adjusted_prices(
             solution.iter_activity_duals(),
@@ -92,7 +88,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Update prices for marginal cost commodities
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
-            solution.iter_activity_keys(),
+            solution.iter_activity(),
             &shadow_prices,
             year,
             &marginal_set,
@@ -104,7 +100,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     if !fullcost_set.is_empty() {
         let annual_activities = calculate_annual_activities(solution.iter_activity());
         let full_cost_prices = calculate_full_cost_prices(
-            solution.iter_activity_keys(),
+            solution.iter_activity(),
             &annual_activities,
             &shadow_prices,
             year,
@@ -355,17 +351,22 @@ where
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
 fn calculate_marginal_cost_prices<'a, I>(
-    activity_keys: I,
+    activity: I,
     shadow_prices: &CommodityPrices,
     year: u32,
     commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = &'a (AssetRef, TimeSliceID)>,
+    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     // Calculate highest marginal cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
-    for (asset, time_slice) in activity_keys {
+    for (asset, time_slice, activity) in activity {
+        // Skip if activity is zero/very small
+        if activity < Activity(f64::EPSILON) {
+            continue;
+        }
+
         // Skip assets that have no primary output
         let primary_output_id = match asset.primary_output() {
             Some(output) => &output.commodity.id,
@@ -378,7 +379,7 @@ where
         }
 
         let marginal_cost =
-            asset.get_marginal_cost_of_primary_output(shadow_prices, year, time_slice);
+            asset.get_marginal_cost_per_primary_output(shadow_prices, year, time_slice);
 
         // Update the highest marginal cost for this commodity/time slice
         highest_costs
@@ -425,18 +426,23 @@ where
 /// * `year` - The year for which prices are being calculated
 /// * `commodities_to_price` - Set of commodity IDs to calculate full cost prices for
 fn calculate_full_cost_prices<'a, I>(
-    activity_keys: I,
+    activity: I,
     annual_activities: &HashMap<AssetRef, Activity>,
     shadow_prices: &CommodityPrices,
     year: u32,
     commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = &'a (AssetRef, TimeSliceID)>,
+    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     // Calculate highest full cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
-    for (asset, time_slice) in activity_keys {
+    for (asset, time_slice, activity) in activity {
+        // Skip if activity is zero/very small
+        if activity < Activity(f64::EPSILON) {
+            continue;
+        }
+
         // Skip assets that have no primary output
         let primary_output_id = match asset.primary_output() {
             Some(output) => &output.commodity.id,
@@ -448,7 +454,7 @@ where
             continue;
         }
 
-        let full_cost = asset.get_full_cost_of_primary_output(
+        let full_cost = asset.get_full_cost_per_primary_output(
             shadow_prices,
             year,
             time_slice,

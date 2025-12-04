@@ -100,7 +100,8 @@ fn validate_commodity(commodity: &mut Commodity) {
         assert_eq!(
             commodity.pricing_strategy,
             PricingStrategy::Unpriced,
-            "Commodity {} of type Other and must be unpriced. Update its pricing strategy to 'unpriced' or 'default'.",
+            "Commodity {} of type Other and must be unpriced. \
+             Update its pricing strategy to 'unpriced' or 'default'.",
             commodity.id
         );
     }
@@ -112,7 +113,8 @@ fn validate_commodity(commodity: &mut Commodity) {
         assert_ne!(
             commodity.pricing_strategy,
             PricingStrategy::Unpriced,
-            "Commodity {} of type {:?} cannot be unpriced. Update its pricing strategy to a valid option.",
+            "Commodity {} of type {:?} cannot be unpriced. \
+             Update its pricing strategy to a valid option.",
             commodity.id,
             commodity.kind
         );
