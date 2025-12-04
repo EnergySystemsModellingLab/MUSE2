@@ -120,3 +120,52 @@ fn validate_commodity(commodity: &mut Commodity) {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::time_slice::TimeSliceLevel;
+
+    fn make_commodity(kind: CommodityType, pricing_strategy: PricingStrategy) -> Commodity {
+        Commodity {
+            id: "ELC".into(),
+            description: "test".into(),
+            kind,
+            time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy,
+            levies_prod: Default::default(),
+            levies_cons: Default::default(),
+            demand: Default::default(),
+        }
+    }
+
+    #[test]
+    fn sets_default_pricing_for_other_to_unpriced() {
+        let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::Default);
+        validate_commodity(&mut commodity);
+        assert_eq!(commodity.pricing_strategy, PricingStrategy::Unpriced);
+    }
+
+    #[test]
+    fn sets_default_pricing_for_sed_to_shadow() {
+        let mut commodity =
+            make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Default);
+        validate_commodity(&mut commodity);
+        assert_eq!(commodity.pricing_strategy, PricingStrategy::Shadow);
+    }
+
+    #[test]
+    #[should_panic]
+    fn other_cannot_be_priced() {
+        let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::MarginalCost);
+        validate_commodity(&mut commodity);
+    }
+
+    #[test]
+    #[should_panic]
+    fn sed_cannot_be_unpriced() {
+        let mut commodity =
+            make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Unpriced);
+        validate_commodity(&mut commodity);
+    }
+}
