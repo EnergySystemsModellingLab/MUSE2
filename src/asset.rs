@@ -430,20 +430,6 @@ impl Asset {
         total_annual_capital_cost / annual_activity
     }
 
-    /// Get the full cost per unit of activity for this asset in the given year/time slice
-    /// (marginal cost + annual capital cost)
-    pub fn get_full_cost_of_commodity_per_activity(
-        &self,
-        commodity_id: &CommodityID,
-        prices: &CommodityPrices,
-        year: u32,
-        time_slice: &TimeSliceID,
-        annual_activity: Activity,
-    ) -> MoneyPerActivity {
-        self.get_marginal_cost_of_commodity_per_activity(commodity_id, prices, year, time_slice)
-            + self.get_annual_capital_cost_per_activity(annual_activity)
-    }
-
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
         self.capacity * self.process.capacity_to_activity

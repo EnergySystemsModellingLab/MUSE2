@@ -438,6 +438,7 @@ where
 {
     // Calculate highest full cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
+    let mut annual_capital_costs_cache = HashMap::new();
     for (asset, time_slice, activity) in activity {
         // Skip candidate assets
         if asset.state() == &AssetState::Candidate {
@@ -449,20 +450,30 @@ where
             continue;
         }
 
+        // Calculate/cache annual capital cost for this asset
+        let annual_capital_cost_per_activity = annual_capital_costs_cache
+            .entry(asset.clone())
+            .or_insert_with(|| {
+                asset.get_annual_capital_cost_per_activity(annual_activities[asset])
+            });
+
         // Iterate over the output flows of this asset
         // Only consider flows for commodities we are pricing
         for flow in asset.iter_flows().filter(|flow| {
             flow.direction() == FlowDirection::Output
                 && commodities_to_price.contains(&flow.commodity.id)
         }) {
-            // Get the full cost of the commodity per unit of activity
-            let full_cost_per_activity = asset.get_full_cost_of_commodity_per_activity(
+            // Get the marginal cost of the commodity per unit of activity
+            let marginal_cost_per_activity = asset.get_marginal_cost_of_commodity_per_activity(
                 &flow.commodity.id,
                 shadow_prices,
                 year,
                 time_slice,
-                annual_activities[asset],
             );
+
+            // Full cost per activity is marginal cost + annual capital cost
+            let full_cost_per_activity =
+                marginal_cost_per_activity + *annual_capital_cost_per_activity;
 
             // Get the full cost per unit of flow for this output
             // FlowDirection::Output excludes zero-coeff outputs so no risk of division by zero
