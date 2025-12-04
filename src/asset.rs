@@ -393,14 +393,18 @@ impl Asset {
     }
 
     /// Get the marginal cost per unit of activity for this asset.
-    pub fn get_marginal_cost_per_activity(
+    pub fn get_marginal_cost_of_commodity_per_activity(
         &self,
+        commodity_id: &CommodityID,
         prices: &CommodityPrices,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         let operating_cost = self.get_operating_cost(year, time_slice);
-        let revenue = self.get_revenue_from_flows_excluding_primary(prices, time_slice);
+        // Calculate revenue excluding the commodity of interest
+        let revenue = self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
+            &flow.commodity.id != commodity_id
+        });
         operating_cost - revenue
     }
 
@@ -428,14 +432,15 @@ impl Asset {
 
     /// Get the full cost per unit of activity for this asset in the given year/time slice
     /// (marginal cost + annual capital cost)
-    pub fn get_full_cost_per_activity(
+    pub fn get_full_cost_of_commodity_per_activity(
         &self,
+        commodity_id: &CommodityID,
         prices: &CommodityPrices,
         year: u32,
         time_slice: &TimeSliceID,
         annual_activity: Activity,
     ) -> MoneyPerActivity {
-        self.get_marginal_cost_per_activity(prices, year, time_slice)
+        self.get_marginal_cost_of_commodity_per_activity(commodity_id, prices, year, time_slice)
             + self.get_annual_capital_cost_per_activity(annual_activity)
     }
 
