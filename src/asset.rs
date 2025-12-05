@@ -821,8 +821,7 @@ impl AssetPool {
     ///
     /// # Panics
     ///
-    /// Panics if any of the provided assets was never commissioned or has already been
-    /// decommissioned.
+    /// Panics if any of the provided assets was never commissioned.
     pub fn mothball_unretained<I>(&mut self, assets: I, year: u32)
     where
         I: IntoIterator<Item = AssetRef>,
@@ -832,7 +831,10 @@ impl AssetPool {
                 AssetState::Commissioned { .. } => !self.active.contains(&asset),
                 _ => panic!("Cannot mothball asset that has not been commissioned"),
             } {
+                // We set the current year as the mothball year, i.e. the first one the asset was not used.
                 asset.make_mut().mothball(year);
+                // And we put it back to the pool, so they can be chosen the next milestone year
+                // if not decommissioned earlier.
                 self.active.push(asset);
             }
         }
