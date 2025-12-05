@@ -54,6 +54,8 @@ pub enum AssetState {
         id: AssetID,
         /// The ID of the agent that owns the asset
         agent_id: AgentID,
+        /// Year in which the asset was mothballed. None, if it is not mothballed
+        mothballed_year: Option<u32>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -99,8 +101,6 @@ pub struct Asset {
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
-    /// Year in which the asset was mothballed. None, if it is not mothballed
-    mothballed_year: Option<u32>,
 }
 
 impl Asset {
@@ -250,9 +250,6 @@ impl Asset {
             "Max decommission year must be after/same as commission year"
         );
 
-        // All assets start without a mothballed year
-        let mothballed_year: Option<u32> = None;
-
         Ok(Self {
             state,
             process,
@@ -263,7 +260,6 @@ impl Asset {
             capacity,
             commission_year,
             max_decommission_year,
-            mothballed_year,
         })
     }
 
@@ -506,7 +502,7 @@ impl Asset {
     /// Decommission this asset
     fn decommission(&mut self, decommission_year: u32, reason: &str) {
         let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id } => (*id, agent_id.clone()),
+            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
             _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
         };
         debug!(
@@ -549,6 +545,7 @@ impl Asset {
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
+            mothballed_year: None,
         };
     }
 
@@ -564,12 +561,39 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        self.mothballed_year = Some(year);
+        let (id, agent_id) = match &self.state {
+            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
+            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        };
+        self.state = AssetState::Commissioned {
+            id,
+            agent_id: agent_id.clone(),
+            mothballed_year: Some(year),
+        };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        self.mothballed_year = None;
+        let (id, agent_id) = match &self.state {
+            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
+            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        };
+        self.state = AssetState::Commissioned {
+            id,
+            agent_id: agent_id.clone(),
+            mothballed_year: None,
+        };
+    }
+
+    /// Get the mothballed year for the asset
+    pub fn get_mothballed_year(&self) -> Option<u32> {
+        let AssetState::Commissioned {
+            mothballed_year, ..
+        } = &self.state
+        else {
+            panic!("Cannot mothballed an asset that hasn't been commissioned")
+        };
+        *mothballed_year
     }
 }
 
@@ -797,13 +821,13 @@ impl AssetPool {
     pub fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
         // Remove assets which are due for decommissioning
         let to_decommission = self.active.extract_if(.., |asset| {
-            asset.mothballed_year.is_some()
-                && asset.mothballed_year <= Some(year - min(mothball_years, year))
+            asset.get_mothballed_year().is_some()
+                && asset.get_mothballed_year() <= Some(year - min(mothball_years, year))
         });
 
         for mut asset in to_decommission {
             // Set `decommission_year` and move to `self.decommissioned`
-            let decommissioned = asset.mothballed_year.unwrap() + mothball_years;
+            let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
             asset.make_mut().decommission(
                 decommissioned,
                 &format!("Unused for at least {mothball_years} years"),
@@ -1415,7 +1439,7 @@ mod tests {
 
         // Only the removed asset should be mothballed (since it's not in active pool)
         assert_eq!(asset_pool.active.len(), 2); // And should be back into the pool
-        assert_eq!(asset_pool.active[0].mothballed_year, Some(2025));
+        assert_eq!(asset_pool.active[0].get_mothballed_year(), Some(2025));
     }
 
     #[rstest]
@@ -1432,7 +1456,7 @@ mod tests {
             .mothball(2025 - mothball_years);
 
         assert_eq!(
-            asset_pool.active[0].mothballed_year,
+            asset_pool.active[0].get_mothballed_year(),
             Some(2025 - mothball_years)
         );
 
@@ -1460,9 +1484,9 @@ mod tests {
         // All assets should be mothballed
         assert_eq!(asset_pool.active.len(), 2);
         assert_eq!(asset_pool.active[0].id(), all_assets[0].id());
-        assert_eq!(asset_pool.active[0].mothballed_year, Some(2025));
+        assert_eq!(asset_pool.active[0].get_mothballed_year(), Some(2025));
         assert_eq!(asset_pool.active[1].id(), all_assets[1].id());
-        assert_eq!(asset_pool.active[1].mothballed_year, Some(2025));
+        assert_eq!(asset_pool.active[1].get_mothballed_year(), Some(2025));
     }
 
     #[rstest]
