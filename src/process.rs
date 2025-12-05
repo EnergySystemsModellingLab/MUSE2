@@ -34,7 +34,7 @@ pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, Pro
 
 /// Map of process investment constraints, keyed by region and year
 pub type ProcessInvestmentConstraintsMap =
-    HashMap<(RegionID, u32), Rc<Vec<ProcessInvestmentConstraint>>>;
+    HashMap<(RegionID, u32), Rc<ProcessInvestmentConstraint>>;
 
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug)]
@@ -486,13 +486,10 @@ pub enum InvestmentConstraintValue {
     /// proportion of the processes primary commodity demand
     Addition {
         /// constraint value to apply
-        addition_limit: f64,
+        addition_limit: Option<f64>,
     },
     /// Growth constraint: Not implemented yet
-    Growth {
-        /// growth constraint seed value
-        growth_constraint_seed: f64,
-    },
+    Growth {},
     /// Limit constraint: Not implemented yet
     Limit {},
 }
@@ -504,8 +501,6 @@ pub struct ProcessInvestmentConstraint {
     pub constraint_name: String,
     /// The parameters value required to impose the constraint
     pub constraint_value: InvestmentConstraintValue,
-    /// The limit type for the constraint
-    pub limit_type: String,
 }
 
 #[cfg(test)]
