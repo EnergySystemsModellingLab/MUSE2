@@ -1,9 +1,9 @@
 asset_id,process_id,region_id,agent_id,commission_year,decommission_year,capacity
-0,gassupply1,R1,A1_GAS,2020,,24.0
-1,gasboiler,R1,A1_RES,2020,,19.0
+0,gassupply1,R1,A1_GAS,2020,2030,24.0
+1,gasboiler,R1,A1_RES,2020,2030,19.0
 2,heatpump,R1,A1_RES,2025,,16.757966484067033
 3,windturbine,R1,A1_PWR,2025,,6.703186593626812
-4,gasCCGT,R1,A1_PWR,2025,,5.3625492749014505
+4,gasCCGT,R1,A1_PWR,2025,2040,5.3625492749014505
 5,heatpump,R1,A1_RES,2030,,13.121973756052487
 6,windturbine,R1,A1_PWR,2030,,11.951976096047806
 7,heatpump,R1,A1_RES,2035,,6.119987760024477
