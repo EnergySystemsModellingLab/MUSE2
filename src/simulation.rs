@@ -40,7 +40,7 @@ pub fn run(
     info!("Milestone year: {year}");
 
     // Commission assets for base year
-    assets.update_for_year(year, model.parameters.mothball_years);
+    assets.update_for_year(year);
 
     // Write assets to file
     writer.write_assets(assets.iter_all())?;
@@ -68,7 +68,7 @@ pub fn run(
         // Commission new assets and decommission those whose lifetime has passed. We do this
         // *before* agent investment, to prevent agents from selecting assets that are being
         // decommissioned in this milestone year.
-        assets.update_for_year(year, model.parameters.mothball_years);
+        assets.update_for_year(year);
 
         // Take all the active assets as a list of existing assets
         let existing_assets = assets.take();
@@ -125,6 +125,7 @@ pub fn run(
 
         // Decommission unused assets
         assets.mothball_unretained(existing_assets, year);
+        assets.decommission_mothballed(year, model.parameters.mothball_years);
 
         // Write assets
         writer.write_assets(assets.iter_all())?;

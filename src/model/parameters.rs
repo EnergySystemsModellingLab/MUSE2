@@ -49,7 +49,7 @@ define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
 define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
 define_param_default!(default_max_ironing_out_iterations, u32, 10);
 define_param_default!(default_capacity_margin, f64, 0.2);
-define_param_default!(default_mothball_years, u32, u32::MAX);
+define_param_default!(default_mothball_years, u32, 0);
 
 /// Model parameters as defined in the `model.toml` file.
 ///
@@ -160,13 +160,6 @@ fn check_capacity_margin(value: f64) -> Result<()> {
     Ok(())
 }
 
-/// Check that the `mothball_years` parameter is valid
-fn check_mothball_years(value: u32) -> Result<()> {
-    ensure!(value > 0, "mothball_years cannot be zero");
-
-    Ok(())
-}
-
 impl ModelParameters {
     /// Read a model file from the specified directory.
     ///
@@ -239,9 +232,6 @@ impl ModelParameters {
 
         // capacity_margin
         check_capacity_margin(self.capacity_margin)?;
-
-        //mothball_years
-        check_mothball_years(self.mothball_years)?;
 
         Ok(())
     }
