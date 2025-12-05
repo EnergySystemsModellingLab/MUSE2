@@ -13,6 +13,7 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::cmp::min;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -797,7 +798,8 @@ impl AssetPool {
     fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
         // Remove assets which are due for decommissioning
         let to_decommission = self.active.extract_if(.., |asset| {
-            asset.mothballed_year.is_some() && asset.mothballed_year <= Some(year - mothball_years)
+            asset.mothballed_year.is_some()
+                && asset.mothballed_year <= Some(year - min(mothball_years, year))
         });
 
         for mut asset in to_decommission {
