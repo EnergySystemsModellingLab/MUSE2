@@ -1,6 +1,6 @@
 //! Assets are instances of a process which are owned and invested in by agents.
 use crate::agent::AgentID;
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, CommodityType};
 use crate::finance::annual_capital_cost;
 use crate::process::{
     ActivityLimits, FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter,
@@ -9,7 +9,9 @@ use crate::process::{
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
-use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{
+    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -320,6 +322,25 @@ impl Asset {
             })
     }
 
+    /// Gets the total SED/SVD output per unit of activity for this asset
+    ///
+    /// Note: Since we are summing coefficients from different commodities, this ONLY makes sense
+    /// if these commodities have the same units (e.g., all in PJ). Users are currently not made to
+    /// give units for commodities, so we cannot possibly enforce this. Something to potentially
+    /// address in future.
+    pub fn get_total_output_per_activity(&self) -> FlowPerActivity {
+        self.iter_flows()
+            .filter(|flow| {
+                flow.direction() == FlowDirection::Output
+                    && matches!(
+                        flow.commodity.kind,
+                        CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                    )
+            })
+            .map(|flow| flow.coeff)
+            .sum()
+    }
+
     /// Get the operating cost for this asset in a given year and time slice
     pub fn get_operating_cost(&self, year: u32, time_slice: &TimeSliceID) -> MoneyPerActivity {
         // The cost for all commodity flows (including levies/incentives)
@@ -396,19 +417,15 @@ impl Asset {
     }
 
     /// Get the marginal cost per unit of activity for this asset.
-    pub fn get_marginal_cost_of_commodity_per_activity(
+    pub fn get_marginal_cost_per_activity(
         &self,
-        commodity_id: &CommodityID,
         prices: &CommodityPrices,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         let operating_cost = self.get_operating_cost(year, time_slice);
-        // Calculate revenue excluding the commodity of interest
-        let revenue = self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
-            &flow.commodity.id != commodity_id
-        });
-        operating_cost - revenue
+        let cost_of_inputs = self.get_input_cost_from_prices(prices, time_slice);
+        operating_cost + cost_of_inputs
     }
 
     /// Get the annual capital cost per unit of capacity for this asset

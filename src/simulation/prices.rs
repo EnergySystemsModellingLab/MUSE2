@@ -333,24 +333,35 @@ where
     // Calculate highest marginal cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
     for (asset, time_slice) in activity_keys {
+        // Collect output flows for commodities we are pricing
+        let mut relevant_flows = asset
+            .iter_flows()
+            .filter(|flow| {
+                flow.direction() == FlowDirection::Output
+                    && commodities_to_price.contains(&flow.commodity.id)
+            })
+            .peekable();
+
+        // Only consider assets that produce at least one commodity we are pricing
+        if relevant_flows.peek().is_none() {
+            continue;
+        }
+
+        // Get the marginal cost per unit of activity
+        let marginal_cost_per_activity =
+            asset.get_marginal_cost_per_activity(shadow_prices, year, time_slice);
+
+        // Get the marginal cost per unit of output
+        // We sum the output of all SED/SVD commodities to get total output. Effectively we
+        // distribute the costs equally over all outputs, so the marginal cost per unit of output is
+        // the same for all output commodities.
+        // Note: this only makes sense if all SED/SVD outputs are using this pricing strategy,
+        // but we're not enforcing this.
+        let total_output = asset.get_total_output_per_activity(); // input checks should ensure that this is never zero
+        let marginal_cost = marginal_cost_per_activity / total_output;
+
         // Iterate over the output flows of this asset
-        // Only consider flows for commodities we are pricing
-        for flow in asset.iter_flows().filter(|flow| {
-            flow.direction() == FlowDirection::Output
-                && commodities_to_price.contains(&flow.commodity.id)
-        }) {
-            // Get the marginal cost of the commodity per unit of activity
-            let marginal_cost_per_activity = asset.get_marginal_cost_of_commodity_per_activity(
-                &flow.commodity.id,
-                shadow_prices,
-                year,
-                time_slice,
-            );
-
-            // Get the marginal cost per unit of flow for this output
-            // FlowDirection::Output excludes zero-coeff outputs so no risk of division by zero
-            let marginal_cost = marginal_cost_per_activity / flow.coeff;
-
+        for flow in relevant_flows {
             // Update the highest marginal cost for this commodity/time slice
             highest_costs
                 .entry((
@@ -408,6 +419,20 @@ where
     let mut highest_costs = HashMap::new();
     let mut annual_capital_costs_cache = HashMap::new();
     for (asset, time_slice) in activity_keys {
+        // Collect output flows for commodities we are pricing
+        let mut relevant_flows = asset
+            .iter_flows()
+            .filter(|flow| {
+                flow.direction() == FlowDirection::Output
+                    && commodities_to_price.contains(&flow.commodity.id)
+            })
+            .peekable();
+
+        // Only consider assets that produce at least one commodity we are pricing
+        if relevant_flows.peek().is_none() {
+            continue;
+        }
+
         // Get annual activity for this asset
         let annual_activity = annual_activities[asset];
 
@@ -424,28 +449,24 @@ where
             .entry(asset.clone())
             .or_insert_with(|| asset.get_annual_capital_cost_per_activity(annual_activity));
 
+        // Get the marginal cost per unit of activity
+        let marginal_cost_per_activity =
+            asset.get_marginal_cost_per_activity(shadow_prices, year, time_slice);
+
+        // Full cost per activity is marginal cost + annual capital cost
+        let full_cost_per_activity = marginal_cost_per_activity + *annual_capital_cost_per_activity;
+
+        // Get the full cost per unit of output
+        // We sum the output of all SED/SVD commodities to get total output. Effectively we
+        // distribute the costs equally over all outputs, so the full cost per unit of output is the
+        // same for all output commodities.
+        // Note: this only makes sense if all SED/SVD outputs are using this pricing strategy,
+        // but we're not enforcing this.
+        let total_output = asset.get_total_output_per_activity(); // input checks should ensure that this is never zero
+        let full_cost = full_cost_per_activity / total_output;
+
         // Iterate over the output flows of this asset
-        // Only consider flows for commodities we are pricing
-        for flow in asset.iter_flows().filter(|flow| {
-            flow.direction() == FlowDirection::Output
-                && commodities_to_price.contains(&flow.commodity.id)
-        }) {
-            // Get the marginal cost of the commodity per unit of activity
-            let marginal_cost_per_activity = asset.get_marginal_cost_of_commodity_per_activity(
-                &flow.commodity.id,
-                shadow_prices,
-                year,
-                time_slice,
-            );
-
-            // Full cost per activity is marginal cost + annual capital cost
-            let full_cost_per_activity =
-                marginal_cost_per_activity + *annual_capital_cost_per_activity;
-
-            // Get the full cost per unit of flow for this output
-            // FlowDirection::Output excludes zero-coeff outputs so no risk of division by zero
-            let full_cost = full_cost_per_activity / flow.coeff;
-
+        for flow in relevant_flows {
             // Update the highest full cost for this commodity/time slice
             highest_costs
                 .entry((
