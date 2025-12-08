@@ -2,14 +2,12 @@
 use super::super::input_err_msg;
 use crate::input::read_csv_optional;
 use crate::process::{
-    InvestmentConstraintValue, ProcessID, ProcessInvestmentConstraint,
-    ProcessInvestmentConstraintsMap, ProcessMap,
+    ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
-use serde_string_enum::DeserializeLabeledStringEnum;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -22,53 +20,28 @@ struct ProcessInvestmentConstraintRaw {
     process_id: String,
     regions: String,
     commission_years: u32,
-    constraint_type: ConstraintType,
-    value: f64,
+    addition_limit: f64,
 }
 
 impl ProcessInvestmentConstraintRaw {
     /// Validate the constraint record for logical consistency and required fields
     fn validate(&self) -> Result<()> {
-        // Validate that growth_constraint_seed is provided when constraint_type is growth
-        if matches!(self.constraint_type, ConstraintType::Growth) {
-            bail!("Growth constraints are not supported yet!")
-        }
-        if matches!(self.constraint_type, ConstraintType::Limit) {
-            bail!("Limit constraints are not supported yet!")
-        }
-
         // Validate that value is finite
         ensure!(
-            self.value.is_finite(),
+            self.addition_limit.is_finite(),
             "Constraint value must be finite for constraint '{}'",
             self.constraint_name
         );
 
-        if matches!(self.constraint_type, ConstraintType::Addition) {
-            // For addition constraints, value must be non-negative
-            ensure!(
-                self.value >= 0.0,
-                "Addition constraint value must be non-negative for constraint '{}'",
-                self.constraint_name
-            );
-        }
+        // For addition constraints, value must be non-negative
+        ensure!(
+            self.addition_limit >= 0.0,
+            "Addition constraint value must be non-negative for constraint '{}'",
+            self.constraint_name
+        );
 
         Ok(())
     }
-}
-
-/// The type of investment constraint being applied
-#[derive(DeserializeLabeledStringEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConstraintType {
-    /// Growth rate constraint (relative change between periods)
-    #[string = "growth"]
-    Growth,
-    /// Addition constraint (absolute change between periods)
-    #[string = "addition"]
-    Addition,
-    /// Absolute limit constraint (total capacity limit)
-    #[string = "limit"]
-    Limit,
 }
 
 /// Read the process investment constraints CSV file.
@@ -154,20 +127,11 @@ where
             process_years
         );
 
-        // Create a processed constraint for each region
         for region in &record_regions {
-            let constraint_value = match record.constraint_type {
-                ConstraintType::Addition => InvestmentConstraintValue::Addition {
-                    addition_limit: Some(record.value),
-                },
-                ConstraintType::Growth => InvestmentConstraintValue::Growth {},
-                ConstraintType::Limit => InvestmentConstraintValue::Limit {},
+            let constraint = ProcessInvestmentConstraint {
+                addition_limit: Some(record.addition_limit),
             };
 
-            let constraint = ProcessInvestmentConstraint {
-                constraint_name: record.constraint_name.clone(),
-                constraint_value,
-            };
             let process_map = map.entry(process_id.clone()).or_default();
             process_map
                 .entry((region.clone(), record.commission_years))
@@ -175,95 +139,181 @@ where
         }
     }
 
-    validate_constraint_consistency(&map)?;
-
     Ok(map)
-}
-
-/// Validate that constraints are internally consistent
-///
-/// Checks for duplicate constraint names within each process/region/year combination.
-fn validate_constraint_consistency(
-    map: &HashMap<ProcessID, ProcessInvestmentConstraintsMap>,
-) -> Result<()> {
-    for (process_id, constraints_map) in map {
-        for ((region_id, year), constraint) in constraints_map {
-            // Check for duplicate constraint names
-            let mut seen = HashSet::new();
-            if !seen.insert(&constraint.constraint_name) {
-                bail!(
-                    "Duplicate constraint name '{}' for process '{}', region '{}', year {}",
-                    constraint.constraint_name,
-                    process_id,
-                    region_id,
-                    year
-                );
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixture::processes;
+    use crate::region::RegionID;
+    use rstest::rstest;
 
-    fn create_raw_constraint(
-        constraint_type: ConstraintType,
-        value: f64,
-    ) -> ProcessInvestmentConstraintRaw {
+    fn create_raw_constraint(addition_limit: f64) -> ProcessInvestmentConstraintRaw {
         ProcessInvestmentConstraintRaw {
             constraint_name: "test_constraint".into(),
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: 2030,
-            constraint_type,
-            value,
+            addition_limit: addition_limit,
         }
     }
 
-    #[test]
-    fn test_validate_growth_not_supported() {
-        // Growth constraints should fail with "not supported yet" message
-        let constraint = create_raw_constraint(ConstraintType::Growth, 0.1);
-        let result = constraint.validate();
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not supported"));
+    #[rstest]
+    fn test_read_process_investment_constraints_from_iter(processes: ProcessMap) {
+        // Create milestone years matching the process years
+        let milestone_years: Vec<u32> = vec![2010, 2015, 2020];
+
+        // Create constraint records for the test process
+        let constraints = vec![
+            ProcessInvestmentConstraintRaw {
+                constraint_name: "gbr_2015_limit".into(),
+                process_id: "process1".into(),
+                regions: "GBR".into(),
+                commission_years: 2015,
+                addition_limit: 100.0,
+            },
+            ProcessInvestmentConstraintRaw {
+                constraint_name: "usa_2015_limit".into(),
+                process_id: "process1".into(),
+                regions: "USA".into(),
+                commission_years: 2015,
+                addition_limit: 200.0,
+            },
+            ProcessInvestmentConstraintRaw {
+                constraint_name: "all_regions_2020_limit".into(),
+                process_id: "process1".into(),
+                regions: "ALL".into(),
+                commission_years: 2020,
+                addition_limit: 50.0,
+            },
+        ];
+
+        // Read constraints into the map
+        let result = read_process_investment_constraints_from_iter(
+            constraints.into_iter(),
+            &processes,
+            &milestone_years,
+        )
+        .unwrap();
+
+        // Verify the constraints were correctly stored
+        let process_id: ProcessID = "process1".into();
+        let process_constraints = result
+            .get(&process_id)
+            .expect("Process constraints should exist");
+
+        // Check GBR 2015 constraint
+        let gbr_region: RegionID = "GBR".into();
+        let gbr_constraint = process_constraints
+            .get(&(gbr_region.clone(), 2015))
+            .expect("GBR 2015 constraint should exist");
+        assert_eq!(gbr_constraint.addition_limit, Some(100.0));
+
+        // Check USA 2015 constraint
+        let usa_region: RegionID = "USA".into();
+        let usa_constraint = process_constraints
+            .get(&(usa_region.clone(), 2015))
+            .expect("USA 2015 constraint should exist");
+        assert_eq!(usa_constraint.addition_limit, Some(200.0));
+
+        // Check that ALL regions constraint created entries for both regions in 2020
+        let gbr_2020_constraint = process_constraints
+            .get(&(gbr_region, 2020))
+            .expect("GBR 2020 constraint should exist");
+        assert_eq!(gbr_2020_constraint.addition_limit, Some(50.0));
+
+        let usa_2020_constraint = process_constraints
+            .get(&(usa_region, 2020))
+            .expect("USA 2020 constraint should exist");
+        assert_eq!(usa_2020_constraint.addition_limit, Some(50.0));
+
+        // Verify total number of constraints (2 for 2015 + 2 for 2020)
+        assert_eq!(process_constraints.len(), 4);
     }
 
-    #[test]
-    fn test_validate_limit_not_supported() {
-        // Limit constraints should fail with "not supported yet" message
-        let constraint = create_raw_constraint(ConstraintType::Limit, 100.0);
-        let result = constraint.validate();
+    #[rstest]
+    fn test_read_constraints_invalid_year(processes: ProcessMap) {
+        // Create constraint with year not in milestone years
+        let milestone_years = vec![2015, 2020];
+
+        let constraints = vec![ProcessInvestmentConstraintRaw {
+            constraint_name: "invalid_year_constraint".into(),
+            process_id: "process1".into(),
+            regions: "GBR".into(),
+            commission_years: 2025, // Not in milestone_years
+            addition_limit: 100.0,
+        }];
+
+        // Should fail with milestone year validation error
+        let result = read_process_investment_constraints_from_iter(
+            constraints.into_iter(),
+            &processes,
+            &milestone_years,
+        );
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not supported"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not a milestone year")
+        );
+    }
+
+    #[rstest]
+    fn test_read_constraints_year_outside_process_years(processes: ProcessMap) {
+        // Create constraint with year outside process operational years
+        // Process years are 2010..=2020 from the fixture
+        let milestone_years = vec![2005, 2015, 2025];
+
+        let constraints = vec![ProcessInvestmentConstraintRaw {
+            constraint_name: "out_of_range_year".into(),
+            process_id: "process1".into(),
+            regions: "GBR".into(),
+            commission_years: 2025, // Outside process years (2010-2020)
+            addition_limit: 100.0,
+        }];
+
+        // Should fail with process year validation error
+        let result = read_process_investment_constraints_from_iter(
+            constraints.into_iter(),
+            &processes,
+            &milestone_years,
+        );
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not valid for process")
+        );
     }
 
     #[test]
     fn test_validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
-        let valid = create_raw_constraint(ConstraintType::Addition, 10.0);
+        let valid = create_raw_constraint(10.0);
         assert!(valid.validate().is_ok());
 
         // Valid: addition constraint with zero value
-        let valid = create_raw_constraint(ConstraintType::Addition, 0.0);
+        let valid = create_raw_constraint(0.0);
         assert!(valid.validate().is_ok());
 
         // Not valid: addition constraint with negative value
-        let valid = create_raw_constraint(ConstraintType::Addition, -10.0);
+        let valid = create_raw_constraint(-10.0);
         assert!(valid.validate().is_err());
     }
 
     #[test]
     fn test_validate_addition_rejects_infinite() {
         // Invalid: infinite value
-        let invalid = create_raw_constraint(ConstraintType::Addition, f64::INFINITY);
+        let invalid = create_raw_constraint(f64::INFINITY);
         assert!(invalid.validate().is_err());
 
         // Invalid: NaN value
-        let invalid = create_raw_constraint(ConstraintType::Addition, f64::NAN);
+        let invalid = create_raw_constraint(f64::NAN);
         assert!(invalid.validate().is_err());
     }
 }

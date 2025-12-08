@@ -478,29 +478,13 @@ pub struct ProcessParameter {
     pub discount_rate: Dimensionless,
 }
 
-/// Value specification for different possible types of investment constraints
-#[derive(Debug, Clone, PartialEq)]
-pub enum InvestmentConstraintValue {
-    /// Addition constraint: Yearly limit an agent can invest
-    /// in the process, shared according to the agent's
-    /// proportion of the processes primary commodity demand
-    Addition {
-        /// constraint value to apply
-        addition_limit: Option<f64>,
-    },
-    /// Growth constraint: Not implemented yet
-    Growth {},
-    /// Limit constraint: Not implemented yet
-    Limit {},
-}
-
 /// A constraint imposed on investments in the process
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProcessInvestmentConstraint {
-    /// The name of the investment constraint
-    pub constraint_name: String,
-    /// The parameters value required to impose the constraint
-    pub constraint_value: InvestmentConstraintValue,
+    /// Addition constraint: Yearly limit an agent can invest
+    /// in the process, shared according to the agent's
+    /// proportion of the processes primary commodity demand
+    pub addition_limit: Option<f64>,
 }
 
 #[cfg(test)]
