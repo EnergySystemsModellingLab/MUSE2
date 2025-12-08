@@ -124,7 +124,8 @@ pub fn run(
         assets.extend(selected_assets);
 
         // Decommission unused assets
-        assets.decommission_if_not_active(existing_assets, year);
+        assets.mothball_unretained(existing_assets, year);
+        assets.decommission_mothballed(year, model.parameters.mothball_years);
 
         // Write assets
         writer.write_assets(assets.iter_all())?;
