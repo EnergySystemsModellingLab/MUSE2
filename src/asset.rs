@@ -767,7 +767,7 @@ impl AssetPool {
         &self.active
     }
 
-    /// Decommission assets whose lifetime has passed or have been unused for too long,
+    /// Decommission assets whose lifetime has passed,
     /// and commission new assets
     pub fn update_for_year(&mut self, year: u32) {
         self.decommission_old(year);
