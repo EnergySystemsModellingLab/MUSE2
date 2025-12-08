@@ -830,7 +830,7 @@ impl AssetPool {
             let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
             asset.make_mut().decommission(
                 decommissioned,
-                &format!("Unused for at least {mothball_years} years"),
+                &format!("The asset has not been used for the set mothball years ({mothball_years} years)."),
             );
             self.decommissioned.push(asset);
         }
@@ -855,8 +855,12 @@ impl AssetPool {
                 AssetState::Commissioned { .. } => !self.active.contains(&asset),
                 _ => panic!("Cannot mothball asset that has not been commissioned"),
             } {
-                // We set the current year as the mothball year, i.e. the first one the asset was not used.
-                asset.make_mut().mothball(year);
+                // If not already set, we set the current year as the mothball year,
+                // i.e. the first one the asset was not used.
+                if asset.get_mothballed_year().is_none() {
+                    asset.make_mut().mothball(year);
+                }
+
                 // And we put it back to the pool, so they can be chosen the next milestone year
                 // if not decommissioned earlier.
                 self.active.push(asset);
