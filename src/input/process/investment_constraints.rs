@@ -17,7 +17,6 @@ const PROCESS_INVESTMENT_CONSTRAINTS_FILE_NAME: &str = "process_investment_const
 /// Represents a row of the process investment constraints CSV file
 #[derive(Deserialize)]
 struct ProcessInvestmentConstraintRaw {
-    constraint_name: String,
     process_id: String,
     regions: String,
     commission_years: String,
@@ -29,16 +28,9 @@ impl ProcessInvestmentConstraintRaw {
     fn validate(&self) -> Result<()> {
         // Validate that value is finite
         ensure!(
-            self.addition_limit.is_finite(),
-            "Constraint value must be finite for constraint '{}'",
-            self.constraint_name
-        );
-
-        // For addition constraints, value must be non-negative
-        ensure!(
-            self.addition_limit >= 0.0,
-            "Addition constraint value must be non-negative for constraint '{}'",
-            self.constraint_name
+            self.addition_limit.is_finite() && self.addition_limit >= 0.0,
+            "Invalid value for addition constraint: '{}'; must be non-negative and finite.",
+            self.addition_limit
         );
 
         Ok(())
@@ -113,8 +105,7 @@ where
         let constraint_years = parse_year_str(&record.commission_years, milestone_years)
             .with_context(|| {
                 format!(
-                    "Invalid year for constraint '{}' on process {}. Valid years are {:?}",
-                    record.constraint_name, process_id, milestone_years
+                    "Invalid year for constraint on process {process_id}. Valid years are {milestone_years:?}",
                 )
             })?;
 
@@ -122,10 +113,7 @@ where
         for year in &constraint_years {
             ensure!(
                 milestone_years.contains(year),
-                "Year {} is not a milestone year for constraint '{}'. Valid milestone years are: {:?}",
-                year,
-                record.constraint_name,
-                milestone_years
+                "Year {year} is not a milestone year. Valid milestone years are: {milestone_years:?}",
             );
         }
 
@@ -156,7 +144,6 @@ mod tests {
 
     fn create_raw_constraint(addition_limit: f64) -> ProcessInvestmentConstraintRaw {
         ProcessInvestmentConstraintRaw {
-            constraint_name: "test_constraint".into(),
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
@@ -172,21 +159,18 @@ mod tests {
         // Create constraint records for the test process
         let constraints = vec![
             ProcessInvestmentConstraintRaw {
-                constraint_name: "gbr_2010_limit".into(),
                 process_id: "process1".into(),
                 regions: "GBR".into(),
                 commission_years: "2010".into(),
                 addition_limit: 100.0,
             },
             ProcessInvestmentConstraintRaw {
-                constraint_name: "all_2015_limit".into(),
                 process_id: "process1".into(),
                 regions: "ALL".into(),
                 commission_years: "2015".into(),
                 addition_limit: 200.0,
             },
             ProcessInvestmentConstraintRaw {
-                constraint_name: "usa_2020_limit".into(),
                 process_id: "process1".into(),
                 regions: "USA".into(),
                 commission_years: "2020".into(),
@@ -246,7 +230,6 @@ mod tests {
 
         // Create a constraint that applies to all regions and all years
         let constraints = vec![ProcessInvestmentConstraintRaw {
-            constraint_name: "all_regions_all_years_limit".into(),
             process_id: "process1".into(),
             regions: "ALL".into(),
             commission_years: "ALL".into(),
@@ -292,7 +275,6 @@ mod tests {
         let milestone_years = vec![2015, 2020];
 
         let constraints = vec![ProcessInvestmentConstraintRaw {
-            constraint_name: "invalid_year_constraint".into(),
             process_id: "process1".into(),
             regions: "GBR".into(),
             commission_years: "2025".into(), // Not in milestone_years
@@ -316,7 +298,6 @@ mod tests {
         let milestone_years = vec![2010, 2015, 2020];
 
         let constraints = vec![ProcessInvestmentConstraintRaw {
-            constraint_name: "out_of_range_year".into(),
             process_id: "process1".into(),
             regions: "GBR".into(),
             commission_years: "2025".into(), // Outside process years (2010-2020)
