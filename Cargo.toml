@@ -14,7 +14,7 @@ categories = ["science", "simulation", "command-line-utilities"]
 [dependencies]
 anyhow = "1.0.100"
 csv = "1.4.0"
-log = "0.4.28"
+log = "0.4.29"
 float-cmp = "0.10.0"
 itertools = "0.14.0"
 serde = {version = "1.0.228", features = ["derive", "rc"]}
