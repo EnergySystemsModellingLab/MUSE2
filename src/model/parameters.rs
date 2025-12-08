@@ -49,6 +49,7 @@ define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
 define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
 define_param_default!(default_max_ironing_out_iterations, u32, 10);
 define_param_default!(default_capacity_margin, f64, 0.2);
+define_param_default!(default_mothball_years, u32, 0);
 
 /// Model parameters as defined in the `model.toml` file.
 ///
@@ -93,6 +94,9 @@ pub struct ModelParameters {
     /// small demand changes before we would otherwise need to break for re-investment.
     #[serde(default = "default_capacity_margin")]
     pub capacity_margin: f64,
+    /// Number of years an asset can remain unused before being decommissioned
+    #[serde(default = "default_mothball_years")]
+    pub mothball_years: u32,
 }
 
 /// The strategy used for calculating commodity prices
