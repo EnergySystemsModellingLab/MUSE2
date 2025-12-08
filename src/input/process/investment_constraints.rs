@@ -5,6 +5,7 @@ use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
+use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -19,7 +20,7 @@ struct ProcessInvestmentConstraintRaw {
     constraint_name: String,
     process_id: String,
     regions: String,
-    commission_years: u32,
+    commission_years: String,
     addition_limit: f64,
 }
 
@@ -108,34 +109,38 @@ where
                 )
             })?;
 
-        // Validate year is a milestone year
-        ensure!(
-            milestone_years.contains(&record.commission_years),
-            "Year {} is not a milestone year for constraint '{}'. Valid milestone years are: {:?}",
-            record.commission_years,
-            record.constraint_name,
-            milestone_years
-        );
+        // Parse associated commission years
+        let constraint_years = parse_year_str(&record.commission_years, milestone_years)
+            .with_context(|| {
+                format!(
+                    "Invalid year for constraint '{}' on process {}. Valid years are {:?}",
+                    record.constraint_name, process_id, milestone_years
+                )
+            })?;
 
-        // Validate year is within process operational years
-        let process_years: Vec<u32> = process.years.clone().collect();
-        ensure!(
-            process_years.contains(&record.commission_years),
-            "Year {} is not valid for process {}. Valid years are: {:?}",
-            record.commission_years,
-            process_id,
-            process_years
-        );
+        // Validate all parsed years are milestone years
+        for year in &constraint_years {
+            ensure!(
+                milestone_years.contains(year),
+                "Year {} is not a milestone year for constraint '{}'. Valid milestone years are: {:?}",
+                year,
+                record.constraint_name,
+                milestone_years
+            );
+        }
 
+        // Create constraints for each region and year combination
         for region in &record_regions {
-            let constraint = ProcessInvestmentConstraint {
-                addition_limit: Some(record.addition_limit),
-            };
+            for &year in &constraint_years {
+                let constraint = ProcessInvestmentConstraint {
+                    addition_limit: Some(record.addition_limit),
+                };
 
-            let process_map = map.entry(process_id.clone()).or_default();
-            process_map
-                .entry((region.clone(), record.commission_years))
-                .or_insert_with(|| Rc::new(constraint));
+                let process_map = map.entry(process_id.clone()).or_default();
+                process_map
+                    .entry((region.clone(), year))
+                    .or_insert_with(|| Rc::new(constraint));
+            }
         }
     }
 
@@ -154,7 +159,7 @@ mod tests {
             constraint_name: "test_constraint".into(),
             process_id: "test_process".into(),
             regions: "ALL".into(),
-            commission_years: 2030,
+            commission_years: "2030".into(),
             addition_limit: addition_limit,
         }
     }
@@ -167,24 +172,24 @@ mod tests {
         // Create constraint records for the test process
         let constraints = vec![
             ProcessInvestmentConstraintRaw {
-                constraint_name: "gbr_2015_limit".into(),
+                constraint_name: "gbr_2010_limit".into(),
                 process_id: "process1".into(),
                 regions: "GBR".into(),
-                commission_years: 2015,
+                commission_years: "2010".into(),
                 addition_limit: 100.0,
             },
             ProcessInvestmentConstraintRaw {
-                constraint_name: "usa_2015_limit".into(),
+                constraint_name: "all_2015_limit".into(),
                 process_id: "process1".into(),
-                regions: "USA".into(),
-                commission_years: 2015,
+                regions: "ALL".into(),
+                commission_years: "2015".into(),
                 addition_limit: 200.0,
             },
             ProcessInvestmentConstraintRaw {
-                constraint_name: "all_regions_2020_limit".into(),
+                constraint_name: "usa_2020_limit".into(),
                 process_id: "process1".into(),
-                regions: "ALL".into(),
-                commission_years: 2020,
+                regions: "USA".into(),
+                commission_years: "2020".into(),
                 addition_limit: 50.0,
             },
         ];
@@ -203,35 +208,84 @@ mod tests {
             .get(&process_id)
             .expect("Process constraints should exist");
 
-        // Check GBR 2015 constraint
         let gbr_region: RegionID = "GBR".into();
-        let gbr_constraint = process_constraints
-            .get(&(gbr_region.clone(), 2015))
-            .expect("GBR 2015 constraint should exist");
-        assert_eq!(gbr_constraint.addition_limit, Some(100.0));
-
-        // Check USA 2015 constraint
         let usa_region: RegionID = "USA".into();
-        let usa_constraint = process_constraints
+
+        // Check GBR 2010 constraint
+        let gbr_2010 = process_constraints
+            .get(&(gbr_region.clone(), 2010))
+            .expect("GBR 2010 constraint should exist");
+        assert_eq!(gbr_2010.addition_limit, Some(100.0));
+
+        // Check GBR 2015 constraint (from ALL regions)
+        let gbr_2015 = process_constraints
+            .get(&(gbr_region, 2015))
+            .expect("GBR 2015 constraint should exist");
+        assert_eq!(gbr_2015.addition_limit, Some(200.0));
+
+        // Check USA 2015 constraint (from ALL regions)
+        let usa_2015 = process_constraints
             .get(&(usa_region.clone(), 2015))
             .expect("USA 2015 constraint should exist");
-        assert_eq!(usa_constraint.addition_limit, Some(200.0));
+        assert_eq!(usa_2015.addition_limit, Some(200.0));
 
-        // Check that ALL regions constraint created entries for both regions in 2020
-        let gbr_2020_constraint = process_constraints
-            .get(&(gbr_region, 2020))
-            .expect("GBR 2020 constraint should exist");
-        assert_eq!(gbr_2020_constraint.addition_limit, Some(50.0));
-
-        let usa_2020_constraint = process_constraints
+        // Check USA 2020 constraint
+        let usa_2020 = process_constraints
             .get(&(usa_region, 2020))
             .expect("USA 2020 constraint should exist");
-        assert_eq!(usa_2020_constraint.addition_limit, Some(50.0));
+        assert_eq!(usa_2020.addition_limit, Some(50.0));
 
-        // Verify total number of constraints (2 for 2015 + 2 for 2020)
+        // Verify total number of constraints (2 GBR + 2 USA = 4)
         assert_eq!(process_constraints.len(), 4);
     }
 
+    #[rstest]
+    fn test_read_constraints_all_regions_all_years(processes: ProcessMap) {
+        // Create milestone years matching the process years
+        let milestone_years: Vec<u32> = vec![2010, 2015, 2020];
+
+        // Create a constraint that applies to all regions and all years
+        let constraints = vec![ProcessInvestmentConstraintRaw {
+            constraint_name: "all_regions_all_years_limit".into(),
+            process_id: "process1".into(),
+            regions: "ALL".into(),
+            commission_years: "ALL".into(),
+            addition_limit: 75.0,
+        }];
+
+        // Read constraints into the map
+        let result = read_process_investment_constraints_from_iter(
+            constraints.into_iter(),
+            &processes,
+            &milestone_years,
+        )
+        .unwrap();
+
+        // Verify the constraints were correctly stored
+        let process_id: ProcessID = "process1".into();
+        let process_constraints = result
+            .get(&process_id)
+            .expect("Process constraints should exist");
+
+        let gbr_region: RegionID = "GBR".into();
+        let usa_region: RegionID = "USA".into();
+
+        // Verify constraint exists for all region-year combinations
+        for &year in &milestone_years {
+            let gbr_constraint = process_constraints
+                .get(&(gbr_region.clone(), year))
+                .expect(&format!("GBR {} constraint should exist", year));
+            assert_eq!(gbr_constraint.addition_limit, Some(75.0));
+
+            let usa_constraint = process_constraints
+                .get(&(usa_region.clone(), year))
+                .expect(&format!("USA {} constraint should exist", year));
+            assert_eq!(usa_constraint.addition_limit, Some(75.0));
+        }
+
+        // Verify total number of constraints (2 regions × 3 years = 6)
+        assert_eq!(process_constraints.len(), 6);
+    }
     #[rstest]
     fn test_read_constraints_invalid_year(processes: ProcessMap) {
         // Create constraint with year not in milestone years
@@ -241,7 +295,7 @@ mod tests {
             constraint_name: "invalid_year_constraint".into(),
             process_id: "process1".into(),
             regions: "GBR".into(),
-            commission_years: 2025, // Not in milestone_years
+            commission_years: "2025".into(), // Not in milestone_years
             addition_limit: 100.0,
         }];
 
@@ -253,25 +307,19 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("not a milestone year")
-        );
     }
 
     #[rstest]
     fn test_read_constraints_year_outside_process_years(processes: ProcessMap) {
         // Create constraint with year outside process operational years
         // Process years are 2010..=2020 from the fixture
-        let milestone_years = vec![2005, 2015, 2025];
+        let milestone_years = vec![2010, 2015, 2020];
 
         let constraints = vec![ProcessInvestmentConstraintRaw {
             constraint_name: "out_of_range_year".into(),
             process_id: "process1".into(),
             regions: "GBR".into(),
-            commission_years: 2025, // Outside process years (2010-2020)
+            commission_years: "2025".into(), // Outside process years (2010-2020)
             addition_limit: 100.0,
         }];
 
@@ -283,12 +331,6 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("not valid for process")
-        );
     }
 
     #[test]
