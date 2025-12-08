@@ -118,19 +118,13 @@ where
         }
 
         // Create constraints for each region and year combination
-        for region in &record_regions {
-            for &year in &constraint_years {
-                let constraint = ProcessInvestmentConstraint {
-                    addition_limit: Some(record.addition_limit),
-                };
-
-                let process_map = map.entry(process_id.clone()).or_default();
-                process_map
-                    .entry((region.clone(), year))
-                    .or_insert_with(|| Rc::new(constraint));
-            }
+        let constraint = Rc::new(ProcessInvestmentConstraint {
+            addition_limit: Some(record.addition_limit),
+        });
+        let process_map = map.entry(process_id.clone()).or_default();
+        for (region, &year) in iproduct!(&record_regions, &constraint_years) {
+            try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }
-    }
 
     Ok(map)
 }
