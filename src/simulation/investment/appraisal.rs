@@ -194,7 +194,7 @@ fn calculate_npv(
         capacity: results.capacity,
         activity: results.activity,
         unmet_demand: results.unmet_demand,
-        metric: -profitability_index.value(),
+        metric: -profitability_index.value().value(),
         coefficients: coefficients.clone(),
         demand: demand.clone(),
     })
