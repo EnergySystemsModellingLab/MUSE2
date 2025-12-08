@@ -1,6 +1,6 @@
 //! Code for updating the simulation state.
 use crate::ISSUES_URL;
-use crate::asset::{AssetRef, AssetState};
+use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, PricingStrategy};
 use crate::model::{ALLOW_BROKEN_OPTION_NAME, Model};
 use crate::process::FlowDirection;
@@ -26,10 +26,10 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
 
     // Partition commodities by pricing strategy
+    let mut shadow_set = HashSet::new();
     let mut scarcity_set = HashSet::new();
     let mut marginal_set = HashSet::new();
     let mut fullcost_set = HashSet::new();
-    let mut unpriced_set = HashSet::new();
     for (commodity_id, commodity) in &model.commodities {
         match commodity.pricing_strategy {
             PricingStrategy::ScarcityAdjusted => {
@@ -41,10 +41,10 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             PricingStrategy::FullCost => {
                 fullcost_set.insert(commodity_id.clone());
             }
-            PricingStrategy::Unpriced => {
-                unpriced_set.insert(commodity_id.clone());
+            PricingStrategy::Shadow => {
+                shadow_set.insert(commodity_id.clone());
             }
-            PricingStrategy::Shadow => { /* nothing else required */ }
+            PricingStrategy::Unpriced => { /* Nothing to do */ }
             PricingStrategy::Default => {
                 unreachable!(
                     "Default pricing strategy should have been resolved during data loading"
@@ -53,23 +53,22 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         }
     }
 
-    // Set up prices map
-    // We will start with a clone of the shadow prices map and replace/remove values as needed
-    let mut result = shadow_prices.clone();
+    // Set up empty prices map
+    let mut result = CommodityPrices::default();
 
-    // Remove prices for unpriced commodities
-    // For now, there should be no shadow prices for unpriced commodities, so let's panic if there
-    // are any, just as a sanity check. In the future we may end up with shadow prices for unpriced
-    // commodities, so this will need to be revisitied.
-    for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
-        if unpriced_set.contains(commodity_id) {
-            result.remove(commodity_id, region_id, time_slice);
-            panic!("Shadow price found for unpriced commodity");
+    // Add prices for shadow-priced commodities
+    if !shadow_set.is_empty() {
+        for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
+            if shadow_set.contains(commodity_id) {
+                let price = shadow_prices
+                    .get(commodity_id, region_id, time_slice)
+                    .unwrap();
+                result.insert(commodity_id, region_id, time_slice, price);
+            }
         }
     }
 
-    // Update prices for scarcity-adjusted commodities
-    // Any markets for which scarcity pricing cannot be calculated will retain their shadow prices
+    // Add prices for scarcity-adjusted commodities
     if !scarcity_set.is_empty() {
         ensure!(
             model.parameters.allow_broken_options,
@@ -83,11 +82,10 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             &shadow_prices,
             &scarcity_set,
         );
-        result.update(scarcity_prices);
+        result.extend(scarcity_prices);
     }
 
-    // Update prices for marginal cost commodities
-    // Any markets for which marginal cost pricing cannot be calculated will retain their shadow prices
+    // Add prices for marginal cost commodities
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
             solution.iter_activity(),
@@ -95,11 +93,10 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             year,
             &marginal_set,
         );
-        result.update(marginal_cost_prices);
+        result.extend(marginal_cost_prices);
     }
 
-    // Update prices for full cost commodities
-    // Any markets for which full cost pricing cannot be calculated will retain their shadow prices
+    // Add prices for full cost commodities
     if !fullcost_set.is_empty() {
         let annual_activities = calculate_annual_activities(solution.iter_activity());
         let full_cost_prices = calculate_full_cost_prices(
@@ -109,7 +106,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             year,
             &fullcost_set,
         );
-        result.update(full_cost_prices);
+        result.extend(full_cost_prices);
     }
 
     // Return the completed prices map
@@ -146,20 +143,12 @@ impl CommodityPrices {
             .map(|((commodity_id, region_id, ts), price)| (commodity_id, region_id, ts, *price))
     }
 
-    /// Update the prices map with the given iterator of entries
-    ///
-    /// If a price doesn't already exist for a given commodity/region/time slice, it will panic.
-    pub fn update<T>(&mut self, iter: T)
+    /// Extend the prices map, possibly overwriting values
+    pub fn extend<T>(&mut self, iter: T)
     where
         T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
     {
-        for (key, price) in iter {
-            let previous = self.0.insert(key, price);
-            assert!(
-                previous.is_some(),
-                "Attempted to update price for non-existent commodity/region/time slice"
-            );
-        }
+        self.0.extend(iter);
     }
 
     /// Get the price for the specified commodity for a given region and time slice
@@ -172,17 +161,6 @@ impl CommodityPrices {
         self.0
             .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
             .copied()
-    }
-
-    /// Remove the specified entry from the map
-    pub fn remove(
-        &mut self,
-        commodity_id: &CommodityID,
-        region_id: &RegionID,
-        time_slice: &TimeSliceID,
-    ) -> Option<MoneyPerFlow> {
-        self.0
-            .remove(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
     }
 
     /// Iterate over the price map's keys
@@ -355,11 +333,6 @@ where
     // Calculate highest marginal cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
     for (asset, time_slice, activity) in activity {
-        // Skip candidate assets
-        if asset.state() == &AssetState::Candidate {
-            continue;
-        }
-
         // Skip if activity is zero/very small
         if activity < Activity(f64::EPSILON) {
             continue;
@@ -440,11 +413,6 @@ where
     let mut highest_costs = HashMap::new();
     let mut annual_capital_costs_cache = HashMap::new();
     for (asset, time_slice, activity) in activity {
-        // Skip candidate assets
-        if asset.state() == &AssetState::Candidate {
-            continue;
-        }
-
         // Skip if activity is zero/very small
         if activity < Activity(f64::EPSILON) {
             continue;
