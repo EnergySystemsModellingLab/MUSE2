@@ -88,7 +88,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Add prices for marginal cost commodities
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
-            solution.iter_activity(),
+            solution.iter_activity_keys(),
             &shadow_prices,
             year,
             &marginal_set,
@@ -100,7 +100,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     if !fullcost_set.is_empty() {
         let annual_activities = calculate_annual_activities(solution.iter_activity());
         let full_cost_prices = calculate_full_cost_prices(
-            solution.iter_activity(),
+            solution.iter_activity_keys(),
             &annual_activities,
             &shadow_prices,
             year,
@@ -322,22 +322,17 @@ where
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
 fn calculate_marginal_cost_prices<'a, I>(
-    activity: I,
+    activity_keys: I,
     shadow_prices: &CommodityPrices,
     year: u32,
     commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: IntoIterator<Item = &'a (AssetRef, TimeSliceID)>,
 {
     // Calculate highest marginal cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
-    for (asset, time_slice, activity) in activity {
-        // Skip if activity is zero/very small
-        if activity < Activity(f64::EPSILON) {
-            continue;
-        }
-
+    for (asset, time_slice) in activity_keys {
         // Iterate over the output flows of this asset
         // Only consider flows for commodities we are pricing
         for flow in asset.iter_flows().filter(|flow| {
@@ -400,30 +395,34 @@ where
 /// * `year` - The year for which prices are being calculated
 /// * `commodities_to_price` - Set of commodity IDs to calculate full cost prices for
 fn calculate_full_cost_prices<'a, I>(
-    activity: I,
+    activity_keys: I,
     annual_activities: &HashMap<AssetRef, Activity>,
     shadow_prices: &CommodityPrices,
     year: u32,
     commodities_to_price: &HashSet<CommodityID>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: IntoIterator<Item = &'a (AssetRef, TimeSliceID)>,
 {
     // Calculate highest full cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
     let mut annual_capital_costs_cache = HashMap::new();
-    for (asset, time_slice, activity) in activity {
-        // Skip if activity is zero/very small
-        if activity < Activity(f64::EPSILON) {
+    for (asset, time_slice) in activity_keys {
+        // Get annual activity for this asset
+        let annual_activity = annual_activities[asset];
+
+        // Cannot calculate capital cost per activity if annual activity is zero/very small
+        // Skip this asset in that case. Note: because of this it's _possible_ that for some
+        // commodities/regions there will be no price calculated if all assets producing that
+        // commodity in that region (including candidate assets) have zero annual activity.
+        if annual_activity < Activity(f64::EPSILON) {
             continue;
         }
 
         // Calculate/cache annual capital cost for this asset
         let annual_capital_cost_per_activity = annual_capital_costs_cache
             .entry(asset.clone())
-            .or_insert_with(|| {
-                asset.get_annual_capital_cost_per_activity(annual_activities[asset])
-            });
+            .or_insert_with(|| asset.get_annual_capital_cost_per_activity(annual_activity));
 
         // Iterate over the output flows of this asset
         // Only consider flows for commodities we are pricing
