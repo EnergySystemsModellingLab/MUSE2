@@ -2,6 +2,9 @@ $schema: https://specs.frictionlessdata.io/schemas/table-schema.json
 description: |
   Constraints on the amount agents can invest in processes.
 
+notes: |
+  Not implemented yet! This file is reserved for future use.
+
 fields:
   - name: process_id
     type: string

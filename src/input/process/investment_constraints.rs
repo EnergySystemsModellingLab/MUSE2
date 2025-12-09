@@ -307,30 +307,6 @@ mod tests {
         // Verify total number of constraints (2 regions × 3 years = 6)
         assert_eq!(process_constraints.len(), 6);
     }
-    #[rstest]
-    fn test_read_constraints_invalid_year(processes: ProcessMap) {
-        // Create constraint with year not in milestone years
-        let milestone_years = vec![2015, 2020];
-
-        let constraints = vec![ProcessInvestmentConstraintRaw {
-            process_id: "process1".into(),
-            regions: "GBR".into(),
-            commission_years: "2025".into(), // Not in milestone_years
-            addition_limit: 100.0,
-        }];
-
-        // Should fail with milestone year validation error
-        let result = read_process_investment_constraints_from_iter(
-            constraints.into_iter(),
-            &processes,
-            &milestone_years,
-        );
-
-        assert_error!(
-            result,
-            "Invalid year for constraint on process process1. Valid years are [2015, 2020]"
-        );
-    }
 
     #[rstest]
     fn test_read_constraints_year_outside_milestone_years(processes: ProcessMap) {
