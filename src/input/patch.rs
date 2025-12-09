@@ -6,7 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
-/// Structure to hold diffs from a diff f
+/// Structure to hold diffs from a diff file
+#[derive(Debug)]
 struct FileDiffs {
     /// The header line from the diff file
     header_line: String,
@@ -42,11 +43,7 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
         } else if let Some(stripped) = line.strip_prefix("+,") {
             to_add.push(stripped.trim().to_string());
         } else {
-            bail!(
-                "Invalid line in diff file {}: {}",
-                file_path.display(),
-                line
-            );
+            bail!("Invalid line in diff file: {line}");
         }
     }
 
@@ -68,14 +65,14 @@ fn modify_string_with_diffs(original: &str, diffs: &FileDiffs) -> Result<String>
         .expect("Original string cannot be empty");
     ensure!(
         original_header == diffs.header_line,
-        "Header line in diff file does not match original string"
+        "Header line in diff file does not match original file"
     );
 
     // Apply deletions
     for item in &diffs.to_delete {
         ensure!(
             modified.contains(item),
-            "Item to delete not found in original string: {item}"
+            "Item to delete not found in original file: {item}"
         );
         modified = modified.replace(item, "");
     }
@@ -147,9 +144,107 @@ pub fn patch_model<P: AsRef<Path>>(model_dir: P, diffs_dir: P) -> Result<PathBuf
 }
 
 fn apply_patch_to_file(file_path: &Path, diff_path: &Path) -> Result<()> {
-    let diffs = read_diffs(diff_path)?;
+    let diffs = read_diffs(diff_path).with_context(|| input_err_msg(diff_path))?;
     let original = fs::read_to_string(file_path).with_context(|| input_err_msg(file_path))?;
     let modified = modify_string_with_diffs(&original, &diffs)?;
     fs::write(file_path, modified)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fixture::assert_error;
+    use std::io::Write;
+
+    #[test]
+    fn test_read_diffs_basic() {
+        let temp_dir = tempdir().unwrap();
+        let diff_file = temp_dir.path().join("test_diff.csv");
+
+        let content = "header\n-,line_to_delete\n+,line_to_add\n";
+        let mut file = fs::File::create(&diff_file).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let diffs = read_diffs(&diff_file).unwrap();
+
+        assert_eq!(diffs.header_line, "header");
+        assert_eq!(diffs.to_delete, vec!["line_to_delete"]);
+        assert_eq!(diffs.to_add, vec!["line_to_add"]);
+    }
+
+    #[test]
+    fn test_read_diffs_with_whitespace() {
+        let temp_dir = tempdir().unwrap();
+        let diff_file = temp_dir.path().join("test_diff.csv");
+
+        let content = "header\n-,  item_with_spaces  \n+,  another_item  \n";
+        let mut file = fs::File::create(&diff_file).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let diffs = read_diffs(&diff_file).unwrap();
+
+        // Whitespace should be trimmed
+        assert_eq!(diffs.to_delete, vec!["item_with_spaces"]);
+        assert_eq!(diffs.to_add, vec!["another_item"]);
+    }
+
+    #[test]
+    fn test_read_diffs_invalid_line() {
+        let temp_dir = tempdir().unwrap();
+        let diff_file = temp_dir.path().join("test_diff.csv");
+
+        let content = "header\ninvalid_line\n";
+        let mut file = fs::File::create(&diff_file).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let result = read_diffs(&diff_file);
+        assert_error!(result, "Invalid line in diff file: invalid_line");
+    }
+
+    #[test]
+    fn test_modify_string_with_diffs_basic() {
+        let original = "header\nline1\nline2\nline3\n";
+        let diffs = FileDiffs {
+            header_line: "header".to_string(),
+            to_delete: vec!["line2".to_string()],
+            to_add: vec!["line_new".to_string()],
+        };
+
+        let modified = modify_string_with_diffs(original, &diffs).unwrap();
+        assert!(!modified.contains("line2"));
+        assert!(modified.contains("line_new"));
+    }
+
+    #[test]
+    fn test_modify_string_with_diffs_mismatched_header() {
+        let original = "header1\nline1\n";
+        let diffs = FileDiffs {
+            header_line: "header2".to_string(),
+            to_delete: vec![],
+            to_add: vec![],
+        };
+
+        let result = modify_string_with_diffs(original, &diffs);
+        assert_error!(
+            result,
+            "Header line in diff file does not match original file"
+        );
+    }
+
+    #[test]
+    fn test_modify_string_with_diffs_missing_item() {
+        let original = "header\nline1\n";
+        let diffs = FileDiffs {
+            header_line: "header".to_string(),
+            to_delete: vec!["nonexistent".to_string()],
+            to_add: vec![],
+        };
+
+        let result = modify_string_with_diffs(original, &diffs);
+        assert_error!(
+            result,
+            "Item to delete not found in original file: nonexistent"
+        );
+    }
 }
