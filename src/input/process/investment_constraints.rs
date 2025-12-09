@@ -16,7 +16,7 @@ use std::rc::Rc;
 const PROCESS_INVESTMENT_CONSTRAINTS_FILE_NAME: &str = "process_investment_constraints.csv";
 
 /// Represents a row of the process investment constraints CSV file
-#[derive(Deserialize)]
+#[derive(PartialEq, Debug, Deserialize)]
 struct ProcessInvestmentConstraintRaw {
     process_id: String,
     regions: String,
@@ -130,7 +130,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::processes;
+    use crate::fixture::{assert_error, processes};
     use crate::region::RegionID;
     use rstest::rstest;
 
@@ -325,7 +325,10 @@ mod tests {
             &milestone_years,
         );
 
-        assert!(result.is_err());
+        assert_error!(
+            result,
+            "Invalid year for constraint on process process1. Valid years are [2015, 2020]"
+        );
     }
 
     #[rstest]
@@ -347,8 +350,10 @@ mod tests {
             &processes,
             &milestone_years,
         );
-
-        assert!(result.is_err());
+        assert_error!(
+            result,
+            "Invalid year for constraint on process process1. Valid years are [2010, 2015, 2020]"
+        );
     }
 
     #[test]
@@ -362,8 +367,8 @@ mod tests {
         assert!(valid.validate().is_ok());
 
         // Not valid: addition constraint with negative value
-        let valid = create_raw_constraint(-10.0);
-        assert!(valid.validate().is_err());
+        let invalid = create_raw_constraint(-10.0);
+        assert!(invalid.validate().is_err());
     }
 
     #[test]

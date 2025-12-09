@@ -18,7 +18,7 @@ fields:
     notes: One or more milestone years separated by semicolons, `all` to select all years or a year
       range in the form 'start..end' to select all valid years within range, inclusive. Either 'start'
       'end' or both can be omitted, which will set the corresponding limit to the minimum or maximum
-      valid year, respectively.
+      valid year, respectively. Must be within the process's year range.
   - name: addition limit
     type: number
     description: Yearly constraint on the amount agents can invest in the process
