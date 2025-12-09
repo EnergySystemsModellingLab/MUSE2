@@ -1,12 +1,13 @@
 //! Code for reading process investment constraints CSV file
 use super::super::input_err_msg;
-use crate::input::read_csv_optional;
+use crate::input::{read_csv_optional, try_insert};
 use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
+use itertools::iproduct;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -102,20 +103,17 @@ where
             })?;
 
         // Parse associated commission years
-        let constraint_years = parse_year_str(&record.commission_years, milestone_years)
+        let milestone_years_in_process_range: Vec<u32> = milestone_years
+            .iter()
+            .copied()
+            .filter(|year| process.years.contains(year))
+            .collect();
+        let constraint_years = parse_year_str(&record.commission_years, &milestone_years_in_process_range)
             .with_context(|| {
                 format!(
-                    "Invalid year for constraint on process {process_id}. Valid years are {milestone_years:?}",
+                    "Invalid year for constraint on process {process_id}. Valid years are {milestone_years_in_process_range:?}",
                 )
             })?;
-
-        // Validate all parsed years are milestone years
-        for year in &constraint_years {
-            ensure!(
-                milestone_years.contains(year),
-                "Year {year} is not a milestone year. Valid milestone years are: {milestone_years:?}",
-            );
-        }
 
         // Create constraints for each region and year combination
         let constraint = Rc::new(ProcessInvestmentConstraint {
@@ -125,7 +123,7 @@ where
         for (region, &year) in iproduct!(&record_regions, &constraint_years) {
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }
-
+    }
     Ok(map)
 }
 
@@ -142,6 +140,51 @@ mod tests {
             regions: "ALL".into(),
             commission_years: "2030".into(),
             addition_limit: addition_limit,
+        }
+    }
+
+    #[rstest]
+    fn test_read_constraints_only_uses_milestone_years_within_process_range(processes: ProcessMap) {
+        // Process years are 2010..=2020 from the fixture (excludes 2008)
+        let milestone_years = vec![2008, 2012, 2016];
+
+        let constraints = vec![ProcessInvestmentConstraintRaw {
+            process_id: "process1".into(),
+            regions: "GBR".into(),
+            commission_years: "ALL".into(), // Should apply to milestone years [2012, 2016]
+            addition_limit: 100.0,
+        }];
+
+        let result = read_process_investment_constraints_from_iter(
+            constraints.into_iter(),
+            &processes,
+            &milestone_years,
+        )
+        .unwrap();
+
+        let process_id: ProcessID = "process1".into();
+        let process_constraints = result
+            .get(&process_id)
+            .expect("Process constraints should exist");
+
+        let gbr_region: RegionID = "GBR".into();
+
+        // Should have constraints for milestone years within process year
+        // range
+        assert_eq!(process_constraints.len(), 2);
+        assert!(process_constraints.contains_key(&(gbr_region.clone(), 2012)));
+        assert!(process_constraints.contains_key(&(gbr_region.clone(), 2016)));
+
+        // All other years should not have constraints
+        let process = processes.get(&process_id).unwrap();
+        for year in process.years.clone() {
+            if ![2012, 2016].contains(&year) {
+                assert!(
+                    !process_constraints.contains_key(&(gbr_region.clone(), year)),
+                    "Should not contain constraint for year {}",
+                    year
+                );
+            }
         }
     }
 
@@ -286,19 +329,19 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_constraints_year_outside_process_years(processes: ProcessMap) {
-        // Create constraint with year outside process operational years
+    fn test_read_constraints_year_outside_milestone_years(processes: ProcessMap) {
+        // Create constraint with year outside milestone years
         // Process years are 2010..=2020 from the fixture
         let milestone_years = vec![2010, 2015, 2020];
 
         let constraints = vec![ProcessInvestmentConstraintRaw {
             process_id: "process1".into(),
             regions: "GBR".into(),
-            commission_years: "2025".into(), // Outside process years (2010-2020)
+            commission_years: "2025".into(), // Outside milestone years (2010-2020)
             addition_limit: 100.0,
         }];
 
-        // Should fail with process year validation error
+        // Should fail with milestone year validation error
         let result = read_process_investment_constraints_from_iter(
             constraints.into_iter(),
             &processes,

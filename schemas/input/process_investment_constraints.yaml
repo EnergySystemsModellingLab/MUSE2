@@ -1,0 +1,26 @@
+$schema: https://specs.frictionlessdata.io/schemas/table-schema.json
+description: |
+  Constraints on the amount agents can invest in processes.
+
+fields:
+  - name: process_id
+    type: string
+    description: The process to which this entry applies
+  - name: regions
+    type: string
+    description: The region(s) to which this entry applies
+    notes: |
+      One or more region IDs, separated by semicolons or the string `all`. Must be regions in which
+      the process operates.
+  - name: commission years
+    type: string
+    description: The milestone year(s) to which this entry applies
+    notes: One or more milestone years separated by semicolons, `all` to select all years or a year
+      range in the form 'start..end' to select all valid years within range, inclusive. Either 'start'
+      'end' or both can be omitted, which will set the corresponding limit to the minimum or maximum
+      valid year, respectively.
+  - name: addition limit
+    type: number
+    description: Yearly constraint on the amount agents can invest in the process
+    notes: The addition limit is allocated evenly between all agents using their proportion
+      of the processes primary commodity demand.
