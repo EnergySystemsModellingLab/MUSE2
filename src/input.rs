@@ -24,6 +24,8 @@ mod asset;
 use asset::read_assets;
 mod commodity;
 use commodity::read_commodities;
+mod patch;
+use patch::patch_model;
 mod process;
 use process::read_processes;
 mod region;
@@ -228,6 +230,11 @@ where
 /// The static model data ([`Model`]) and an [`AssetPool`] struct or an error.
 pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let model_params = ModelParameters::from_path(&model_dir)?;
+
+    // If `model_params` specifies a `base_dir`, patch the base model and load the patched model
+    if let Some(base_dir) = &model_params.base_model {
+        return load_model(patch_model(Path::new(base_dir), model_dir.as_ref())?);
+    }
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
     let regions = read_regions(model_dir.as_ref())?;

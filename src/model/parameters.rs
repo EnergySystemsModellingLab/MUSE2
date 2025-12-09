@@ -97,6 +97,10 @@ pub struct ModelParameters {
     /// Number of years an asset can remain unused before being decommissioned
     #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
+    /// Optional base model directory to use as a starting point, with this model's files applied
+    /// as patches/diffs.
+    #[serde(default)]
+    pub base_model: Option<String>,
 }
 
 /// The strategy used for calculating commodity prices
