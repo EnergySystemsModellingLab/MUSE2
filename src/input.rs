@@ -233,7 +233,15 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 
     // If `model_params` specifies a `base_dir`, patch the base model and load the patched model
     if let Some(base_dir) = &model_params.base_model {
-        return load_model(patch_model(Path::new(base_dir), model_dir.as_ref())?);
+        let patched_model =
+            patch_model(Path::new(base_dir), model_dir.as_ref()).with_context(|| {
+                format!(
+                    "Error patching base model at {} with patches from {}",
+                    base_dir,
+                    model_dir.as_ref().display()
+                )
+            })?;
+        return load_model(patched_model);
     }
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;

@@ -2,9 +2,10 @@
 use super::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
+use log::info;
 use std::fs;
-use std::path::{Path, PathBuf};
-use tempfile::tempdir;
+use std::path::Path;
+use tempfile::{TempDir, tempdir};
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
@@ -24,26 +25,29 @@ struct FileDiffs {
 fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
     // Read the entire file as a string
     let content = fs::read_to_string(file_path).with_context(|| input_err_msg(file_path))?;
+    let content = content.trim();
 
     // Read header line
     // This is saved to ensure that diffs are applied to a base file with the same header
-    let header_line = content
-        .lines()
-        .next()
-        .expect("Diff file cannot be empty")
-        .to_string();
+    let header_line = match content.lines().next() {
+        Some(line) => line.trim().to_string(),
+        None => bail!("Diff file cannot be empty"),
+    };
 
     // Collect additions and deletions
     let mut to_delete = Vec::new();
     let mut to_add = Vec::new();
     for line in content.lines().skip(1) {
         let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
         if let Some(stripped) = line.strip_prefix("-,") {
             to_delete.push(stripped.trim().to_string());
         } else if let Some(stripped) = line.strip_prefix("+,") {
             to_add.push(stripped.trim().to_string());
         } else {
-            bail!("Invalid line in diff file: {line}");
+            bail!("Invalid row in diff file: {line}. Must start with '-,' or '+,'");
         }
     }
 
@@ -54,25 +58,28 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
     })
 }
 
-/// Modify a string by applying diffs: removing lines and adding lines.
-fn modify_string_with_diffs(original: &str, diffs: &FileDiffs) -> Result<String> {
-    let mut modified = original.to_string();
+/// Modify a string representation of a file by applying diffs: removing lines and adding lines.
+fn modify_base_with_diffs(base: &str, diffs: &FileDiffs) -> Result<String> {
+    let base = base.trim();
+    let mut modified = base.to_string();
+
+    // Check that the base string is not empty
+    ensure!(!base.is_empty(), "Base file is empty");
 
     // Check that the headers match
-    let original_header = original
-        .lines()
-        .next()
-        .expect("Original string cannot be empty");
+    let original_header = base.lines().next().unwrap().trim();
     ensure!(
         original_header == diffs.header_line,
-        "Header line in diff file does not match original file"
+        "Header line in diff file does not match base file: expected '{}', found '{}'",
+        original_header,
+        diffs.header_line
     );
 
     // Apply deletions
     for item in &diffs.to_delete {
         ensure!(
             modified.contains(item),
-            "Item to delete not found in original file: {item}"
+            "Row to delete not found in base file: {item}"
         );
         modified = modified.replace(item, "");
     }
@@ -85,17 +92,18 @@ fn modify_string_with_diffs(original: &str, diffs: &FileDiffs) -> Result<String>
     Ok(modified)
 }
 
-pub fn patch_model<P: AsRef<Path>>(model_dir: P, diffs_dir: P) -> Result<PathBuf> {
-    // Copy contents of model_dir to a teporary directory
+pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<TempDir> {
+    info!(
+        "Patching model at '{}' with diffs from '{}'",
+        base_model_dir.as_ref().display(),
+        diffs_dir.as_ref().display()
+    );
+
+    // Copy contents of `base_model_dir` to a temporary directory
     let temp_dir = tempdir().context("Failed to create temporary directory")?;
     let temp_path = temp_dir.path();
 
-    for entry in fs::read_dir(model_dir.as_ref()).with_context(|| {
-        format!(
-            "Failed to read model directory: {}",
-            model_dir.as_ref().display()
-        )
-    })? {
+    for entry in fs::read_dir(base_model_dir.as_ref())? {
         let entry = entry?;
         let src_path = entry.path();
 
@@ -107,13 +115,13 @@ pub fn patch_model<P: AsRef<Path>>(model_dir: P, diffs_dir: P) -> Result<PathBuf
         }
     }
 
-    // Apply each patch from diffs_dir to the corresponding file in the temporary directory
-    for entry in fs::read_dir(diffs_dir.as_ref()).with_context(|| {
-        format!(
-            "Failed to read diffs directory: {}",
-            diffs_dir.as_ref().display()
-        )
-    })? {
+    // Patch the model.toml file
+    let base_toml_path = base_model_dir.as_ref().join("model.toml");
+    let patch_toml_path = diffs_dir.as_ref().join("model.toml");
+    patch_model_toml(&base_toml_path, &patch_toml_path)?;
+
+    // Patch CSV files based on diffs in diffs_dir
+    for entry in fs::read_dir(diffs_dir.as_ref())? {
         let entry = entry?;
         let diff_path = entry.path();
 
@@ -122,32 +130,104 @@ pub fn patch_model<P: AsRef<Path>>(model_dir: P, diffs_dir: P) -> Result<PathBuf
             let diff_filename = diff_path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .context("Failed to get diff filename")?;
+                .unwrap();
+
+            // Ignore non-CSV files
+            if !std::path::Path::new(diff_filename)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+            {
+                continue;
+            }
 
             // Check that the filename ends with "_diff.csv"
             ensure!(
-                diff_filename.ends_with("_diff.csv"),
+                diff_filename.to_lowercase().ends_with("_diff.csv"),
                 "Diff file must end with '_diff.csv': {diff_filename}"
             );
 
             // Extract the base filename (e.g., "agents" from "agents_diff.csv")
             let base_name = &diff_filename[..diff_filename.len() - "_diff.csv".len()];
             let target_filename = format!("{base_name}.csv");
-            let file_path = temp_path.join(&target_filename);
+            let base_path = base_model_dir.as_ref().join(&target_filename);
 
-            apply_patch_to_file(&file_path, &diff_path)?;
+            // Read base file and apply patch
+            let patched_str =
+                read_base_file_with_patch(&base_path, &diff_path).with_context(|| {
+                    format!(
+                        "Error applying patch from {} to {}",
+                        diff_path.display(),
+                        base_path.display(),
+                    )
+                })?;
+
+            // Save to the temporary directory
+            fs::write(temp_path.join(&target_filename), patched_str)?;
         }
     }
 
-    // Return the path to the temporary directory
-    Ok(temp_path.to_path_buf())
+    info!(
+        "Patching complete. Patched model saved to temporary path '{}'",
+        temp_path.display()
+    );
+
+    // Return the temporary directory
+    Ok(temp_dir)
 }
 
-fn apply_patch_to_file(file_path: &Path, diff_path: &Path) -> Result<()> {
+fn read_base_file_with_patch(base_file_path: &Path, diff_path: &Path) -> Result<String> {
+    // Read base file
+    if !base_file_path.exists() {
+        bail!(
+            "Base file for patching does not exist: {}",
+            base_file_path.display()
+        );
+    }
+    let base = fs::read_to_string(base_file_path).with_context(|| input_err_msg(base_file_path))?;
+
+    // Read diff file
+    if !diff_path.exists() {
+        bail!(
+            "Diff file for patching does not exist: {}",
+            diff_path.display()
+        );
+    }
     let diffs = read_diffs(diff_path).with_context(|| input_err_msg(diff_path))?;
-    let original = fs::read_to_string(file_path).with_context(|| input_err_msg(file_path))?;
-    let modified = modify_string_with_diffs(&original, &diffs)?;
-    fs::write(file_path, modified)?;
+
+    // Apply diffs to base file
+    let modified = modify_base_with_diffs(&base, &diffs)?;
+    Ok(modified)
+}
+
+fn patch_model_toml(base_path: &Path, patch_path: &Path) -> Result<()> {
+    // Read original TOML file
+    let base_str = fs::read_to_string(base_path).with_context(|| input_err_msg(base_path))?;
+    let mut base_data: toml::Value =
+        toml::from_str(&base_str).with_context(|| input_err_msg(base_path))?;
+
+    // Read patch TOML file
+    let patch_str = fs::read_to_string(patch_path).with_context(|| input_err_msg(patch_path))?;
+    let patch_data: toml::Value =
+        toml::from_str(&patch_str).with_context(|| input_err_msg(patch_path))?;
+
+    // Merge patch into base (only top-level fields allowed)
+    let base_table = base_data.as_table_mut().expect("Base TOML must be a table");
+    let patch_table = patch_data.as_table().expect("Patch TOML must be a table");
+
+    for (key, patch_val) in patch_table {
+        // Skip `base_model` field
+        if key == "base_model" {
+            continue;
+        }
+
+        // Overwrite or add the field from the patch
+        base_table.insert(key.clone(), patch_val.clone());
+    }
+
+    // Save modified TOML back to original file
+    let modified_str = toml::to_string_pretty(&base_data)?;
+    fs::write(base_path, modified_str)?;
+
     Ok(())
 }
 
@@ -178,13 +258,14 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let diff_file = temp_dir.path().join("test_diff.csv");
 
-        let content = "header\n-,  item_with_spaces  \n+,  another_item  \n";
+        let content = " header \n-,  item_with_spaces  \n+,  another_item  \n";
         let mut file = fs::File::create(&diff_file).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
         let diffs = read_diffs(&diff_file).unwrap();
 
         // Whitespace should be trimmed
+        assert_eq!(diffs.header_line, "header");
         assert_eq!(diffs.to_delete, vec!["item_with_spaces"]);
         assert_eq!(diffs.to_add, vec!["another_item"]);
     }
@@ -211,7 +292,7 @@ mod tests {
             to_add: vec!["line_new".to_string()],
         };
 
-        let modified = modify_string_with_diffs(original, &diffs).unwrap();
+        let modified = modify_base_with_diffs(original, &diffs).unwrap();
         assert!(!modified.contains("line2"));
         assert!(modified.contains("line_new"));
     }
@@ -225,7 +306,7 @@ mod tests {
             to_add: vec![],
         };
 
-        let result = modify_string_with_diffs(original, &diffs);
+        let result = modify_base_with_diffs(original, &diffs);
         assert_error!(
             result,
             "Header line in diff file does not match original file"
@@ -241,7 +322,7 @@ mod tests {
             to_add: vec![],
         };
 
-        let result = modify_string_with_diffs(original, &diffs);
+        let result = modify_base_with_diffs(original, &diffs);
         assert_error!(
             result,
             "Item to delete not found in original file: nonexistent"
