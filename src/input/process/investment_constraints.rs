@@ -134,13 +134,14 @@ mod tests {
     use crate::region::RegionID;
     use rstest::rstest;
 
-    fn create_raw_constraint(addition_limit: f64) -> ProcessInvestmentConstraintRaw {
-        ProcessInvestmentConstraintRaw {
+    fn validate_raw_constraint(addition_limit: f64) -> Result<()> {
+        let constraint = ProcessInvestmentConstraintRaw {
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
             addition_limit: addition_limit,
-        }
+        };
+        constraint.validate()
     }
 
     #[rstest]
@@ -359,26 +360,35 @@ mod tests {
     #[test]
     fn test_validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
-        let valid = create_raw_constraint(10.0);
-        assert!(valid.validate().is_ok());
+        let valid = validate_raw_constraint(10.0);
+        assert!(valid.is_ok());
 
         // Valid: addition constraint with zero value
-        let valid = create_raw_constraint(0.0);
-        assert!(valid.validate().is_ok());
+        let valid = validate_raw_constraint(0.0);
+        assert!(valid.is_ok());
 
         // Not valid: addition constraint with negative value
-        let invalid = create_raw_constraint(-10.0);
-        assert!(invalid.validate().is_err());
+        let invalid = validate_raw_constraint(-10.0);
+        assert_error!(
+            invalid,
+            "Invalid value for addition constraint: '-10'; must be non-negative and finite."
+        );
     }
 
     #[test]
     fn test_validate_addition_rejects_infinite() {
         // Invalid: infinite value
-        let invalid = create_raw_constraint(f64::INFINITY);
-        assert!(invalid.validate().is_err());
+        let invalid = validate_raw_constraint(f64::INFINITY);
+        assert_error!(
+            invalid,
+            "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
+        );
 
         // Invalid: NaN value
-        let invalid = create_raw_constraint(f64::NAN);
-        assert!(invalid.validate().is_err());
+        let invalid = validate_raw_constraint(f64::NAN);
+        assert_error!(
+            invalid,
+            "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
+        );
     }
 }
