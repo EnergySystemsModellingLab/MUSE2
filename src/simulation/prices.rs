@@ -9,6 +9,7 @@ use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use anyhow::{Result, ensure};
+use itertools::iproduct;
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
 /// Calculate commodity prices.
@@ -25,24 +26,26 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Compute shadow prices for all SED/SVD commodities (needed by all strategies)
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
 
-    // Partition commodities by pricing strategy
+    // Partition markets by pricing strategy
+    // For now, commodities use a single strategy for all regions, but this may change in the future
     let mut shadow_set = HashSet::new();
     let mut scarcity_set = HashSet::new();
     let mut marginal_set = HashSet::new();
     let mut fullcost_set = HashSet::new();
-    for (commodity_id, commodity) in &model.commodities {
+    for ((commodity_id, commodity), (region_id, _)) in iproduct!(&model.commodities, &model.regions)
+    {
         match commodity.pricing_strategy {
             PricingStrategy::ScarcityAdjusted => {
-                scarcity_set.insert(commodity_id.clone());
+                scarcity_set.insert((commodity_id.clone(), region_id.clone()));
             }
             PricingStrategy::MarginalCost => {
-                marginal_set.insert(commodity_id.clone());
+                marginal_set.insert((commodity_id.clone(), region_id.clone()));
             }
             PricingStrategy::FullCost => {
-                fullcost_set.insert(commodity_id.clone());
+                fullcost_set.insert((commodity_id.clone(), region_id.clone()));
             }
             PricingStrategy::Shadow => {
-                shadow_set.insert(commodity_id.clone());
+                shadow_set.insert((commodity_id.clone(), region_id.clone()));
             }
             PricingStrategy::Unpriced => { /* Nothing to do */ }
             PricingStrategy::Default => {
@@ -59,7 +62,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Add prices for shadow-priced commodities
     if !shadow_set.is_empty() {
         for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
-            if shadow_set.contains(commodity_id) {
+            if shadow_set.contains(&(commodity_id.clone(), region_id.clone())) {
                 let price = shadow_prices
                     .get(commodity_id, region_id, time_slice)
                     .unwrap();
@@ -88,7 +91,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Add prices for marginal cost commodities
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
-            solution.iter_activity_keys(),
+            solution.iter_activity_keys_for_commissioned(),
+            solution.iter_activity_keys_for_candidates(),
             &shadow_prices,
             year,
             &marginal_set,
@@ -100,7 +104,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     if !fullcost_set.is_empty() {
         let annual_activities = calculate_annual_activities(solution.iter_activity());
         let full_cost_prices = calculate_full_cost_prices(
-            solution.iter_activity_keys(),
+            solution.iter_activity_keys_for_commissioned(),
+            solution.iter_activity_keys_for_candidates(),
             &annual_activities,
             &shadow_prices,
             year,
@@ -267,7 +272,7 @@ impl IntoIterator for CommodityPrices {
 fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
     shadow_prices: &CommodityPrices,
-    commodities_to_price: &HashSet<CommodityID>,
+    markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
@@ -275,17 +280,19 @@ where
     // Calculate highest activity dual for each commodity/region/time slice
     let mut highest_duals = HashMap::new();
     for (asset, time_slice, dual) in activity_duals {
+        let region_id = asset.region_id();
+
         // Iterate over the output flows of this asset
         // Only consider flows for commodities we are pricing
         for flow in asset.iter_flows().filter(|flow| {
             flow.direction() == FlowDirection::Output
-                && commodities_to_price.contains(&flow.commodity.id)
+                && markets_to_price.contains(&(flow.commodity.id.clone(), region_id.clone()))
         }) {
             // Update the highest dual for this commodity/time slice
             highest_duals
                 .entry((
                     flow.commodity.id.clone(),
-                    asset.region_id().clone(),
+                    region_id.clone(),
                     time_slice.clone(),
                 ))
                 .and_modify(|current_dual| {
@@ -321,25 +328,32 @@ where
 /// * `activity_keys` - Iterator over activity keys from optimisation solution
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
-fn calculate_marginal_cost_prices<'a, I>(
-    activity_keys: I,
+fn calculate_marginal_cost_prices<'a, I, J>(
+    activity_keys_for_commissioned: I,
+    activity_keys_for_candidates: J,
     shadow_prices: &CommodityPrices,
     year: u32,
-    commodities_to_price: &HashSet<CommodityID>,
+    markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: IntoIterator<Item = &'a (AssetRef, TimeSliceID)>,
+    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    J: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
+    let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
+
+    // Start by looking at Commissioned assets
     // Calculate highest marginal cost for each commodity/region/time slice
-    let mut highest_costs = HashMap::new();
-    for (asset, time_slice) in activity_keys {
+    // Keep track of markets _not_ priced by Commissioned assets to handle Candidates later
+    let mut markets_to_price_with_candidates = markets_to_price.clone();
+    for (asset, time_slice) in activity_keys_for_commissioned {
         let region_id = asset.region_id();
 
         // Only proceed if the asset produces at least one commodity we are pricing
+        // This is to prevent unnecessary overhead in `iter_marginal_costs`
         let produces_relevant_commodity = asset
             .iter_flows()
             .filter(|flow| flow.direction() == FlowDirection::Output)
-            .any(|flow| commodities_to_price.contains(&flow.commodity.id));
+            .any(|flow| markets_to_price.contains(&(flow.commodity.id.clone(), region_id.clone())));
         if !produces_relevant_commodity {
             continue;
         }
@@ -347,21 +361,52 @@ where
         // Iterate over all the SED/SVD marginal costs for commodities we are pricing
         for (commodity_id, marginal_cost) in asset
             .iter_marginal_costs(shadow_prices, year, time_slice)
-            .filter(|(cid, _)| commodities_to_price.contains(cid))
+            .filter(|(cid, _)| markets_to_price.contains(&(cid.clone(), region_id.clone())))
         {
-            // Update the highest cost for this commodity/time slice
-            highest_costs
+            // Update the highest cost for this commodity/region/time slice
+            prices
                 .entry((commodity_id.clone(), region_id.clone(), time_slice.clone()))
-                .and_modify(|current_cost| {
-                    if marginal_cost > *current_cost {
-                        *current_cost = marginal_cost;
-                    }
-                })
+                .and_modify(|current_cost| *current_cost = current_cost.max(marginal_cost))
+                .or_insert(marginal_cost);
+            markets_to_price_with_candidates.remove(&(commodity_id.clone(), region_id.clone()));
+        }
+    }
+
+    // Next, look at Candidate assets for any markets not covered by Commissioned assets
+    // For these, we take the _lowest_ marginal cost
+    for (asset, time_slice) in activity_keys_for_candidates {
+        let region_id = asset.region_id();
+
+        // Only proceed if the asset produces at least one commodity we are pricing, and that
+        // wasn't already covered by Commissioned assets
+        let produces_relevant_commodity = asset
+            .iter_flows()
+            .filter(|flow| flow.direction() == FlowDirection::Output)
+            .any(|flow| {
+                markets_to_price_with_candidates
+                    .contains(&(flow.commodity.id.clone(), region_id.clone()))
+            });
+        if !produces_relevant_commodity {
+            continue;
+        }
+
+        // Iterate over all the SED/SVD marginal costs for markets we are pricing
+        for (commodity_id, marginal_cost) in asset
+            .iter_marginal_costs(shadow_prices, year, time_slice)
+            .filter(|(cid, _)| {
+                markets_to_price_with_candidates.contains(&(cid.clone(), region_id.clone()))
+            })
+        {
+            // Update the _lowest_ cost for this commodity/region/time slice
+            prices
+                .entry((commodity_id.clone(), region_id.clone(), time_slice.clone()))
+                .and_modify(|current_cost| *current_cost = current_cost.min(marginal_cost))
                 .or_insert(marginal_cost);
         }
     }
 
-    highest_costs
+    // Return the calculated marginal prices
+    prices
 }
 
 /// Calculated annual activities for each asset by summing across all time slices
@@ -388,27 +433,30 @@ where
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
 /// * `commodities_to_price` - Set of commodity IDs to calculate full cost prices for
-fn calculate_full_cost_prices<'a, I>(
-    activity_keys: I,
+fn calculate_full_cost_prices<'a, I, J>(
+    activity_keys_for_commissioned: I,
+    activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
     shadow_prices: &CommodityPrices,
     year: u32,
-    commodities_to_price: &HashSet<CommodityID>,
+    markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: IntoIterator<Item = &'a (AssetRef, TimeSliceID)>,
+    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    J: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
+    let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
+
+    // Start by looking at Commissioned assets
     // Calculate highest full cost for each commodity/region/time slice
-    let mut highest_costs = HashMap::new();
+    // We will keep track of markets _not_ priced by commissioned assets to handle candidates later
     let mut annual_capital_costs_cache = HashMap::new();
-    for (asset, time_slice) in activity_keys {
+    let mut markets_to_price_with_candidates = markets_to_price.clone();
+    for (asset, time_slice) in activity_keys_for_commissioned {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
 
         // Cannot calculate capital cost per activity if annual activity is zero/very small
-        // Skip this asset in that case. Note: because of this it's _possible_ that for some
-        // commodities/regions there will be no price calculated if all assets producing that
-        // commodity in that region (including candidate assets) have zero annual activity.
         if annual_activity < Activity(f64::EPSILON) {
             continue;
         }
@@ -417,7 +465,7 @@ where
         let produces_relevant_commodity = asset
             .iter_flows()
             .filter(|flow| flow.direction() == FlowDirection::Output)
-            .any(|flow| commodities_to_price.contains(&flow.commodity.id));
+            .any(|flow| markets_to_price.contains(&(flow.commodity.id.clone(), region_id.clone())));
         if !produces_relevant_commodity {
             continue;
         }
@@ -430,24 +478,60 @@ where
         // Iterate over all the SED/SVD marginal costs for commodities we are pricing
         for (commodity_id, marginal_cost) in asset
             .iter_marginal_costs(shadow_prices, year, time_slice)
-            .filter(|(cid, _)| commodities_to_price.contains(cid))
+            .filter(|(cid, _)| markets_to_price.contains(&(cid.clone(), region_id.clone())))
         {
             // Add capital cost per flow to marginal cost to get full cost
             let marginal_cost = marginal_cost + annual_capital_cost_per_flow;
 
-            // Update the highest cost for this commodity/time slice
-            highest_costs
+            // Update the highest cost for this commodity/region/time slice
+            prices
                 .entry((commodity_id.clone(), region_id.clone(), time_slice.clone()))
-                .and_modify(|current_cost| {
-                    if marginal_cost > *current_cost {
-                        *current_cost = marginal_cost;
-                    }
-                })
+                .and_modify(|current_cost| *current_cost = current_cost.max(marginal_cost))
                 .or_insert(marginal_cost);
+            markets_to_price_with_candidates.remove(&(commodity_id.clone(), region_id.clone()));
         }
     }
 
-    highest_costs
+    // Next, look at Candidate assets for any markets not covered by Commissioned assets
+    // For these we assume full utilisation, and take the _lowest_ full cost
+    for (asset, time_slice) in activity_keys_for_candidates {
+        let region_id = asset.region_id();
+
+        // Only proceed if the asset produces at least one commodity we are pricing, and that
+        // wasn't already covered by Commissioned assets
+        let produces_relevant_commodity = asset
+            .iter_flows()
+            .filter(|flow| flow.direction() == FlowDirection::Output)
+            .any(|flow| {
+                markets_to_price_with_candidates
+                    .contains(&(flow.commodity.id.clone(), region_id.clone()))
+            });
+        if !produces_relevant_commodity {
+            continue;
+        }
+
+        // Calculate annual capital cost per flow for this asset _assuming full utilisation_
+        let annual_capital_cost_per_flow =
+            asset.get_annual_capital_cost_per_flow(asset.max_activity());
+
+        // Iterate over all the SED/SVD marginal costs for markets we are pricing
+        for (commodity_id, marginal_cost) in asset
+            .iter_marginal_costs(shadow_prices, year, time_slice)
+            .filter(|(cid, _)| markets_to_price.contains(&(cid.clone(), region_id.clone())))
+        {
+            // Add capital cost per flow to marginal cost to get full cost
+            let full_cost = marginal_cost + annual_capital_cost_per_flow;
+
+            // Update the _lowest_ cost for this commodity/region/time slice
+            prices
+                .entry((commodity_id.clone(), region_id.clone(), time_slice.clone()))
+                .and_modify(|current_cost| *current_cost = current_cost.min(full_cost))
+                .or_insert(full_cost);
+        }
+    }
+
+    // Return the calculated full cost prices
+    prices
 }
 
 #[cfg(test)]

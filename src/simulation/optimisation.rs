@@ -302,6 +302,24 @@ impl Solution<'_> {
     pub fn iter_activity_keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
         self.variables.activity_var_keys()
     }
+
+    /// Iterate over activity variable keys for Commissioned assets
+    pub fn iter_activity_keys_for_commissioned(
+        &self,
+    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
+        self.iter_activity_keys()
+            .filter(|(asset, _)| matches!(asset.state(), AssetState::Commissioned { .. }))
+            .map(|(asset, time_slice)| (asset, time_slice))
+    }
+
+    /// Iterate over activity variable keys for Candidate assets
+    pub fn iter_activity_keys_for_candidates(
+        &self,
+    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
+        self.iter_activity_keys()
+            .filter(|(asset, _)| matches!(asset.state(), AssetState::Candidate))
+            .map(|(asset, time_slice)| (asset, time_slice))
+    }
 }
 
 /// Defines the possible errors that can occur when running the solver
