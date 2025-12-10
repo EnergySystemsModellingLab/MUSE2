@@ -416,16 +416,35 @@ impl Asset {
             .sum()
     }
 
-    /// Get the marginal cost per unit of activity for this asset.
-    pub fn get_marginal_cost_per_activity(
+    /// Get the generic activity cost per unit of activity for this asset.
+    ///
+    /// These are all activity costs that are not associated with specific SED/SVD outputs.
+    /// Includes levies, flow costs, costs of inputs and variable operating costs
+    pub fn get_generic_activity_cost(
         &self,
         prices: &CommodityPrices,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        let operating_cost = self.get_operating_cost(year, time_slice);
+        // The cost of purchasing input commodities
         let cost_of_inputs = self.get_input_cost_from_prices(prices, time_slice);
-        operating_cost + cost_of_inputs
+
+        // Flow costs/levies for all flows except SED/SVD outputs
+        let excludes_sed_svd_output = |flow: &&ProcessFlow| {
+            !(flow.direction() == FlowDirection::Output
+                && matches!(
+                    flow.commodity.kind,
+                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                ))
+        };
+        let flow_costs = self
+            .iter_flows()
+            .filter(excludes_sed_svd_output)
+            .map(|flow| flow.get_total_cost(&self.region_id, year, time_slice))
+            .sum();
+
+        // These are all MoneyPerActivity so can be summed directly
+        cost_of_inputs + flow_costs + self.process_parameter.variable_operating_cost
     }
 
     /// Get the annual capital cost per unit of capacity for this asset

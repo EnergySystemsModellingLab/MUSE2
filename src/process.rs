@@ -398,7 +398,19 @@ pub struct ProcessFlow {
 }
 
 impl ProcessFlow {
-    /// Get the cost for this flow with the given parameters.
+    /// Get the cost per unit flow for a given region, year, and time slice.
+    ///
+    /// Includes flow costs and levies/incentives, if any.
+    pub fn get_total_cost_per_flow(
+        &self,
+        region_id: &RegionID,
+        year: u32,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerFlow {
+        self.cost + self.get_levy(region_id, year, time_slice)
+    }
+
+    /// Get the cost for this flow per unit of activity for a given region, year, and time slice.
     ///
     /// This includes cost per unit flow and levies/incentives, if any.
     pub fn get_total_cost(
@@ -407,8 +419,7 @@ impl ProcessFlow {
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        let cost_per_unit = self.cost + self.get_levy(region_id, year, time_slice);
-
+        let cost_per_unit = self.get_total_cost_per_flow(region_id, year, time_slice);
         self.coeff.abs() * cost_per_unit
     }
 

@@ -333,6 +333,8 @@ where
     // Calculate highest marginal cost for each commodity/region/time slice
     let mut highest_costs = HashMap::new();
     for (asset, time_slice) in activity_keys {
+        let region_id = asset.region_id();
+
         // Collect output flows for commodities we are pricing
         let mut relevant_flows = asset
             .iter_flows()
@@ -347,34 +349,43 @@ where
             continue;
         }
 
-        // Get the marginal cost per unit of activity
-        let marginal_cost_per_activity =
-            asset.get_marginal_cost_per_activity(shadow_prices, year, time_slice);
+        // Calculate generic activity costs.
+        // This is all activity costs not associated with specific SED/SVD outputs, which will get
+        // shared equally over all SED/SVD outputs. Includes levies, flow costs, costs of inputs and
+        // variable operating costs
+        let generic_activity_cost_per_activity =
+            asset.get_generic_activity_cost(shadow_prices, year, time_slice);
 
-        // Get the marginal cost per unit of output
-        // We sum the output of all SED/SVD commodities to get total output. Effectively we
-        // distribute the costs equally over all outputs, so the marginal cost per unit of output is
-        // the same for all output commodities.
-        // Note: this only makes sense if all SED/SVD outputs are using this pricing strategy,
-        // but we're not enforcing this.
+        // Share generic activity costs equally over all SED/SVD outputs
+        // We sum the output coefficients of all SED/SVD commodities to get total output, then
+        // divide costs by this total output to get the generic cost per unit of output.
+        // Note: only works if all SED/SVD outputs have the same units - not currently checked!
         let total_output = asset.get_total_output_per_activity(); // input checks should ensure that this is never zero
-        let marginal_cost = marginal_cost_per_activity / total_output;
+        let generic_cost_per_flow = generic_activity_cost_per_activity / total_output;
 
         // Iterate over the output flows of this asset
         for flow in relevant_flows {
+            // Get the costs for this specific commodity flow
+            let commodity_specific_costs_per_flow =
+                flow.get_total_cost_per_flow(region_id, year, time_slice);
+
+            // Add these to the generic costs to get total cost for this commodity
+            let marginal_cost_for_commodity =
+                generic_cost_per_flow + commodity_specific_costs_per_flow;
+
             // Update the highest marginal cost for this commodity/time slice
             highest_costs
                 .entry((
                     flow.commodity.id.clone(),
-                    asset.region_id().clone(),
+                    region_id.clone(),
                     time_slice.clone(),
                 ))
                 .and_modify(|current_cost| {
-                    if marginal_cost > *current_cost {
-                        *current_cost = marginal_cost;
+                    if marginal_cost_for_commodity > *current_cost {
+                        *current_cost = marginal_cost_for_commodity;
                     }
                 })
-                .or_insert(marginal_cost);
+                .or_insert(marginal_cost_for_commodity);
         }
     }
 
@@ -419,6 +430,17 @@ where
     let mut highest_costs = HashMap::new();
     let mut annual_capital_costs_cache = HashMap::new();
     for (asset, time_slice) in activity_keys {
+        let annual_activity = annual_activities[asset];
+        let region_id = asset.region_id();
+
+        // Cannot calculate capital cost per activity if annual activity is zero/very small
+        // Skip this asset in that case. Note: because of this it's _possible_ that for some
+        // commodities/regions there will be no price calculated if all assets producing that
+        // commodity in that region (including candidate assets) have zero annual activity.
+        if annual_activity < Activity(f64::EPSILON) {
+            continue;
+        }
+
         // Collect output flows for commodities we are pricing
         let mut relevant_flows = asset
             .iter_flows()
@@ -433,53 +455,48 @@ where
             continue;
         }
 
-        // Get annual activity for this asset
-        let annual_activity = annual_activities[asset];
-
-        // Cannot calculate capital cost per activity if annual activity is zero/very small
-        // Skip this asset in that case. Note: because of this it's _possible_ that for some
-        // commodities/regions there will be no price calculated if all assets producing that
-        // commodity in that region (including candidate assets) have zero annual activity.
-        if annual_activity < Activity(f64::EPSILON) {
-            continue;
-        }
-
         // Calculate/cache annual capital cost for this asset
         let annual_capital_cost_per_activity = annual_capital_costs_cache
             .entry(asset.clone())
             .or_insert_with(|| asset.get_annual_capital_cost_per_activity(annual_activity));
 
-        // Get the marginal cost per unit of activity
-        let marginal_cost_per_activity =
-            asset.get_marginal_cost_per_activity(shadow_prices, year, time_slice);
+        // Calculate generic activity costs.
+        // This is all activity costs not associated with specific SED/SVD outputs, which will get
+        // shared equally over all SED/SVD outputs. Includes levies, flow costs, costs of inputs and
+        // variable operating costs
+        let generic_activity_cost_per_activity =
+            asset.get_generic_activity_cost(shadow_prices, year, time_slice);
 
-        // Full cost per activity is marginal cost + annual capital cost
-        let full_cost_per_activity = marginal_cost_per_activity + *annual_capital_cost_per_activity;
-
-        // Get the full cost per unit of output
-        // We sum the output of all SED/SVD commodities to get total output. Effectively we
-        // distribute the costs equally over all outputs, so the full cost per unit of output is the
-        // same for all output commodities.
-        // Note: this only makes sense if all SED/SVD outputs are using this pricing strategy,
-        // but we're not enforcing this.
+        // Share capital costs and generic activity costs equally over all SED/SVD outputs
+        // We sum the output coefficients of all SED/SVD commodities to get total output, then
+        // divide costs by this total output to get the generic cost per unit of output.
+        // Note: only works if all SED/SVD outputs have the same units - not currently checked!
         let total_output = asset.get_total_output_per_activity(); // input checks should ensure that this is never zero
-        let full_cost = full_cost_per_activity / total_output;
+        let generic_cost_per_flow =
+            (*annual_capital_cost_per_activity + generic_activity_cost_per_activity) / total_output;
 
         // Iterate over the output flows of this asset
         for flow in relevant_flows {
-            // Update the highest full cost for this commodity/time slice
+            // Get the costs for this specific commodity flow
+            let commodity_specific_costs_per_flow =
+                flow.get_total_cost_per_flow(region_id, year, time_slice);
+
+            // Add these to the generic costs to get total cost for this commodity
+            let full_cost_for_commodity = generic_cost_per_flow + commodity_specific_costs_per_flow;
+
+            // Update the highest cost for this commodity/time slice
             highest_costs
                 .entry((
                     flow.commodity.id.clone(),
-                    asset.region_id().clone(),
+                    region_id.clone(),
                     time_slice.clone(),
                 ))
                 .and_modify(|current_cost| {
-                    if full_cost > *current_cost {
-                        *current_cost = full_cost;
+                    if full_cost_for_commodity > *current_cost {
+                        *current_cost = full_cost_for_commodity;
                     }
                 })
-                .or_insert(full_cost);
+                .or_insert(full_cost_for_commodity);
         }
     }
 
