@@ -5,7 +5,7 @@ GASOLI,Gasoline,sed,season,full
 DIESEL,Diesel,sed,season,full
 GASNAT,Natural gas,sed,season,full
 ELCTRI,Electricity,sed,daynight,shadow
-H2YPRD,Hydrogen,sed,season,shadow
+H2YPRD,Hydrogen,sed,season,full
 TPASKM,Passenger kms,svd,daynight,shadow
 RSHEAT,Residential heating,svd,daynight,shadow
 CO2EMT,CO2 emitted,oth,annual,unpriced
