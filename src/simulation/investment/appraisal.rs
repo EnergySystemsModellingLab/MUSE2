@@ -7,7 +7,7 @@ use crate::finance::{lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use costs::annual_fixed_cost;
 use indexmap::IndexMap;
 use std::cmp::Ordering;
@@ -192,6 +192,9 @@ fn calculate_npv(
 
     // Calculate profitability index for the hypothetical investment
     let annual_fixed_cost = annual_fixed_cost(asset);
+    if annual_fixed_cost.value() < 0.0 {
+        bail!("The current NPV calculation does not support negative annual fixed costs");
+    }
     let activity_surpluses = &coefficients.activity_coefficients;
     let profitability_index = profitability_index(
         results.capacity,
