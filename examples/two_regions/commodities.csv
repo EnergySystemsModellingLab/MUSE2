@@ -1,6 +1,6 @@
 id,description,type,time_slice_level,pricing_strategy
 electricity,Electricity,sed,daynight,shadow
-gas,Gas,sed,daynight,shadow
+gas,Gas,sed,daynight,full
 heat,Heat,svd,daynight,shadow
 wind,Wind,oth,daynight,unpriced
 CO2f,Carbon dioxide,oth,daynight,unpriced

@@ -1,12 +1,12 @@
 id,description,type,time_slice_level,pricing_strategy
-OILCRD,Crude oil,sed,season,shadow
-GASPRD,Gas produced,sed,season,shadow
-GASOLI,Gasoline,sed,season,shadow
-DIESEL,Diesel,sed,season,shadow
-GASNAT,Natural gas,sed,season,shadow
+OILCRD,Crude oil,sed,season,full
+GASPRD,Gas produced,sed,season,full
+GASOLI,Gasoline,sed,season,full
+DIESEL,Diesel,sed,season,full
+GASNAT,Natural gas,sed,season,full
 ELCTRI,Electricity,sed,daynight,shadow
 TPASKM,Passenger kms,svd,daynight,shadow
 RSHEAT,Residential heating,svd,daynight,shadow
 CO2EMT,CO2 emitted,oth,annual,unpriced
-BIOPRD,Biomass produced,sed,season,shadow
-BIOPEL,Biomass pellets,sed,season,shadow
+BIOPRD,Biomass produced,sed,season,full
+BIOPEL,Biomass pellets,sed,season,full
