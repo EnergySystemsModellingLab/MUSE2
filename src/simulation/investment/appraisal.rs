@@ -253,7 +253,7 @@ mod tests {
     use indexmap::indexmap;
     use rstest::rstest;
 
-    /// Create an AppraisalOutput with customisable metric precedence for testing
+    /// Create an AppraisalOutput with customisable metric precedence
     fn appraisal_output(
         asset: Asset,
         time_slice: TimeSliceID,
