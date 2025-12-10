@@ -203,7 +203,8 @@ mod tests {
     use super::*;
     use crate::fixture::{agents, assert_error, region_ids};
     use crate::process::{
-        ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessParameterMap,
+        ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessInvestmentConstraintsMap,
+        ProcessParameterMap,
     };
     use crate::region::RegionID;
     use crate::units::ActivityPerCapacity;
@@ -226,6 +227,7 @@ mod tests {
                     regions: region_ids.clone(),
                     primary_output: None,
                     capacity_to_activity: ActivityPerCapacity(1.0),
+                    investment_constraints: ProcessInvestmentConstraintsMap::new(),
                 };
                 (id, process.into())
             })
