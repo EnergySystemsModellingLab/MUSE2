@@ -267,7 +267,7 @@ impl IntoIterator for CommodityPrices {
 /// # Arguments
 /// * `activity_duals` - Iterator over activity duals from optimisation solution
 /// * `shadow_prices` - Shadow prices for all commodities
-/// * `commodities_to_price` - Set of commodity IDs to calculate scarcity-adjusted prices for
+/// * `markets_to_price` - Set of markets to calculate scarcity-adjusted prices for
 fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
     shadow_prices: &CommodityPrices,
@@ -323,9 +323,11 @@ where
 /// Calculate marginal cost prices for a set of commodities.
 ///
 /// # Arguments
-/// * `activity_keys` - Iterator over activity keys from optimisation solution
+/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing assets
+/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate assets
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
+/// * `markets_to_price` - Set of markets to calculate marginal cost prices for
 fn calculate_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
@@ -436,11 +438,12 @@ where
 /// Calculate full cost prices for a set of commodities.
 ///
 /// # Arguments
-/// * `activity_keys` - Iterator over activity keys from optimisation solution
+/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing assets
+/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate assets
 /// * `annual_activities` - Map of annual activities for each asset computed by `calculate_annual_activities`
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
-/// * `commodities_to_price` - Set of commodity IDs to calculate full cost prices for
+/// * `markets_to_price` - Set of markets to calculate full cost prices for
 fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
