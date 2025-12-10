@@ -1,8 +1,8 @@
 //! Code for reading in agent-related data from CSV files.
 use super::{input_err_msg, read_csv};
 use crate::agent::{
-    Agent, AgentCommodityPortionsMap, AgentCostLimitsMap, AgentID, AgentMap, AgentObjectiveMap,
-    AgentSearchSpaceMap, DecisionRule,
+    Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
+    DecisionRule,
 };
 use crate::commodity::CommodityMap;
 use crate::process::ProcessMap;
@@ -18,8 +18,6 @@ mod search_space;
 use search_space::read_agent_search_space;
 mod commodity_portion;
 use commodity_portion::read_agent_commodity_portions;
-mod cost_limit;
-use cost_limit::read_agent_cost_limits;
 
 const AGENT_FILE_NAME: &str = "agents.csv";
 
@@ -58,7 +56,6 @@ pub fn read_agents(
     milestone_years: &[u32],
 ) -> Result<AgentMap> {
     let mut agents = read_agents_file(model_dir, region_ids)?;
-    let agent_ids = agents.keys().cloned().collect();
 
     // We read commodity portions first as they are required by `read_agent_search_space`
     let mut agent_commodities = read_agent_commodity_portions(
@@ -83,14 +80,10 @@ pub fn read_agents(
         &commodity_ids,
         milestone_years,
     )?;
-    let mut cost_limits = read_agent_cost_limits(model_dir, &agent_ids, milestone_years)?;
 
     for (id, agent) in &mut agents {
         agent.objectives = objectives.remove(id).unwrap();
         agent.search_space = search_spaces.remove(id).unwrap();
-        if let Some(cost_limits) = cost_limits.remove(id) {
-            agent.cost_limits = cost_limits;
-        }
     }
 
     Ok(agents)
@@ -151,7 +144,6 @@ where
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule,
-            cost_limits: AgentCostLimitsMap::new(),
             regions,
             objectives: AgentObjectiveMap::new(),
         };
@@ -188,7 +180,6 @@ mod tests {
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
-            cost_limits: AgentCostLimitsMap::new(),
             regions: IndexSet::from(["GBR".into()]),
             objectives: AgentObjectiveMap::new(),
         };

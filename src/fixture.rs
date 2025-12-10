@@ -1,8 +1,8 @@
 //! Fixtures for tests
 
 use crate::agent::{
-    Agent, AgentCommodityPortionsMap, AgentCostLimitsMap, AgentID, AgentMap, AgentObjectiveMap,
-    AgentSearchSpaceMap, DecisionRule,
+    Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
+    DecisionRule,
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
@@ -237,7 +237,6 @@ pub fn agents() -> AgentMap {
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
-            cost_limits: AgentCostLimitsMap::new(),
             regions: IndexSet::new(),
             objectives: AgentObjectiveMap::new(),
         },
