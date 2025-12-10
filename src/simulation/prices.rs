@@ -91,7 +91,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     if !marginal_set.is_empty() {
         let marginal_cost_prices = calculate_marginal_cost_prices(
             solution.iter_activity_for_existing(),
-            solution.iter_activity_keys_for_candidates(),
+            solution.iter_activity_for_candidates(),
             &shadow_prices,
             year,
             &marginal_set,
@@ -104,7 +104,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         let annual_activities = calculate_annual_activities(solution.iter_activity_for_existing());
         let full_cost_prices = calculate_full_cost_prices(
             solution.iter_activity_for_existing(),
-            solution.iter_activity_keys_for_candidates(),
+            solution.iter_activity_for_candidates(),
             &annual_activities,
             &shadow_prices,
             year,
@@ -328,14 +328,14 @@ where
 /// * `year` - The year for which prices are being calculated
 fn calculate_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
-    activity_keys_for_candidates: J,
+    activity_for_candidates: J,
     shadow_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-    J: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
 
@@ -377,7 +377,7 @@ where
 
     // Next, look at candidate assets for any markets not covered by existing assets
     // For these, we take the _lowest_ marginal cost
-    for (asset, time_slice) in activity_keys_for_candidates {
+    for (asset, time_slice, _activity) in activity_for_candidates {
         let region_id = asset.region_id();
 
         // Only consider markets not already priced by existing assets
@@ -443,7 +443,7 @@ where
 /// * `commodities_to_price` - Set of commodity IDs to calculate full cost prices for
 fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
-    activity_keys_for_candidates: J,
+    activity_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
     shadow_prices: &CommodityPrices,
     year: u32,
@@ -451,7 +451,7 @@ fn calculate_full_cost_prices<'a, I, J>(
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-    J: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
 
@@ -502,7 +502,7 @@ where
 
     // Next, look at candidate assets for any markets not covered by existing assets
     // For these we assume full utilisation, and take the _lowest_ full cost
-    for (asset, time_slice) in activity_keys_for_candidates {
+    for (asset, time_slice, _activity) in activity_for_candidates {
         let region_id = asset.region_id();
 
         // Only consider markets not already priced by existing assets
