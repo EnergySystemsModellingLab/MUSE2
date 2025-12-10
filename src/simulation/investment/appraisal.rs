@@ -30,6 +30,10 @@ pub struct AppraisalOutput {
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// The hypothetical unmet demand following investment in this asset
     pub unmet_demand: DemandMap,
+    /// Where there is more than one possible metric for comparing appraisals, this integer
+    /// indicates the precedence of the metric (lower values have higher precedence).
+    /// Only metrics with the same precedence should be compared.
+    pub metric_precedence: u8,
     /// The comparison metric to compare investment decisions (lower is better)
     pub metric: f64,
     /// Capacity and activity coefficients used in the appraisal
@@ -112,6 +116,14 @@ pub fn classify_appraisal_comparison_method(
     }
 }
 
+/// Filter mixed-precedence appraisal outputs to only those with the minimum metric precedence
+pub fn filter_for_minimum_precedence(mut outputs: Vec<AppraisalOutput>) -> Vec<AppraisalOutput> {
+    if let Some(min_precedence) = outputs.iter().map(|o| o.metric_precedence).min() {
+        outputs.retain(|o| o.metric_precedence == min_precedence);
+    }
+    outputs
+}
+
 /// Calculate LCOX for a hypothetical investment in the given asset.
 ///
 /// This is more commonly referred to as Levelised Cost of *Electricity*, but as the model can
@@ -151,6 +163,7 @@ fn calculate_lcox(
         capacity: results.capacity,
         activity: results.activity,
         unmet_demand: results.unmet_demand,
+        metric_precedence: 0,
         metric: cost_index.value(),
         coefficients: coefficients.clone(),
         demand: demand.clone(),
@@ -187,14 +200,23 @@ fn calculate_npv(
         activity_surpluses,
     );
 
+    // calculate metric and precedence depending on asset parameters
+    // note that metric will be minimised so if larger is better, we negate the value
+    let (metric_precedence, metric) = match annual_fixed_cost.value() {
+        // If AFC is zero, use total surplus as the metric (strictly better than nonzero AFC)
+        0.0 => (0, -profitability_index.total_annualised_surplus.value()),
+        // If AFC is non-zero, use profitability index as the metric
+        _ => (1, -profitability_index.value().value()),
+    };
+
     // Return appraisal output
-    // Higher profitability index is better, so we make it negative for comparison
     Ok(AppraisalOutput {
         asset: asset.clone(),
         capacity: results.capacity,
         activity: results.activity,
         unmet_demand: results.unmet_demand,
-        metric: -profitability_index.value().value(),
+        metric_precedence,
+        metric,
         coefficients: coefficients.clone(),
         demand: demand.clone(),
     })
@@ -215,4 +237,61 @@ pub fn appraise_investment(
         ObjectiveType::NetPresentValue => calculate_npv,
     };
     appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::asset::Asset;
+    use crate::fixture::{asset, time_slice};
+    use crate::units::{
+        Activity, Capacity, Flow, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow,
+    };
+    use indexmap::indexmap;
+    use rstest::rstest;
+
+    /// Create an AppraisalOutput with customisable metric precedence for testing
+    fn appraisal_output(
+        asset: Asset,
+        time_slice: TimeSliceID,
+        metric_precedence: u8,
+    ) -> AppraisalOutput {
+        let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
+        let activity = indexmap! { time_slice.clone() => Activity(10.0) };
+        let demand = indexmap! { time_slice.clone() => Flow(100.0) };
+        let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
+
+        AppraisalOutput {
+            asset: AssetRef::from(asset),
+            capacity: Capacity(42.0),
+            coefficients: ObjectiveCoefficients {
+                capacity_coefficient: MoneyPerCapacity(3.14),
+                activity_coefficients,
+                unmet_demand_coefficient: MoneyPerFlow(10000.0),
+            },
+            activity,
+            demand,
+            unmet_demand,
+            metric_precedence,
+            metric: 4.14,
+        }
+    }
+
+    #[rstest]
+    fn test_filter_for_minimum_precedence(asset: Asset, time_slice: TimeSliceID) {
+        let outputs = vec![
+            appraisal_output(asset.clone(), time_slice.clone(), 1),
+            appraisal_output(asset.clone(), time_slice.clone(), 0),
+            appraisal_output(asset.clone(), time_slice.clone(), 2),
+            appraisal_output(asset.clone(), time_slice.clone(), 0),
+            appraisal_output(asset.clone(), time_slice.clone(), 1),
+            appraisal_output(asset, time_slice, 1),
+        ];
+
+        let filtered = filter_for_minimum_precedence(outputs);
+
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].metric_precedence, 0);
+        assert_eq!(filtered[1].metric_precedence, 0);
+    }
 }

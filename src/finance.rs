@@ -29,10 +29,12 @@ pub fn annual_capital_cost(
 }
 
 /// Represents the profitability index of an investment
-/// in terms of it's numerator and denominator components.
+/// in terms of it's annualised components.
 pub struct ProfitabilityIndex {
-    total_annualised_surplus: Money,
-    annualised_fixed_cost: Money,
+    /// the total annualised surplus of an asset
+    pub total_annualised_surplus: Money,
+    /// the total annualised fixed cost of an asset
+    pub annualised_fixed_cost: Money,
 }
 
 impl ProfitabilityIndex {

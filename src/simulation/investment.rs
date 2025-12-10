@@ -8,6 +8,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
+use crate::simulation::investment::appraisal::filter_for_minimum_precedence;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
@@ -707,6 +708,8 @@ fn select_best_assets(
             )?;
             outputs_for_opts.push(output);
         }
+
+        outputs_for_opts = filter_for_minimum_precedence(outputs_for_opts);
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
