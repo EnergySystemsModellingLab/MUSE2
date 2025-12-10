@@ -215,7 +215,7 @@ impl Solution<'_> {
     }
 
     /// Activity for each existing asset
-    fn iter_activity_for_existing(
+    pub fn iter_activity_for_existing(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         let cols = &self.solution.columns()[self.variables.existing_asset_var_idx.clone()];
@@ -301,15 +301,6 @@ impl Solution<'_> {
     /// Iterate over activity variable keys
     pub fn iter_activity_keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
         self.variables.activity_var_keys()
-    }
-
-    /// Iterate over activity variable keys for Commissioned assets
-    pub fn iter_activity_keys_for_commissioned(
-        &self,
-    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
-        self.iter_activity_keys()
-            .filter(|(asset, _)| matches!(asset.state(), AssetState::Commissioned { .. }))
-            .map(|(asset, time_slice)| (asset, time_slice))
     }
 
     /// Iterate over activity variable keys for Candidate assets

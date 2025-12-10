@@ -330,16 +330,7 @@ impl Asset {
     /// give units for commodities, so we cannot possibly enforce this. Something to potentially
     /// address in future.
     pub fn get_total_output_per_activity(&self) -> FlowPerActivity {
-        self.iter_flows()
-            .filter(|flow| {
-                flow.direction() == FlowDirection::Output
-                    && matches!(
-                        flow.commodity.kind,
-                        CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
-                    )
-            })
-            .map(|flow| flow.coeff)
-            .sum()
+        self.iter_output_flows().map(|flow| flow.coeff).sum()
     }
 
     /// Get the operating cost for this asset in a given year and time slice
@@ -469,23 +460,14 @@ impl Asset {
         let generic_cost_per_flow = generic_activity_cost / total_output;
 
         // Iterate over SED/SVD output flows
-        self.iter_flows().filter_map(move |flow| {
-            if flow.direction() == FlowDirection::Output
-                && matches!(
-                    flow.commodity.kind,
-                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
-                )
-            {
-                // Get the costs for this specific commodity flow
-                let commodity_specific_costs_per_flow =
-                    flow.get_total_cost_per_flow(self.region_id(), year, time_slice);
+        self.iter_output_flows().map(move |flow| {
+            // Get the costs for this specific commodity flow
+            let commodity_specific_costs_per_flow =
+                flow.get_total_cost_per_flow(self.region_id(), year, time_slice);
 
-                // Add these to the generic costs to get total cost for this commodity
-                let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
-                Some((flow.commodity.id.clone(), marginal_cost))
-            } else {
-                None
-            }
+            // Add these to the generic costs to get total cost for this commodity
+            let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
+            (flow.commodity.id.clone(), marginal_cost)
         })
     }
 
@@ -536,6 +518,17 @@ impl Asset {
     /// Iterate over the asset's flows
     pub fn iter_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
         self.flows.values()
+    }
+
+    /// Iterate over the asset's output SED/SVD flows
+    pub fn iter_output_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
+        self.flows.values().filter(|flow| {
+            flow.direction() == FlowDirection::Output
+                && matches!(
+                    flow.commodity.kind,
+                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                )
+        })
     }
 
     /// Get the primary output flow (if any) for this asset
