@@ -1,16 +1,16 @@
 //! Fixtures for tests
 
 use crate::agent::{
-    Agent, AgentCommodityPortionsMap, AgentCostLimitsMap, AgentID, AgentMap, AgentObjectiveMap,
-    AgentSearchSpaceMap, DecisionRule,
+    Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
+    DecisionRule,
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{
     Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
 };
 use crate::process::{
-    ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessMap,
-    ProcessParameter, ProcessParameterMap,
+    ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
+    ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
 use crate::simulation::investment::appraisal::{
@@ -179,6 +179,13 @@ pub fn process_activity_limits_map(
 }
 
 #[fixture]
+/// Create an empty set of ProcessInvestmentConstraints for a given region/year
+/// Returns a HashMap keyed by (RegionID, year) with empty Rc<ProcessInvestmentConstraint>
+pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
+    HashMap::new()
+}
+
+#[fixture]
 /// Create an empty set of ProcessFlows for a given region/year
 pub fn process_flows() -> Rc<IndexMap<CommodityID, ProcessFlow>> {
     Rc::new(IndexMap::new())
@@ -204,6 +211,7 @@ pub fn process(
     process_parameter_map: ProcessParameterMap,
     process_activity_limits_map: ProcessActivityLimitsMap,
     process_flows_map: ProcessFlowsMap,
+    process_investment_constraints: ProcessInvestmentConstraintsMap,
 ) -> Process {
     Process {
         id: "process1".into(),
@@ -215,6 +223,7 @@ pub fn process(
         regions: region_ids,
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
+        investment_constraints: process_investment_constraints,
     }
 }
 
@@ -233,7 +242,6 @@ pub fn agents() -> AgentMap {
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
-            cost_limits: AgentCostLimitsMap::new(),
             regions: IndexSet::new(),
             objectives: AgentObjectiveMap::new(),
         },

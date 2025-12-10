@@ -4,7 +4,7 @@ use crate::commodity::CommodityID;
 use crate::id::define_id_type;
 use crate::process::{FlowDirection, Process};
 use crate::region::RegionID;
-use crate::units::{Dimensionless, Money};
+use crate::units::Dimensionless;
 use indexmap::{IndexMap, IndexSet};
 use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
@@ -14,9 +14,6 @@ define_id_type! {AgentID}
 
 /// A map of [`Agent`]s, keyed by agent ID
 pub type AgentMap = IndexMap<AgentID, Agent>;
-
-/// A map of cost limits for an agent, keyed by year
-pub type AgentCostLimitsMap = HashMap<u32, AgentCostLimits>;
 
 /// A map of commodity portions for an agent, keyed by commodity and year
 pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
@@ -43,8 +40,6 @@ pub struct Agent {
     pub search_space: AgentSearchSpaceMap,
     /// The decision rule that the agent uses to decide investment.
     pub decision_rule: DecisionRule,
-    /// Cost limits (e.g. capital cost, annual operating cost)
-    pub cost_limits: AgentCostLimitsMap,
     /// The regions in which this agent operates.
     pub regions: IndexSet<RegionID>,
     /// The agent's objectives.
@@ -67,15 +62,6 @@ impl Agent {
                 process.flows[&flows_key][commodity_id].direction() == FlowDirection::Output
             })
     }
-}
-
-/// The cost limits for an agent in a particular year
-#[derive(Debug, Clone, PartialEq)]
-pub struct AgentCostLimits {
-    /// The maximum capital cost the agent will pay.
-    pub capex_limit: Option<Money>,
-    /// The maximum annual operating cost (fuel etc.) that the agent will pay.
-    pub annual_cost_limit: Option<Money>,
 }
 
 /// The decision rule for a particular objective
