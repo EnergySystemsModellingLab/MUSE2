@@ -709,6 +709,7 @@ fn select_best_assets(
             outputs_for_opts.push(output);
         }
 
+        // discard any appraisals with non-minimal metric precedence
         outputs_for_opts = filter_for_minimum_precedence(outputs_for_opts);
 
         // Save appraisal results
