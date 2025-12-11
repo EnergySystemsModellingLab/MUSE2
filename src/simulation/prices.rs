@@ -515,9 +515,9 @@ where
 /// price is taken from the asset with the highest full cost among those existing assets. If _no_
 /// existing assets produce the commodity in that region and time slice (in particular, this will
 /// occur when there's no demand for the commodity), then candidate assets are considered: we
-/// take the price from the candidate asset with the _lowest_ full cost, assuming full dispatch
-/// (i.e. the single candidate asset that would be most competitive if a small amount of demand was
-/// added).
+/// take the price from the candidate asset with the _lowest_ full cost, assuming maximum
+/// possible dispatch (i.e. the single candidate asset that would be most competitive if a small
+/// amount of demand was added).
 ///
 /// # Arguments
 /// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
@@ -611,13 +611,17 @@ where
             continue;
         }
 
-        // Calculate/cache annual capital cost per flow for this asset _assuming full dispatch
-        let max_annual_activity = *asset
-            .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
-            .end();
+        // Calculate/cache annual capital cost per flow for this asset assuming full dispatch
+        // (bound by the activity limits of the asset)
         let annual_capital_cost_per_flow = *annual_capital_costs_cache
             .entry(asset.clone())
-            .or_insert_with(|| asset.get_annual_capital_cost_per_flow(max_annual_activity));
+            .or_insert_with(|| {
+                asset.get_annual_capital_cost_per_flow(
+                    *asset
+                        .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
+                        .end(),
+                )
+            });
 
         // Iterate over all the SED/SVD marginal costs for markets we need prices for
         for (commodity_id, marginal_cost) in asset
