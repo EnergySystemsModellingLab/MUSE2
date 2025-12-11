@@ -78,6 +78,13 @@ pub enum AssetState {
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
+    /// The asset has been divided and only its children matter, now
+    Divided {
+        /// The ID of the agent that owns the asset
+        agent_id: AgentID,
+        /// IDs of the children assets
+        children: Vec<AssetID>,
+    },
 }
 
 /// An asset controlled by an agent.
@@ -466,7 +473,8 @@ impl Asset {
             AssetState::Commissioned { agent_id, .. }
             | AssetState::Decommissioned { agent_id, .. }
             | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id } => Some(agent_id),
+            | AssetState::Selected { agent_id }
+            | AssetState::Divided { agent_id, .. } => Some(agent_id),
             AssetState::Candidate => None,
         }
     }
@@ -716,8 +724,10 @@ impl Hash for AssetRef {
                 self.0.commission_year.hash(state);
                 self.0.agent_id().hash(state);
             }
-            AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
-                // We shouldn't currently need to hash Future or Decommissioned assets
+            AssetState::Future { .. }
+            | AssetState::Decommissioned { .. }
+            | AssetState::Divided { .. } => {
+                // We shouldn't currently need to hash Future, Decommissioned or Divided assets
                 unimplemented!("Cannot hash Future or Decommissioned assets");
             }
         }
