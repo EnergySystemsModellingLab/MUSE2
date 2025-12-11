@@ -2,102 +2,54 @@
 use super::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
-use csv::{ReaderBuilder, StringRecord};
+use csv::{ReaderBuilder, Trim};
 use indexmap::IndexSet;
 use log::info;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::Path;
 use tempfile::{TempDir, tempdir};
-
-/// A CSV row with normalized representation for comparison and original format for output.
-/// Equality and hashing are based only on the normalized representation.
-#[derive(Debug, Clone)]
-struct CsvRow {
-    normalized: String,
-    original: StringRecord,
-}
-
-impl CsvRow {
-    /// Create a `CsvRow` from a CSV record, normalizing it automatically
-    fn from_record(record: &StringRecord) -> Self {
-        // Normalize: trim fields and join with commas for comparison
-        let normalized = record.iter().map(str::trim).collect::<Vec<_>>().join(",");
-        // Preserve original format
-        Self {
-            normalized,
-            original: record.clone(),
-        }
-    }
-
-    /// Get the normalized representation (for comparison)
-    fn normalized(&self) -> &str {
-        &self.normalized
-    }
-
-    /// Get the original format as a string (for output)
-    fn original_str(&self) -> String {
-        self.original.iter().collect::<Vec<_>>().join(",")
-    }
-}
-
-impl PartialEq for CsvRow {
-    fn eq(&self, other: &Self) -> bool {
-        self.normalized == other.normalized
-    }
-}
-
-impl Eq for CsvRow {}
-
-impl Hash for CsvRow {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.normalized.hash(state);
-    }
-}
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
 struct FileDiffs {
-    /// The header columns from the base file (without the diff column)
-    base_headers: Vec<String>,
-    /// Rows to delete (normalized)
-    to_delete: IndexSet<CsvRow>,
-    /// Rows to add (normalized)
-    to_add: IndexSet<CsvRow>,
+    /// The column headers from the diff file
+    headers: Vec<String>,
+    /// Rows to delete (normalized to remove whitespace)
+    to_delete: IndexSet<String>,
+    /// Rows to add (normalized to remove whitespace)
+    to_add: IndexSet<String>,
 }
 
 /// Read diffs from a diff file.
 ///
-/// The diff file has an extra column on the left with '+' or '-' indicators.
-/// The header row also has this extra column which should be ignored when comparing
-/// with the base file header.
+/// Diff files follow the same format as base files, but with an extra column on the left with
+/// '+' or '-' indicators to indicate whether that row should be added to or deleted from the base
+/// file.
 fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
-    let content = fs::read_to_string(file_path).with_context(|| input_err_msg(file_path))?;
-
-    let mut reader = ReaderBuilder::new().from_reader(content.as_bytes());
+    // Read the diff file from the given path, trimming any whitespace
+    let mut reader = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_path(file_path)
+        .with_context(|| input_err_msg(file_path))?;
 
     // Read header
     let diff_header = reader.headers().with_context(|| input_err_msg(file_path))?;
-
     ensure!(!diff_header.is_empty(), "Diff file header cannot be empty");
 
-    // Extract base headers (skip first column which is the diff indicator)
-    // Trim headers for comparison
-    let base_headers: Vec<String> = diff_header
+    // Colect column headers (skip first column which is the diff indicator)
+    let headers: Vec<String> = diff_header
         .iter()
         .skip(1)
-        .map(|s| s.trim().to_string())
+        .map(ToString::to_string)
         .collect();
-
     ensure!(
-        !base_headers.is_empty(),
-        "Diff file must have at least one data column (excluding diff column)"
+        !headers.is_empty(),
+        "Diff file must have at least one data column"
     );
 
     // Collect additions and deletions
     let mut to_delete = IndexSet::new();
     let mut to_add = IndexSet::new();
-
     for (line_num, result) in reader.records().enumerate() {
         let record = result.with_context(|| {
             format!("Error reading record at line {} in diff file", line_num + 2)
@@ -110,32 +62,26 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
         );
 
         // First column is the diff indicator
-        let diff_indicator = record
-            .get(0)
-            .context("Missing diff indicator column")?
-            .trim();
+        let diff_indicator = record.get(0).context("Missing diff indicator column")?;
 
-        // Extract the base row (skip first column)
-        let base_row_record: StringRecord = record.iter().skip(1).collect();
-
-        // Create CsvRow (normalizes internally)
-        let csv_row = CsvRow::from_record(&base_row_record);
+        // Build normalized row string by joining trimmed fields with commas
+        let row_str = record.iter().skip(1).collect::<Vec<_>>().join(",");
 
         match diff_indicator {
             "-" => {
                 ensure!(
-                    to_delete.insert(csv_row.clone()),
+                    to_delete.insert(row_str.clone()),
                     "Duplicate deletion entry at line {}: {}",
                     line_num + 2,
-                    csv_row.normalized()
+                    row_str
                 );
             }
             "+" => {
                 ensure!(
-                    to_add.insert(csv_row.clone()),
+                    to_add.insert(row_str.clone()),
                     "Duplicate addition entry at line {}: {}",
                     line_num + 2,
-                    csv_row.normalized()
+                    row_str
                 );
             }
             _ => {
@@ -152,13 +98,12 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
     for del_row in &to_delete {
         ensure!(
             !to_add.contains(del_row),
-            "Row appears in both deletions and additions: {}",
-            del_row.normalized()
+            "Row appears in both deletions and additions: {del_row}"
         );
     }
 
     Ok(FileDiffs {
-        base_headers,
+        headers,
         to_delete,
         to_add,
     })
@@ -167,54 +112,52 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
 /// Modify a base CSV file by applying diffs: removing rows and adding rows.
 /// Preserves the order of rows from the base file, with new rows appended at the end.
 fn modify_base_with_diffs(base: &str, diffs: &FileDiffs) -> Result<String> {
-    ensure!(!base.trim().is_empty(), "Base file is empty");
-
-    let mut reader = ReaderBuilder::new().from_reader(base.as_bytes());
+    // Read base file from string, trimming whitespace
+    let mut reader = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_reader(base.as_bytes());
 
     // Read and validate header
     let base_header = reader
         .headers()
         .context("Failed to read base file header")?;
 
-    // Trim headers for comparison
-    let base_header_vec: Vec<String> = base_header.iter().map(|s| s.trim().to_string()).collect();
+    let base_header_vec: Vec<String> = base_header.iter().map(ToString::to_string).collect();
 
     ensure!(
-        base_header_vec == diffs.base_headers,
+        base_header_vec == diffs.headers,
         "Header mismatch: base file has [{}], diff file expects [{}]",
         base_header_vec.join(", "),
-        diffs.base_headers.join(", ")
+        diffs.headers.join(", ")
     );
 
     // Read all rows from base file, preserving order and checking for duplicates
     let mut base_rows = IndexSet::new();
-
     for (line_num, result) in reader.records().enumerate() {
         let record = result.with_context(|| {
             format!("Error reading record at line {} in base file", line_num + 2)
         })?;
 
-        // CsvRow handles normalization internally
-        let row = CsvRow::from_record(&record);
+        // Create normalized row string by joining trimmed fields with commas
+        let row_str = record.iter().collect::<Vec<_>>().join(",");
 
-        // Check for duplicates using IndexSet
+        // Check for duplicates
         ensure!(
-            base_rows.insert(row.clone()),
+            base_rows.insert(row_str.clone()),
             "Duplicate row at line {} in base file: {}",
             line_num + 2,
-            row.original_str()
+            row_str
         );
     }
 
-    // Apply deletions (IndexSet preserves order during iteration)
+    // Apply deletions
     base_rows.retain(|row| !diffs.to_delete.contains(row));
 
     // Apply additions (append to end, checking for duplicates)
     for add_row in &diffs.to_add {
         ensure!(
             base_rows.insert(add_row.clone()),
-            "Addition already present in base file: {}",
-            add_row.normalized()
+            "Addition already present in base file: {add_row}"
         );
     }
 
@@ -224,16 +167,10 @@ fn modify_base_with_diffs(base: &str, diffs: &FileDiffs) -> Result<String> {
     // Write header
     output.push_str(&base_header_vec.join(","));
 
-    // Write rows (IndexSet preserves insertion order)
+    // Write rows
     if !base_rows.is_empty() {
         output.push('\n');
-        output.push_str(
-            &base_rows
-                .iter()
-                .map(CsvRow::original_str)
-                .collect::<Vec<_>>()
-                .join("\n"),
-        );
+        output.push_str(&base_rows.iter().cloned().collect::<Vec<_>>().join("\n"));
     }
 
     Ok(output)
@@ -262,7 +199,7 @@ pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<Te
         }
     }
 
-    // Patch the model.toml file
+    // Patch the new model.toml file un the temporary directory
     let base_toml_path = temp_path.join("model.toml");
     let patch_toml_path = diffs_dir.as_ref().join("model.toml");
     patch_model_toml(&base_toml_path, &patch_toml_path)?;
@@ -395,12 +332,12 @@ mod tests {
 
         let diffs = read_diffs(&diff_file).unwrap();
 
-        assert_eq!(diffs.base_headers, vec!["col1", "col2"]);
+        assert_eq!(diffs.headers, vec!["col1", "col2"]);
         assert_eq!(diffs.to_delete.len(), 1);
         assert_eq!(diffs.to_add.len(), 1);
 
-        let del_row = CsvRow::from_record(&StringRecord::from(vec!["val1", "val2"]));
-        let add_row = CsvRow::from_record(&StringRecord::from(vec!["val3", "val4"]));
+        let del_row = "val1,val2".to_string();
+        let add_row = "val3,val4".to_string();
         assert!(diffs.to_delete.contains(&del_row));
         assert!(diffs.to_add.contains(&add_row));
     }
@@ -417,16 +354,14 @@ mod tests {
         let diffs = read_diffs(&diff_file).unwrap();
 
         // Headers should be trimmed
-        assert_eq!(diffs.base_headers, vec!["col1", "col2"]);
+        assert_eq!(diffs.headers, vec!["col1", "col2"]);
         // Rows should be normalized (whitespace trimmed)
         assert_eq!(diffs.to_delete.len(), 1);
         assert_eq!(diffs.to_add.len(), 1);
 
         // Check that whitespace is normalized
-        let del_row1 = CsvRow::from_record(&StringRecord::from(vec!["item1", "item2"]));
-        let del_row2 = CsvRow::from_record(&StringRecord::from(vec!["  item1  ", "  item2  "]));
-        assert_eq!(del_row1, del_row2);
-        assert!(diffs.to_delete.contains(&del_row1));
+        let del_row = "item1,item2".to_string();
+        assert!(diffs.to_delete.contains(&del_row));
     }
 
     #[test]
@@ -434,16 +369,12 @@ mod tests {
         let base = "col1,col2\nrow1,row2\nrow3,row4\nrow5,row6\n";
 
         let mut to_delete = IndexSet::new();
-        to_delete.insert(CsvRow::from_record(&StringRecord::from(vec![
-            "row3", "row4",
-        ])));
+        to_delete.insert("row3,row4".to_string());
         let mut to_add = IndexSet::new();
-        to_add.insert(CsvRow::from_record(&StringRecord::from(vec![
-            "row7", "row8",
-        ])));
+        to_add.insert("row7,row8".to_string());
 
         let diffs = FileDiffs {
-            base_headers: vec!["col1".to_string(), "col2".to_string()],
+            headers: vec!["col1".to_string(), "col2".to_string()],
             to_delete,
             to_add,
         };
@@ -463,7 +394,7 @@ mod tests {
     fn test_modify_base_with_diffs_mismatched_header() {
         let base = "col1,col2\nrow1,row2\n";
         let diffs = FileDiffs {
-            base_headers: vec!["col1".to_string(), "col3".to_string()],
+            headers: vec!["col1".to_string(), "col3".to_string()],
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
         };
