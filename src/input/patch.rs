@@ -2,6 +2,7 @@
 use super::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
+use indexmap::IndexSet;
 use log::info;
 use std::fs;
 use std::path::Path;
@@ -13,9 +14,9 @@ struct FileDiffs {
     /// The header line from the diff file
     header_line: String,
     /// Lines to delete from the original file
-    to_delete: Vec<String>,
+    to_delete: IndexSet<String>,
     /// Lines to add to the original file
-    to_add: Vec<String>,
+    to_add: IndexSet<String>,
 }
 
 /// Read diffs from a diff file.
@@ -35,20 +36,27 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
     };
 
     // Collect additions and deletions
-    let mut to_delete = Vec::new();
-    let mut to_add = Vec::new();
+    let mut to_delete = IndexSet::new();
+    let mut to_add = IndexSet::new();
     for line in content.lines().skip(1) {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        if let Some(stripped) = line.strip_prefix("-,") {
-            to_delete.push(stripped.trim().to_string());
-        } else if let Some(stripped) = line.strip_prefix("+,") {
-            to_add.push(stripped.trim().to_string());
+        if let Some(body) = line.strip_prefix("-,") {
+            let v = body.trim().to_string();
+            ensure!(to_delete.insert(v.clone()), "Duplicate deletion entry: {v}",);
+        } else if let Some(body) = line.strip_prefix("+,") {
+            let v = body.trim().to_string();
+            ensure!(to_add.insert(v.clone()), "Duplicate addition entry: {v}");
         } else {
             bail!("Invalid row in diff file: {line}. Must start with '-,' or '+,'");
         }
+    }
+
+    // Disallow overlap
+    if let Some(dup) = to_delete.iter().find(|d| to_add.contains(*d)) {
+        bail!("Line appears in both deletions and additions: {dup}");
     }
 
     Ok(FileDiffs {
@@ -60,14 +68,11 @@ fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
 
 /// Modify a string representation of a file by applying diffs: removing lines and adding lines.
 fn modify_base_with_diffs(base: &str, diffs: &FileDiffs) -> Result<String> {
-    let base = base.trim();
-    let mut modified = base.to_string();
+    ensure!(!base.trim().is_empty(), "Base file is empty");
 
-    // Check that the base string is not empty
-    ensure!(!base.is_empty(), "Base file is empty");
-
-    // Check that the headers match
-    let original_header = base.lines().next().unwrap().trim();
+    // Split into lines while preserving order; keep header intact
+    let lines: Vec<&str> = base.lines().collect();
+    let original_header = lines.first().unwrap().trim();
     ensure!(
         original_header == diffs.header_line,
         "Header line in diff file does not match base file: expected '{}', found '{}'",
@@ -75,21 +80,38 @@ fn modify_base_with_diffs(base: &str, diffs: &FileDiffs) -> Result<String> {
         diffs.header_line
     );
 
-    // Apply deletions
-    for item in &diffs.to_delete {
+    // Build a unique set from the body
+    let mut body = IndexSet::new();
+    for &line in lines.iter().skip(1) {
+        let l = line.strip_suffix('\r').unwrap_or(line);
+        ensure!(body.insert(l), "Duplicate line found in base file: {l}");
+    }
+
+    // Deletions
+    for d in &diffs.to_delete {
         ensure!(
-            modified.contains(item),
-            "Row to delete not found in base file: {item}"
+            body.shift_remove(d.as_str()),
+            "Row to delete not found in base file: {d}"
         );
-        modified = modified.replace(item, "");
     }
 
-    // Apply additions
-    for item in &diffs.to_add {
-        modified.push_str(item);
+    // Additions
+    for a in &diffs.to_add {
+        ensure!(
+            body.insert(a.as_str()),
+            "Addition already present in base file: {a}"
+        );
     }
 
-    Ok(modified)
+    // Rebuild
+    let mut out = String::new();
+    out.push_str(original_header);
+    if !body.is_empty() {
+        out.push('\n');
+        out.push_str(&body.iter().copied().collect::<Vec<_>>().join("\n"));
+    }
+
+    Ok(out)
 }
 
 pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<TempDir> {
@@ -116,7 +138,7 @@ pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<Te
     }
 
     // Patch the model.toml file
-    let base_toml_path = base_model_dir.as_ref().join("model.toml");
+    let base_toml_path = temp_path.join("model.toml");
     let patch_toml_path = diffs_dir.as_ref().join("model.toml");
     patch_model_toml(&base_toml_path, &patch_toml_path)?;
 
