@@ -603,6 +603,11 @@ impl Asset {
         };
         *mothballed_year
     }
+
+    /// Checks if the assets corresponds to a process that has a `unit_size` and is therefore divisible.
+    pub fn is_divisible(&self) -> bool {
+        self.process.unit_size.is_some()
+    }
 }
 
 #[allow(clippy::missing_fields_in_debug)]
