@@ -13,8 +13,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
 /// Calculate commodity prices.
 ///
-/// Note that the behaviour will be different depending on the [`PricingStrategy`] for each
-/// commodity.
+/// Prices for each commodity are calculated based on their respective pricing strategies.
 ///
 /// # Arguments
 ///
@@ -134,6 +133,17 @@ impl CommodityPrices {
         self.0.insert(key, price);
     }
 
+    /// Extend the prices map, panic if any key already exists
+    pub fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
+    {
+        for (key, price) in iter {
+            let existing = self.0.insert(key.clone(), price).is_some();
+            assert!(!existing, "Key {key:?} already exists in the map");
+        }
+    }
+
     /// Iterate over the map.
     ///
     /// # Returns
@@ -145,14 +155,6 @@ impl CommodityPrices {
         self.0
             .iter()
             .map(|((commodity_id, region_id, ts), price)| (commodity_id, region_id, ts, *price))
-    }
-
-    /// Extend the prices map, possibly overwriting values
-    pub fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
-    {
-        self.0.extend(iter);
     }
 
     /// Get the price for the specified commodity for a given region and time slice
@@ -322,12 +324,37 @@ where
 
 /// Calculate marginal cost prices for a set of commodities.
 ///
+/// This pricing strategy aims to incorporate the marginal cost of commodity production into the price.
+///
+/// For a given asset, a marginal cost can be calculated for each SED/SVD, which is the sum of:
+/// - Generic activity costs: Activity-related costs not tied to a specific SED/SVD output
+///   (variable operating costs, cost of purchasing inputs, plus all levies and flow costs not
+///   associated with specific SED/SVD outputs). As above, these are shared over all SED/SVD
+///   outputs according to their flow coefficients.
+/// - Commodity-specific activity costs: flow costs/levies for the specific SED/SVD output.
+///
+/// If any existing assets produce a given commodity in a particular region and time slice, the
+/// price is taken from the asset with the highest marginal cost among those existing assets. If _no_
+/// existing assets produce the commodity in that region and time slice (in particular, this will
+/// occur when there's no demand for the commodity), then candidate assets are considered: we
+/// take the price from the candidate asset with the _lowest_ marginal cost, assuming full utilisation
+/// (i.e. the single candidate asset that would be most competitive if a small amount of demand was
+/// added).
+///
+/// Note: this should be similar to the "shadow price" strategy, which is also based on marginal
+/// costs of the most expensive producer, but may be more successful in cases where there are
+//  multiple SED/SVD outputs per asset.
+///
 /// # Arguments
-/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing assets
-/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate assets
+/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
+///   assets
+/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
+///   assets. Note: we only need the keys, since we assume full utilisation for candidates.
+/// * `annual_activities` - Map of annual activities for each asset computed by
+///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
-/// * `markets_to_price` - Set of markets to calculate marginal cost prices for
+/// * `markets_to_price` - Set of markets to calculate full cost prices for
 fn calculate_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
@@ -437,10 +464,33 @@ where
 
 /// Calculate full cost prices for a set of commodities.
 ///
+/// This pricing strategy aims to incorporate the full cost of commodity production into the price.
+///
+/// For a given asset, a full cost can be calculated for each SED/SVD, which is the sum of:
+/// - Annual capital costs/fixed operating costs: Calculated based on the capacity of the asset
+///   and the total annual output. If an asset has multiple SED/SVD outputs, then these costs are
+///   shared equally over all outputs according to their flow coefficients.
+/// - Generic activity costs: Activity-related costs not tied to a specific SED/SVD output
+///   (variable operating costs, cost of purchasing inputs, plus all levies and flow costs not
+///   associated with specific SED/SVD outputs). As above, these are shared over all SED/SVD
+///   outputs according to their flow coefficients.
+/// - Commodity-specific activity costs: flow costs/levies for the specific SED/SVD output.
+///
+/// If any existing assets produce a given commodity in a particular region and time slice, the
+/// price is taken from the asset with the highest full cost among those existing assets. If _no_
+/// existing assets produce the commodity in that region and time slice (in particular, this will
+/// occur when there's no demand for the commodity), then candidate assets are considered: we
+/// take the price from the candidate asset with the _lowest_ full cost, assuming full utilisation
+/// (i.e. the single candidate asset that would be most competitive if a small amount of demand was
+/// added).
+///
 /// # Arguments
-/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing assets
-/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate assets
-/// * `annual_activities` - Map of annual activities for each asset computed by `calculate_annual_activities`
+/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
+///   assets
+/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
+///   assets. Note: we only need the keys, since we assume full utilisation for candidates.
+/// * `annual_activities` - Map of annual activities for each asset computed by
+///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for

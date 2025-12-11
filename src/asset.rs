@@ -338,7 +338,7 @@ impl Asset {
         // The cost for all commodity flows (including levies/incentives)
         let flows_cost = self
             .iter_flows()
-            .map(|flow| flow.get_total_cost(&self.region_id, year, time_slice))
+            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
             .sum();
 
         self.process_parameter.variable_operating_cost + flows_cost
@@ -370,7 +370,7 @@ impl Asset {
         })
     }
 
-    /// Get the total cost of input flows.
+    /// Get the total cost of purchasing input commodities per unit of activity for this asset.
     ///
     /// If a price is missing, there is assumed to be no cost.
     pub fn get_input_cost_from_prices(
@@ -410,7 +410,7 @@ impl Asset {
 
     /// Get the generic activity cost per unit of activity for this asset.
     ///
-    /// These are all activity costs that are not associated with specific SED/SVD outputs.
+    /// These are all activity-related costs that are not associated with specific SED/SVD outputs.
     /// Includes levies, flow costs, costs of inputs and variable operating costs
     fn get_generic_activity_cost(
         &self,
@@ -432,7 +432,7 @@ impl Asset {
         let flow_costs = self
             .iter_flows()
             .filter(excludes_sed_svd_output)
-            .map(|flow| flow.get_total_cost(&self.region_id, year, time_slice))
+            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
             .sum();
 
         // These are all MoneyPerActivity so can be summed directly
@@ -440,6 +440,12 @@ impl Asset {
     }
 
     /// Iterate over marginal costs for all SED/SVD output commodities for this asset
+    ///
+    /// For each SED/SVD output commodity, the marginal cost is calculated as the sum of:
+    /// - Generic activity costs (variable operating costs, cost of purchasing inputs, plus all
+    ///   levies and flow costs not associated with specific SED/SVD outputs), which are
+    ///   shared equally over all SED/SVD outputs
+    /// - Production levies and flow costs for the specific SED/SVD output commodity
     pub fn iter_marginal_costs<'a>(
         &'a self,
         prices: &'a CommodityPrices,
@@ -480,6 +486,9 @@ impl Asset {
     }
 
     /// Get the annual capital cost per unit of activity for this asset
+    ///
+    /// Total capital costs (cost per capacity * capacity) are shared equally over the year in
+    /// accordance with the annual activity.
     pub fn get_annual_capital_cost_per_activity(
         &self,
         annual_activity: Activity,
@@ -494,6 +503,9 @@ impl Asset {
     }
 
     /// Get the annual capital cost per unit of output flow for this asset
+    ///
+    /// Total capital costs (cost per capacity * capacity) are shared equally across all output
+    /// flows in accordance with the annual activity and total output per unit of activity.
     pub fn get_annual_capital_cost_per_flow(&self, annual_activity: Activity) -> MoneyPerFlow {
         let annual_capital_cost_per_activity =
             self.get_annual_capital_cost_per_activity(annual_activity);

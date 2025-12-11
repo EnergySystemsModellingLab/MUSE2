@@ -192,8 +192,8 @@ pub struct Solution<'a> {
 impl Solution<'_> {
     /// Create a map of commodity flows for each asset's coeffs at every time slice.
     ///
-    /// Note that this only includes commodity flows which relate to assets, so not every commodity
-    /// in the simulation will necessarily be represented.
+    /// Note that this only includes commodity flows which relate to existing assets, so not every
+    /// commodity in the simulation will necessarily be represented.
     pub fn create_flow_map(&self) -> FlowMap {
         // The decision variables represent assets' activity levels, not commodity flows. We
         // multiply this value by the flow coeffs to get commodity flows.
@@ -209,7 +209,7 @@ impl Solution<'_> {
         flows
     }
 
-    /// Activity for all assets (existing and candidate)
+    /// Activity for all assets (existing and candidate, if present)
     pub fn iter_activity(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         self.variables
             .activity_var_keys()

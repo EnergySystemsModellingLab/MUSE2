@@ -413,7 +413,7 @@ impl ProcessFlow {
     /// Get the cost for this flow per unit of activity for a given region, year, and time slice.
     ///
     /// This includes cost per unit flow and levies/incentives, if any.
-    pub fn get_total_cost(
+    pub fn get_total_cost_per_activity(
         &self,
         region_id: &RegionID,
         year: u32,
@@ -905,7 +905,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(5.0)
         );
     }
@@ -917,7 +917,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost_and_levy.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost_and_levy.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(15.0)
         );
     }
@@ -929,7 +929,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost_and_incentive.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost_and_incentive.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(2.0)
         );
     }
@@ -942,7 +942,7 @@ mod tests {
     ) {
         flow_with_cost.coeff = FlowPerActivity(-2.0);
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(10.0)
         );
     }
@@ -955,7 +955,7 @@ mod tests {
     ) {
         flow_with_cost.coeff = FlowPerActivity(0.0);
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(0.0)
         );
     }
