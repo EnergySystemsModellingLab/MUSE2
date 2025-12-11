@@ -326,12 +326,28 @@ where
 ///
 /// This pricing strategy aims to incorporate the marginal cost of commodity production into the price.
 ///
-/// For a given asset, a marginal cost can be calculated for each SED/SVD, which is the sum of:
+/// For a given asset, a marginal cost can be calculated for each SED/SVD output, which is the sum of:
 /// - Generic activity costs: Activity-related costs not tied to a specific SED/SVD output
 ///   (variable operating costs, cost of purchasing inputs, plus all levies and flow costs not
-///   associated with specific SED/SVD outputs). As above, these are shared over all SED/SVD
+///   associated with specific SED/SVD outputs). These are shared over all SED/SVD
 ///   outputs according to their flow coefficients.
 /// - Commodity-specific activity costs: flow costs/levies for the specific SED/SVD output.
+///
+/// ---
+///
+/// For example, consider an asset A(SED) -> B(SED) + 2C(SED) + D(OTH), with the following costs:
+/// - Variable operating cost: 5 per unit activity
+/// - Production levy on C: 3 per unit flow
+/// - Production levy on D: 4 per unit flow
+/// - Shadow price of A: 1 per unit flow
+///
+/// Then:
+/// - Generic activity cost per activity = (1 + 5 + 4) = 10
+/// - Generic activity cost per SED/SVD output = 10 / (1 + 2) = 3.333
+/// - Marginal cost of B = 3.333
+/// - Marginal cost of C = 3.333 + 3 = 6.333
+///
+/// ---
 ///
 /// If any existing assets produce a given commodity in a particular region and time slice, the
 /// price is taken from the asset with the highest marginal cost among those existing assets. If _no_
@@ -466,7 +482,7 @@ where
 ///
 /// This pricing strategy aims to incorporate the full cost of commodity production into the price.
 ///
-/// For a given asset, a full cost can be calculated for each SED/SVD, which is the sum of:
+/// For a given asset, a full cost can be calculated for each SED/SVD output, which is the sum of:
 /// - Annual capital costs/fixed operating costs: Calculated based on the capacity of the asset
 ///   and the total annual output. If an asset has multiple SED/SVD outputs, then these costs are
 ///   shared equally over all outputs according to their flow coefficients.
@@ -476,11 +492,30 @@ where
 ///   outputs according to their flow coefficients.
 /// - Commodity-specific activity costs: flow costs/levies for the specific SED/SVD output.
 ///
+/// ---
+///
+/// For example, consider an asset A(SED) -> B(SED) + 2C(SED) + D(OTH), with the following costs:
+/// - Annual capital cost + fixed operating cost: 2.5 per unit capacity
+/// - Variable operating cost: 5 per unit activity
+/// - Production levy on C: 3 per unit flow
+/// - Production levy on D: 4 per unit flow
+/// - Shadow price of A: 1 per unit flow
+///
+/// If capacity is 4 and annual activity is 2:
+/// - Annual capital + fixed operating cost per activity = (2.5 * 4) / 2 = 5
+/// - Annual capital + fixed operating cost per SED/SVD output = 5 / (1 + 2) = 1.666
+/// - Generic activity cost per activity = (1 + 5 + 4) = 10
+/// - Generic activity cost per SED/SVD output = 10 / (1 + 2) = 3.333
+/// - Full cost of B = 1.666 + 3.333 = 5.0
+/// - Full cost of C = 1.666 + 3.333 + 3 = 8.0
+///
+/// ---
+///
 /// If any existing assets produce a given commodity in a particular region and time slice, the
 /// price is taken from the asset with the highest full cost among those existing assets. If _no_
 /// existing assets produce the commodity in that region and time slice (in particular, this will
 /// occur when there's no demand for the commodity), then candidate assets are considered: we
-/// take the price from the candidate asset with the _lowest_ full cost, assuming full utilisation
+/// take the price from the candidate asset with the _lowest_ full cost, assuming full dispatch
 /// (i.e. the single candidate asset that would be most competitive if a small amount of demand was
 /// added).
 ///
@@ -488,7 +523,7 @@ where
 /// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
 ///   assets
 /// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
-///   assets. Note: we only need the keys, since we assume full utilisation for candidates.
+///   assets. Note: we only need the keys, since we assume full dispatch for candidates.
 /// * `annual_activities` - Map of annual activities for each asset computed by
 ///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `shadow_prices` - Shadow prices for all commodities
