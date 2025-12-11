@@ -5,7 +5,7 @@ use crate::commodity::{CommodityID, PricingStrategy};
 use crate::model::{ALLOW_BROKEN_OPTION_NAME, Model};
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use anyhow::{Result, ensure};
 use itertools::iproduct;
@@ -611,10 +611,13 @@ where
             continue;
         }
 
-        // Calculate/cache annual capital cost per flow for this asset _assuming full utilisation_
+        // Calculate/cache annual capital cost per flow for this asset _assuming full dispatch
+        let max_annual_activity = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
+            .end();
         let annual_capital_cost_per_flow = *annual_capital_costs_cache
             .entry(asset.clone())
-            .or_insert_with(|| asset.get_annual_capital_cost_per_flow(asset.max_activity()));
+            .or_insert_with(|| asset.get_annual_capital_cost_per_flow(max_annual_activity));
 
         // Iterate over all the SED/SVD marginal costs for markets we need prices for
         for (commodity_id, marginal_cost) in asset
