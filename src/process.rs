@@ -63,7 +63,7 @@ pub struct Process {
     pub capacity_to_activity: ActivityPerCapacity,
     /// Investment constraints for this process
     pub investment_constraints: ProcessInvestmentConstraintsMap,
-    /// Capacity of the units in which an asset for this process will be divided into, if any.
+    /// Capacity of the units in which an asset for this process will be divided into when commissioned, if any.
     ///
     /// By default, an asset will not be divided when commissioned (`unit_size` will be None), but
     /// if this is set, then it will be divided in as many assets as needed to commission the total

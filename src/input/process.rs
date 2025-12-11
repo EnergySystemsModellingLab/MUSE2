@@ -146,6 +146,15 @@ where
             .capacity_to_activity
             .unwrap_or(ActivityPerCapacity(1.0));
 
+        // Validate unit_size
+        if process_raw.unit_size.is_some() {
+            ensure!(
+                process_raw.unit_size > Some(Capacity(0.0)),
+                "Error in process {}: unit_size must be > 0 or None",
+                process_raw.id
+            );
+        }
+
         // Validate capacity_to_activity
         ensure!(
             capacity_to_activity >= ActivityPerCapacity(0.0),
