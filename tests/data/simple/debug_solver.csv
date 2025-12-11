@@ -1,28 +1,28 @@
 milestone_year,run_description,objective_value
 2020,final without candidates,4132.120065800383
-2020,final with candidates,4132.101429603421
-2030,ironing out iteration 0; post RSHEAT|GBR investment,7472.7750840957415
-2030,ironing out iteration 0; post ELCTRI|GBR investment,6987.825639679641
-2030,ironing out iteration 0; post GASNAT|GBR investment,6605.982446043676
-2030,ironing out iteration 0; post GASPRD|GBR investment,4679.188446792093
-2030,ironing out iteration 0; final without candidates,4679.188446792093
-2030,ironing out iteration 0; final with candidates,4679.179969120355
-2030,ironing out iteration 1; post RSHEAT|GBR investment,7049.644182058773
-2030,ironing out iteration 1; post ELCTRI|GBR investment,6878.792496802073
-2030,ironing out iteration 1; post GASNAT|GBR investment,6473.209176448168
-2030,ironing out iteration 1; post GASPRD|GBR investment,4679.188446792093
-2030,ironing out iteration 1; final without candidates,4679.188446792093
-2030,ironing out iteration 1; final with candidates,4679.179969120355
-2030,final without candidates,4679.188446792097
-2030,final with candidates,4679.179969120354
-2040,ironing out iteration 0; post RSHEAT|GBR investment,9579.355545368668
-2040,ironing out iteration 0; post GASNAT|GBR investment,9410.220494873938
+2020,final with candidates,4132.101429603424
+2030,ironing out iteration 0; post RSHEAT|GBR investment,7497.556577735686
+2030,ironing out iteration 0; post ELCTRI|GBR investment,7017.283063090937
+2030,ironing out iteration 0; post GASNAT|GBR investment,6695.655943607615
+2030,ironing out iteration 0; post GASPRD|GBR investment,4679.188446792092
+2030,ironing out iteration 0; final without candidates,4679.188446792092
+2030,ironing out iteration 0; final with candidates,4679.179969120356
+2030,ironing out iteration 1; post RSHEAT|GBR investment,7070.139773858095
+2030,ironing out iteration 1; post ELCTRI|GBR investment,6903.632926445492
+2030,ironing out iteration 1; post GASNAT|GBR investment,6562.882722674486
+2030,ironing out iteration 1; post GASPRD|GBR investment,4679.188446792092
+2030,ironing out iteration 1; final without candidates,4679.188446792092
+2030,ironing out iteration 1; final with candidates,4679.179969120356
+2030,final without candidates,4679.188446792095
+2030,final with candidates,4679.179969120355
+2040,ironing out iteration 0; post RSHEAT|GBR investment,9622.35262122069
+2040,ironing out iteration 0; post GASNAT|GBR investment,9532.394986451922
 2040,ironing out iteration 0; post GASPRD|GBR investment,6613.816363708185
 2040,ironing out iteration 0; final without candidates,6613.816363708185
-2040,ironing out iteration 0; final with candidates,6613.815807254492
-2040,ironing out iteration 1; post RSHEAT|GBR investment,9210.448681991138
-2040,ironing out iteration 1; post GASNAT|GBR investment,9106.299148857117
+2040,ironing out iteration 0; final with candidates,6613.815807254493
+2040,ironing out iteration 1; post RSHEAT|GBR investment,9228.997370876943
+2040,ironing out iteration 1; post GASNAT|GBR investment,9216.077282981569
 2040,ironing out iteration 1; post GASPRD|GBR investment,6613.816363708185
 2040,ironing out iteration 1; final without candidates,6613.816363708185
-2040,ironing out iteration 1; final with candidates,6613.815807254492
+2040,ironing out iteration 1; final with candidates,6613.815807254493
 2040,final without candidates,6613.816363708183
