@@ -1011,7 +1011,7 @@ mod tests {
         }
 
         // Annual limit should be 0..1
-        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual, &time_slice_info2);
+        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual);
         assert_approx_eq!(Dimensionless, *annual_limit.start(), Dimensionless(0.0));
         assert_approx_eq!(Dimensionless, *annual_limit.end(), Dimensionless(1.0));
     }
@@ -1035,10 +1035,7 @@ mod tests {
         }
 
         // The seasonal limit should reflect the given bound
-        let season_limit = result.get_limit(
-            &TimeSliceSelection::Season("winter".into()),
-            &time_slice_info2,
-        );
+        let season_limit = result.get_limit(&TimeSliceSelection::Season("winter".into()));
         assert_eq!(*season_limit.end(), Dimensionless(0.01));
     }
 
