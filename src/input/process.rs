@@ -8,7 +8,7 @@ use crate::process::{
 };
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
-use crate::units::ActivityPerCapacity;
+use crate::units::{ActivityPerCapacity, Capacity};
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::IndexSet;
 use log::warn;
@@ -37,6 +37,7 @@ struct ProcessRaw {
     start_year: Option<u32>,
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
+    unit_size: Option<Capacity>,
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -163,6 +164,7 @@ where
             primary_output,
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
+            unit_size: process_raw.unit_size,
         };
 
         ensure!(

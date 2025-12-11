@@ -5,8 +5,8 @@ use crate::id::define_id_type;
 use crate::region::RegionID;
 use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{
-    ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerCapacityPerYear, MoneyPerFlow,
+    ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
+    MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow,
 };
 use anyhow::{Result, ensure};
 use indexmap::{IndexMap, IndexSet};
@@ -63,6 +63,12 @@ pub struct Process {
     pub capacity_to_activity: ActivityPerCapacity,
     /// Investment constraints for this process
     pub investment_constraints: ProcessInvestmentConstraintsMap,
+    /// Capacity of the units in which an asset for this process will be divided into, if any.
+    ///
+    /// By default, an asset will not be divided when commissioned (`unit_size` will be None), but
+    /// if this is set, then it will be divided in as many assets as needed to commission the total
+    /// capacity, each having a `unit_size` capacity or a fraction of it.
+    pub unit_size: Option<Capacity>,
 }
 
 impl Process {

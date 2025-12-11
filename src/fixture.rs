@@ -219,6 +219,7 @@ pub fn process(
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
         investment_constraints: process_investment_constraints,
+        unit_size: None,
     }
 }
 
