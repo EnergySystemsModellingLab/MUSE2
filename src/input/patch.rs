@@ -2,7 +2,7 @@
 use super::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
-use csv::{ReaderBuilder, Trim};
+use csv::{ReaderBuilder, Trim, Writer};
 use indexmap::IndexSet;
 use log::info;
 use std::fs;
@@ -11,22 +11,43 @@ use tempfile::{TempDir, tempdir};
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
-pub struct Patch {
+pub struct FilePatch {
     /// The target base filename that this patch applies to (e.g. "agents.csv")
     base_filename: String,
     /// The header row (optional). If `None`, the header is not checked against base files.
-    header_row: Option<String>,
-    /// Rows to delete
-    to_delete: IndexSet<String>,
-    /// Rows to add
-    to_add: IndexSet<String>,
+    header_row: Option<Vec<String>>,
+    /// Rows to delete (each row is a vector of canonicalized fields)
+    to_delete: IndexSet<Vec<String>>,
+    /// Rows to add (each row is a vector of canonicalized fields)
+    to_add: IndexSet<Vec<String>>,
 }
 
-impl Patch {
+/// Build a canonical comma-joined string from an iterator of field strings.
+fn canonicalize_fields<I, S>(fields: I) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    fields
+        .into_iter()
+        .map(|s| s.as_ref().trim().to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Build a canonical vector of trimmed strings from an iterator of field strings.
+fn canonicalize_vec<'a, I>(fields: I) -> Vec<String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    fields.into_iter().map(|s| s.trim().to_string()).collect()
+}
+
+impl FilePatch {
     /// Create a new empty `Patch` with the given `base_filename`.
     pub fn new(base_filename: impl Into<String>) -> Self {
         let base_filename = base_filename.into();
-        Patch {
+        FilePatch {
             base_filename,
             header_row: None,
             to_delete: IndexSet::new(),
@@ -36,24 +57,32 @@ impl Patch {
 
     /// Set the header row for this patch (`header` should be a comma-joined string, e.g. "a,b,c").
     pub fn with_header(mut self, header: impl Into<String>) -> Self {
-        self.header_row = Some(header.into());
+        let s = header.into();
+        let v = s.split(',').map(|s| s.trim().to_string()).collect();
+        self.header_row = Some(v);
         self
     }
 
     /// Add a row to the patch (row is a canonical comma-joined string, e.g. "a,b,c").
-    pub fn add(&mut self, row: impl Into<String>) -> &mut Self {
-        self.to_add.insert(row.into());
+    /// This consumes and returns the `Patch` so calls can be chained.
+    pub fn add_row(mut self, row: impl Into<String>) -> Self {
+        let s = row.into();
+        let v = s.split(',').map(|s| s.trim().to_string()).collect();
+        self.to_add.insert(v);
         self
     }
 
     /// Mark a row for deletion from the base (row is a canonical comma-joined string).
-    pub fn delete(&mut self, row: impl Into<String>) -> &mut Self {
-        self.to_delete.insert(row.into());
+    /// This consumes and returns the `Patch` so calls can be chained.
+    pub fn delete_row(mut self, row: impl Into<String>) -> Self {
+        let s = row.into();
+        let v = s.split(',').map(|s| s.trim().to_string()).collect();
+        self.to_delete.insert(v);
         self
     }
 
     /// Read a diff file and construct a `Patch`.
-    pub fn from_file(file_path: &Path) -> Result<Patch> {
+    pub fn from_file(file_path: &Path) -> Result<FilePatch> {
         // Extract the base filename by removing the `_diff.csv` suffix
         let file_name = file_path
             .file_name()
@@ -88,11 +117,10 @@ impl Patch {
             !headers_vec.is_empty(),
             "Diff file must have at least one data column"
         );
-        let header_row = headers_vec.join(",");
 
         // Collect additions and deletions
-        let mut to_delete = IndexSet::new();
-        let mut to_add = IndexSet::new();
+        let mut to_delete: IndexSet<Vec<String>> = IndexSet::new();
+        let mut to_add: IndexSet<Vec<String>> = IndexSet::new();
         for (line_num, result) in reader.records().enumerate() {
             let record = result.with_context(|| {
                 format!("Error reading record at line {} in diff file", line_num + 2)
@@ -107,19 +135,20 @@ impl Patch {
             // First column is the diff indicator
             let diff_indicator = record.get(0).context("Missing diff indicator column")?;
 
-            // Build normalized row string by joining trimmed fields with commas
-            let row_str = record.iter().skip(1).collect::<Vec<_>>().join(",");
+            // Build normalized row vector from the csv record
+            let row_vec = canonicalize_vec(record.iter().skip(1));
+            let row_str = canonicalize_fields(&row_vec);
 
             match diff_indicator {
                 "-" => {
                     ensure!(
-                        to_delete.insert(row_str.clone()),
+                        to_delete.insert(row_vec.clone()),
                         "Duplicate deletion entry: {row_str}",
                     );
                 }
                 "+" => {
                     ensure!(
-                        to_add.insert(row_str.clone()),
+                        to_add.insert(row_vec.clone()),
                         "Duplicate addition entry: {row_str}",
                     );
                 }
@@ -130,9 +159,9 @@ impl Patch {
         }
 
         // Create Patch object
-        Ok(Patch {
+        Ok(FilePatch {
             base_filename,
-            header_row: Some(header_row),
+            header_row: Some(headers_vec),
             to_delete,
             to_add,
         })
@@ -167,7 +196,7 @@ impl Patch {
 
 /// Modify a base CSV file by applying diffs: removing rows and adding rows.
 /// Preserves the order of rows from the base file, with new rows appended at the end.
-fn modify_base_with_patch(base: &str, diffs: &Patch) -> Result<String> {
+fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
     // Read base file from string, trimming whitespace
     let mut reader = ReaderBuilder::new()
         .trim(Trim::All)
@@ -181,32 +210,29 @@ fn modify_base_with_patch(base: &str, diffs: &Patch) -> Result<String> {
     let base_header_vec: Vec<String> = base_header.iter().map(ToString::to_string).collect();
 
     // If the patch contains a header, compare it with the base file header.
-    if let Some(ref header_row) = diffs.header_row {
-        let diffs_header_vec: Vec<String> = header_row
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
+    if let Some(ref header_row_vec) = patch.header_row {
         ensure!(
-            base_header_vec == diffs_header_vec,
+            base_header_vec == *header_row_vec,
             "Header mismatch: base file has [{}], diff file expects [{}]",
             base_header_vec.join(", "),
-            diffs_header_vec.join(", ")
+            header_row_vec.join(", ")
         );
     }
 
     // Read all rows from base file, preserving order and checking for duplicates
-    let mut base_rows = IndexSet::new();
+    let mut base_rows: IndexSet<Vec<String>> = IndexSet::new();
     for (line_num, result) in reader.records().enumerate() {
         let record = result.with_context(|| {
             format!("Error reading record at line {} in base file", line_num + 2)
         })?;
 
-        // Create normalized row string by joining trimmed fields with commas
-        let row_str = record.iter().collect::<Vec<_>>().join(",");
+        // Create normalized row vector by trimming fields
+        let row_vec = canonicalize_vec(record.iter());
+        let row_str = canonicalize_fields(&row_vec);
 
         // Check for duplicates
         ensure!(
-            base_rows.insert(row_str.clone()),
+            base_rows.insert(row_vec.clone()),
             "Duplicate row at line {} in base file: {}",
             line_num + 2,
             row_str
@@ -214,36 +240,35 @@ fn modify_base_with_patch(base: &str, diffs: &Patch) -> Result<String> {
     }
 
     // Check that there's no overlap between additions and deletions
-    for del_row in &diffs.to_delete {
+    for del_row in &patch.to_delete {
         ensure!(
-            !diffs.to_add.contains(del_row),
-            "Row appears in both deletions and additions: {del_row}"
+            !patch.to_add.contains(del_row),
+            "Row appears in both deletions and additions: {}",
+            canonicalize_fields(del_row)
         );
     }
 
     // Apply deletions
-    base_rows.retain(|row| !diffs.to_delete.contains(row));
+    base_rows.retain(|row| !patch.to_delete.contains(row));
 
     // Apply additions (append to end, checking for duplicates)
-    for add_row in &diffs.to_add {
+    for add_row in &patch.to_add {
         ensure!(
             base_rows.insert(add_row.clone()),
-            "Addition already present in base file: {add_row}"
+            "Addition already present in base file: {add_row:?}"
         );
     }
 
-    // Rebuild CSV output
-    let mut output = String::new();
-
-    // Write header
-    output.push_str(&base_header_vec.join(","));
-
-    // Write rows
-    if !base_rows.is_empty() {
-        output.push('\n');
-        output.push_str(&base_rows.iter().cloned().collect::<Vec<_>>().join("\n"));
+    // Serialize CSV output using csv::Writer to ensure correct quoting/escaping
+    let mut wtr = Writer::from_writer(vec![]);
+    wtr.write_record(base_header_vec.iter())?;
+    for row in &base_rows {
+        let row_iter = row.iter().map(String::as_str);
+        wtr.write_record(row_iter)?;
     }
-
+    wtr.flush()?;
+    let inner = wtr.into_inner()?;
+    let output = String::from_utf8(inner)?;
     Ok(output)
 }
 
@@ -288,20 +313,16 @@ pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<Te
         }
 
         // Only consider CSV files
-        let diff_filename = diff_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("Invalid filename encoding")?;
-
-        if !std::path::Path::new(diff_filename)
+        if !diff_path
             .extension()
+            .and_then(|e| e.to_str())
             .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
         {
             continue;
         }
 
         // Read diffs and push to vector (Patch::from_file validates `_diff.csv` suffix)
-        let patch = Patch::from_file(&diff_path)
+        let patch = FilePatch::from_file(&diff_path)
             .with_context(|| format!("Failed to read diff file: {}", diff_path.display()))?;
         patches.push(patch);
     }
@@ -370,12 +391,15 @@ mod tests {
         file.write_all(content.as_bytes()).unwrap();
 
         // Parse from the file
-        let diffs = Patch::from_file(&diff_file).unwrap();
-        assert_eq!(diffs.header_row.as_deref(), Some("col1,col2"));
+        let diffs = FilePatch::from_file(&diff_file).unwrap();
+        assert_eq!(
+            diffs.header_row.as_ref().map(|v| v.join(",")),
+            Some("col1,col2".to_string())
+        );
         assert_eq!(diffs.to_delete.len(), 1);
         assert_eq!(diffs.to_add.len(), 1);
-        let del_row = "val1,val2".to_string();
-        let add_row = "val3,val4".to_string();
+        let del_row = vec!["val1".to_string(), "val2".to_string()];
+        let add_row = vec!["val3".to_string(), "val4".to_string()];
         assert!(diffs.to_delete.contains(&del_row));
         assert!(diffs.to_add.contains(&add_row));
     }
@@ -390,12 +414,15 @@ mod tests {
         file.write_all(content.as_bytes()).unwrap();
 
         // Parse from the file
-        let diffs_from_file = Patch::from_file(&diff_file).unwrap();
-        assert_eq!(diffs_from_file.header_row.as_deref(), Some("col1,col2"));
+        let diffs_from_file = FilePatch::from_file(&diff_file).unwrap();
+        assert_eq!(
+            diffs_from_file.header_row.as_ref().map(|v| v.join(",")),
+            Some("col1,col2".to_string())
+        );
         assert_eq!(diffs_from_file.to_delete.len(), 1);
         assert_eq!(diffs_from_file.to_add.len(), 1);
-        let del_row = "item1,item2".to_string();
-        let add_row = "another1,another2".to_string();
+        let del_row = vec!["item1".to_string(), "item2".to_string()];
+        let add_row = vec!["another1".to_string(), "another2".to_string()];
         assert!(diffs_from_file.to_delete.contains(&del_row));
         assert!(diffs_from_file.to_add.contains(&add_row));
     }
@@ -404,19 +431,12 @@ mod tests {
     fn test_modify_base_with_diffs_preserves_order() {
         let base = "col1,col2\nrow1,row2\nrow3,row4\nrow5,row6\n";
 
-        let mut to_delete = IndexSet::new();
-        to_delete.insert("row3,row4".to_string());
-        let mut to_add = IndexSet::new();
-        to_add.insert("row7,row8".to_string());
+        let patch = FilePatch::new("test.csv")
+            .with_header("col1,col2")
+            .delete_row("row3,row4")
+            .add_row("row7,row8");
 
-        let diffs = Patch {
-            header_row: Some("col1,col2".to_string()),
-            base_filename: "test.csv".to_string(),
-            to_delete,
-            to_add,
-        };
-
-        let modified = modify_base_with_patch(base, &diffs).unwrap();
+        let modified = modify_base_with_patch(base, &patch).unwrap();
 
         // Should preserve order: row1,row2 -> row5,row6 -> row7,row8
         let lines: Vec<&str> = modified.lines().collect();
@@ -430,14 +450,9 @@ mod tests {
     #[test]
     fn test_modify_base_with_diffs_mismatched_header() {
         let base = "col1,col2\nrow1,row2\n";
-        let diffs = Patch {
-            header_row: Some("col1,col3".to_string()),
-            base_filename: "test.csv".to_string(),
-            to_delete: IndexSet::new(),
-            to_add: IndexSet::new(),
-        };
+        let patch = FilePatch::new("test.csv").with_header("col1,col3");
 
-        let result = modify_base_with_patch(base, &diffs);
+        let result = modify_base_with_patch(base, &patch);
         assert_error!(
             result,
             "Header mismatch: base file has [col1, col2], diff file expects [col1, col3]"

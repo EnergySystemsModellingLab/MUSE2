@@ -25,7 +25,7 @@ use asset::read_assets;
 mod commodity;
 use commodity::read_commodities;
 mod patch;
-pub use patch::{Patch, patch_model};
+pub use patch::{FilePatch, patch_model};
 mod process;
 use process::read_processes;
 mod region;
