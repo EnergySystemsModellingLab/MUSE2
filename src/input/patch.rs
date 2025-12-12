@@ -2,7 +2,7 @@
 use super::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
-use csv::{ReaderBuilder, Trim};
+use csv::{Reader, ReaderBuilder, Trim};
 use indexmap::IndexSet;
 use log::info;
 use std::fs;
@@ -11,7 +11,9 @@ use tempfile::{TempDir, tempdir};
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
-struct FileDiffs {
+struct Patch {
+    /// The target base filename that this patch applies to (e.g. "agents.csv")
+    base_filename: String,
     /// The column headers from the diff file
     headers: Vec<String>,
     /// Rows to delete (normalized to remove whitespace)
@@ -20,98 +22,151 @@ struct FileDiffs {
     to_add: IndexSet<String>,
 }
 
-/// Read diffs from a diff file.
-///
-/// Diff files follow the same format as base files, but with an extra column on the left with
-/// '+' or '-' indicators to indicate whether that row should be added to or deleted from the base
-/// file.
-fn read_diffs(file_path: &Path) -> Result<FileDiffs> {
-    // Read the diff file from the given path, trimming any whitespace
-    let mut reader = ReaderBuilder::new()
-        .trim(Trim::All)
-        .from_path(file_path)
-        .with_context(|| input_err_msg(file_path))?;
-
-    // Read header
-    let diff_header = reader.headers().with_context(|| input_err_msg(file_path))?;
-    ensure!(!diff_header.is_empty(), "Diff file header cannot be empty");
-
-    // Colect column headers (skip first column which is the diff indicator)
-    let headers: Vec<String> = diff_header
-        .iter()
-        .skip(1)
-        .map(ToString::to_string)
-        .collect();
-    ensure!(
-        !headers.is_empty(),
-        "Diff file must have at least one data column"
-    );
-
-    // Collect additions and deletions
-    let mut to_delete = IndexSet::new();
-    let mut to_add = IndexSet::new();
-    for (line_num, result) in reader.records().enumerate() {
-        let record = result.with_context(|| {
-            format!("Error reading record at line {} in diff file", line_num + 2)
-        })?;
-
+impl Patch {
+    /// Read a diff file and construct a `Patch`.
+    pub fn from_file(file_path: &Path) -> Result<Patch> {
+        let file_name = file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .context("Invalid filename encoding")?;
         ensure!(
-            !record.is_empty(),
-            "Empty row at line {} in diff file",
-            line_num + 2
+            file_name.to_lowercase().ends_with("_diff.csv"),
+            "Diff file must end with '_diff.csv': {file_name}"
+        );
+        let base_name = &file_name[..file_name.len() - "_diff.csv".len()];
+        let base_filename = format!("{base_name}.csv");
+
+        let reader = ReaderBuilder::new()
+            .trim(Trim::All)
+            .from_path(file_path)
+            .with_context(|| input_err_msg(file_path))?;
+
+        Self::from_reader(reader, base_filename)
+    }
+
+    /// Read a diff from an in-memory string and construct a `Patch`.
+    pub fn _from_str(base_filename: &str, file_contents: &str) -> Result<Patch> {
+        let reader = ReaderBuilder::new()
+            .trim(Trim::All)
+            .from_reader(file_contents.as_bytes());
+
+        Self::from_reader(reader, base_filename.to_string())
+    }
+
+    /// Shared helper that parses a CSV `Reader` and constructs a `Patch`.
+    fn from_reader<R: std::io::Read>(
+        mut reader: Reader<R>,
+        base_filename: String,
+    ) -> Result<Patch> {
+        // Read header
+        let diff_header = reader
+            .headers()
+            .with_context(|| input_err_msg(Path::new(&base_filename)))?;
+        ensure!(!diff_header.is_empty(), "Diff file header cannot be empty");
+
+        // Colect column headers (skip first column which is the diff indicator)
+        let headers: Vec<String> = diff_header
+            .iter()
+            .skip(1)
+            .map(ToString::to_string)
+            .collect();
+        ensure!(
+            !headers.is_empty(),
+            "Diff file must have at least one data column"
         );
 
-        // First column is the diff indicator
-        let diff_indicator = record.get(0).context("Missing diff indicator column")?;
+        // Collect additions and deletions
+        let mut to_delete = IndexSet::new();
+        let mut to_add = IndexSet::new();
+        for (line_num, result) in reader.records().enumerate() {
+            let record = result.with_context(|| {
+                format!("Error reading record at line {} in diff file", line_num + 2)
+            })?;
 
-        // Build normalized row string by joining trimmed fields with commas
-        let row_str = record.iter().skip(1).collect::<Vec<_>>().join(",");
+            ensure!(
+                !record.is_empty(),
+                "Empty row at line {} in diff file",
+                line_num + 2
+            );
 
-        match diff_indicator {
-            "-" => {
-                ensure!(
-                    to_delete.insert(row_str.clone()),
-                    "Duplicate deletion entry at line {}: {}",
-                    line_num + 2,
-                    row_str
-                );
-            }
-            "+" => {
-                ensure!(
-                    to_add.insert(row_str.clone()),
-                    "Duplicate addition entry at line {}: {}",
-                    line_num + 2,
-                    row_str
-                );
-            }
-            _ => {
-                bail!(
-                    "Invalid diff indicator at line {}: '{}'. Must be '+' or '-'",
-                    line_num + 2,
-                    diff_indicator
-                );
+            // First column is the diff indicator
+            let diff_indicator = record.get(0).context("Missing diff indicator column")?;
+
+            // Build normalized row string by joining trimmed fields with commas
+            let row_str = record.iter().skip(1).collect::<Vec<_>>().join(",");
+
+            match diff_indicator {
+                "-" => {
+                    ensure!(
+                        to_delete.insert(row_str.clone()),
+                        "Duplicate deletion entry at line {}: {}",
+                        line_num + 2,
+                        row_str
+                    );
+                }
+                "+" => {
+                    ensure!(
+                        to_add.insert(row_str.clone()),
+                        "Duplicate addition entry at line {}: {}",
+                        line_num + 2,
+                        row_str
+                    );
+                }
+                _ => {
+                    bail!(
+                        "Invalid diff indicator at line {}: '{}'. Must be '+' or '-'",
+                        line_num + 2,
+                        diff_indicator
+                    );
+                }
             }
         }
+
+        // Disallow overlap between deletions and additions
+        for del_row in &to_delete {
+            ensure!(
+                !to_add.contains(del_row),
+                "Row appears in both deletions and additions: {del_row}"
+            );
+        }
+
+        Ok(Patch {
+            base_filename,
+            headers,
+            to_delete,
+            to_add,
+        })
     }
 
-    // Disallow overlap between deletions and additions
-    for del_row in &to_delete {
-        ensure!(
-            !to_add.contains(del_row),
-            "Row appears in both deletions and additions: {del_row}"
-        );
+    /// Apply this patch to a base model and return the modified CSV as a string.
+    fn apply(&self, base_model_dir: &Path) -> Result<String> {
+        let base_path = base_model_dir.join(&self.base_filename);
+
+        if !base_path.exists() {
+            bail!(
+                "Base file for patching does not exist: {}",
+                base_path.display()
+            );
+        }
+
+        let base = fs::read_to_string(&base_path).with_context(|| input_err_msg(&base_path))?;
+        let modified = modify_base_with_diffs(&base, self)?;
+        Ok(modified)
     }
 
-    Ok(FileDiffs {
-        headers,
-        to_delete,
-        to_add,
-    })
+    /// Apply this patch to a base model and save the modified CSV to another directory.
+    pub fn apply_and_save(&self, base_model_dir: &Path, new_model_dir: &Path) -> Result<()> {
+        let modified = self.apply(base_model_dir)?;
+        let new_path = new_model_dir.join(&self.base_filename);
+        fs::write(&new_path, modified)
+            .with_context(|| format!("Failed to write patched file: {}", new_path.display()))?;
+        Ok(())
+    }
 }
 
 /// Modify a base CSV file by applying diffs: removing rows and adding rows.
 /// Preserves the order of rows from the base file, with new rows appended at the end.
-fn modify_base_with_diffs(base: &str, diffs: &FileDiffs) -> Result<String> {
+fn modify_base_with_diffs(base: &str, diffs: &Patch) -> Result<String> {
     // Read base file from string, trimming whitespace
     let mut reader = ReaderBuilder::new()
         .trim(Trim::All)
@@ -204,50 +259,40 @@ pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<Te
     let patch_toml_path = diffs_dir.as_ref().join("model.toml");
     patch_model_toml(&base_toml_path, &patch_toml_path)?;
 
-    // Patch CSV files based on diffs in diffs_dir
+    // Read all patch files into memory first
+    let mut patches = Vec::new();
     for entry in fs::read_dir(diffs_dir.as_ref())? {
         let entry = entry?;
         let diff_path = entry.path();
 
-        // Only process files (skip any subdirectories if present)
-        if diff_path.is_file() {
-            let diff_filename = diff_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .context("Invalid filename encoding")?;
-
-            // Ignore non-CSV files
-            if !std::path::Path::new(diff_filename)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
-            {
-                continue;
-            }
-
-            // Check that the filename ends with "_diff.csv"
-            ensure!(
-                diff_filename.to_lowercase().ends_with("_diff.csv"),
-                "Diff file must end with '_diff.csv': {diff_filename}"
-            );
-
-            // Extract the base filename (e.g., "agents" from "agents_diff.csv")
-            let base_name = &diff_filename[..diff_filename.len() - "_diff.csv".len()];
-            let target_filename = format!("{base_name}.csv");
-            let base_path = base_model_dir.as_ref().join(&target_filename);
-
-            // Read base file and apply patch
-            let patched_str =
-                read_base_file_with_patch(&base_path, &diff_path).with_context(|| {
-                    format!(
-                        "Error applying patch from {} to {}",
-                        diff_path.display(),
-                        base_path.display(),
-                    )
-                })?;
-
-            // Save to the temporary directory
-            fs::write(temp_path.join(&target_filename), patched_str)?;
+        if !diff_path.is_file() {
+            continue;
         }
+
+        // Only consider CSV files
+        let diff_filename = diff_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("Invalid filename encoding")?;
+
+        if !std::path::Path::new(diff_filename)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+        {
+            continue;
+        }
+
+        // Read diffs and push to vector (Patch::from_file validates `_diff.csv` suffix)
+        let patch = Patch::from_file(&diff_path)
+            .with_context(|| format!("Failed to read diff file: {}", diff_path.display()))?;
+        patches.push(patch);
+    }
+
+    // Apply each patch to its corresponding base file and write to temp dir
+    for patch in &patches {
+        patch
+            .apply_and_save(base_model_dir.as_ref(), temp_path)
+            .with_context(|| format!("Failed to apply patch to file: {}", patch.base_filename))?;
     }
 
     info!(
@@ -257,30 +302,6 @@ pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<Te
 
     // Return the temporary directory
     Ok(temp_dir)
-}
-
-fn read_base_file_with_patch(base_file_path: &Path, diff_path: &Path) -> Result<String> {
-    // Read base file
-    if !base_file_path.exists() {
-        bail!(
-            "Base file for patching does not exist: {}",
-            base_file_path.display()
-        );
-    }
-    let base = fs::read_to_string(base_file_path).with_context(|| input_err_msg(base_file_path))?;
-
-    // Read diff file
-    if !diff_path.exists() {
-        bail!(
-            "Diff file for patching does not exist: {}",
-            diff_path.display()
-        );
-    }
-    let diffs = read_diffs(diff_path).with_context(|| input_err_msg(diff_path))?;
-
-    // Apply diffs to base file
-    let modified = modify_base_with_diffs(&base, &diffs)?;
-    Ok(modified)
 }
 
 fn patch_model_toml(base_path: &Path, patch_path: &Path) -> Result<()> {
@@ -330,7 +351,7 @@ mod tests {
         let mut file = fs::File::create(&diff_file).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let diffs = read_diffs(&diff_file).unwrap();
+        let diffs = Patch::from_file(&diff_file).unwrap();
 
         assert_eq!(diffs.headers, vec!["col1", "col2"]);
         assert_eq!(diffs.to_delete.len(), 1);
@@ -351,7 +372,7 @@ mod tests {
         let mut file = fs::File::create(&diff_file).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let diffs = read_diffs(&diff_file).unwrap();
+        let diffs = Patch::from_file(&diff_file).unwrap();
 
         // Headers should be trimmed
         assert_eq!(diffs.headers, vec!["col1", "col2"]);
@@ -373,8 +394,9 @@ mod tests {
         let mut to_add = IndexSet::new();
         to_add.insert("row7,row8".to_string());
 
-        let diffs = FileDiffs {
+        let diffs = Patch {
             headers: vec!["col1".to_string(), "col2".to_string()],
+            base_filename: "test.csv".to_string(),
             to_delete,
             to_add,
         };
@@ -393,8 +415,9 @@ mod tests {
     #[test]
     fn test_modify_base_with_diffs_mismatched_header() {
         let base = "col1,col2\nrow1,row2\n";
-        let diffs = FileDiffs {
+        let diffs = Patch {
             headers: vec!["col1".to_string(), "col3".to_string()],
+            base_filename: "test.csv".to_string(),
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
         };
