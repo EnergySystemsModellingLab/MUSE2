@@ -2,7 +2,7 @@
 use super::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
-use csv::{Reader, ReaderBuilder, Trim};
+use csv::{ReaderBuilder, Trim};
 use indexmap::IndexSet;
 use log::info;
 use std::fs;
@@ -11,11 +11,11 @@ use tempfile::{TempDir, tempdir};
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
-struct Patch {
+pub struct Patch {
     /// The target base filename that this patch applies to (e.g. "agents.csv")
     base_filename: String,
-    /// The column headers from the diff file
-    headers: Vec<String>,
+    /// The header row
+    header_row: String,
     /// Rows to delete (normalized to remove whitespace)
     to_delete: IndexSet<String>,
     /// Rows to add (normalized to remove whitespace)
@@ -23,8 +23,43 @@ struct Patch {
 }
 
 impl Patch {
+    /// Create a new empty `Patch` with the given `base_filename` and
+    /// a comma-joined header string (e.g. "a,b,c").
+    pub fn new<B, H>(base_filename: B, header_row: H) -> Self
+    where
+        B: Into<String>,
+        H: Into<String>,
+    {
+        let base_filename = base_filename.into();
+        let header_row = header_row.into().trim().to_string();
+
+        Patch {
+            base_filename,
+            header_row,
+            to_delete: IndexSet::new(),
+            to_add: IndexSet::new(),
+        }
+    }
+
+    /// Add a row to the patch (row is a canonical comma-joined string, e.g. "a,b,c").
+    /// Returns `self` for chaining.
+    pub fn add(&mut self, row: impl Into<String>) -> &mut Self {
+        let s = row.into().trim().to_string();
+        self.to_add.insert(s);
+        self
+    }
+
+    /// Mark a row for deletion from the base (row is a canonical comma-joined string).
+    /// Returns `self` for chaining.
+    pub fn delete(&mut self, row: impl Into<String>) -> &mut Self {
+        let s = row.into().trim().to_string();
+        self.to_delete.insert(s);
+        self
+    }
+
     /// Read a diff file and construct a `Patch`.
     pub fn from_file(file_path: &Path) -> Result<Patch> {
+        // Extract the base filename by removing the `_diff.csv` suffix
         let file_name = file_path
             .file_name()
             .and_then(|n| n.to_str())
@@ -36,44 +71,29 @@ impl Patch {
         let base_name = &file_name[..file_name.len() - "_diff.csv".len()];
         let base_filename = format!("{base_name}.csv");
 
-        let reader = ReaderBuilder::new()
+        // Read diff CSV file
+        let mut reader = ReaderBuilder::new()
             .trim(Trim::All)
             .from_path(file_path)
             .with_context(|| input_err_msg(file_path))?;
 
-        Self::from_reader(reader, base_filename)
-    }
-
-    /// Read a diff from an in-memory string and construct a `Patch`.
-    pub fn _from_str(base_filename: &str, file_contents: &str) -> Result<Patch> {
-        let reader = ReaderBuilder::new()
-            .trim(Trim::All)
-            .from_reader(file_contents.as_bytes());
-
-        Self::from_reader(reader, base_filename.to_string())
-    }
-
-    /// Shared helper that parses a CSV `Reader` and constructs a `Patch`.
-    fn from_reader<R: std::io::Read>(
-        mut reader: Reader<R>,
-        base_filename: String,
-    ) -> Result<Patch> {
         // Read header
         let diff_header = reader
             .headers()
             .with_context(|| input_err_msg(Path::new(&base_filename)))?;
         ensure!(!diff_header.is_empty(), "Diff file header cannot be empty");
 
-        // Colect column headers (skip first column which is the diff indicator)
-        let headers: Vec<String> = diff_header
+        // Collect column headers (skip first column which is the diff indicator)
+        let headers_vec: Vec<String> = diff_header
             .iter()
             .skip(1)
             .map(ToString::to_string)
             .collect();
         ensure!(
-            !headers.is_empty(),
+            !headers_vec.is_empty(),
             "Diff file must have at least one data column"
         );
+        let header_row = headers_vec.join(",");
 
         // Collect additions and deletions
         let mut to_delete = IndexSet::new();
@@ -99,40 +119,25 @@ impl Patch {
                 "-" => {
                     ensure!(
                         to_delete.insert(row_str.clone()),
-                        "Duplicate deletion entry at line {}: {}",
-                        line_num + 2,
-                        row_str
+                        "Duplicate deletion entry: {row_str}",
                     );
                 }
                 "+" => {
                     ensure!(
                         to_add.insert(row_str.clone()),
-                        "Duplicate addition entry at line {}: {}",
-                        line_num + 2,
-                        row_str
+                        "Duplicate addition entry: {row_str}",
                     );
                 }
                 _ => {
-                    bail!(
-                        "Invalid diff indicator at line {}: '{}'. Must be '+' or '-'",
-                        line_num + 2,
-                        diff_indicator
-                    );
+                    bail!("Invalid diff indicator: '{diff_indicator}'. Must be '+' or '-'");
                 }
             }
         }
 
-        // Disallow overlap between deletions and additions
-        for del_row in &to_delete {
-            ensure!(
-                !to_add.contains(del_row),
-                "Row appears in both deletions and additions: {del_row}"
-            );
-        }
-
+        // Create Patch object
         Ok(Patch {
             base_filename,
-            headers,
+            header_row,
             to_delete,
             to_add,
         })
@@ -140,17 +145,18 @@ impl Patch {
 
     /// Apply this patch to a base model and return the modified CSV as a string.
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
+        // Read the base file to string
         let base_path = base_model_dir.join(&self.base_filename);
-
         if !base_path.exists() {
             bail!(
                 "Base file for patching does not exist: {}",
                 base_path.display()
             );
         }
-
         let base = fs::read_to_string(&base_path).with_context(|| input_err_msg(&base_path))?;
-        let modified = modify_base_with_diffs(&base, self)?;
+
+        // Apply the patch
+        let modified = modify_base_with_patch(&base, self)?;
         Ok(modified)
     }
 
@@ -166,7 +172,7 @@ impl Patch {
 
 /// Modify a base CSV file by applying diffs: removing rows and adding rows.
 /// Preserves the order of rows from the base file, with new rows appended at the end.
-fn modify_base_with_diffs(base: &str, diffs: &Patch) -> Result<String> {
+fn modify_base_with_patch(base: &str, diffs: &Patch) -> Result<String> {
     // Read base file from string, trimming whitespace
     let mut reader = ReaderBuilder::new()
         .trim(Trim::All)
@@ -179,11 +185,17 @@ fn modify_base_with_diffs(base: &str, diffs: &Patch) -> Result<String> {
 
     let base_header_vec: Vec<String> = base_header.iter().map(ToString::to_string).collect();
 
+    // Compare base header vector with the comma-joined header string stored in the patch
+    let diffs_header_vec: Vec<String> = diffs
+        .header_row
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
     ensure!(
-        base_header_vec == diffs.headers,
+        base_header_vec == diffs_header_vec,
         "Header mismatch: base file has [{}], diff file expects [{}]",
         base_header_vec.join(", "),
-        diffs.headers.join(", ")
+        diffs_header_vec.join(", ")
     );
 
     // Read all rows from base file, preserving order and checking for duplicates
@@ -202,6 +214,14 @@ fn modify_base_with_diffs(base: &str, diffs: &Patch) -> Result<String> {
             "Duplicate row at line {} in base file: {}",
             line_num + 2,
             row_str
+        );
+    }
+
+    // Check that there's no overlap between additions and deletions
+    for del_row in &diffs.to_delete {
+        ensure!(
+            !diffs.to_add.contains(del_row),
+            "Row appears in both deletions and additions: {del_row}"
         );
     }
 
@@ -231,6 +251,8 @@ fn modify_base_with_diffs(base: &str, diffs: &Patch) -> Result<String> {
     Ok(output)
 }
 
+/// Patch a base model directory with diffs from another directory.
+/// Returns a `TempDir` containing the patched model.
 pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<TempDir> {
     info!(
         "Patching model at '{}' with diffs from '{}'",
@@ -344,19 +366,18 @@ mod tests {
 
     #[test]
     fn test_read_diffs_basic() {
+        // Create diff file
         let temp_dir = tempdir().unwrap();
         let diff_file = temp_dir.path().join("test_diff.csv");
-
         let content = "diff,col1,col2\n-,val1,val2\n+,val3,val4\n";
         let mut file = fs::File::create(&diff_file).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
+        // Parse from the file
         let diffs = Patch::from_file(&diff_file).unwrap();
-
-        assert_eq!(diffs.headers, vec!["col1", "col2"]);
+        assert_eq!(diffs.header_row, "col1,col2");
         assert_eq!(diffs.to_delete.len(), 1);
         assert_eq!(diffs.to_add.len(), 1);
-
         let del_row = "val1,val2".to_string();
         let add_row = "val3,val4".to_string();
         assert!(diffs.to_delete.contains(&del_row));
@@ -365,24 +386,22 @@ mod tests {
 
     #[test]
     fn test_read_diffs_with_whitespace() {
+        // Create diff file with extra whitespace
         let temp_dir = tempdir().unwrap();
         let diff_file = temp_dir.path().join("test_diff.csv");
-
         let content = " diff , col1 , col2 \n-,  item1  ,  item2  \n+,  another1  ,  another2  \n";
         let mut file = fs::File::create(&diff_file).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let diffs = Patch::from_file(&diff_file).unwrap();
-
-        // Headers should be trimmed
-        assert_eq!(diffs.headers, vec!["col1", "col2"]);
-        // Rows should be normalized (whitespace trimmed)
-        assert_eq!(diffs.to_delete.len(), 1);
-        assert_eq!(diffs.to_add.len(), 1);
-
-        // Check that whitespace is normalized
+        // Parse from the file
+        let diffs_from_file = Patch::from_file(&diff_file).unwrap();
+        assert_eq!(diffs_from_file.header_row, "col1,col2");
+        assert_eq!(diffs_from_file.to_delete.len(), 1);
+        assert_eq!(diffs_from_file.to_add.len(), 1);
         let del_row = "item1,item2".to_string();
-        assert!(diffs.to_delete.contains(&del_row));
+        let add_row = "another1,another2".to_string();
+        assert!(diffs_from_file.to_delete.contains(&del_row));
+        assert!(diffs_from_file.to_add.contains(&add_row));
     }
 
     #[test]
@@ -395,13 +414,13 @@ mod tests {
         to_add.insert("row7,row8".to_string());
 
         let diffs = Patch {
-            headers: vec!["col1".to_string(), "col2".to_string()],
+            header_row: "col1,col2".to_string(),
             base_filename: "test.csv".to_string(),
             to_delete,
             to_add,
         };
 
-        let modified = modify_base_with_diffs(base, &diffs).unwrap();
+        let modified = modify_base_with_patch(base, &diffs).unwrap();
 
         // Should preserve order: row1,row2 -> row5,row6 -> row7,row8
         let lines: Vec<&str> = modified.lines().collect();
@@ -416,13 +435,13 @@ mod tests {
     fn test_modify_base_with_diffs_mismatched_header() {
         let base = "col1,col2\nrow1,row2\n";
         let diffs = Patch {
-            headers: vec!["col1".to_string(), "col3".to_string()],
+            header_row: "col1,col3".to_string(),
             base_filename: "test.csv".to_string(),
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
         };
 
-        let result = modify_base_with_diffs(base, &diffs);
+        let result = modify_base_with_patch(base, &diffs);
         assert_error!(
             result,
             "Header mismatch: base file has [col1, col2], diff file expects [col1, col3]"
