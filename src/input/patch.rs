@@ -14,46 +14,41 @@ use tempfile::{TempDir, tempdir};
 pub struct Patch {
     /// The target base filename that this patch applies to (e.g. "agents.csv")
     base_filename: String,
-    /// The header row
-    header_row: String,
-    /// Rows to delete (normalized to remove whitespace)
+    /// The header row (optional). If `None`, the header is not checked against base files.
+    header_row: Option<String>,
+    /// Rows to delete
     to_delete: IndexSet<String>,
-    /// Rows to add (normalized to remove whitespace)
+    /// Rows to add
     to_add: IndexSet<String>,
 }
 
 impl Patch {
-    /// Create a new empty `Patch` with the given `base_filename` and
-    /// a comma-joined header string (e.g. "a,b,c").
-    pub fn new<B, H>(base_filename: B, header_row: H) -> Self
-    where
-        B: Into<String>,
-        H: Into<String>,
-    {
+    /// Create a new empty `Patch` with the given `base_filename`.
+    pub fn new(base_filename: impl Into<String>) -> Self {
         let base_filename = base_filename.into();
-        let header_row = header_row.into().trim().to_string();
-
         Patch {
             base_filename,
-            header_row,
+            header_row: None,
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
         }
     }
 
+    /// Set the header row for this patch (`header` should be a comma-joined string, e.g. "a,b,c").
+    pub fn with_header(mut self, header: impl Into<String>) -> Self {
+        self.header_row = Some(header.into());
+        self
+    }
+
     /// Add a row to the patch (row is a canonical comma-joined string, e.g. "a,b,c").
-    /// Returns `self` for chaining.
     pub fn add(&mut self, row: impl Into<String>) -> &mut Self {
-        let s = row.into().trim().to_string();
-        self.to_add.insert(s);
+        self.to_add.insert(row.into());
         self
     }
 
     /// Mark a row for deletion from the base (row is a canonical comma-joined string).
-    /// Returns `self` for chaining.
     pub fn delete(&mut self, row: impl Into<String>) -> &mut Self {
-        let s = row.into().trim().to_string();
-        self.to_delete.insert(s);
+        self.to_delete.insert(row.into());
         self
     }
 
@@ -137,7 +132,7 @@ impl Patch {
         // Create Patch object
         Ok(Patch {
             base_filename,
-            header_row,
+            header_row: Some(header_row),
             to_delete,
             to_add,
         })
@@ -185,18 +180,19 @@ fn modify_base_with_patch(base: &str, diffs: &Patch) -> Result<String> {
 
     let base_header_vec: Vec<String> = base_header.iter().map(ToString::to_string).collect();
 
-    // Compare base header vector with the comma-joined header string stored in the patch
-    let diffs_header_vec: Vec<String> = diffs
-        .header_row
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .collect();
-    ensure!(
-        base_header_vec == diffs_header_vec,
-        "Header mismatch: base file has [{}], diff file expects [{}]",
-        base_header_vec.join(", "),
-        diffs_header_vec.join(", ")
-    );
+    // If the patch contains a header, compare it with the base file header.
+    if let Some(ref header_row) = diffs.header_row {
+        let diffs_header_vec: Vec<String> = header_row
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+        ensure!(
+            base_header_vec == diffs_header_vec,
+            "Header mismatch: base file has [{}], diff file expects [{}]",
+            base_header_vec.join(", "),
+            diffs_header_vec.join(", ")
+        );
+    }
 
     // Read all rows from base file, preserving order and checking for duplicates
     let mut base_rows = IndexSet::new();
@@ -375,7 +371,7 @@ mod tests {
 
         // Parse from the file
         let diffs = Patch::from_file(&diff_file).unwrap();
-        assert_eq!(diffs.header_row, "col1,col2");
+        assert_eq!(diffs.header_row.as_deref(), Some("col1,col2"));
         assert_eq!(diffs.to_delete.len(), 1);
         assert_eq!(diffs.to_add.len(), 1);
         let del_row = "val1,val2".to_string();
@@ -395,7 +391,7 @@ mod tests {
 
         // Parse from the file
         let diffs_from_file = Patch::from_file(&diff_file).unwrap();
-        assert_eq!(diffs_from_file.header_row, "col1,col2");
+        assert_eq!(diffs_from_file.header_row.as_deref(), Some("col1,col2"));
         assert_eq!(diffs_from_file.to_delete.len(), 1);
         assert_eq!(diffs_from_file.to_add.len(), 1);
         let del_row = "item1,item2".to_string();
@@ -414,7 +410,7 @@ mod tests {
         to_add.insert("row7,row8".to_string());
 
         let diffs = Patch {
-            header_row: "col1,col2".to_string(),
+            header_row: Some("col1,col2".to_string()),
             base_filename: "test.csv".to_string(),
             to_delete,
             to_add,
@@ -435,7 +431,7 @@ mod tests {
     fn test_modify_base_with_diffs_mismatched_header() {
         let base = "col1,col2\nrow1,row2\n";
         let diffs = Patch {
-            header_row: "col1,col3".to_string(),
+            header_row: Some("col1,col3".to_string()),
             base_filename: "test.csv".to_string(),
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
