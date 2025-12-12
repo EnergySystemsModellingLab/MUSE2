@@ -17,6 +17,7 @@ use std::fmt::{self, Write};
 use std::fs;
 use std::hash::Hash;
 use std::path::Path;
+use tempfile::tempdir;
 
 mod agent;
 use agent::read_agents;
@@ -25,7 +26,7 @@ use asset::read_assets;
 mod commodity;
 use commodity::read_commodities;
 mod patch;
-pub use patch::{FilePatch, patch_model};
+pub use patch::{FilePatch, patch_model_to_path};
 mod process;
 use process::read_processes;
 mod region;
@@ -231,17 +232,12 @@ where
 pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
-    // If `model_params` specifies a `base_dir`, patch the base model and load the patched model
+    // If `model_params` specifies a `base_dir`, patch the base model to a temporary directory and
+    // load the patched model
     if let Some(base_dir) = &model_params.base_model {
-        let patched_model =
-            patch_model(Path::new(base_dir), model_dir.as_ref()).with_context(|| {
-                format!(
-                    "Error patching base model at {} with patches from {}",
-                    base_dir,
-                    model_dir.as_ref().display()
-                )
-            })?;
-        return load_model(patched_model);
+        let temp = tempdir().context("Failed to create temporary directory for model patching")?;
+        patch_model_to_path(Path::new(base_dir), model_dir.as_ref(), &temp)?;
+        return load_model(temp.path());
     }
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;

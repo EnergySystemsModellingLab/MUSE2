@@ -7,7 +7,6 @@ use indexmap::IndexSet;
 use log::info;
 use std::fs;
 use std::path::Path;
-use tempfile::{TempDir, tempdir};
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
@@ -272,37 +271,47 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
     Ok(output)
 }
 
-/// Patch a base model directory with diffs from another directory.
-/// Returns a `TempDir` containing the patched model.
-pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<TempDir> {
+/// Patch a base model directory with diffs from another directory and save to an output directory.
+pub fn patch_model_to_path<P: AsRef<Path>, O: AsRef<Path>>(
+    base_model_dir: P,
+    diffs_dir: P,
+    out_dir: O,
+) -> Result<()> {
     info!(
         "Patching model at '{}' with diffs from '{}'",
         base_model_dir.as_ref().display(),
         diffs_dir.as_ref().display()
     );
+    let out_path = out_dir.as_ref();
 
-    // Copy contents of `base_model_dir` to a temporary directory
-    let temp_dir = tempdir().context("Failed to create temporary directory")?;
-    let temp_path = temp_dir.path();
-
+    // Copy all CSV files from the base model directory to the temporary directory
+    // Some of these will be overwritten by the patched versions later.
     for entry in fs::read_dir(base_model_dir.as_ref())? {
         let entry = entry?;
         let src_path = entry.path();
-
-        // Only copy files (skip any subdirectories if present)
-        if src_path.is_file() {
-            let dst_path = temp_path.join(entry.file_name());
+        if src_path.is_file()
+            && src_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+        {
+            let dst_path = out_path.join(entry.file_name());
             fs::copy(&src_path, &dst_path)
                 .with_context(|| format!("Failed to copy file: {}", src_path.display()))?;
         }
     }
 
-    // Patch the new model.toml file un the temporary directory
-    let base_toml_path = temp_path.join("model.toml");
+    // Read and merge `model.toml` from the base model and the diffs directory, then
+    // write the merged result into the output directory.
+    let base_toml_src = base_model_dir.as_ref().join("model.toml");
     let patch_toml_path = diffs_dir.as_ref().join("model.toml");
-    patch_model_toml(&base_toml_path, &patch_toml_path)?;
+    let merged_toml = read_toml_with_patch(&base_toml_src, &patch_toml_path)?;
+    let merged_str = toml::to_string_pretty(&merged_toml)?;
+    fs::write(out_path.join("model.toml"), merged_str)?;
 
-    // Read all patch files into memory first
+    // Read all patch files into memory first. CSV diffs are parsed into `FilePatch` entries;
+    // any non-CSV files (e.g. README.txt) are copied from the diffs directory into the
+    // temporary model directory so they override/add to the patched model.
     let mut patches = Vec::new();
     for entry in fs::read_dir(diffs_dir.as_ref())? {
         let entry = entry?;
@@ -312,67 +321,65 @@ pub fn patch_model<P: AsRef<Path>>(base_model_dir: P, diffs_dir: P) -> Result<Te
             continue;
         }
 
-        // Only consider CSV files
-        if !diff_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
-        {
-            continue;
+        // If the file is a CSV, parse it as a diff. Otherwise, copy the file into the temp dir.
+        match diff_path.extension().and_then(|e| e.to_str()) {
+            Some(ext) if ext.eq_ignore_ascii_case("csv") => {
+                // Read diffs and push to vector (FilePatch::from_file validates `_diff.csv` suffix)
+                let patch = FilePatch::from_file(&diff_path).with_context(|| {
+                    format!("Failed to read diff file: {}", diff_path.display())
+                })?;
+                patches.push(patch);
+            }
+            _ => {
+                // Copy non-CSV file (e.g., README) into the temporary patched model directory
+                let dst_path = out_path.join(entry.file_name());
+                fs::copy(&diff_path, &dst_path).with_context(|| {
+                    format!("Failed to copy diff asset: {}", diff_path.display())
+                })?;
+            }
         }
-
-        // Read diffs and push to vector (Patch::from_file validates `_diff.csv` suffix)
-        let patch = FilePatch::from_file(&diff_path)
-            .with_context(|| format!("Failed to read diff file: {}", diff_path.display()))?;
-        patches.push(patch);
     }
 
     // Apply each patch to its corresponding base file and write to temp dir
     for patch in &patches {
         patch
-            .apply_and_save(base_model_dir.as_ref(), temp_path)
+            .apply_and_save(base_model_dir.as_ref(), out_path)
             .with_context(|| format!("Failed to apply patch to file: {}", patch.base_filename))?;
     }
 
     info!(
-        "Patching complete. Patched model saved to temporary path '{}'",
-        temp_path.display()
+        "Patching complete. Patched model saved to '{}'",
+        out_path.display()
     );
 
-    // Return the temporary directory
-    Ok(temp_dir)
+    Ok(())
 }
 
-fn patch_model_toml(base_path: &Path, patch_path: &Path) -> Result<()> {
-    // Read original TOML file
+/// Read `base_path` and `patch_path` TOML files, merge top-level fields from the patch
+/// into the base
+fn read_toml_with_patch(base_path: &Path, patch_path: &Path) -> Result<toml::Value> {
+    // Read base TOML
     let base_str = fs::read_to_string(base_path).with_context(|| input_err_msg(base_path))?;
     let mut base_data: toml::Value =
         toml::from_str(&base_str).with_context(|| input_err_msg(base_path))?;
 
-    // Read patch TOML file
+    // Read patch TOML
     let patch_str = fs::read_to_string(patch_path).with_context(|| input_err_msg(patch_path))?;
     let patch_data: toml::Value =
         toml::from_str(&patch_str).with_context(|| input_err_msg(patch_path))?;
 
-    // Merge patch into base (only top-level fields allowed)
     let base_table = base_data.as_table_mut().expect("Base TOML must be a table");
     let patch_table = patch_data.as_table().expect("Patch TOML must be a table");
 
+    // Merge the patch into the base, skipping `base_model`, and prioritizing patch values
     for (key, patch_val) in patch_table {
-        // Skip `base_model` field
         if key == "base_model" {
             continue;
         }
-
-        // Overwrite or add the field from the patch
         base_table.insert(key.clone(), patch_val.clone());
     }
 
-    // Save modified TOML back to original file
-    let modified_str = toml::to_string_pretty(&base_data)?;
-    fs::write(base_path, modified_str)?;
-
-    Ok(())
+    Ok(base_data)
 }
 
 #[cfg(test)]
@@ -380,6 +387,7 @@ mod tests {
     use super::*;
     use crate::fixture::assert_error;
     use std::io::Write;
+    use tempfile::tempdir;
 
     #[test]
     fn test_read_diffs_basic() {
