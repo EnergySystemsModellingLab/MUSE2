@@ -17,7 +17,6 @@ use std::fmt::{self, Write};
 use std::fs;
 use std::hash::Hash;
 use std::path::Path;
-use tempfile::tempdir;
 
 mod agent;
 use agent::read_agents;
@@ -26,7 +25,7 @@ use asset::read_assets;
 mod commodity;
 use commodity::read_commodities;
 mod patch;
-pub use patch::{FilePatch, patch_model_to_path};
+pub use patch::{FilePatch, ModelPatch};
 mod process;
 use process::read_processes;
 mod region;
@@ -234,9 +233,9 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
 
     // If `model_params` specifies a `base_dir`, patch the base model to a temporary directory and
     // load the patched model
-    if let Some(base_dir) = &model_params.base_model {
-        let temp = tempdir().context("Failed to create temporary directory for model patching")?;
-        patch_model_to_path(Path::new(base_dir), model_dir.as_ref(), &temp)?;
+    if model_params.base_model.is_some() {
+        let patch = ModelPatch::from_path(model_dir.as_ref())?;
+        let temp = patch.build_to_tempdir()?;
         return load_model(temp.path());
     }
 

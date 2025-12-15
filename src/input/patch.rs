@@ -4,9 +4,161 @@ use super::input_err_msg;
 use anyhow::{Context, Result, bail, ensure};
 use csv::{ReaderBuilder, Trim, Writer};
 use indexmap::IndexSet;
-use log::info;
 use std::fs;
 use std::path::Path;
+
+/// Structure to hold a set of patches to apply to a base model.
+pub struct ModelPatch {
+    // The base model directory path
+    base_model_dir: String,
+    // The list of file patches to apply
+    file_patches: Vec<FilePatch>,
+    // Optional settings patches (TOML values)
+    settings_patch: Option<toml::value::Table>,
+}
+
+impl ModelPatch {
+    /// Create a new empty `ModelPatch` with the given base model directory.
+    pub fn new(base_model_dir: String) -> Self {
+        ModelPatch {
+            base_model_dir,
+            file_patches: Vec::new(),
+            settings_patch: None,
+        }
+    }
+
+    /// Add a `FilePatch` to this `ModelPatch`.
+    pub fn with_file_patch(mut self, patch: FilePatch) -> Self {
+        self.file_patches.push(patch);
+        self
+    }
+
+    /// Add a settings patch (TOML table) to this `ModelPatch`.
+    pub fn with_settings_patch(mut self, patch: toml::value::Table) -> Self {
+        assert!(
+            self.settings_patch.is_none(),
+            "Settings patch already set for this ModelPatch"
+        );
+        assert!(
+            !patch.contains_key("base_model"),
+            "Settings patch cannot contain `base_model` field"
+        );
+        self.settings_patch = Some(patch);
+        self
+    }
+
+    /// Build a `ModelPatch` from a diffs directory. Expects `model.toml` to be present in the
+    /// diffs directory and to contain a `base_model` string field that points to the base
+    /// model directory. Also collects all `*_diff.csv` files in the diffs directory into
+    /// `FilePatch` entries, and any other top-level fields in `model.toml` become the
+    /// `settings_patch`.
+    pub fn from_path(diffs_dir: &Path) -> Result<ModelPatch> {
+        // Read model.toml in the diffs directory
+        let patch_toml_str = fs::read_to_string(diffs_dir.join("model.toml"))?;
+        let patch_toml_data: toml::Value = toml::from_str(&patch_toml_str)?;
+
+        // Extract `base_model` field from model.toml
+        // Any additional fields become the settings_patch
+        let (base_model_dir, settings_patch) = match patch_toml_data {
+            toml::Value::Table(mut tbl) => {
+                let base = tbl
+                    .remove("base_model")
+                    .and_then(|v| v.as_str().map(std::string::ToString::to_string))
+                    .context("Patch model.toml missing required `base_model` field")?;
+                (base, tbl)
+            }
+            _ => bail!("Patch TOML must be a table"),
+        };
+
+        // Collect all file patches from `*_diff.csv` files in diffs directory
+        let mut file_patches = Vec::new();
+        for entry in fs::read_dir(diffs_dir)? {
+            let entry = entry?;
+            let p = entry.path();
+            if !p.is_file() {
+                continue;
+            }
+            if let Some(name) = p.file_name().and_then(|n| n.to_str())
+                && name.to_lowercase().ends_with("_diff.csv")
+            {
+                let fp = FilePatch::from_file(&p)
+                    .with_context(|| format!("Failed to read diff file: {}", p.display()))?;
+                file_patches.push(fp);
+            }
+        }
+
+        Ok(ModelPatch {
+            base_model_dir,
+            file_patches,
+            settings_patch: Some(settings_patch),
+        })
+    }
+
+    /// Apply this `ModelPatch` into `out_dir` (creating/overwriting files there).
+    fn build<O: AsRef<Path>>(&self, out_dir: O) -> Result<()> {
+        let base_dir = Path::new(&self.base_model_dir);
+        let out_path = out_dir.as_ref();
+
+        // Copy all CSV files from the base model into the output directory
+        // Any files with associated patches will be overwritten later
+        for entry in fs::read_dir(base_dir)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            if src_path.is_file()
+                && src_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+            {
+                let dst_path = out_path.join(entry.file_name());
+                fs::copy(&src_path, &dst_path)
+                    .with_context(|| format!("Failed to copy file: {}", src_path.display()))?;
+            }
+        }
+
+        // Apply settings patch (if any), or copy model.toml from the base model
+        let base_toml_path = base_dir.join("model.toml");
+        let out_toml_path = out_path.join("model.toml");
+        if let Some(settings_patch) = &self.settings_patch {
+            // Start with model.toml from base model
+            let settings_toml = fs::read_to_string(&base_toml_path)?;
+            let mut settings_value: toml::Value = toml::from_str(&settings_toml)?;
+            let merged_table = settings_value
+                .as_table_mut()
+                .context("Merged model TOML must be a table")?;
+
+            // Apply settings patch
+            for (key, patch_val) in settings_patch {
+                merged_table.insert(key.clone(), patch_val.clone());
+            }
+
+            // Save to file
+            let merged_toml = toml::to_string_pretty(&settings_value)?;
+            fs::write(&out_toml_path, merged_toml)?;
+        } else {
+            // No settings patch; copy base model.toml
+            fs::copy(&base_toml_path, &out_toml_path)?;
+        }
+
+        // Apply file patches
+        for patch in &self.file_patches {
+            patch
+                .apply_and_save(base_dir.as_ref(), out_path)
+                .with_context(|| {
+                    format!("Failed to apply patch to file: {}", patch.base_filename)
+                })?;
+        }
+
+        Ok(())
+    }
+
+    /// Build the patched model into a temporary directory and return the `TempDir`.
+    pub fn build_to_tempdir(&self) -> Result<tempfile::TempDir> {
+        let temp_dir = tempfile::tempdir()?;
+        self.build(temp_dir.path())?;
+        Ok(temp_dir)
+    }
+}
 
 /// Structure to hold diffs from a diff file
 #[derive(Debug)]
@@ -63,7 +215,6 @@ impl FilePatch {
     }
 
     /// Add a row to the patch (row is a canonical comma-joined string, e.g. "a,b,c").
-    /// This consumes and returns the `Patch` so calls can be chained.
     pub fn add_row(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
@@ -72,7 +223,6 @@ impl FilePatch {
     }
 
     /// Mark a row for deletion from the base (row is a canonical comma-joined string).
-    /// This consumes and returns the `Patch` so calls can be chained.
     pub fn delete_row(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
@@ -184,9 +334,9 @@ impl FilePatch {
     }
 
     /// Apply this patch to a base model and save the modified CSV to another directory.
-    pub fn apply_and_save(&self, base_model_dir: &Path, new_model_dir: &Path) -> Result<()> {
+    pub fn apply_and_save(&self, base_model_dir: &Path, out_model_dir: &Path) -> Result<()> {
         let modified = self.apply(base_model_dir)?;
-        let new_path = new_model_dir.join(&self.base_filename);
+        let new_path = out_model_dir.join(&self.base_filename);
         fs::write(&new_path, modified)
             .with_context(|| format!("Failed to write patched file: {}", new_path.display()))?;
         Ok(())
@@ -271,117 +421,6 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
     Ok(output)
 }
 
-/// Patch a base model directory with diffs from another directory and save to an output directory.
-pub fn patch_model_to_path<P: AsRef<Path>, O: AsRef<Path>>(
-    base_model_dir: P,
-    diffs_dir: P,
-    out_dir: O,
-) -> Result<()> {
-    info!(
-        "Patching model at '{}' with diffs from '{}'",
-        base_model_dir.as_ref().display(),
-        diffs_dir.as_ref().display()
-    );
-    let out_path = out_dir.as_ref();
-
-    // Copy all CSV files from the base model directory to the temporary directory
-    // Some of these will be overwritten by the patched versions later.
-    for entry in fs::read_dir(base_model_dir.as_ref())? {
-        let entry = entry?;
-        let src_path = entry.path();
-        if src_path.is_file()
-            && src_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
-        {
-            let dst_path = out_path.join(entry.file_name());
-            fs::copy(&src_path, &dst_path)
-                .with_context(|| format!("Failed to copy file: {}", src_path.display()))?;
-        }
-    }
-
-    // Read and merge `model.toml` from the base model and the diffs directory, then
-    // write the merged result into the output directory.
-    let base_toml_src = base_model_dir.as_ref().join("model.toml");
-    let patch_toml_path = diffs_dir.as_ref().join("model.toml");
-    let merged_toml = read_toml_with_patch(&base_toml_src, &patch_toml_path)?;
-    let merged_str = toml::to_string_pretty(&merged_toml)?;
-    fs::write(out_path.join("model.toml"), merged_str)?;
-
-    // Read all patch files into memory first. CSV diffs are parsed into `FilePatch` entries;
-    // any non-CSV files (e.g. README.txt) are copied from the diffs directory into the
-    // temporary model directory so they override/add to the patched model.
-    let mut patches = Vec::new();
-    for entry in fs::read_dir(diffs_dir.as_ref())? {
-        let entry = entry?;
-        let diff_path = entry.path();
-
-        if !diff_path.is_file() {
-            continue;
-        }
-
-        // If the file is a CSV, parse it as a diff. Otherwise, copy the file into the temp dir.
-        match diff_path.extension().and_then(|e| e.to_str()) {
-            Some(ext) if ext.eq_ignore_ascii_case("csv") => {
-                // Read diffs and push to vector (FilePatch::from_file validates `_diff.csv` suffix)
-                let patch = FilePatch::from_file(&diff_path).with_context(|| {
-                    format!("Failed to read diff file: {}", diff_path.display())
-                })?;
-                patches.push(patch);
-            }
-            _ => {
-                // Copy non-CSV file (e.g., README) into the temporary patched model directory
-                let dst_path = out_path.join(entry.file_name());
-                fs::copy(&diff_path, &dst_path).with_context(|| {
-                    format!("Failed to copy diff asset: {}", diff_path.display())
-                })?;
-            }
-        }
-    }
-
-    // Apply each patch to its corresponding base file and write to temp dir
-    for patch in &patches {
-        patch
-            .apply_and_save(base_model_dir.as_ref(), out_path)
-            .with_context(|| format!("Failed to apply patch to file: {}", patch.base_filename))?;
-    }
-
-    info!(
-        "Patching complete. Patched model saved to '{}'",
-        out_path.display()
-    );
-
-    Ok(())
-}
-
-/// Read `base_path` and `patch_path` TOML files, merge top-level fields from the patch
-/// into the base
-fn read_toml_with_patch(base_path: &Path, patch_path: &Path) -> Result<toml::Value> {
-    // Read base TOML
-    let base_str = fs::read_to_string(base_path).with_context(|| input_err_msg(base_path))?;
-    let mut base_data: toml::Value =
-        toml::from_str(&base_str).with_context(|| input_err_msg(base_path))?;
-
-    // Read patch TOML
-    let patch_str = fs::read_to_string(patch_path).with_context(|| input_err_msg(patch_path))?;
-    let patch_data: toml::Value =
-        toml::from_str(&patch_str).with_context(|| input_err_msg(patch_path))?;
-
-    let base_table = base_data.as_table_mut().expect("Base TOML must be a table");
-    let patch_table = patch_data.as_table().expect("Patch TOML must be a table");
-
-    // Merge the patch into the base, skipping `base_model`, and prioritizing patch values
-    for (key, patch_val) in patch_table {
-        if key == "base_model" {
-            continue;
-        }
-        base_table.insert(key.clone(), patch_val.clone());
-    }
-
-    Ok(base_data)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,7 +429,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_read_diffs_basic() {
+    fn test_patch_from_file() {
         // Create diff file
         let temp_dir = tempdir().unwrap();
         let diff_file = temp_dir.path().join("test_diff.csv");
@@ -399,21 +438,22 @@ mod tests {
         file.write_all(content.as_bytes()).unwrap();
 
         // Parse from the file
-        let diffs = FilePatch::from_file(&diff_file).unwrap();
+        let patch = FilePatch::from_file(&diff_file).unwrap();
+
         assert_eq!(
-            diffs.header_row.as_ref().map(|v| v.join(",")),
+            patch.header_row.as_ref().map(|v| v.join(",")),
             Some("col1,col2".to_string())
         );
-        assert_eq!(diffs.to_delete.len(), 1);
-        assert_eq!(diffs.to_add.len(), 1);
+        assert_eq!(patch.to_delete.len(), 1);
+        assert_eq!(patch.to_add.len(), 1);
         let del_row = vec!["val1".to_string(), "val2".to_string()];
         let add_row = vec!["val3".to_string(), "val4".to_string()];
-        assert!(diffs.to_delete.contains(&del_row));
-        assert!(diffs.to_add.contains(&add_row));
+        assert!(patch.to_delete.contains(&del_row));
+        assert!(patch.to_add.contains(&add_row));
     }
 
     #[test]
-    fn test_read_diffs_with_whitespace() {
+    fn test_patch_from_file_whitespace() {
         // Create diff file with extra whitespace
         let temp_dir = tempdir().unwrap();
         let diff_file = temp_dir.path().join("test_diff.csv");
@@ -422,21 +462,22 @@ mod tests {
         file.write_all(content.as_bytes()).unwrap();
 
         // Parse from the file
-        let diffs_from_file = FilePatch::from_file(&diff_file).unwrap();
+        let patch = FilePatch::from_file(&diff_file).unwrap();
+
         assert_eq!(
-            diffs_from_file.header_row.as_ref().map(|v| v.join(",")),
+            patch.header_row.as_ref().map(|v| v.join(",")),
             Some("col1,col2".to_string())
         );
-        assert_eq!(diffs_from_file.to_delete.len(), 1);
-        assert_eq!(diffs_from_file.to_add.len(), 1);
+        assert_eq!(patch.to_delete.len(), 1);
+        assert_eq!(patch.to_add.len(), 1);
         let del_row = vec!["item1".to_string(), "item2".to_string()];
         let add_row = vec!["another1".to_string(), "another2".to_string()];
-        assert!(diffs_from_file.to_delete.contains(&del_row));
-        assert!(diffs_from_file.to_add.contains(&add_row));
+        assert!(patch.to_delete.contains(&del_row));
+        assert!(patch.to_add.contains(&add_row));
     }
 
     #[test]
-    fn test_modify_base_with_diffs_preserves_order() {
+    fn test_modify_base_with_patch() {
         let base = "col1,col2\nrow1,row2\nrow3,row4\nrow5,row6\n";
 
         let patch = FilePatch::new("test.csv")
@@ -456,7 +497,7 @@ mod tests {
     }
 
     #[test]
-    fn test_modify_base_with_diffs_mismatched_header() {
+    fn test_modify_base_with_patch_mismatched_header() {
         let base = "col1,col2\nrow1,row2\n";
         let patch = FilePatch::new("test.csv").with_header("col1,col3");
 
