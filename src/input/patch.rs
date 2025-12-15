@@ -5,12 +5,12 @@ use anyhow::{Context, Result, bail, ensure};
 use csv::{ReaderBuilder, Trim, Writer};
 use indexmap::IndexSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Structure to hold a set of patches to apply to a base model.
 pub struct ModelPatch {
     // The base model directory path
-    base_model_dir: String,
+    base_model_dir: PathBuf,
     // The list of file patches to apply
     file_patches: Vec<FilePatch>,
     // Optional settings patches (TOML values)
@@ -19,9 +19,9 @@ pub struct ModelPatch {
 
 impl ModelPatch {
     /// Create a new empty `ModelPatch` with the given base model directory.
-    pub fn new(base_model_dir: String) -> Self {
+    pub fn new<P: Into<PathBuf>>(base_model_dir: P) -> Self {
         ModelPatch {
-            base_model_dir,
+            base_model_dir: base_model_dir.into(),
             file_patches: Vec::new(),
             settings_patch: None,
         }
@@ -63,7 +63,7 @@ impl ModelPatch {
             toml::Value::Table(mut tbl) => {
                 let base = tbl
                     .remove("base_model")
-                    .and_then(|v| v.as_str().map(std::string::ToString::to_string))
+                    .and_then(|v| v.as_str().map(PathBuf::from))
                     .context("Patch model.toml missing required `base_model` field")?;
                 (base, tbl)
             }
@@ -96,7 +96,7 @@ impl ModelPatch {
 
     /// Apply this `ModelPatch` into `out_dir` (creating/overwriting files there).
     fn build<O: AsRef<Path>>(&self, out_dir: O) -> Result<()> {
-        let base_dir = Path::new(&self.base_model_dir);
+        let base_dir = self.base_model_dir.as_path();
         let out_path = out_dir.as_ref();
 
         // Copy all CSV files from the base model into the output directory
@@ -142,11 +142,9 @@ impl ModelPatch {
 
         // Apply file patches
         for patch in &self.file_patches {
-            patch
-                .apply_and_save(base_dir.as_ref(), out_path)
-                .with_context(|| {
-                    format!("Failed to apply patch to file: {}", patch.base_filename)
-                })?;
+            patch.apply_and_save(base_dir, out_path).with_context(|| {
+                format!("Failed to apply patch to file: {}", patch.base_filename)
+            })?;
         }
 
         Ok(())
