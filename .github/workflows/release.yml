@@ -48,7 +48,7 @@ jobs:
           cp target/release/muse2${{ matrix.exe_suffix }} muse2
           cp LICENSE muse2/LICENCE.txt
           cp assets/readme/readme_${{ matrix.osname }}.txt muse2/README.txt
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: ${{ github.event_name != 'release' }}
         with:
           name: muse2_${{ matrix.osname }}
