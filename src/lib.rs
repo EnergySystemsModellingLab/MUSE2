@@ -18,6 +18,7 @@ pub mod input;
 pub mod log;
 pub mod model;
 pub mod output;
+pub mod patch;
 pub mod process;
 pub mod region;
 pub mod settings;

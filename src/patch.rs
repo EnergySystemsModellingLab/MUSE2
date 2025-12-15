@@ -1,5 +1,5 @@
 //! Code for applying patches/diffs to model input files.
-use super::input_err_msg;
+use crate::input::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
 use csv::{ReaderBuilder, Trim, Writer};
