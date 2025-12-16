@@ -147,10 +147,7 @@ mod tests {
             Settings::load_from_path(&file_path).unwrap(),
             Settings {
                 log_level: "warn".to_string(),
-                debug_model: false,
-                overwrite: false,
-                results_root: current_dir().unwrap().join("muse2_results"),
-                graph_results_root: current_dir().unwrap().join("muse2_graphs"),
+                ..Settings::default()
             }
         );
     }
