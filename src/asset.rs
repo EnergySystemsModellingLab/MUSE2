@@ -580,7 +580,7 @@ impl Asset {
                 parent_id,
                 ..
             } => (*id, agent_id.clone(), *parent_id),
-            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+            _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
@@ -599,7 +599,7 @@ impl Asset {
                 parent_id,
                 ..
             } => (*id, agent_id.clone(), *parent_id),
-            _ => panic!("Cannot unmothballed an asset that hasn't been commissioned"),
+            _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
@@ -640,14 +640,10 @@ impl Asset {
         );
 
         // Time to divide the asset until its capacity is all down to zero
-        let mut children = Vec::<Asset>::new();
+        let mut children = Vec::new();
         while self.capacity > Capacity(0.0) {
             let mut child = self.clone();
-            child.capacity = if self.process.unit_size.unwrap() <= self.capacity {
-                self.process.unit_size.unwrap()
-            } else {
-                self.capacity
-            };
+            child.capacity = self.process.unit_size.filter(|size| *size <= self.capacity).unwrap_or(self.capacity);
             self.capacity -= child.capacity;
             children.push(child);
         }
@@ -784,7 +780,7 @@ impl Hash for AssetRef {
             | AssetState::Decommissioned { .. }
             | AssetState::Divided { .. } => {
                 // We shouldn't currently need to hash Future, Decommissioned or Divided assets
-                unimplemented!("Cannot hash Future or Decommissioned assets");
+                panic!("Cannot hash Future, Decommissioned or Divided assets");
             }
         }
     }
