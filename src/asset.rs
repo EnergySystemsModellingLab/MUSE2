@@ -56,6 +56,8 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
+        /// ID of the parent asset, if any. None, if this asset is not resulting from dividing a parent
+        parent_id: Option<AssetID>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -537,7 +539,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    fn commission(&mut self, id: AssetID, reason: &str) {
+    /// * `parent_id` - The ID of the parent of this asset, if any.
+    fn commission(&mut self, id: AssetID, reason: &str, parent_id: Option<AssetID>) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -554,6 +557,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
+            parent_id,
         };
     }
 
@@ -569,27 +573,39 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
+        let (id, agent_id, parent_id) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                parent_id,
+                ..
+            } => (*id, agent_id.clone(), *parent_id),
             _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: Some(year),
+            parent_id,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
-            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        let (id, agent_id, parent_id) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                parent_id,
+                ..
+            } => (*id, agent_id.clone(), *parent_id),
+            _ => panic!("Cannot unmothballed an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
+            parent_id,
         };
     }
 
@@ -847,7 +863,7 @@ impl AssetPool {
                 continue;
             }
 
-            asset.commission(AssetID(self.next_id), "user input");
+            asset.commission(AssetID(self.next_id), "user input", None);
             self.next_id += 1;
             self.active.push(asset.into());
         }
@@ -975,7 +991,7 @@ impl AssetPool {
             AssetState::Selected { .. } => {
                 asset
                     .make_mut()
-                    .commission(AssetID(self.next_id), "selected");
+                    .commission(AssetID(self.next_id), "selected", None);
                 self.next_id += 1;
                 asset
             }
@@ -1576,7 +1592,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset1.commission(AssetID(1), "");
+        asset1.commission(AssetID(1), "", None);
         assert!(asset1.is_commissioned());
         assert_eq!(asset1.id(), Some(AssetID(1)));
 
@@ -1589,7 +1605,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset2.commission(AssetID(2), "");
+        asset2.commission(AssetID(2), "", None);
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
     }
@@ -1612,7 +1628,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), "", None);
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1644,7 +1660,7 @@ mod tests {
             max_decommission_year,
         )
         .unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), "", None);
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1659,7 +1675,7 @@ mod tests {
     fn test_commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), "", None);
     }
 
     #[rstest]
