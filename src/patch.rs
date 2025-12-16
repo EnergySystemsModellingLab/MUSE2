@@ -50,10 +50,6 @@ impl ModelPatch {
         let s = patch_str.as_ref();
         let patch: toml::value::Table =
             toml::from_str(s).expect("Failed to parse string passed to with_toml_patch");
-        assert!(
-            !patch.contains_key("base_model"),
-            "TOML patch must not contain a `base_model` field"
-        );
         self.toml_patch = Some(patch);
         self
     }
@@ -186,11 +182,6 @@ impl FilePatch {
 
 /// Merge a TOML patch into a base TOML string and return the merged TOML.
 fn merge_model_toml(base_toml: &str, patch: &toml::value::Table) -> Result<String> {
-    ensure!(
-        !patch.contains_key("base_model"),
-        "TOML patch must not contain a `base_model` field"
-    );
-
     // Parse base TOML into a table
     let mut base_val: toml::Value = toml::from_str(base_toml)?;
     let base_tbl = base_val
@@ -352,23 +343,5 @@ mod tests {
         assert!(merged.contains("field = \"patched\""));
         assert!(merged.contains("[section]"));
         assert!(merged.contains("new_field = \"added\""));
-    }
-
-    #[test]
-    fn test_merge_rejects_base_model_key() {
-        let base = r#"field = "data""#;
-
-        // Create a TOML patch with a base_model key
-        let mut patch = toml::value::Table::new();
-        patch.insert(
-            "base_model".to_string(),
-            toml::Value::String("..".to_string()),
-        );
-
-        // `merge_model_toml` should return an error
-        assert_error!(
-            merge_model_toml(base, &patch),
-            "TOML patch cannot contain a `base_model` field"
-        );
     }
 }
