@@ -1,4 +1,4 @@
-//! Code for applying patches/diffs to model input files.
+//! Code for applying patches to model input files.
 use crate::input::input_err_msg;
 
 use anyhow::{Context, Result, bail, ensure};
@@ -113,7 +113,7 @@ impl ModelPatch {
     }
 }
 
-/// Structure to hold diffs from a diff file
+/// Structure to hold patches to a model csv file.
 #[derive(Debug)]
 pub struct FilePatch {
     /// The target base filename that this patch applies to (e.g. "agents.csv")
@@ -234,18 +234,17 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         .trim(Trim::All)
         .from_reader(base.as_bytes());
 
-    // Read and validate header
+    // Read header
     let base_header = reader
         .headers()
         .context("Failed to read base file header")?;
-
     let base_header_vec: Vec<String> = base_header.iter().map(ToString::to_string).collect();
 
     // If the patch contains a header, compare it with the base file header.
     if let Some(ref header_row_vec) = patch.header_row {
         ensure!(
             base_header_vec == *header_row_vec,
-            "Header mismatch: base file has [{}], diff file expects [{}]",
+            "Header mismatch: base file has [{}], patch has [{}]",
             base_header_vec.join(", "),
             header_row_vec.join(", ")
         );
@@ -337,7 +336,7 @@ mod tests {
         let result = modify_base_with_patch(base, &patch);
         assert_error!(
             result,
-            "Header mismatch: base file has [col1, col2], diff file expects [col1, col3]"
+            "Header mismatch: base file has [col1, col2], patch has [col1, col3]"
         );
     }
 

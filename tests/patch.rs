@@ -1,6 +1,7 @@
-//! Integration tests for the `validate` command.
+//! Integration tests for the `patch` module.
 use anyhow::Result;
 use muse2::cli::handle_validate_command;
+use muse2::input::read_toml;
 use muse2::model::ModelParameters;
 use muse2::patch::{FilePatch, ModelPatch};
 use muse2::settings::Settings;
@@ -60,8 +61,8 @@ fn test_toml_patch_and_validate() {
     let model_dir = get_model_dir_toml_patch().unwrap();
 
     // The appropriate change has been made
-    let model_params = ModelParameters::from_path(&model_dir).unwrap();
-    assert_eq!(model_params.milestone_years, vec![2020, 2030, 2040, 2050]);
+    let toml: ModelParameters = read_toml(&model_dir.path().join("model.toml")).unwrap();
+    assert_eq!(toml.milestone_years, vec![2020, 2030, 2040, 2050]);
 
     // Validation should fail
     let val = handle_validate_command(&model_dir.path(), Some(Settings::default()));
