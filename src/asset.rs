@@ -80,10 +80,10 @@ pub enum AssetState {
     Candidate,
     /// The asset has been divided and only its children matter, now
     Divided {
+        /// The ID of the asset
+        id: AssetID,
         /// The ID of the agent that owns the asset
         agent_id: AgentID,
-        /// IDs of the children assets
-        children: Vec<AssetID>,
     },
 }
 
@@ -607,6 +607,41 @@ impl Asset {
     /// Checks if the assets corresponds to a process that has a `unit_size` and is therefore divisible.
     pub fn is_divisible(&self) -> bool {
         self.process.unit_size.is_some()
+    }
+
+    /// Divides an asset if it is divisible, setting it as Divided and returning a vector of children
+    ///
+    /// The children assets are identical to the parent (including state) but with a capacity defined
+    /// by the `unit_size`. Only Future or Selected assets can be divided.
+    pub fn divide_asset(&mut self, id: AssetID) -> Vec<Asset> {
+        let agent_id = match &self.state {
+            AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
+            state => panic!("Assets with state {state} cannot be divided"),
+        };
+        assert!(
+            self.is_divisible(),
+            "Only assets with a unit size defined can be divided"
+        );
+
+        // Time to divide the asset until its capacity is all down to zero
+        let mut children = Vec::<Asset>::new();
+        while self.capacity > Capacity(0.0) {
+            let mut child = self.clone();
+            child.capacity = if self.process.unit_size.unwrap() <= self.capacity {
+                self.process.unit_size.unwrap()
+            } else {
+                self.capacity
+            };
+            self.capacity -= child.capacity;
+            children.push(child);
+        }
+
+        // Finally, set the state of this asset as divided and return the children.
+        self.state = AssetState::Divided {
+            id,
+            agent_id: agent_id.clone(),
+        };
+        children
     }
 }
 
