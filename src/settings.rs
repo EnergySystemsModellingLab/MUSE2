@@ -5,7 +5,6 @@ use crate::log::DEFAULT_LOG_LEVEL;
 use anyhow::Result;
 use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
-use std::env::current_dir;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
@@ -48,9 +47,9 @@ pub struct Settings {
     pub overwrite: bool,
     /// Whether to write additional information to CSV files
     pub debug_model: bool,
-    /// Results root path to save MUSE2 results. Defaults to `{pwd}/muse2_results`.
+    /// Results root path to save MUSE2 results. Defaults to `muse2_results`.
     pub results_root: PathBuf,
-    /// Results root path to save MUSE2 graph outputs. Defaults to `{pwd}/muse2_graphs`.
+    /// Results root path to save MUSE2 graph outputs. Defaults to `muse2_graphs`.
     pub graph_results_root: PathBuf,
 }
 
@@ -60,8 +59,8 @@ impl Default for Settings {
             log_level: DEFAULT_LOG_LEVEL.to_string(),
             overwrite: false,
             debug_model: false,
-            results_root: current_dir().unwrap().join("muse2_results"),
-            graph_results_root: current_dir().unwrap().join("muse2_graphs"),
+            results_root: PathBuf::from("muse2_results"),
+            graph_results_root: PathBuf::from("muse2_graphs"),
         }
     }
 }
