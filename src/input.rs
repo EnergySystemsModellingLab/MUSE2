@@ -5,14 +5,12 @@ use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
-use crate::patch::ModelPatch;
 use crate::region::RegionID;
 use crate::units::UnitType;
 use anyhow::{Context, Result, bail, ensure};
 use float_cmp::approx_eq;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use log::info;
 use serde::de::{Deserialize, DeserializeOwned, Deserializer};
 use std::collections::HashMap;
 use std::fmt::{self, Write};
@@ -230,19 +228,6 @@ where
 /// The static model data ([`Model`]) and an [`AssetPool`] struct or an error.
 pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
     let model_params = ModelParameters::from_path(&model_dir)?;
-
-    // If `model_params` specifies a `base_dir`, patch the base model to a temporary directory and
-    // load the patched model
-    if model_params.base_model.is_some() {
-        info!("Patching base model specified in model.toml");
-        let patch = ModelPatch::from_path(model_dir.as_ref())?;
-        let temp = patch.build_to_tempdir()?;
-        info!(
-            "Base model patched to temporary directory at {}",
-            temp.path().display()
-        );
-        return load_model(temp.path());
-    }
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
     let regions = read_regions(model_dir.as_ref())?;

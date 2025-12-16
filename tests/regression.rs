@@ -47,11 +47,7 @@ fn run_regression_test_debug_opt(example_name: &str, debug_model: bool) {
     };
     handle_example_run_command(example_name, &opts, Some(Settings::default())).unwrap();
 
-    // If example_name ends with "_patch", map to the base example name.
-    let test_data_dir = PathBuf::from(format!(
-        "tests/data/{}",
-        example_name.strip_suffix("_patch").unwrap_or(example_name)
-    ));
+    let test_data_dir = PathBuf::from(format!("tests/data/{example_name}"));
     compare_output_dirs(&output_dir, &test_data_dir, debug_model);
 }
 

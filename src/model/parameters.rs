@@ -58,7 +58,6 @@ define_param_default!(default_mothball_years, u32, 0);
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ModelParameters {
     /// Milestone years
-    #[serde(default)]
     pub milestone_years: Vec<u32>,
     /// Allow known-broken options to be enabled.
     #[serde(default, rename = "please_give_me_broken_results")] // Can't use constant here :-(
@@ -98,10 +97,6 @@ pub struct ModelParameters {
     /// Number of years an asset can remain unused before being decommissioned
     #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
-    /// Optional base model directory to use as a starting point, with this model's files applied
-    /// as patches/diffs.
-    #[serde(default)]
-    pub base_model: Option<String>,
 }
 
 /// The strategy used for calculating commodity prices
@@ -178,16 +173,6 @@ impl ModelParameters {
     pub fn from_path<P: AsRef<Path>>(model_dir: P) -> Result<ModelParameters> {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
         let model_params: ModelParameters = read_toml(&file_path)?;
-
-        // If `base_model` is specified, just check that it exists and skip further validation
-        // as we will do this later on the fully patched model.
-        if let Some(base_model_path) = &model_params.base_model {
-            ensure!(
-                Path::new(base_model_path).is_dir(),
-                "`base_model` directory not found: {base_model_path}",
-            );
-            return Ok(model_params);
-        }
 
         // Set flag signalling whether broken model options are allowed or not
         BROKEN_OPTIONS_ALLOWED

@@ -1,4 +1,0 @@
-,process_id,regions,commission_years,capital_cost,fixed_operating_cost,variable_operating_cost,lifetime,discount_rate
-+,BIOPRO,all,all,1.0,0.2,0.25,20,0.09
-+,BIOPLL,all,all,2.0,0.22,0.26,20,0.1
-+,RBIOBL,all,all,60,1.05,0.2,20,0.1

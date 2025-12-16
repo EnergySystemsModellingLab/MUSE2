@@ -60,39 +60,6 @@ impl ModelPatch {
         self
     }
 
-    /// Build a `ModelPatch` from a diffs directory. Expects `model.toml` to be present in the
-    /// diffs directory and to contain a `base_model` string field that points to the base
-    /// model directory. Also collects all `*_diff.csv` files in the diffs directory into
-    /// `FilePatch` entries, and any other top-level fields in `model.toml` become the
-    /// `toml_patch`.
-    pub fn from_path(diffs_dir: &Path) -> Result<ModelPatch> {
-        // Parse patch model.toml and extract base_model + toml patch
-        let (base_model_dir, toml_patch) = read_patch_toml(&diffs_dir.join("model.toml"))?;
-
-        // Collect all file patches from `*_diff.csv` files in diffs directory
-        let mut file_patches = Vec::new();
-        for entry in fs::read_dir(diffs_dir)? {
-            let entry = entry?;
-            let p = entry.path();
-            if !p.is_file() {
-                continue;
-            }
-            if let Some(name) = p.file_name().and_then(|n| n.to_str())
-                && name.to_lowercase().ends_with("_diff.csv")
-            {
-                let fp = FilePatch::from_file(&p)
-                    .with_context(|| format!("Failed to read diff file: {}", p.display()))?;
-                file_patches.push(fp);
-            }
-        }
-
-        Ok(ModelPatch {
-            base_model_dir,
-            file_patches,
-            toml_patch: Some(toml_patch),
-        })
-    }
-
     /// Apply this `ModelPatch` into `out_dir` (creating/overwriting files there).
     fn build<O: AsRef<Path>>(&self, out_dir: O) -> Result<()> {
         let base_dir = self.base_model_dir.as_path();
@@ -195,92 +162,6 @@ impl FilePatch {
         self
     }
 
-    /// Read a diff file and construct a `Patch`.
-    pub fn from_file(file_path: &Path) -> Result<FilePatch> {
-        // Extract the base filename by removing the `_diff.csv` suffix
-        let file_name = file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .context("Invalid filename encoding")?;
-        ensure!(
-            file_name.to_lowercase().ends_with("_diff.csv"),
-            "Diff file must end with '_diff.csv': {file_name}"
-        );
-        let base_name = &file_name[..file_name.len() - "_diff.csv".len()];
-        let base_filename = format!("{base_name}.csv");
-
-        // Read diff CSV file
-        let mut reader = ReaderBuilder::new()
-            .trim(Trim::All)
-            .from_path(file_path)
-            .with_context(|| input_err_msg(file_path))?;
-
-        // Read header
-        let diff_header = reader
-            .headers()
-            .with_context(|| input_err_msg(Path::new(&base_filename)))?;
-        ensure!(!diff_header.is_empty(), "Diff file header cannot be empty");
-
-        // Collect column headers (skip first column which is the diff indicator)
-        let headers_vec: Vec<String> = diff_header
-            .iter()
-            .skip(1)
-            .map(ToString::to_string)
-            .collect();
-        ensure!(
-            !headers_vec.is_empty(),
-            "Diff file must have at least one data column"
-        );
-
-        // Collect additions and deletions
-        let mut to_delete: IndexSet<Vec<String>> = IndexSet::new();
-        let mut to_add: IndexSet<Vec<String>> = IndexSet::new();
-        for (line_num, result) in reader.records().enumerate() {
-            let record = result.with_context(|| {
-                format!("Error reading record at line {} in diff file", line_num + 2)
-            })?;
-
-            ensure!(
-                !record.is_empty(),
-                "Empty row at line {} in diff file",
-                line_num + 2
-            );
-
-            // First column is the diff indicator
-            let diff_indicator = record.get(0).context("Missing diff indicator column")?;
-
-            // Build normalized row vector from the csv record
-            let row_vec = canonicalize_vec(record.iter().skip(1));
-            let row_str = canonicalize_fields(&row_vec);
-
-            match diff_indicator {
-                "-" => {
-                    ensure!(
-                        to_delete.insert(row_vec.clone()),
-                        "Duplicate deletion entry: {row_str}",
-                    );
-                }
-                "+" => {
-                    ensure!(
-                        to_add.insert(row_vec.clone()),
-                        "Duplicate addition entry: {row_str}",
-                    );
-                }
-                _ => {
-                    bail!("Invalid diff indicator: '{diff_indicator}'. Must be '+' or '-'");
-                }
-            }
-        }
-
-        // Create Patch object
-        Ok(FilePatch {
-            base_filename,
-            header_row: Some(headers_vec),
-            to_delete,
-            to_add,
-        })
-    }
-
     /// Apply this patch to a base model and return the modified CSV as a string.
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
         // Read the base file to string
@@ -305,23 +186,6 @@ impl FilePatch {
         fs::write(&new_path, modified)
             .with_context(|| format!("Failed to write patched file: {}", new_path.display()))?;
         Ok(())
-    }
-}
-
-/// Read a patch `model.toml` file and return the `base_model` path and remaining
-/// table as the toml patch.
-fn read_patch_toml(toml_path: &Path) -> Result<(PathBuf, toml::value::Table)> {
-    let s = fs::read_to_string(toml_path)?;
-    let val: toml::Value = toml::from_str(&s)?;
-    match val {
-        toml::Value::Table(mut tbl) => {
-            let base = tbl
-                .remove("base_model")
-                .and_then(|v| v.as_str().map(PathBuf::from))
-                .context("Patch model.toml missing required `base_model` field")?;
-            Ok((base, tbl))
-        }
-        _ => bail!("Patch TOML must be a table"),
     }
 }
 
@@ -444,56 +308,6 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
 mod tests {
     use super::*;
     use crate::fixture::assert_error;
-    use std::io::Write;
-    use tempfile::tempdir;
-
-    #[test]
-    fn test_patch_from_file() {
-        // Create diff file
-        let temp_dir = tempdir().unwrap();
-        let diff_file = temp_dir.path().join("test_diff.csv");
-        let content = "diff,col1,col2\n-,val1,val2\n+,val3,val4\n";
-        let mut file = fs::File::create(&diff_file).unwrap();
-        file.write_all(content.as_bytes()).unwrap();
-
-        // Parse from the file
-        let patch = FilePatch::from_file(&diff_file).unwrap();
-
-        assert_eq!(
-            patch.header_row.as_ref().map(|v| v.join(",")),
-            Some("col1,col2".to_string())
-        );
-        assert_eq!(patch.to_delete.len(), 1);
-        assert_eq!(patch.to_add.len(), 1);
-        let del_row = vec!["val1".to_string(), "val2".to_string()];
-        let add_row = vec!["val3".to_string(), "val4".to_string()];
-        assert!(patch.to_delete.contains(&del_row));
-        assert!(patch.to_add.contains(&add_row));
-    }
-
-    #[test]
-    fn test_patch_from_file_whitespace() {
-        // Create diff file with extra whitespace
-        let temp_dir = tempdir().unwrap();
-        let diff_file = temp_dir.path().join("test_diff.csv");
-        let content = " diff , col1 , col2 \n-,  item1  ,  item2  \n+,  another1  ,  another2  \n";
-        let mut file = fs::File::create(&diff_file).unwrap();
-        file.write_all(content.as_bytes()).unwrap();
-
-        // Parse from the file
-        let patch = FilePatch::from_file(&diff_file).unwrap();
-
-        assert_eq!(
-            patch.header_row.as_ref().map(|v| v.join(",")),
-            Some("col1,col2".to_string())
-        );
-        assert_eq!(patch.to_delete.len(), 1);
-        assert_eq!(patch.to_add.len(), 1);
-        let del_row = vec!["item1".to_string(), "item2".to_string()];
-        let add_row = vec!["another1".to_string(), "another2".to_string()];
-        assert!(patch.to_delete.contains(&del_row));
-        assert!(patch.to_add.contains(&add_row));
-    }
 
     #[test]
     fn test_modify_base_with_patch() {
@@ -525,26 +339,6 @@ mod tests {
             result,
             "Header mismatch: base file has [col1, col2], diff file expects [col1, col3]"
         );
-    }
-
-    #[test]
-    fn test_read_patch_toml() {
-        // Create patch TOML file
-        let td = tempdir().unwrap();
-        let p = td.path().join("model.toml");
-        let content = r#"
-            base_model = "some/base/path"
-            foo = "bar"
-        "#;
-        let mut f = fs::File::create(&p).unwrap();
-        f.write_all(content.as_bytes()).unwrap();
-
-        // Read with `read_patch_toml`
-        // Should return the base_model path and remaining table (without the base_model field)
-        let (base, tbl) = read_patch_toml(&p).unwrap();
-        assert_eq!(base, PathBuf::from("some/base/path"));
-        assert_eq!(tbl.get("foo").and_then(|v| v.as_str()), Some("bar"));
-        assert!(!tbl.contains_key("base_model"));
     }
 
     #[test]
