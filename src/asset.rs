@@ -810,6 +810,8 @@ pub struct AssetPool {
     future: Vec<Asset>,
     /// Assets that have been decommissioned
     decommissioned: Vec<AssetRef>,
+    /// Assets that have been divided
+    divided: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
 }
@@ -824,6 +826,7 @@ impl AssetPool {
             active: Vec::new(),
             future: assets,
             decommissioned: Vec::new(),
+            divided: Vec::new(),
             next_id: 0,
         }
     }
@@ -863,9 +866,23 @@ impl AssetPool {
                 continue;
             }
 
-            asset.commission(AssetID(self.next_id), "user input", None);
-            self.next_id += 1;
-            self.active.push(asset.into());
+            // If it is divisible, we divided and commission all the children
+            if asset.is_divisible() {
+                let children = asset.divide_asset(AssetID(self.next_id));
+                self.next_id += 1;
+                for mut child in children {
+                    child.commission(AssetID(self.next_id), "user input", asset.id());
+                    self.next_id += 1;
+                    self.active.push(child.into());
+                }
+                self.divided.push(asset.into());
+
+            // If not, we just commission it as a single asset
+            } else {
+                asset.commission(AssetID(self.next_id), "user input", None);
+                self.next_id += 1;
+                self.active.push(asset.into());
+            }
         }
     }
 
