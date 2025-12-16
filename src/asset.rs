@@ -643,7 +643,11 @@ impl Asset {
         let mut children = Vec::new();
         while self.capacity > Capacity(0.0) {
             let mut child = self.clone();
-            child.capacity = self.process.unit_size.filter(|size| *size <= self.capacity).unwrap_or(self.capacity);
+            child.capacity = self
+                .process
+                .unit_size
+                .filter(|size| *size <= self.capacity)
+                .unwrap_or(self.capacity);
             self.capacity -= child.capacity;
             children.push(child);
         }
