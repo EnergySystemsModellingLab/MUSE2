@@ -16,7 +16,7 @@ pub struct ModelPatch {
 }
 
 impl ModelPatch {
-    /// Create a new empty `ModelPatch` with the given base model directory.
+    /// Create a new empty `ModelPatch` for a base model at the given directory.
     pub fn new<P: Into<PathBuf>>(base_model_dir: P) -> Self {
         ModelPatch {
             base_model_dir: base_model_dir.into(),
@@ -63,6 +63,17 @@ impl ModelPatch {
         let base_dir = self.base_model_dir.as_path();
         let out_path = out_dir.as_ref();
 
+        // Apply toml patch (if any), or copy model.toml unchanged from the base model
+        let base_toml_path = base_dir.join("model.toml");
+        let out_toml_path = out_path.join("model.toml");
+        if let Some(toml_patch) = &self.toml_patch {
+            let toml_content = fs::read_to_string(&base_toml_path)?;
+            let merged_toml = merge_model_toml(&toml_content, toml_patch)?;
+            fs::write(&out_toml_path, merged_toml)?;
+        } else {
+            fs::copy(&base_toml_path, &out_toml_path)?;
+        }
+
         // Copy all CSV files from the base model into the output directory
         // Any files with associated patches will be overwritten later
         for entry in fs::read_dir(base_dir)? {
@@ -77,17 +88,6 @@ impl ModelPatch {
                 let dst_path = out_path.join(entry.file_name());
                 fs::copy(&src_path, &dst_path)?;
             }
-        }
-
-        // Apply toml patch (if any), or copy model.toml unchanged from the base model
-        let base_toml_path = base_dir.join("model.toml");
-        let out_toml_path = out_path.join("model.toml");
-        if let Some(toml_patch) = &self.toml_patch {
-            let toml_content = fs::read_to_string(&base_toml_path)?;
-            let merged_toml = merge_model_toml(&toml_content, toml_patch)?;
-            fs::write(&out_toml_path, merged_toml)?;
-        } else {
-            fs::copy(&base_toml_path, &out_toml_path)?;
         }
 
         // Apply file patches
@@ -106,25 +106,24 @@ impl ModelPatch {
     }
 }
 
-/// Structure to hold patches to a model csv file.
+/// Structure to hold patches for a model csv file.
 #[derive(Debug)]
 pub struct FilePatch {
-    /// The target base filename that this patch applies to (e.g. "agents.csv")
-    base_filename: String,
+    /// The file that this patch applies to (e.g. "agents.csv")
+    filename: String,
     /// The header row (optional). If `None`, the header is not checked against base files.
     header_row: Option<Vec<String>>,
-    /// Rows to delete (each row is a vector of canonicalized fields)
+    /// Rows to delete (each row is a vector of fields)
     to_delete: IndexSet<Vec<String>>,
-    /// Rows to add (each row is a vector of canonicalized fields)
+    /// Rows to add (each row is a vector of fields)
     to_add: IndexSet<Vec<String>>,
 }
 
 impl FilePatch {
-    /// Create a new empty `Patch` with the given `base_filename`.
-    pub fn new(base_filename: impl Into<String>) -> Self {
-        let base_filename = base_filename.into();
+    /// Create a new empty `Patch` for the given file.
+    pub fn new(filename: impl Into<String>) -> Self {
         FilePatch {
-            base_filename,
+            filename: filename.into(),
             header_row: None,
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
@@ -162,7 +161,7 @@ impl FilePatch {
     /// Apply this patch to a base model and return the modified CSV as a string.
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
         // Read the base file to string
-        let base_path = base_model_dir.join(&self.base_filename);
+        let base_path = base_model_dir.join(&self.filename);
         ensure!(
             base_path.exists() && base_path.is_file(),
             "Base file for patching does not exist: {}",
@@ -172,24 +171,24 @@ impl FilePatch {
 
         // Apply the patch
         let modified = modify_base_with_patch(&base, self)
-            .with_context(|| format!("Error applying patch to file: {}", self.base_filename))?;
+            .with_context(|| format!("Error applying patch to file: {}", self.filename))?;
         Ok(modified)
     }
 
     /// Apply this patch to a base model and save the modified CSV to another directory.
     pub fn apply_and_save(&self, base_model_dir: &Path, out_model_dir: &Path) -> Result<()> {
         let modified = self.apply(base_model_dir)?;
-        let new_path = out_model_dir.join(&self.base_filename);
+        let new_path = out_model_dir.join(&self.filename);
         fs::write(&new_path, modified)?;
         Ok(())
     }
 }
 
-/// Merge a TOML patch into a base model TOML string and return the merged TOML.
+/// Merge a TOML patch into a base TOML string and return the merged TOML.
 fn merge_model_toml(base_toml: &str, patch: &toml::value::Table) -> Result<String> {
     ensure!(
         !patch.contains_key("base_model"),
-        "TOML patch cannot contain a `base_model` field"
+        "TOML patch must not contain a `base_model` field"
     );
 
     // Parse base TOML into a table
@@ -211,18 +210,18 @@ fn merge_model_toml(base_toml: &str, patch: &toml::value::Table) -> Result<Strin
 /// Modify a string representation of a base CSV file by applying a `FilePatch`.
 /// Preserves the order of rows from the base file, with new rows appended at the end.
 fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
-    // Read base file from string, trimming whitespace
+    // Read base string, trimming whitespace
     let mut reader = ReaderBuilder::new()
         .trim(Trim::All)
         .from_reader(base.as_bytes());
 
-    // Read header
+    // Extract header from the base string
     let base_header = reader
         .headers()
         .context("Failed to read base file header")?;
     let base_header_vec: Vec<String> = base_header.iter().map(ToString::to_string).collect();
 
-    // If the patch contains a header, compare it with the base file header.
+    // If the patch contains a header, compare it with the base header.
     if let Some(ref header_row_vec) = patch.header_row {
         ensure!(
             base_header_vec == *header_row_vec,
@@ -232,7 +231,7 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         );
     }
 
-    // Read all rows from base file, preserving order and checking for duplicates
+    // Read all rows from the base, preserving order and checking for duplicates
     let mut base_rows: IndexSet<Vec<String>> = IndexSet::new();
     for result in reader.records() {
         let record = result?;
@@ -258,6 +257,14 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         );
     }
 
+    // Ensure every row requested for deletion actually exists in the base file.
+    for del_row in &patch.to_delete {
+        ensure!(
+            base_rows.contains(del_row),
+            "Row to delete not present in base file: {del_row:?}"
+        );
+    }
+
     // Apply deletions
     base_rows.retain(|row| !patch.to_delete.contains(row));
 
@@ -269,7 +276,7 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         );
     }
 
-    // Serialize CSV output using csv::Writer to ensure correct quoting/escaping
+    // Serialize CSV output using csv::Writer
     let mut wtr = Writer::from_writer(vec![]);
     wtr.write_record(base_header_vec.iter())?;
     for row in &base_rows {
