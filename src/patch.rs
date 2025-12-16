@@ -1,13 +1,11 @@
 //! Code for applying patches to model input files.
-use crate::input::input_err_msg;
-
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use csv::{ReaderBuilder, Trim, Writer};
 use indexmap::IndexSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Structure to hold a set of patches to apply to a base model.
+/// Struct to hold a set of patches to apply to a base model.
 pub struct ModelPatch {
     // The base model directory path
     base_model_dir: PathBuf,
@@ -54,13 +52,13 @@ impl ModelPatch {
             toml::from_str(s).expect("Failed to parse string passed to with_toml_patch");
         assert!(
             !patch.contains_key("base_model"),
-            "TOML patch cannot contain `base_model` field"
+            "TOML patch must not contain a `base_model` field"
         );
         self.toml_patch = Some(patch);
         self
     }
 
-    /// Apply this `ModelPatch` into `out_dir` (creating/overwriting files there).
+    /// Build this `ModelPatch` into `out_dir` (creating/overwriting files there).
     fn build<O: AsRef<Path>>(&self, out_dir: O) -> Result<()> {
         let base_dir = self.base_model_dir.as_path();
         let out_path = out_dir.as_ref();
@@ -77,29 +75,24 @@ impl ModelPatch {
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
             {
                 let dst_path = out_path.join(entry.file_name());
-                fs::copy(&src_path, &dst_path)
-                    .with_context(|| format!("Failed to copy file: {}", src_path.display()))?;
+                fs::copy(&src_path, &dst_path)?;
             }
         }
 
-        // Apply toml patch (if any), or copy model.toml from the base model
+        // Apply toml patch (if any), or copy model.toml unchanged from the base model
         let base_toml_path = base_dir.join("model.toml");
         let out_toml_path = out_path.join("model.toml");
         if let Some(toml_patch) = &self.toml_patch {
-            // Start with model.toml from base model and merge via helper
             let toml_content = fs::read_to_string(&base_toml_path)?;
             let merged_toml = merge_model_toml(&toml_content, toml_patch)?;
             fs::write(&out_toml_path, merged_toml)?;
         } else {
-            // No toml patch; copy base model.toml
             fs::copy(&base_toml_path, &out_toml_path)?;
         }
 
         // Apply file patches
         for patch in &self.file_patches {
-            patch.apply_and_save(base_dir, out_path).with_context(|| {
-                format!("Failed to apply patch to file: {}", patch.base_filename)
-            })?;
+            patch.apply_and_save(base_dir, out_path)?;
         }
 
         Ok(())
@@ -138,15 +131,19 @@ impl FilePatch {
         }
     }
 
-    /// Set the header row for this patch (`header` should be a comma-joined string, e.g. "a,b,c").
+    /// Set the header row for this patch (header should be a comma-joined string, e.g. "a,b,c").
     pub fn with_header(mut self, header: impl Into<String>) -> Self {
+        assert!(
+            self.header_row.is_none(),
+            "Header already set for this FilePatch",
+        );
         let s = header.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.header_row = Some(v);
         self
     }
 
-    /// Add a row to the patch (row is a canonical comma-joined string, e.g. "a,b,c").
+    /// Add a row to the patch (row should be a comma-joined string, e.g. "a,b,c").
     pub fn add_row(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
@@ -154,7 +151,7 @@ impl FilePatch {
         self
     }
 
-    /// Mark a row for deletion from the base (row is a canonical comma-joined string).
+    /// Mark a row for deletion from the base (row should be a comma-joined string, e.g. "a,b,c").
     pub fn delete_row(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
@@ -166,16 +163,16 @@ impl FilePatch {
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
         // Read the base file to string
         let base_path = base_model_dir.join(&self.base_filename);
-        if !base_path.exists() {
-            bail!(
-                "Base file for patching does not exist: {}",
-                base_path.display()
-            );
-        }
-        let base = fs::read_to_string(&base_path).with_context(|| input_err_msg(&base_path))?;
+        ensure!(
+            base_path.exists() && base_path.is_file(),
+            "Base file for patching does not exist: {}",
+            base_path.display()
+        );
+        let base = fs::read_to_string(&base_path)?;
 
         // Apply the patch
-        let modified = modify_base_with_patch(&base, self)?;
+        let modified = modify_base_with_patch(&base, self)
+            .with_context(|| format!("Error applying patch to file: {}", self.base_filename))?;
         Ok(modified)
     }
 
@@ -183,47 +180,32 @@ impl FilePatch {
     pub fn apply_and_save(&self, base_model_dir: &Path, out_model_dir: &Path) -> Result<()> {
         let modified = self.apply(base_model_dir)?;
         let new_path = out_model_dir.join(&self.base_filename);
-        fs::write(&new_path, modified)
-            .with_context(|| format!("Failed to write patched file: {}", new_path.display()))?;
+        fs::write(&new_path, modified)?;
         Ok(())
     }
 }
 
 /// Merge a TOML patch into a base model TOML string and return the merged TOML.
 fn merge_model_toml(base_toml: &str, patch: &toml::value::Table) -> Result<String> {
-    if patch.contains_key("base_model") {
-        bail!("TOML patch cannot contain `base_model` field");
-    }
+    assert!(
+        !patch.contains_key("base_model"),
+        "TOML patch cannot contain a `base_model` field"
+    );
+
+    // Parse base TOML into a table
     let mut base_val: toml::Value = toml::from_str(base_toml)?;
     let base_tbl = base_val
         .as_table_mut()
         .context("Base model TOML must be a table")?;
+
+    // Apply patch entries
     for (k, v) in patch {
         base_tbl.insert(k.clone(), v.clone());
     }
+
+    // Serialize merged TOML back to string
     let out = toml::to_string_pretty(&base_val)?;
     Ok(out)
-}
-
-/// Build a canonical comma-joined string from an iterator of field strings.
-fn canonicalize_fields<I, S>(fields: I) -> String
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    fields
-        .into_iter()
-        .map(|s| s.as_ref().trim().to_string())
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-/// Build a canonical vector of trimmed strings from an iterator of field strings.
-fn canonicalize_vec<'a, I>(fields: I) -> Vec<String>
-where
-    I: IntoIterator<Item = &'a str>,
-{
-    fields.into_iter().map(|s| s.trim().to_string()).collect()
 }
 
 /// Modify a string representation of a base CSV file by applying a `FilePatch`.
@@ -252,21 +234,19 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
 
     // Read all rows from base file, preserving order and checking for duplicates
     let mut base_rows: IndexSet<Vec<String>> = IndexSet::new();
-    for (line_num, result) in reader.records().enumerate() {
-        let record = result.with_context(|| {
-            format!("Error reading record at line {} in base file", line_num + 2)
-        })?;
+    for result in reader.records() {
+        let record = result?;
 
         // Create normalized row vector by trimming fields
-        let row_vec = canonicalize_vec(record.iter());
-        let row_str = canonicalize_fields(&row_vec);
+        let row_vec = record
+            .iter()
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<_>>();
 
         // Check for duplicates
         ensure!(
             base_rows.insert(row_vec.clone()),
-            "Duplicate row at line {} in base file: {}",
-            line_num + 2,
-            row_str
+            "Duplicate row in base file: {row_vec:?}",
         );
     }
 
@@ -274,8 +254,7 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
     for del_row in &patch.to_delete {
         ensure!(
             !patch.to_add.contains(del_row),
-            "Row appears in both deletions and additions: {}",
-            canonicalize_fields(del_row)
+            "Row appears in both deletions and additions: {del_row:?}",
         );
     }
 
