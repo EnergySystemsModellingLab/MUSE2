@@ -42,12 +42,16 @@ impl ModelPatch {
         self
     }
 
-    /// Add a TOML patch (TOML table) to this `ModelPatch`.
-    pub fn with_toml_patch(mut self, patch: toml::value::Table) -> Self {
+    /// Add a TOML patch (provided as a string) to this `ModelPatch`.
+    /// The string will be parsed into a `toml::value::Table`.
+    pub fn with_toml_patch(mut self, patch_str: impl AsRef<str>) -> Self {
         assert!(
             self.toml_patch.is_none(),
             "TOML patch already set for this ModelPatch"
         );
+        let s = patch_str.as_ref();
+        let patch: toml::value::Table =
+            toml::from_str(s).expect("Failed to parse string passed to with_toml_patch");
         assert!(
             !patch.contains_key("base_model"),
             "TOML patch cannot contain `base_model` field"
@@ -531,7 +535,7 @@ mod tests {
         let content = r#"
             base_model = "some/base/path"
             foo = "bar"
-            "#;
+        "#;
         let mut f = fs::File::create(&p).unwrap();
         f.write_all(content.as_bytes()).unwrap();
 
@@ -549,7 +553,7 @@ mod tests {
             title = "base"
             [section]
             a = 1
-            "#;
+        "#;
 
         // Create a patch table
         let mut patch = toml::value::Table::new();

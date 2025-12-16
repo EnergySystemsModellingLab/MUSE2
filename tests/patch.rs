@@ -15,30 +15,24 @@ fn get_model_dir_file_patch() -> Result<TempDir> {
     let assets_patch = FilePatch::new("assets.csv")
         .delete_row("GASDRV,GBR,A0_GEX,4002.26,2020")
         .add_row("GASDRV,GBR,A0_GEX,4003.26,2020");
-    let model_patch = ModelPatch::new(&base_model_dir).with_file_patch(assets_patch);
 
-    let temp_dir = model_patch.build_to_tempdir()?;
-    Ok(temp_dir)
+    ModelPatch::new(&base_model_dir)
+        .with_file_patch(assets_patch)
+        .build_to_tempdir()
 }
 
-/// Patch of the "simple" model with a change to the `model.toml` file.
+/// Patch of the "simple" model with a change to the `model.toml`.
 fn get_model_dir_toml_patch() -> Result<TempDir> {
     let base_model_dir = PathBuf::from("examples/simple");
 
     // Add an extra milestone year (2050)
-    let mut toml_patch = toml::value::Table::new();
-    toml_patch.insert(
-        "milestone_years".to_string(),
-        toml::Value::Array(vec![
-            toml::Value::Integer(2020),
-            toml::Value::Integer(2030),
-            toml::Value::Integer(2040),
-            toml::Value::Integer(2050),
-        ]),
-    );
-    let model_patch = ModelPatch::new(&base_model_dir).with_toml_patch(toml_patch);
-    let temp_dir = model_patch.build_to_tempdir()?;
-    Ok(temp_dir)
+    let toml_patch = r#"
+        milestone_years = [2020, 2030, 2040, 2050]
+    "#;
+
+    ModelPatch::new(&base_model_dir)
+        .with_toml_patch(toml_patch)
+        .build_to_tempdir()
 }
 
 #[test]
