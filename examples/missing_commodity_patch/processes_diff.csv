@@ -1,0 +1,4 @@
+,id,description,regions,primary_output,start_year,end_year,capacity_to_activity
++,BIOPRO,Biomass production,all,BIOPRD,2020,2040,1.0
++,BIOPLL,Biomass pelletiser,all,BIOPEL,2020,2040,1.0
++,RBIOBL,Biomass boiler,all,RSHEAT,2020,2040,1.0

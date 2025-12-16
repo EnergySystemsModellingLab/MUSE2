@@ -1,0 +1,3 @@
+,id,description,regions,decision_rule,decision_lexico_tolerance
++,A0_BPD,Biomass producer,all,single,
++,A0_BPL,Biomass pelletiser,all,single,

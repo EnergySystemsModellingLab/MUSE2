@@ -1,0 +1,3 @@
+,agent_id,years,objective_type,decision_weight,decision_lexico_order
++,A0_BPD,all,lcox,,
++,A0_BPL,all,lcox,,

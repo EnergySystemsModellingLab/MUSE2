@@ -1,0 +1,6 @@
+-,process_id,commodity_id,regions,commission_years,coeff,type,cost
++,BIOPRO,BIOPRD,all,all,1.0,fixed,
++,BIOPLL,BIOPRD,all,all,-1.05,fixed,
++,BIOPLL,BIOPEL,all,all,1.0,fixed,
++,RBIOBL,BIOPEL,all,all,-1.2,fixed,
++,RBIOBL,RSHEAT,all,all,1,fixed,
