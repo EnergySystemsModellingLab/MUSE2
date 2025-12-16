@@ -187,7 +187,7 @@ impl FilePatch {
 
 /// Merge a TOML patch into a base model TOML string and return the merged TOML.
 fn merge_model_toml(base_toml: &str, patch: &toml::value::Table) -> Result<String> {
-    assert!(
+    ensure!(
         !patch.contains_key("base_model"),
         "TOML patch cannot contain a `base_model` field"
     );
@@ -289,32 +289,33 @@ mod tests {
 
     #[test]
     fn test_modify_base_with_patch() {
-        let base = "col1,col2\nrow1,row2\nrow3,row4\nrow5,row6\n";
+        let base = "col1,col2\nvalue1,value2\nvalue3,value4\nvalue5,value6\n";
 
+        // Create a patch to delete row3,row4 and add row7,row8
         let patch = FilePatch::new("test.csv")
             .with_header("col1,col2")
-            .delete_row("row3,row4")
-            .add_row("row7,row8");
+            .delete_row("value3,value4")
+            .add_row("value7,value8");
 
         let modified = modify_base_with_patch(base, &patch).unwrap();
 
-        // Should preserve order: row1,row2 -> row5,row6 -> row7,row8
         let lines: Vec<&str> = modified.lines().collect();
-        assert_eq!(lines[0], "col1,col2");
-        assert_eq!(lines[1], "row1,row2");
-        assert_eq!(lines[2], "row5,row6");
-        assert_eq!(lines[3], "row7,row8");
-        assert!(!modified.contains("row3,row4"));
+        assert_eq!(lines[0], "col1,col2"); // header is present
+        assert_eq!(lines[1], "value1,value2"); // unchanged row
+        assert_eq!(lines[2], "value5,value6"); // unchanged row
+        assert_eq!(lines[3], "value7,value8"); // added row
+        assert!(!modified.contains("value3,value4")); // deleted row
     }
 
     #[test]
     fn test_modify_base_with_patch_mismatched_header() {
-        let base = "col1,col2\nrow1,row2\n";
+        let base = "col1,col2\nvalue1,value2\n";
+
+        // Create a patch with a mismatched header
         let patch = FilePatch::new("test.csv").with_header("col1,col3");
 
-        let result = modify_base_with_patch(base, &patch);
         assert_error!(
-            result,
+            modify_base_with_patch(base, &patch),
             "Header mismatch: base file has [col1, col2], patch has [col1, col3]"
         );
     }
@@ -322,15 +323,15 @@ mod tests {
     #[test]
     fn test_merge_model_toml_basic() {
         let base = r#"
-            title = "base"
+            field = "data"
             [section]
             a = 1
         "#;
 
-        // Create a patch table
+        // Create a TOML patch
         let mut patch = toml::value::Table::new();
         patch.insert(
-            "title".to_string(),
+            "field".to_string(),
             toml::Value::String("patched".to_string()),
         );
         patch.insert(
@@ -339,18 +340,18 @@ mod tests {
         );
 
         // Apply patch with `merge_model_toml`
-        // Should overwrite title and add new_field, but keep section.a
+        // Should overwrite field and add new_field, but keep section.a
         let merged = merge_model_toml(base, &patch).unwrap();
-        assert!(merged.contains("title = \"patched\""));
+        assert!(merged.contains("field = \"patched\""));
         assert!(merged.contains("[section]"));
         assert!(merged.contains("new_field = \"added\""));
     }
 
     #[test]
     fn test_merge_rejects_base_model_key() {
-        let base = r#"title = "base""#;
+        let base = r#"field = "data""#;
 
-        // Create a patch table with a base_model key
+        // Create a TOML patch with a base_model key
         let mut patch = toml::value::Table::new();
         patch.insert(
             "base_model".to_string(),
@@ -358,7 +359,9 @@ mod tests {
         );
 
         // `merge_model_toml` should return an error
-        let res = merge_model_toml(base, &patch);
-        assert!(res.is_err());
+        assert_error!(
+            merge_model_toml(base, &patch),
+            "TOML patch cannot contain a `base_model` field"
+        );
     }
 }
