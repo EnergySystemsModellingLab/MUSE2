@@ -862,7 +862,7 @@ impl AssetPool {
                 continue;
             }
 
-            // If it is divisible, we divided and commission all the children
+            // If it is divisible, we divide and commission all the children
             if asset.is_divisible() {
                 let children = asset.divide_asset(AssetID(self.next_id));
                 self.next_id += 1;
