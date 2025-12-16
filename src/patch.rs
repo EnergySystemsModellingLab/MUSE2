@@ -13,8 +13,8 @@ pub struct ModelPatch {
     base_model_dir: PathBuf,
     // The list of file patches to apply
     file_patches: Vec<FilePatch>,
-    // Optional settings patches (TOML values)
-    settings_patch: Option<toml::value::Table>,
+    // Optional patch for model.toml (TOML table)
+    toml_patch: Option<toml::value::Table>,
 }
 
 impl ModelPatch {
@@ -23,27 +23,36 @@ impl ModelPatch {
         ModelPatch {
             base_model_dir: base_model_dir.into(),
             file_patches: Vec::new(),
-            settings_patch: None,
+            toml_patch: None,
         }
     }
 
-    /// Add a `FilePatch` to this `ModelPatch`.
+    /// Add a single `FilePatch` to this `ModelPatch`.
     pub fn with_file_patch(mut self, patch: FilePatch) -> Self {
         self.file_patches.push(patch);
         self
     }
 
-    /// Add a settings patch (TOML table) to this `ModelPatch`.
-    pub fn with_settings_patch(mut self, patch: toml::value::Table) -> Self {
+    /// Add multiple `FilePatch` entries to this `ModelPatch`.
+    pub fn with_file_patches<I>(mut self, patches: I) -> Self
+    where
+        I: IntoIterator<Item = FilePatch>,
+    {
+        self.file_patches.extend(patches);
+        self
+    }
+
+    /// Add a TOML patch (TOML table) to this `ModelPatch`.
+    pub fn with_toml_patch(mut self, patch: toml::value::Table) -> Self {
         assert!(
-            self.settings_patch.is_none(),
-            "Settings patch already set for this ModelPatch"
+            self.toml_patch.is_none(),
+            "TOML patch already set for this ModelPatch"
         );
         assert!(
             !patch.contains_key("base_model"),
-            "Settings patch cannot contain `base_model` field"
+            "TOML patch cannot contain `base_model` field"
         );
-        self.settings_patch = Some(patch);
+        self.toml_patch = Some(patch);
         self
     }
 
@@ -51,24 +60,10 @@ impl ModelPatch {
     /// diffs directory and to contain a `base_model` string field that points to the base
     /// model directory. Also collects all `*_diff.csv` files in the diffs directory into
     /// `FilePatch` entries, and any other top-level fields in `model.toml` become the
-    /// `settings_patch`.
+    /// `toml_patch`.
     pub fn from_path(diffs_dir: &Path) -> Result<ModelPatch> {
-        // Read model.toml in the diffs directory
-        let patch_toml_str = fs::read_to_string(diffs_dir.join("model.toml"))?;
-        let patch_toml_data: toml::Value = toml::from_str(&patch_toml_str)?;
-
-        // Extract `base_model` field from model.toml
-        // Any additional fields become the settings_patch
-        let (base_model_dir, settings_patch) = match patch_toml_data {
-            toml::Value::Table(mut tbl) => {
-                let base = tbl
-                    .remove("base_model")
-                    .and_then(|v| v.as_str().map(PathBuf::from))
-                    .context("Patch model.toml missing required `base_model` field")?;
-                (base, tbl)
-            }
-            _ => bail!("Patch TOML must be a table"),
-        };
+        // Parse patch model.toml and extract base_model + toml patch
+        let (base_model_dir, toml_patch) = read_patch_toml(&diffs_dir.join("model.toml"))?;
 
         // Collect all file patches from `*_diff.csv` files in diffs directory
         let mut file_patches = Vec::new();
@@ -90,7 +85,7 @@ impl ModelPatch {
         Ok(ModelPatch {
             base_model_dir,
             file_patches,
-            settings_patch: Some(settings_patch),
+            toml_patch: Some(toml_patch),
         })
     }
 
@@ -116,27 +111,16 @@ impl ModelPatch {
             }
         }
 
-        // Apply settings patch (if any), or copy model.toml from the base model
+        // Apply toml patch (if any), or copy model.toml from the base model
         let base_toml_path = base_dir.join("model.toml");
         let out_toml_path = out_path.join("model.toml");
-        if let Some(settings_patch) = &self.settings_patch {
-            // Start with model.toml from base model
-            let settings_toml = fs::read_to_string(&base_toml_path)?;
-            let mut settings_value: toml::Value = toml::from_str(&settings_toml)?;
-            let merged_table = settings_value
-                .as_table_mut()
-                .context("Merged model TOML must be a table")?;
-
-            // Apply settings patch
-            for (key, patch_val) in settings_patch {
-                merged_table.insert(key.clone(), patch_val.clone());
-            }
-
-            // Save to file
-            let merged_toml = toml::to_string_pretty(&settings_value)?;
+        if let Some(toml_patch) = &self.toml_patch {
+            // Start with model.toml from base model and merge via helper
+            let toml_content = fs::read_to_string(&base_toml_path)?;
+            let merged_toml = merge_model_toml(&toml_content, toml_patch)?;
             fs::write(&out_toml_path, merged_toml)?;
         } else {
-            // No settings patch; copy base model.toml
+            // No toml patch; copy base model.toml
             fs::copy(&base_toml_path, &out_toml_path)?;
         }
 
@@ -169,27 +153,6 @@ pub struct FilePatch {
     to_delete: IndexSet<Vec<String>>,
     /// Rows to add (each row is a vector of canonicalized fields)
     to_add: IndexSet<Vec<String>>,
-}
-
-/// Build a canonical comma-joined string from an iterator of field strings.
-fn canonicalize_fields<I, S>(fields: I) -> String
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    fields
-        .into_iter()
-        .map(|s| s.as_ref().trim().to_string())
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-/// Build a canonical vector of trimmed strings from an iterator of field strings.
-fn canonicalize_vec<'a, I>(fields: I) -> Vec<String>
-where
-    I: IntoIterator<Item = &'a str>,
-{
-    fields.into_iter().map(|s| s.trim().to_string()).collect()
 }
 
 impl FilePatch {
@@ -341,7 +304,61 @@ impl FilePatch {
     }
 }
 
-/// Modify a base CSV file by applying diffs: removing rows and adding rows.
+/// Read a patch `model.toml` file and return the `base_model` path and remaining
+/// table as the toml patch.
+fn read_patch_toml(toml_path: &Path) -> Result<(PathBuf, toml::value::Table)> {
+    let s = fs::read_to_string(toml_path)?;
+    let val: toml::Value = toml::from_str(&s)?;
+    match val {
+        toml::Value::Table(mut tbl) => {
+            let base = tbl
+                .remove("base_model")
+                .and_then(|v| v.as_str().map(PathBuf::from))
+                .context("Patch model.toml missing required `base_model` field")?;
+            Ok((base, tbl))
+        }
+        _ => bail!("Patch TOML must be a table"),
+    }
+}
+
+/// Merge a TOML patch into a base model TOML string and return the merged TOML.
+fn merge_model_toml(base_toml: &str, patch: &toml::value::Table) -> Result<String> {
+    if patch.contains_key("base_model") {
+        bail!("TOML patch cannot contain `base_model` field");
+    }
+    let mut base_val: toml::Value = toml::from_str(base_toml)?;
+    let base_tbl = base_val
+        .as_table_mut()
+        .context("Base model TOML must be a table")?;
+    for (k, v) in patch {
+        base_tbl.insert(k.clone(), v.clone());
+    }
+    let out = toml::to_string_pretty(&base_val)?;
+    Ok(out)
+}
+
+/// Build a canonical comma-joined string from an iterator of field strings.
+fn canonicalize_fields<I, S>(fields: I) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    fields
+        .into_iter()
+        .map(|s| s.as_ref().trim().to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Build a canonical vector of trimmed strings from an iterator of field strings.
+fn canonicalize_vec<'a, I>(fields: I) -> Vec<String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    fields.into_iter().map(|s| s.trim().to_string()).collect()
+}
+
+/// Modify a string representation of a base CSV file by applying a `FilePatch`.
 /// Preserves the order of rows from the base file, with new rows appended at the end.
 fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
     // Read base file from string, trimming whitespace
@@ -504,5 +521,68 @@ mod tests {
             result,
             "Header mismatch: base file has [col1, col2], diff file expects [col1, col3]"
         );
+    }
+
+    #[test]
+    fn test_read_patch_toml() {
+        // Create patch TOML file
+        let td = tempdir().unwrap();
+        let p = td.path().join("model.toml");
+        let content = r#"
+            base_model = "some/base/path"
+            foo = "bar"
+            "#;
+        let mut f = fs::File::create(&p).unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+
+        // Read with `read_patch_toml`
+        // Should return the base_model path and remaining table (without the base_model field)
+        let (base, tbl) = read_patch_toml(&p).unwrap();
+        assert_eq!(base, PathBuf::from("some/base/path"));
+        assert_eq!(tbl.get("foo").and_then(|v| v.as_str()), Some("bar"));
+        assert!(!tbl.contains_key("base_model"));
+    }
+
+    #[test]
+    fn test_merge_model_toml_basic() {
+        let base = r#"
+            title = "base"
+            [section]
+            a = 1
+            "#;
+
+        // Create a patch table
+        let mut patch = toml::value::Table::new();
+        patch.insert(
+            "title".to_string(),
+            toml::Value::String("patched".to_string()),
+        );
+        patch.insert(
+            "new_field".to_string(),
+            toml::Value::String("added".to_string()),
+        );
+
+        // Apply patch with `merge_model_toml`
+        // Should overwrite title and add new_field, but keep section.a
+        let merged = merge_model_toml(base, &patch).unwrap();
+        assert!(merged.contains("title = \"patched\""));
+        assert!(merged.contains("[section]"));
+        assert!(merged.contains("new_field = \"added\""));
+    }
+
+    #[test]
+    fn test_merge_rejects_base_model_key() {
+        let base = r#"title = "base""#;
+
+        // Create a patch table with a base_model key
+        let mut patch = toml::value::Table::new();
+        patch.insert(
+            "base_model".to_string(),
+            toml::Value::String("..".to_string()),
+        );
+
+        // `merge_model_toml` should return an error
+        let res = merge_model_toml(base, &patch);
+        assert!(res.is_err());
     }
 }
