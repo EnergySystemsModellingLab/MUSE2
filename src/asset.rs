@@ -1327,6 +1327,22 @@ mod tests {
     }
 
     #[rstest]
+    fn test_asset_pool_commission_new_divisible(asset_divisible: Asset) {
+        let commision_year = asset_divisible.commission_year;
+        let expected_children = (asset_divisible.capacity
+            / asset_divisible.process.unit_size.unwrap())
+        .value()
+        .ceil() as usize;
+        let mut asset_pool = AssetPool::new(vec![asset_divisible]);
+        assert!(asset_pool.active.is_empty());
+        asset_pool.commission_new(commision_year);
+        assert!(asset_pool.future.is_empty());
+        assert!(!asset_pool.active.is_empty());
+        assert_eq!(asset_pool.active.len(), expected_children);
+        assert_eq!(asset_pool.next_group_id, 1)
+    }
+
+    #[rstest]
     fn test_asset_pool_commission_already_decommissioned(asset: Asset) {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new(vec![asset]);
