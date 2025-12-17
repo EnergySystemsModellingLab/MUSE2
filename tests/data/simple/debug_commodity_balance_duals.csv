@@ -243,7 +243,7 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.day,7.993308999999999
 2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.peak,7.993308999999999
 2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.evening,7.993308999999999
-2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.night,7.993308999999999
+2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.night,17.26223303030303
 2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.day,7.993308999999999
 2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.peak,7.993308999999999
 2030,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.evening,17.26223303030303
@@ -323,7 +323,7 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.day,7.993308999999999
 2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.peak,7.993308999999999
 2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.evening,7.993308999999999
-2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.night,7.993308999999999
+2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.night,17.26223303030303
 2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.day,7.993308999999999
 2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.peak,7.993308999999999
 2030,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.evening,17.26223303030303
@@ -451,7 +451,7 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2030,final without candidates,ELCTRI,GBR,winter.day,7.993308999999999
 2030,final without candidates,ELCTRI,GBR,winter.peak,7.993308999999999
 2030,final without candidates,ELCTRI,GBR,winter.evening,7.993308999999999
-2030,final without candidates,ELCTRI,GBR,peak.night,7.993308999999999
+2030,final without candidates,ELCTRI,GBR,peak.night,17.26223303030303
 2030,final without candidates,ELCTRI,GBR,peak.day,7.993308999999999
 2030,final without candidates,ELCTRI,GBR,peak.peak,7.993308999999999
 2030,final without candidates,ELCTRI,GBR,peak.evening,17.26223303030303
