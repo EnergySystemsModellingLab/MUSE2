@@ -644,7 +644,7 @@ impl Asset {
                 .process
                 .unit_size
                 .filter(|size| *size <= capacity)
-                .unwrap_or(self.capacity);
+                .unwrap_or(capacity);
             capacity -= child.capacity;
             children.push(child.into());
         }
@@ -1242,6 +1242,19 @@ mod tests {
         .unwrap()
     }
 
+    #[fixture]
+    fn asset_divisible(mut process: Process) -> Asset {
+        process.unit_size = Some(Capacity(4.0));
+        Asset::new_future(
+            "agent1".into(),
+            Rc::new(process),
+            "GBR".into(),
+            Capacity(11.0),
+            2010,
+        )
+        .unwrap()
+    }
+
     #[rstest]
     fn test_asset_get_activity_per_capacity_limits(
         asset_with_activity_limits: Asset,
@@ -1252,6 +1265,35 @@ mod tests {
             asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
             ActivityPerCapacity(0.2)..=ActivityPerCapacity(1.0)
         );
+    }
+
+    #[rstest]
+    fn test_divide_asset(asset_divisible: Asset) {
+        assert!(
+            asset_divisible.is_divisible(),
+            "Divisbile asset cannot be divided!"
+        );
+
+        // Check number of children
+        let children = asset_divisible.divide_asset();
+        let expected_children = (asset_divisible.capacity
+            / asset_divisible.process.unit_size.unwrap())
+        .value()
+        .ceil() as usize;
+        assert_eq!(
+            children.len(),
+            expected_children,
+            "Unexpected number of children"
+        );
+
+        // Check capacity of the children
+        let max_child_capacity = asset_divisible.process.unit_size.unwrap();
+        for child in children {
+            assert!(
+                child.capacity <= max_child_capacity,
+                "Child capacity is too large!"
+            )
+        }
     }
 
     #[rstest]
