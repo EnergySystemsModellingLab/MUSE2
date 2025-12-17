@@ -1457,6 +1457,37 @@ mod tests {
     }
 
     #[rstest]
+    fn test_asset_pool_extend_new_divisible_assets(
+        mut asset_pool: AssetPool,
+        mut process: Process,
+    ) {
+        // Start with some commissioned assets
+        asset_pool.commission_new(2020);
+        let original_count = asset_pool.active.len();
+
+        // Create new non-commissioned assets
+        process.unit_size = Some(Capacity(4.0));
+        let process_rc = Rc::new(process);
+        let new_assets: Vec<AssetRef> = vec![
+            Asset::new_selected(
+                "agent2".into(),
+                Rc::clone(&process_rc),
+                "GBR".into(),
+                Capacity(11.0),
+                2015,
+            )
+            .unwrap()
+            .into(),
+        ];
+        let expected_children = (new_assets[0].capacity / new_assets[0].process.unit_size.unwrap())
+            .value()
+            .ceil() as usize;
+
+        asset_pool.extend(new_assets);
+        assert_eq!(asset_pool.active.len(), original_count + expected_children);
+    }
+
+    #[rstest]
     fn test_asset_pool_extend_mixed_assets(mut asset_pool: AssetPool, process: Process) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
