@@ -634,11 +634,89 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::CommodityID;
-    use crate::fixture::{commodity_id, region_id, time_slice, time_slice_info};
+    use crate::asset::Asset;
+    use crate::asset::AssetRef;
+    use crate::commodity::{Commodity, CommodityID};
+    use crate::fixture::{
+        commodity_id, other_commodity, region_id, sed_commodity, time_slice, time_slice_info,
+    };
+    use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow, ProcessParameter};
     use crate::region::RegionID;
     use crate::time_slice::TimeSliceID;
+    use crate::units::ActivityPerCapacity;
+    use crate::units::{
+        Activity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+        MoneyPerCapacityPerYear, MoneyPerFlow,
+    };
+    use indexmap::{IndexMap, IndexSet};
     use rstest::rstest;
+    use std::collections::{HashMap, HashSet};
+    use std::rc::Rc;
+
+    fn build_process_flow(commodity: &Commodity, coeff: f64, cost: MoneyPerFlow) -> ProcessFlow {
+        ProcessFlow {
+            commodity: Rc::new(commodity.clone()),
+            coeff: FlowPerActivity(coeff),
+            kind: FlowType::Fixed,
+            cost,
+        }
+    }
+
+    fn build_process(
+        flows: IndexMap<CommodityID, ProcessFlow>,
+        region_id: &RegionID,
+        year: u32,
+        time_slice_info: &TimeSliceInfo,
+        variable_operating_cost: MoneyPerActivity,
+        capital_cost: MoneyPerCapacity,
+        lifetime: u32,
+        discount_rate: Dimensionless,
+    ) -> Process {
+        let mut process_flows_map = HashMap::new();
+        process_flows_map.insert((region_id.clone(), year), Rc::new(flows));
+
+        let mut process_parameter_map = HashMap::new();
+        let proc_param = ProcessParameter {
+            capital_cost,
+            fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
+            variable_operating_cost,
+            lifetime,
+            discount_rate,
+        };
+        process_parameter_map.insert((region_id.clone(), year), Rc::new(proc_param));
+
+        let mut activity_limits_map = HashMap::new();
+        activity_limits_map.insert(
+            (region_id.clone(), year),
+            Rc::new(ActivityLimits::new_with_full_availability(time_slice_info)),
+        );
+
+        let regions: IndexSet<RegionID> = IndexSet::from([region_id.clone()]);
+
+        Process {
+            id: "p1".into(),
+            description: "test process".into(),
+            years: 2010..=2020,
+            activity_limits: activity_limits_map,
+            flows: process_flows_map,
+            parameters: process_parameter_map,
+            regions,
+            primary_output: None,
+            capacity_to_activity: ActivityPerCapacity(1.0),
+            investment_constraints: HashMap::new(),
+        }
+    }
+
+    fn assert_price_approx(
+        prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+        commodity: &CommodityID,
+        region: &RegionID,
+        time_slice: &TimeSliceID,
+        expected: MoneyPerFlow,
+    ) {
+        let p = prices[&(commodity.clone(), region.clone(), time_slice.clone())];
+        assert!((p - expected).abs() < MoneyPerFlow::EPSILON);
+    }
 
     #[rstest]
     #[case(MoneyPerFlow(100.0), MoneyPerFlow(100.0), Dimensionless(0.0), true)] // exactly equal
@@ -690,5 +768,147 @@ mod tests {
 
         // With single time slice (duration=1.0), average should equal the price
         assert_eq!(averages[&(commodity_id, region_id)], MoneyPerFlow(100.0));
+    }
+
+    #[rstest]
+    fn test_marginal_cost_example(
+        sed_commodity: Commodity,
+        other_commodity: Commodity,
+        region_id: RegionID,
+        time_slice_info: TimeSliceInfo,
+        time_slice: TimeSliceID,
+    ) {
+        // Use the same setup as in the docstring example for marginal cost pricing
+        let mut a = sed_commodity.clone();
+        a.id = "A".into();
+        let mut b = sed_commodity.clone();
+        b.id = "B".into();
+        let mut c = sed_commodity.clone();
+        c.id = "C".into();
+        let mut d = other_commodity.clone();
+        d.id = "D".into();
+
+        let mut flows = IndexMap::new();
+        flows.insert(
+            a.id.clone(),
+            build_process_flow(&a, -1.0, MoneyPerFlow(0.0)),
+        );
+        flows.insert(b.id.clone(), build_process_flow(&b, 1.0, MoneyPerFlow(0.0)));
+        flows.insert(c.id.clone(), build_process_flow(&c, 2.0, MoneyPerFlow(3.0)));
+        flows.insert(d.id.clone(), build_process_flow(&d, 1.0, MoneyPerFlow(4.0)));
+
+        let process = build_process(
+            flows,
+            &region_id,
+            2015u32,
+            &time_slice_info,
+            MoneyPerActivity(5.0), // variable operating cost
+            MoneyPerCapacity(0.0), // capital cost
+            5,                     // lifetime
+            Dimensionless(1.0),    // discount rate
+        );
+
+        let asset =
+            Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2015u32)
+                .unwrap();
+        let asset_ref = AssetRef::from(asset);
+        let shadow_prices =
+            CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
+        let mut markets = HashSet::new();
+        markets.insert((b.id.clone(), region_id.clone()));
+        markets.insert((c.id.clone(), region_id.clone()));
+
+        let existing = vec![(&asset_ref, &time_slice, Activity(1.0))];
+        let candidates = Vec::new();
+
+        let prices = calculate_marginal_cost_prices(
+            existing.into_iter(),
+            candidates.into_iter(),
+            &shadow_prices,
+            2015u32,
+            &markets,
+        );
+
+        assert_price_approx(
+            &prices,
+            &b.id,
+            &region_id,
+            &time_slice,
+            MoneyPerFlow(10.0 / 3.0),
+        );
+        assert_price_approx(
+            &prices,
+            &c.id,
+            &region_id,
+            &time_slice,
+            MoneyPerFlow(10.0 / 3.0 + 3.0),
+        );
+    }
+
+    #[rstest]
+    fn test_full_cost_example(
+        sed_commodity: Commodity,
+        other_commodity: Commodity,
+        region_id: RegionID,
+        time_slice_info: TimeSliceInfo,
+        time_slice: TimeSliceID,
+    ) {
+        // Use the same setup as in the docstring example for full cost pricing
+        let mut a = sed_commodity.clone();
+        a.id = "A".into();
+        let mut b = sed_commodity.clone();
+        b.id = "B".into();
+        let mut c = sed_commodity.clone();
+        c.id = "C".into();
+        let mut d = other_commodity.clone();
+        d.id = "D".into();
+
+        let mut flows = IndexMap::new();
+        flows.insert(
+            a.id.clone(),
+            build_process_flow(&a, -1.0, MoneyPerFlow(0.0)),
+        );
+        flows.insert(b.id.clone(), build_process_flow(&b, 1.0, MoneyPerFlow(0.0)));
+        flows.insert(c.id.clone(), build_process_flow(&c, 2.0, MoneyPerFlow(3.0)));
+        flows.insert(d.id.clone(), build_process_flow(&d, 1.0, MoneyPerFlow(4.0)));
+
+        let process = build_process(
+            flows,
+            &region_id,
+            2015u32,
+            &time_slice_info,
+            MoneyPerActivity(5.0), // variable operating cost
+            MoneyPerCapacity(2.5), // capital cost per capacity so annualised=2.5
+            1,                     // lifetime so annualised = capital_cost
+            Dimensionless(0.0),    // discount rate
+        );
+
+        let asset =
+            Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(4.0), 2015u32)
+                .unwrap();
+        let asset_ref = AssetRef::from(asset);
+        let shadow_prices =
+            CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
+        let mut markets = HashSet::new();
+        markets.insert((b.id.clone(), region_id.clone()));
+        markets.insert((c.id.clone(), region_id.clone()));
+
+        let existing = vec![(&asset_ref, &time_slice, Activity(2.0))];
+        let candidates = Vec::new();
+
+        let mut annual_activities = HashMap::new();
+        annual_activities.insert(asset_ref.clone(), Activity(2.0));
+
+        let prices = calculate_full_cost_prices(
+            existing.into_iter(),
+            candidates.into_iter(),
+            &annual_activities,
+            &shadow_prices,
+            2015u32,
+            &markets,
+        );
+
+        assert_price_approx(&prices, &b.id, &region_id, &time_slice, MoneyPerFlow(5.0));
+        assert_price_approx(&prices, &c.id, &region_id, &time_slice, MoneyPerFlow(8.0));
     }
 }
