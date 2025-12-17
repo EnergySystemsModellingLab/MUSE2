@@ -122,6 +122,7 @@ fn validate_commodity(commodity: &mut Commodity) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixture::assert_error;
     use crate::time_slice::TimeSliceLevel;
 
     fn make_commodity(kind: CommodityType, pricing_strategy: PricingStrategy) -> Commodity {
@@ -140,7 +141,7 @@ mod tests {
     #[test]
     fn sets_default_pricing_for_other_to_unpriced() {
         let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::Default);
-        validate_commodity(&mut commodity);
+        validate_commodity(&mut commodity).unwrap();
         assert_eq!(commodity.pricing_strategy, PricingStrategy::Unpriced);
     }
 
@@ -148,22 +149,26 @@ mod tests {
     fn sets_default_pricing_for_sed_to_shadow() {
         let mut commodity =
             make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Default);
-        validate_commodity(&mut commodity);
+        validate_commodity(&mut commodity).unwrap();
         assert_eq!(commodity.pricing_strategy, PricingStrategy::Shadow);
     }
 
     #[test]
-    #[should_panic]
     fn other_cannot_be_priced() {
         let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::MarginalCost);
-        validate_commodity(&mut commodity);
+        assert_error!(
+            validate_commodity(&mut commodity),
+            "Commodity ELC of type Other must be unpriced. Update its pricing strategy to 'unpriced' or 'default'."
+        );
     }
 
     #[test]
-    #[should_panic]
     fn sed_cannot_be_unpriced() {
         let mut commodity =
             make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Unpriced);
-        validate_commodity(&mut commodity);
+        assert_error!(
+            validate_commodity(&mut commodity),
+            "Commodity ELC of type SupplyEqualsDemand cannot be unpriced. Update its pricing strategy to a valid option."
+        );
     }
 }
