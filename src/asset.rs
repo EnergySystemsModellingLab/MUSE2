@@ -621,7 +621,7 @@ impl Asset {
     ///
     /// The children assets are identical to the parent (including state) but with a capacity defined
     /// by the `unit_size`. Only Future or Selected assets can be divided.
-    pub fn divide_asset(&self) -> Vec<Asset> {
+    pub fn divide_asset(&self) -> Vec<AssetRef> {
         assert!(
             matches!(
                 self.state,
@@ -646,7 +646,7 @@ impl Asset {
                 .filter(|size| *size <= capacity)
                 .unwrap_or(self.capacity);
             capacity -= child.capacity;
-            children.push(child);
+            children.push(child.into());
         }
 
         children
@@ -860,13 +860,13 @@ impl AssetPool {
             if asset.is_divisible() {
                 let children = asset.divide_asset();
                 for mut child in children {
-                    child.commission(
+                    child.make_mut().commission(
                         AssetID(self.next_id),
                         "user input",
                         Some(AssetID(self.next_group_id)),
                     );
                     self.next_id += 1;
-                    self.active.push(child.into());
+                    self.active.push(child);
                 }
                 self.next_group_id += 1;
             }
@@ -993,27 +993,49 @@ impl AssetPool {
     {
         // Check all assets are either Commissioned or Selected, and, if the latter,
         // then commission them
-        let assets = assets.into_iter().map(|mut asset| match &asset.state {
-            AssetState::Commissioned { .. } => {
-                asset.make_mut().unmothball();
-                asset
-            }
-            AssetState::Selected { .. } => {
-                asset
-                    .make_mut()
-                    .commission(AssetID(self.next_id), "selected", None);
-                self.next_id += 1;
-                asset
-            }
-            _ => panic!(
-                "Cannot extend asset pool with asset in state {}. Only assets in \
+        let mut groups = Vec::new();
+        let assets = assets
+            .into_iter()
+            .filter_map(|mut asset| match &asset.state {
+                AssetState::Commissioned { .. } => {
+                    asset.make_mut().unmothball();
+                    Some(asset)
+                }
+                AssetState::Selected { .. } => {
+                    // If it is divisible, we divide and commission all the children
+                    if asset.is_divisible() {
+                        let children = asset.divide_asset();
+                        for mut child in children.clone() {
+                            child.make_mut().commission(
+                                AssetID(self.next_id),
+                                "selected",
+                                Some(AssetID(self.next_group_id)),
+                            );
+                            self.next_id += 1;
+                        }
+                        self.next_group_id += 1;
+                        groups.extend(children);
+                        None
+                    }
+                    // If not, we just commission it as a single asset
+                    else {
+                        asset
+                            .make_mut()
+                            .commission(AssetID(self.next_id), "selected", None);
+                        self.next_id += 1;
+                        Some(asset)
+                    }
+                }
+                _ => panic!(
+                    "Cannot extend asset pool with asset in state {}. Only assets in \
                 Commissioned or Selected states are allowed.",
-                asset.state
-            ),
-        });
+                    asset.state
+                ),
+            });
 
         // New assets may not have been sorted, but active needs to be sorted by ID
         self.active.extend(assets);
+        self.active.extend(groups);
         self.active.sort();
 
         // Sanity check: all assets should be unique
