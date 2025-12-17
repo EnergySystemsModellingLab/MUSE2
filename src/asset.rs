@@ -462,6 +462,14 @@ impl Asset {
         }
     }
 
+    /// Get the group ID for this asset
+    pub fn group_id(&self) -> Option<AssetID> {
+        match &self.state {
+            AssetState::Commissioned { group_id, .. } => *group_id,
+            _ => None,
+        }
+    }
+
     /// Get the agent ID for this asset
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {

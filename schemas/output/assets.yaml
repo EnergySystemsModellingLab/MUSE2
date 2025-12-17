@@ -18,6 +18,12 @@ fields:
   - name: agent_id
     type: string
     description: The agent to which this asset belongs
+  - name: group_id
+    type: string
+    description: The group ID number of this asset, if any
+    notes: |
+      Assets that have been created by dividing a parent asset are identified together by their group
+      id. If an asset does not come from a divided asset, then this field will be empty.
   - name: commission_year
     type: integer
     description: The year in which the asset was commissioned
