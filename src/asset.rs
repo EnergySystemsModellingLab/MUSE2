@@ -1004,17 +1004,16 @@ impl AssetPool {
                 AssetState::Selected { .. } => {
                     // If it is divisible, we divide and commission all the children
                     if asset.is_divisible() {
-                        let children = asset.divide_asset();
-                        for mut child in children.clone() {
+                        for mut child in asset.divide_asset() {
                             child.make_mut().commission(
                                 AssetID(self.next_id),
                                 "selected",
                                 Some(AssetID(self.next_group_id)),
                             );
                             self.next_id += 1;
+                            groups.push(child);
                         }
                         self.next_group_id += 1;
-                        groups.extend(children);
                         None
                     }
                     // If not, we just commission it as a single asset
