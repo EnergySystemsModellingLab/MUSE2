@@ -24,37 +24,26 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Compute shadow prices for all SED/SVD commodities (needed by all strategies)
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
 
-    // Partition markets by pricing strategy
-    // For now, commodities use a single strategy for all regions, but this may change in the future
-    let mut shadow_set = HashSet::new();
-    let mut scarcity_set = HashSet::new();
-    let mut marginal_set = HashSet::new();
-    let mut fullcost_set = HashSet::new();
+    // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
+    // For now, commodities use a single strategy for all regions, but this may change in the future.
+    let mut pricing_sets = HashMap::new();
     for ((commodity_id, commodity), region_id) in
         iproduct!(&model.commodities, model.iter_regions())
     {
-        match commodity.pricing_strategy {
-            PricingStrategy::ScarcityAdjusted => {
-                scarcity_set.insert((commodity_id.clone(), region_id.clone()));
-            }
-            PricingStrategy::MarginalCost => {
-                marginal_set.insert((commodity_id.clone(), region_id.clone()));
-            }
-            PricingStrategy::FullCost => {
-                fullcost_set.insert((commodity_id.clone(), region_id.clone()));
-            }
-            PricingStrategy::Shadow => {
-                shadow_set.insert((commodity_id.clone(), region_id.clone()));
-            }
-            PricingStrategy::Unpriced => { /* Nothing to do */ }
+        if commodity.pricing_strategy == PricingStrategy::Unpriced {
+            continue;
         }
+        pricing_sets
+            .entry(&commodity.pricing_strategy)
+            .or_insert_with(HashSet::new)
+            .insert((commodity_id.clone(), region_id.clone()));
     }
 
     // Set up empty prices map
     let mut result = CommodityPrices::default();
 
     // Add prices for shadow-priced commodities
-    if !shadow_set.is_empty() {
+    if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
         for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
             if shadow_set.contains(&(commodity_id.clone(), region_id.clone())) {
                 let price = shadow_prices
@@ -66,7 +55,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     }
 
     // Add prices for scarcity-adjusted commodities
-    if !scarcity_set.is_empty() {
+    if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
         ensure!(
             model.parameters.allow_broken_options,
             "The `scarcity` pricing strategy is known to be broken. \
@@ -77,25 +66,25 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         let scarcity_prices = calculate_scarcity_adjusted_prices(
             solution.iter_activity_duals(),
             &shadow_prices,
-            &scarcity_set,
+            scarcity_set,
         );
         result.extend(scarcity_prices);
     }
 
     // Add prices for marginal cost commodities
-    if !marginal_set.is_empty() {
+    if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
         let marginal_cost_prices = calculate_marginal_cost_prices(
             solution.iter_activity_for_existing(),
             solution.iter_activity_for_candidates(),
             &shadow_prices,
             year,
-            &marginal_set,
+            marginal_set,
         );
         result.extend(marginal_cost_prices);
     }
 
     // Add prices for full cost commodities
-    if !fullcost_set.is_empty() {
+    if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
         let annual_activities = calculate_annual_activities(solution.iter_activity_for_existing());
         let full_cost_prices = calculate_full_cost_prices(
             solution.iter_activity_for_existing(),
@@ -103,7 +92,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             &annual_activities,
             &shadow_prices,
             year,
-            &fullcost_set,
+            fullcost_set,
         );
         result.extend(full_cost_prices);
     }
