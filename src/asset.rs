@@ -35,6 +35,22 @@ use std::slice;
 )]
 pub struct AssetID(u32);
 
+/// A unique identifier for an asset group
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    derive_more::Display,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Deserialize,
+    Serialize,
+)]
+pub struct AssetGroupID(u32);
+
 /// The state of an asset
 ///
 /// New assets are created as either `Future` or `Candidate` assets. `Future` assets (which are
@@ -57,7 +73,7 @@ pub enum AssetState {
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
         /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
-        group_id: Option<AssetID>,
+        group_id: Option<AssetGroupID>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -463,7 +479,7 @@ impl Asset {
     }
 
     /// Get the group ID for this asset
-    pub fn group_id(&self) -> Option<AssetID> {
+    pub fn group_id(&self) -> Option<AssetGroupID> {
         match &self.state {
             AssetState::Commissioned { group_id, .. } => *group_id,
             _ => None,
@@ -540,7 +556,7 @@ impl Asset {
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
     /// * `group_id` - The ID of the group of this asset, if any.
-    fn commission(&mut self, id: AssetID, reason: &str, group_id: Option<AssetID>) {
+    fn commission(&mut self, id: AssetID, group_id: Option<AssetGroupID>, reason: &str) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -870,8 +886,8 @@ impl AssetPool {
                 for mut child in children {
                     child.make_mut().commission(
                         AssetID(self.next_id),
+                        Some(AssetGroupID(self.next_group_id)),
                         "user input",
-                        Some(AssetID(self.next_group_id)),
                     );
                     self.next_id += 1;
                     self.active.push(child);
@@ -880,7 +896,7 @@ impl AssetPool {
             }
             // If not, we just commission it as a single asset
             else {
-                asset.commission(AssetID(self.next_id), "user input", None);
+                asset.commission(AssetID(self.next_id), None, "user input");
                 self.next_id += 1;
                 self.active.push(asset.into());
             }
@@ -1015,8 +1031,8 @@ impl AssetPool {
                         for mut child in asset.divide_asset() {
                             child.make_mut().commission(
                                 AssetID(self.next_id),
+                                Some(AssetGroupID(self.next_group_id)),
                                 "selected",
-                                Some(AssetID(self.next_group_id)),
                             );
                             self.next_id += 1;
                             groups.push(child);
@@ -1028,7 +1044,7 @@ impl AssetPool {
                     else {
                         asset
                             .make_mut()
-                            .commission(AssetID(self.next_id), "selected", None);
+                            .commission(AssetID(self.next_id), None, "selected");
                         self.next_id += 1;
                         Some(asset)
                     }
@@ -1720,7 +1736,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset1.commission(AssetID(1), "", None);
+        asset1.commission(AssetID(1), None, "");
         assert!(asset1.is_commissioned());
         assert_eq!(asset1.id(), Some(AssetID(1)));
 
@@ -1733,7 +1749,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset2.commission(AssetID(2), "", None);
+        asset2.commission(AssetID(2), None, "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
     }
@@ -1756,7 +1772,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset.commission(AssetID(1), "", None);
+        asset.commission(AssetID(1), None, "");
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1788,7 +1804,7 @@ mod tests {
             max_decommission_year,
         )
         .unwrap();
-        asset.commission(AssetID(1), "", None);
+        asset.commission(AssetID(1), None, "");
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1803,7 +1819,7 @@ mod tests {
     fn test_commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), "", None);
+        asset.commission(AssetID(1), None, "");
     }
 
     #[rstest]

@@ -1,6 +1,6 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
-use crate::asset::{Asset, AssetID, AssetRef};
+use crate::asset::{Asset, AssetGroupID, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
@@ -124,7 +124,7 @@ struct AssetRow {
     process_id: ProcessID,
     region_id: RegionID,
     agent_id: AgentID,
-    group_id: Option<AssetID>,
+    group_id: Option<AssetGroupID>,
     commission_year: u32,
     decommission_year: Option<u32>,
     capacity: Capacity,
