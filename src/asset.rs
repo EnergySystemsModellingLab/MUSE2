@@ -1016,13 +1016,11 @@ impl AssetPool {
     {
         // Check all assets are either Commissioned or Selected, and, if the latter,
         // then commission them
-        let mut groups = Vec::new();
-        let assets = assets
-            .into_iter()
-            .filter_map(|mut asset| match &asset.state {
+        for mut asset in assets {
+            match &asset.state {
                 AssetState::Commissioned { .. } => {
                     asset.make_mut().unmothball();
-                    Some(asset)
+                    self.active.push(asset);
                 }
                 AssetState::Selected { .. } => {
                     // If it is divisible, we divide and commission all the children
@@ -1034,10 +1032,9 @@ impl AssetPool {
                                 "selected",
                             );
                             self.next_id += 1;
-                            groups.push(child);
+                            self.active.push(child);
                         }
                         self.next_group_id += 1;
-                        None
                     }
                     // If not, we just commission it as a single asset
                     else {
@@ -1045,7 +1042,7 @@ impl AssetPool {
                             .make_mut()
                             .commission(AssetID(self.next_id), None, "selected");
                         self.next_id += 1;
-                        Some(asset)
+                        self.active.push(asset);
                     }
                 }
                 _ => panic!(
@@ -1053,11 +1050,10 @@ impl AssetPool {
                 Commissioned or Selected states are allowed.",
                     asset.state
                 ),
-            });
+            }
+        }
 
         // New assets may not have been sorted, but active needs to be sorted by ID
-        self.active.extend(assets);
-        self.active.extend(groups);
         self.active.sort();
 
         // Sanity check: all assets should be unique
