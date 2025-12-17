@@ -661,14 +661,13 @@ impl Asset {
 
         // Divide the asset into children until all capacity is allocated
         let mut capacity = self.capacity;
+        let unit_size = self.process.unit_size.expect(
+            "Only assets corresponding to processes with a unit size defined can be divided",
+        );
         let mut children = Vec::new();
         while capacity > Capacity(0.0) {
             let mut child = self.clone();
-            child.capacity = self
-                .process
-                .unit_size
-                .filter(|size| *size <= capacity)
-                .unwrap_or(capacity);
+            child.capacity = unit_size.min(capacity);
             capacity -= child.capacity;
             children.push(child.into());
         }
