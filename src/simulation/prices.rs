@@ -1,13 +1,12 @@
 //! Code for updating the simulation state.
-use crate::ISSUES_URL;
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, PricingStrategy};
-use crate::model::{ALLOW_BROKEN_OPTION_NAME, Model};
+use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use itertools::iproduct;
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
@@ -56,13 +55,6 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
     // Add prices for scarcity-adjusted commodities
     if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
-        ensure!(
-            model.parameters.allow_broken_options,
-            "The `scarcity` pricing strategy is known to be broken. \
-            Commodity prices may be incorrect if assets have more than one output commodity. \
-            See: {ISSUES_URL}/677. \
-            To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
-        );
         let scarcity_prices = calculate_scarcity_adjusted_prices(
             solution.iter_activity_duals(),
             &shadow_prices,

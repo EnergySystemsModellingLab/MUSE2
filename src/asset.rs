@@ -503,7 +503,7 @@ impl Asset {
 
     /// Iterate over marginal costs for all SED/SVD output commodities for this asset
     ///
-    /// See [`iter_marginal_costs_with_filter`] for details.
+    /// See `iter_marginal_costs_with_filter` for details.
     pub fn iter_marginal_costs<'a>(
         &'a self,
         prices: &'a CommodityPrices,

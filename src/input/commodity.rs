@@ -1,13 +1,16 @@
 //! Code for reading in commodity-related data from CSV files.
 use super::{input_err_msg, read_csv};
+use crate::ISSUES_URL;
 use crate::commodity::{
     BalanceType, Commodity, CommodityID, CommodityLevyMap, CommodityMap, CommodityType, DemandMap,
     PricingStrategy,
 };
+use crate::model::{ALLOW_BROKEN_OPTION_NAME, broken_model_options_allowed};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel};
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::{IndexMap, IndexSet};
+use log::warn;
 use serde::Deserialize;
 use std::path::Path;
 
@@ -157,6 +160,20 @@ fn validate_commodity(commodity: &Commodity) -> Result<()> {
                 commodity.kind
             );
         }
+    }
+
+    // Gatekeep the scarcity pricing option
+    if commodity.pricing_strategy == PricingStrategy::ScarcityAdjusted {
+        ensure!(
+            broken_model_options_allowed(),
+            "The `scarcity` pricing strategy is known to be broken. \
+            To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
+        );
+        warn!(
+            "The pricing strategy for {} is set to 'scarcity'. Commodity prices may be \
+            incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677",
+            commodity.id
+        );
     }
 
     Ok(())
