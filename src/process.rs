@@ -3,7 +3,7 @@
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
-use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
     ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, MoneyPerFlow,
@@ -243,7 +243,7 @@ impl ActivityLimits {
     /// Add an annual limit
     fn add_annual_limit(&mut self, limit: RangeInclusive<Dimensionless>) -> Result<()> {
         // Get current limit for the year
-        let current_limit = self.get_limit_for_year(&TimeSliceInfo::default());
+        let current_limit = self.get_limit_for_year();
 
         // Ensure that the new limit overlaps with the current limit
         // If not, it's impossible to satisfy both limits, so we must exit with an error
@@ -266,12 +266,11 @@ impl ActivityLimits {
     pub fn get_limit(
         &self,
         time_slice_selection: &TimeSliceSelection,
-        time_slice_info: &TimeSliceInfo,
     ) -> RangeInclusive<Dimensionless> {
         match time_slice_selection {
             TimeSliceSelection::Single(ts_id) => self.get_limit_for_time_slice(ts_id),
             TimeSliceSelection::Season(season) => self.get_limit_for_season(season),
-            TimeSliceSelection::Annual => self.get_limit_for_year(time_slice_info),
+            TimeSliceSelection::Annual => self.get_limit_for_year(),
         }
     }
 
@@ -325,14 +324,16 @@ impl ActivityLimits {
     }
 
     /// Get the limit for the entire year
-    fn get_limit_for_year(&self, time_slice_info: &TimeSliceInfo) -> RangeInclusive<Dimensionless> {
+    fn get_limit_for_year(&self) -> RangeInclusive<Dimensionless> {
         // Get the sum of limits for all seasons
         let mut total_lower = Dimensionless(0.0);
         let mut total_upper = Dimensionless(0.0);
-        for ts_selection in time_slice_info.iter_selections_at_level(TimeSliceLevel::Season) {
-            let TimeSliceSelection::Season(season) = ts_selection else {
-                panic!("Expected season selection")
-            };
+        let seasons = self
+            .time_slice_limits
+            .keys()
+            .map(|ts_id| ts_id.season.clone())
+            .unique();
+        for season in seasons {
             let season_limit = self.get_limit_for_season(&season);
             total_lower += *season_limit.start();
             total_upper += *season_limit.end();
@@ -990,7 +991,7 @@ mod tests {
         }
 
         // Annual limit should be 0..1
-        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual, &time_slice_info2);
+        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual);
         assert_approx_eq!(Dimensionless, *annual_limit.start(), Dimensionless(0.0));
         assert_approx_eq!(Dimensionless, *annual_limit.end(), Dimensionless(1.0));
     }
@@ -1014,10 +1015,7 @@ mod tests {
         }
 
         // The seasonal limit should reflect the given bound
-        let season_limit = result.get_limit(
-            &TimeSliceSelection::Season("winter".into()),
-            &time_slice_info2,
-        );
+        let season_limit = result.get_limit(&TimeSliceSelection::Season("winter".into()));
         assert_eq!(*season_limit.end(), Dimensionless(0.01));
     }
 
