@@ -332,7 +332,7 @@ impl ActivityLimits {
             .time_slice_limits
             .keys()
             .map(|ts_id| ts_id.season.clone())
-            .collect::<IndexSet<_>>();
+            .unique();
         for season in seasons {
             let season_limit = self.get_limit_for_season(&season);
             total_lower += *season_limit.start();

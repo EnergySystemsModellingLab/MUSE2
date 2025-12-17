@@ -414,7 +414,7 @@ impl Asset {
             .map(|flow| {
                 flow.coeff
                     * prices
-                        .get(&flow.commodity.id, self.region_id(), time_slice)
+                        .get(&flow.commodity.id, &self.region_id, time_slice)
                         .unwrap_or_default()
             })
             .sum()
@@ -447,7 +447,6 @@ impl Asset {
             .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
             .sum();
 
-        // These are all MoneyPerActivity so can be summed directly
         cost_of_inputs + flow_costs + self.process_parameter.variable_operating_cost
     }
 
@@ -474,14 +473,15 @@ impl Asset {
         // We sum the output coefficients of all SED/SVD commodities to get total output, then
         // divide costs by this total output to get the generic cost per unit of output.
         // Note: only works if all SED/SVD outputs have the same units - not currently checked!
-        let total_output = self.get_total_output_per_activity(); // input checks should ensure that this is never zero
-        let generic_cost_per_flow = generic_activity_cost / total_output;
+        let total_output_per_activity = self.get_total_output_per_activity();
+        assert!(total_output_per_activity > FlowPerActivity(f64::EPSILON)); // input checks should guarantee this
+        let generic_cost_per_flow = generic_activity_cost / total_output_per_activity;
 
         // Iterate over SED/SVD output flows
         self.iter_output_flows().map(move |flow| {
             // Get the costs for this specific commodity flow
             let commodity_specific_costs_per_flow =
-                flow.get_total_cost_per_flow(self.region_id(), year, time_slice);
+                flow.get_total_cost_per_flow(&self.region_id, year, time_slice);
 
             // Add these to the generic costs to get total cost for this commodity
             let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
@@ -491,9 +491,9 @@ impl Asset {
 
     /// Get the annual capital cost per unit of capacity for this asset
     pub fn get_annual_capital_cost_per_capacity(&self) -> MoneyPerCapacity {
-        let capital_cost = self.process_parameter().capital_cost;
-        let lifetime = self.process_parameter().lifetime;
-        let discount_rate = self.process_parameter().discount_rate;
+        let capital_cost = self.process_parameter.capital_cost;
+        let lifetime = self.process_parameter.lifetime;
+        let discount_rate = self.process_parameter.discount_rate;
         annual_capital_cost(capital_cost, lifetime, discount_rate)
     }
 
@@ -509,7 +509,7 @@ impl Asset {
         let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity();
         assert!(
             annual_activity > Activity(f64::EPSILON),
-            "Annual activity must be greater than zero to calculate annual capital cost per activity"
+            "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
         );
         total_annual_capital_cost / annual_activity
     }
@@ -522,10 +522,7 @@ impl Asset {
         let annual_capital_cost_per_activity =
             self.get_annual_capital_cost_per_activity(annual_activity);
         let total_output_per_activity = self.get_total_output_per_activity();
-        assert!(
-            total_output_per_activity > FlowPerActivity(f64::EPSILON),
-            "Total output per activity must be greater than zero to calculate annual capital cost per flow"
-        );
+        assert!(total_output_per_activity > FlowPerActivity(f64::EPSILON)); // input checks should guarantee this
         annual_capital_cost_per_activity / total_output_per_activity
     }
 
@@ -940,7 +937,7 @@ impl AssetPool {
                     the start of the simulation",
                     asset.process_id(),
                     asset.commission_year,
-                    asset.process_parameter().lifetime
+                    asset.process_parameter.lifetime
                 );
                 continue;
             }

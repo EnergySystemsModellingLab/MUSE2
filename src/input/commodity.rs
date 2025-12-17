@@ -5,7 +5,7 @@ use crate::commodity::{
 };
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use indexmap::IndexSet;
 use std::path::Path;
 
@@ -42,7 +42,7 @@ pub fn read_commodities(
 
     // Validate commodities
     for commodity in commodities.values_mut() {
-        validate_commodity(commodity);
+        validate_commodity(commodity)?;
     }
 
     // Read costs table
@@ -84,7 +84,7 @@ pub fn read_commodities(
         .collect())
 }
 
-fn validate_commodity(commodity: &mut Commodity) {
+fn validate_commodity(commodity: &mut Commodity) -> Result<()> {
     // Set default pricing strategy if needed
     if commodity.pricing_strategy == PricingStrategy::Default {
         commodity.pricing_strategy = match commodity.kind {
@@ -95,30 +95,28 @@ fn validate_commodity(commodity: &mut Commodity) {
         };
     }
 
-    // Check that OTH commodities are unpriced
-    if commodity.kind == CommodityType::Other {
-        assert_eq!(
-            commodity.pricing_strategy,
-            PricingStrategy::Unpriced,
-            "Commodity {} of type Other and must be unpriced. \
-             Update its pricing strategy to 'unpriced' or 'default'.",
-            commodity.id
-        );
+    // Check that the pricing strategy is appropriate for the commodity type
+    match commodity.kind {
+        CommodityType::Other => {
+            ensure!(
+                commodity.pricing_strategy == PricingStrategy::Unpriced,
+                "Commodity {} of type Other must be unpriced. \
+                Update its pricing strategy to 'unpriced' or 'default'.",
+                commodity.id
+            );
+        }
+        CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand => {
+            ensure!(
+                commodity.pricing_strategy != PricingStrategy::Unpriced,
+                "Commodity {} of type {:?} cannot be unpriced. \
+                Update its pricing strategy to a valid option.",
+                commodity.id,
+                commodity.kind
+            );
+        }
     }
 
-    // Check that SED and SVD commodities are not unpriced
-    if commodity.kind == CommodityType::SupplyEqualsDemand
-        || commodity.kind == CommodityType::ServiceDemand
-    {
-        assert_ne!(
-            commodity.pricing_strategy,
-            PricingStrategy::Unpriced,
-            "Commodity {} of type {:?} cannot be unpriced. \
-             Update its pricing strategy to a valid option.",
-            commodity.id,
-            commodity.kind
-        );
-    }
+    Ok(())
 }
 
 #[cfg(test)]

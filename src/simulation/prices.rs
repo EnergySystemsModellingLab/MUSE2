@@ -30,7 +30,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     let mut scarcity_set = HashSet::new();
     let mut marginal_set = HashSet::new();
     let mut fullcost_set = HashSet::new();
-    for ((commodity_id, commodity), (region_id, _)) in iproduct!(&model.commodities, &model.regions)
+    for ((commodity_id, commodity), region_id) in
+        iproduct!(&model.commodities, model.iter_regions())
     {
         match commodity.pricing_strategy {
             PricingStrategy::ScarcityAdjusted => {
@@ -267,9 +268,14 @@ impl IntoIterator for CommodityPrices {
 /// Calculate scarcity-adjusted prices for a set of commodities.
 ///
 /// # Arguments
+///
 /// * `activity_duals` - Iterator over activity duals from optimisation solution
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `markets_to_price` - Set of markets to calculate scarcity-adjusted prices for
+///
+/// # Returns
+///
+/// A map of scarcity-adjusted prices for the specified markets in all time slices
 fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
     shadow_prices: &CommodityPrices,
@@ -362,6 +368,7 @@ where
 //  multiple SED/SVD outputs per asset.
 ///
 /// # Arguments
+///
 /// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
 ///   assets
 /// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
@@ -371,6 +378,10 @@ where
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
+///
+/// # Returns
+///
+/// A map of marginal cost prices for the specified markets in all time slices
 fn calculate_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
@@ -520,6 +531,7 @@ where
 /// amount of demand was added).
 ///
 /// # Arguments
+///
 /// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
 ///   assets
 /// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
@@ -529,6 +541,10 @@ where
 /// * `shadow_prices` - Shadow prices for all commodities
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
+///
+/// # Returns
+///
+/// A map of full cost prices for the specified markets in all time slices
 fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
