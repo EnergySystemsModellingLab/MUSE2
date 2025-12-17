@@ -10,6 +10,9 @@ use anyhow::Result;
 use itertools::iproduct;
 use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 
+/// Iterator item type for asset activity iterators
+type Item<'a> = (&'a AssetRef, &'a TimeSliceID, Activity);
+
 /// Calculate commodity prices.
 ///
 /// Prices for each commodity are calculated based on their respective pricing strategies.
@@ -366,8 +369,8 @@ fn calculate_marginal_cost_prices<'a, I, J>(
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-    J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: Iterator<Item = Item<'a>>,
+    J: Iterator<Item = Item<'a>>,
 {
     let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
 
@@ -440,7 +443,7 @@ where
 /// Calculated annual activities for each asset by summing across all time slices
 fn calculate_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
 where
-    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: IntoIterator<Item = Item<'a>>,
 {
     activities
         .into_iter()
@@ -518,8 +521,8 @@ fn calculate_full_cost_prices<'a, I, J>(
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-    J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+    I: Iterator<Item = Item<'a>>,
+    J: Iterator<Item = Item<'a>>,
 {
     let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
 
