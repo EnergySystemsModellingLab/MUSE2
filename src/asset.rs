@@ -643,7 +643,7 @@ impl Asset {
             "Only assets corresponding to processes with a unit size defined can be divided"
         );
 
-        // Time to divide the asset until its capacity is all down to zero
+        // Divide the asset into children until all capacity is allocated
         let mut capacity = self.capacity;
         let mut children = Vec::new();
         while capacity > Capacity(0.0) {
