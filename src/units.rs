@@ -97,6 +97,9 @@ macro_rules! base_unit_struct {
             }
         }
         impl $name {
+            /// Small epsilon constant for this unit type.
+            pub const EPSILON: $name = $name(f64::EPSILON);
+
             /// Create from an f64 value
             pub fn new(value: f64) -> Self {
                 $name(value)

@@ -486,7 +486,7 @@ impl Asset {
         // divide costs by this total output to get the generic cost per unit of output.
         // Note: only works if all SED/SVD outputs have the same units - not currently checked!
         let total_output_per_activity = self.get_total_output_per_activity();
-        assert!(total_output_per_activity > FlowPerActivity(f64::EPSILON)); // input checks should guarantee this
+        assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
         let generic_cost_per_flow = generic_activity_cost / total_output_per_activity;
 
         // Iterate over SED/SVD output flows
@@ -532,7 +532,7 @@ impl Asset {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
         let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity();
         assert!(
-            annual_activity > Activity(f64::EPSILON),
+            annual_activity > Activity::EPSILON,
             "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
         );
         total_annual_capital_cost / annual_activity
@@ -546,7 +546,7 @@ impl Asset {
         let annual_capital_cost_per_activity =
             self.get_annual_capital_cost_per_activity(annual_activity);
         let total_output_per_activity = self.get_total_output_per_activity();
-        assert!(total_output_per_activity > FlowPerActivity(f64::EPSILON)); // input checks should guarantee this
+        assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
         annual_capital_cost_per_activity / total_output_per_activity
     }
 

@@ -387,7 +387,7 @@ where
         let region_id = asset.region_id();
 
         // Only proceed if the asset has non-zero activity in this time slice
-        if activity < Activity(f64::EPSILON) {
+        if activity < Activity::EPSILON {
             continue;
         }
 
@@ -541,7 +541,7 @@ where
         let region_id = asset.region_id();
 
         // Only proceed if the asset has non-zero activity in this time slice
-        if activity < Activity(f64::EPSILON) {
+        if activity < Activity::EPSILON {
             continue;
         }
 
