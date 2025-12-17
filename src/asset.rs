@@ -1307,12 +1307,14 @@ mod tests {
 
         // Check capacity of the children
         let max_child_capacity = asset_divisible.process.unit_size.unwrap();
-        for child in children {
+        for child in children.clone() {
             assert!(
                 child.capacity <= max_child_capacity,
                 "Child capacity is too large!"
             )
         }
+        let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
+        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
