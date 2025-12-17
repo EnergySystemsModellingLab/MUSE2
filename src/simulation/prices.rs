@@ -47,11 +47,6 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
                 shadow_set.insert((commodity_id.clone(), region_id.clone()));
             }
             PricingStrategy::Unpriced => { /* Nothing to do */ }
-            PricingStrategy::Default => {
-                unreachable!(
-                    "Default pricing strategy should have been resolved during data loading"
-                )
-            }
         }
     }
 

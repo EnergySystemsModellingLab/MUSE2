@@ -1,12 +1,14 @@
 //! Code for reading in commodity-related data from CSV files.
-use super::read_csv_id_file;
+use super::{input_err_msg, read_csv};
 use crate::commodity::{
-    BalanceType, Commodity, CommodityID, CommodityMap, CommodityType, PricingStrategy,
+    BalanceType, Commodity, CommodityID, CommodityLevyMap, CommodityMap, CommodityType, DemandMap,
+    PricingStrategy,
 };
 use crate::region::RegionID;
-use crate::time_slice::TimeSliceInfo;
-use anyhow::{Result, ensure};
-use indexmap::IndexSet;
+use crate::time_slice::{TimeSliceInfo, TimeSliceLevel};
+use anyhow::{Context, Ok, Result, ensure};
+use indexmap::{IndexMap, IndexSet};
+use serde::Deserialize;
 use std::path::Path;
 
 mod levy;
@@ -16,6 +18,16 @@ use demand::read_demand;
 mod demand_slicing;
 
 const COMMODITY_FILE_NAME: &str = "commodities.csv";
+
+#[derive(PartialEq, Debug, Deserialize)]
+struct CommodityRaw {
+    pub id: CommodityID,
+    pub description: String,
+    #[serde(rename = "type")] // NB: we can't name a field type as it's a reserved keyword
+    pub kind: CommodityType,
+    pub time_slice_level: TimeSliceLevel,
+    pub pricing_strategy: Option<PricingStrategy>,
+}
 
 /// Read commodity data from the specified model directory.
 ///
@@ -36,14 +48,8 @@ pub fn read_commodities(
     milestone_years: &[u32],
 ) -> Result<CommodityMap> {
     // Read commodities table
-    let mut commodities =
-        read_csv_id_file::<Commodity, CommodityID>(&model_dir.join(COMMODITY_FILE_NAME))?;
+    let commodities = read_commodities_file(model_dir)?;
     let commodity_ids = commodities.keys().cloned().collect();
-
-    // Validate commodities
-    for commodity in commodities.values_mut() {
-        validate_commodity(commodity)?;
-    }
 
     // Read costs table
     let mut costs = read_commodity_levies(
@@ -84,24 +90,61 @@ pub fn read_commodities(
         .collect())
 }
 
-fn validate_commodity(commodity: &mut Commodity) -> Result<()> {
-    // Set default pricing strategy if needed
-    if commodity.pricing_strategy == PricingStrategy::Default {
-        commodity.pricing_strategy = match commodity.kind {
-            CommodityType::Other => PricingStrategy::Unpriced,
-            CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand => {
-                PricingStrategy::Shadow
-            }
+fn read_commodities_file(model_dir: &Path) -> Result<IndexMap<CommodityID, Commodity>> {
+    let file_path = model_dir.join(COMMODITY_FILE_NAME);
+    let commodities_csv = read_csv(&file_path)?;
+    read_commodities_file_from_iter(commodities_csv).with_context(|| input_err_msg(&file_path))
+}
+
+fn read_commodities_file_from_iter<I>(iter: I) -> Result<IndexMap<CommodityID, Commodity>>
+where
+    I: Iterator<Item = CommodityRaw>,
+{
+    let mut commodities = IndexMap::new();
+    for commodity_raw in iter {
+        let pricing_strategy = match commodity_raw.pricing_strategy {
+            Some(strategy) => strategy,
+            None => default_pricing_strategy(&commodity_raw.kind),
         };
+
+        let commodity = Commodity {
+            id: commodity_raw.id.clone(),
+            description: commodity_raw.description,
+            kind: commodity_raw.kind,
+            time_slice_level: commodity_raw.time_slice_level,
+            pricing_strategy,
+            levies_prod: CommodityLevyMap::default(),
+            levies_cons: CommodityLevyMap::default(),
+            demand: DemandMap::default(),
+        };
+
+        validate_commodity(&commodity)?;
+
+        ensure!(
+            commodities.insert(commodity_raw.id, commodity).is_none(),
+            "Duplicate commodity ID"
+        );
     }
 
+    Ok(commodities)
+}
+
+/// Get the default pricing strategy for a given commodity kind.
+fn default_pricing_strategy(commodity_kind: &CommodityType) -> PricingStrategy {
+    match commodity_kind {
+        CommodityType::Other => PricingStrategy::Unpriced,
+        CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand => PricingStrategy::Shadow,
+    }
+}
+
+fn validate_commodity(commodity: &Commodity) -> Result<()> {
     // Check that the pricing strategy is appropriate for the commodity type
     match commodity.kind {
         CommodityType::Other => {
             ensure!(
                 commodity.pricing_strategy == PricingStrategy::Unpriced,
                 "Commodity {} of type Other must be unpriced. \
-                Update its pricing strategy to 'unpriced' or 'default'.",
+                    Update its pricing strategy to 'unpriced' or 'default'.",
                 commodity.id
             );
         }
@@ -109,7 +152,7 @@ fn validate_commodity(commodity: &mut Commodity) -> Result<()> {
             ensure!(
                 commodity.pricing_strategy != PricingStrategy::Unpriced,
                 "Commodity {} of type {:?} cannot be unpriced. \
-                Update its pricing strategy to a valid option.",
+                    Update its pricing strategy to a valid option.",
                 commodity.id,
                 commodity.kind
             );
@@ -132,29 +175,20 @@ mod tests {
             kind,
             time_slice_level: TimeSliceLevel::Annual,
             pricing_strategy,
-            levies_prod: Default::default(),
-            levies_cons: Default::default(),
-            demand: Default::default(),
+            levies_prod: CommodityLevyMap::default(),
+            levies_cons: CommodityLevyMap::default(),
+            demand: DemandMap::default(),
         }
     }
 
     #[test]
-    fn sets_default_pricing_for_other_to_unpriced() {
-        let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::Default);
-        validate_commodity(&mut commodity).unwrap();
-        assert_eq!(commodity.pricing_strategy, PricingStrategy::Unpriced);
+    fn test_validate_commodity() {
+        let commodity = make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Shadow);
+        assert!(validate_commodity(&commodity).is_ok());
     }
 
     #[test]
-    fn sets_default_pricing_for_sed_to_shadow() {
-        let mut commodity =
-            make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Default);
-        validate_commodity(&mut commodity).unwrap();
-        assert_eq!(commodity.pricing_strategy, PricingStrategy::Shadow);
-    }
-
-    #[test]
-    fn other_cannot_be_priced() {
+    fn test_validate_commodity_other_priced() {
         let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::MarginalCost);
         assert_error!(
             validate_commodity(&mut commodity),
@@ -163,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn sed_cannot_be_unpriced() {
+    fn test_validate_commodity_sed_unpriced() {
         let mut commodity =
             make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Unpriced);
         assert_error!(
