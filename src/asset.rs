@@ -56,7 +56,7 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
-        /// ID of the parent asset, if any. None, if this asset is not resulting from dividing a parent
+        /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
         group_id: Option<AssetID>,
     },
     /// The asset has been decommissioned
