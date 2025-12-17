@@ -57,7 +57,7 @@ pub enum AssetState {
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
         /// ID of the parent asset, if any. None, if this asset is not resulting from dividing a parent
-        parent_id: Option<AssetID>,
+        group_id: Option<AssetID>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -80,13 +80,6 @@ pub enum AssetState {
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
-    /// The asset has been divided and only its children matter, now
-    Divided {
-        /// The ID of the asset
-        id: AssetID,
-        /// The ID of the agent that owns the asset
-        agent_id: AgentID,
-    },
 }
 
 /// An asset controlled by an agent.
@@ -475,8 +468,7 @@ impl Asset {
             AssetState::Commissioned { agent_id, .. }
             | AssetState::Decommissioned { agent_id, .. }
             | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id }
-            | AssetState::Divided { agent_id, .. } => Some(agent_id),
+            | AssetState::Selected { agent_id } => Some(agent_id),
             AssetState::Candidate => None,
         }
     }
@@ -539,8 +531,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    /// * `parent_id` - The ID of the parent of this asset, if any.
-    fn commission(&mut self, id: AssetID, reason: &str, parent_id: Option<AssetID>) {
+    /// * `group_id` - The ID of the group of this asset, if any.
+    fn commission(&mut self, id: AssetID, reason: &str, group_id: Option<AssetID>) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -557,7 +549,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
-            parent_id,
+            group_id,
         };
     }
 
@@ -573,39 +565,39 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id, parent_id) = match &self.state {
+        let (id, agent_id, group_id) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                parent_id,
+                group_id,
                 ..
-            } => (*id, agent_id.clone(), *parent_id),
+            } => (*id, agent_id.clone(), *group_id),
             _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: Some(year),
-            parent_id,
+            group_id,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id, parent_id) = match &self.state {
+        let (id, agent_id, group_id) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                parent_id,
+                group_id,
                 ..
-            } => (*id, agent_id.clone(), *parent_id),
+            } => (*id, agent_id.clone(), *group_id),
             _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
-            parent_id,
+            group_id,
         };
     }
 
@@ -615,7 +607,7 @@ impl Asset {
             mothballed_year, ..
         } = &self.state
         else {
-            panic!("Cannot mothballed an asset that hasn't been commissioned")
+            panic!("Cannot mothball an asset that hasn't been commissioned")
         };
         *mothballed_year
     }
@@ -625,38 +617,38 @@ impl Asset {
         self.process.unit_size.is_some()
     }
 
-    /// Divides an asset if it is divisible, setting it as Divided and returning a vector of children
+    /// Divides an asset if it is divisible and returns a vector of children
     ///
     /// The children assets are identical to the parent (including state) but with a capacity defined
     /// by the `unit_size`. Only Future or Selected assets can be divided.
-    pub fn divide_asset(&mut self, id: AssetID) -> Vec<Asset> {
-        let agent_id = match &self.state {
-            AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
-            state => panic!("Assets with state {state} cannot be divided"),
-        };
+    pub fn divide_asset(&self) -> Vec<Asset> {
+        assert!(
+            matches!(
+                self.state,
+                AssetState::Future { .. } | AssetState::Selected { .. }
+            ),
+            "Assets with state {0} cannot be divided. Only Future or Selected assets can be divided",
+            self.state
+        );
         assert!(
             self.is_divisible(),
-            "Only assets with a unit size defined can be divided"
+            "Only assets corresponding to processes with a unit size defined can be divided"
         );
 
         // Time to divide the asset until its capacity is all down to zero
+        let mut capacity = self.capacity;
         let mut children = Vec::new();
-        while self.capacity > Capacity(0.0) {
+        while capacity > Capacity(0.0) {
             let mut child = self.clone();
             child.capacity = self
                 .process
                 .unit_size
-                .filter(|size| *size <= self.capacity)
+                .filter(|size| *size <= capacity)
                 .unwrap_or(self.capacity);
-            self.capacity -= child.capacity;
+            capacity -= child.capacity;
             children.push(child);
         }
 
-        // Finally, set the state of this asset as divided and return the children.
-        self.state = AssetState::Divided {
-            id,
-            agent_id: agent_id.clone(),
-        };
         children
     }
 }
@@ -780,11 +772,9 @@ impl Hash for AssetRef {
                 self.0.commission_year.hash(state);
                 self.0.agent_id().hash(state);
             }
-            AssetState::Future { .. }
-            | AssetState::Decommissioned { .. }
-            | AssetState::Divided { .. } => {
-                // We shouldn't currently need to hash Future, Decommissioned or Divided assets
-                panic!("Cannot hash Future, Decommissioned or Divided assets");
+            AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
+                // We shouldn't currently need to hash Future or Decommissioned assets
+                panic!("Cannot hash Future or Decommissioned assets");
             }
         }
     }
@@ -810,10 +800,10 @@ pub struct AssetPool {
     future: Vec<Asset>,
     /// Assets that have been decommissioned
     decommissioned: Vec<AssetRef>,
-    /// Assets that have been divided
-    divided: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
+    /// Next available group ID number
+    next_group_id: u32,
 }
 
 impl AssetPool {
@@ -826,8 +816,8 @@ impl AssetPool {
             active: Vec::new(),
             future: assets,
             decommissioned: Vec::new(),
-            divided: Vec::new(),
             next_id: 0,
+            next_group_id: 0,
         }
     }
 
@@ -868,17 +858,20 @@ impl AssetPool {
 
             // If it is divisible, we divide and commission all the children
             if asset.is_divisible() {
-                let children = asset.divide_asset(AssetID(self.next_id));
-                self.next_id += 1;
+                let children = asset.divide_asset();
                 for mut child in children {
-                    child.commission(AssetID(self.next_id), "user input", asset.id());
+                    child.commission(
+                        AssetID(self.next_id),
+                        "user input",
+                        Some(AssetID(self.next_group_id)),
+                    );
                     self.next_id += 1;
                     self.active.push(child.into());
                 }
-                self.divided.push(asset.into());
-
+                self.next_group_id += 1;
+            }
             // If not, we just commission it as a single asset
-            } else {
+            else {
                 asset.commission(AssetID(self.next_id), "user input", None);
                 self.next_id += 1;
                 self.active.push(asset.into());
