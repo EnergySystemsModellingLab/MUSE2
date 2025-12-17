@@ -1,6 +1,6 @@
 id,description,type,time_slice_level,pricing_strategy
-GASPRD,Gas produced,sed,season,shadow
-GASNAT,Natural gas,sed,season,shadow
-ELCTRI,Electricity,sed,daynight,shadow
-RSHEAT,Residential heating,svd,daynight,shadow
-CO2EMT,CO2 emitted,oth,annual,unpriced
+GASPRD,Gas produced,sed,season,
+GASNAT,Natural gas,sed,season,
+ELCTRI,Electricity,sed,daynight,
+RSHEAT,Residential heating,svd,daynight,
+CO2EMT,CO2 emitted,oth,annual,
