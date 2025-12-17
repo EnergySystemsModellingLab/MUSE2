@@ -450,19 +450,31 @@ impl Asset {
         cost_of_inputs + flow_costs + self.process_parameter.variable_operating_cost
     }
 
-    /// Iterate over marginal costs for all SED/SVD output commodities for this asset
+    /// Iterate over marginal costs for a filtered set of SED/SVD output commodities for this asset
     ///
     /// For each SED/SVD output commodity, the marginal cost is calculated as the sum of:
     /// - Generic activity costs (variable operating costs, cost of purchasing inputs, plus all
     ///   levies and flow costs not associated with specific SED/SVD outputs), which are
     ///   shared equally over all SED/SVD outputs
     /// - Production levies and flow costs for the specific SED/SVD output commodity
-    pub fn iter_marginal_costs<'a>(
+    pub fn iter_marginal_costs_with_filter<'a>(
         &'a self,
         prices: &'a CommodityPrices,
         year: u32,
         time_slice: &'a TimeSliceID,
-    ) -> impl Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a {
+        filter: impl Fn(&CommodityID) -> bool + 'a,
+    ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
+        // Iterator over SED/SVD output flows matching the filter
+        let mut output_flows_iter = self
+            .iter_output_flows()
+            .filter(move |flow| filter(&flow.commodity.id))
+            .peekable();
+
+        // If there are no output flows after filtering, return an empty iterator
+        if output_flows_iter.peek().is_none() {
+            return Box::new(std::iter::empty::<(CommodityID, MoneyPerFlow)>());
+        }
+
         // Calculate generic activity costs.
         // This is all activity costs not associated with specific SED/SVD outputs, which will get
         // shared equally over all SED/SVD outputs. Includes levies, flow costs, costs of inputs and
@@ -478,7 +490,7 @@ impl Asset {
         let generic_cost_per_flow = generic_activity_cost / total_output_per_activity;
 
         // Iterate over SED/SVD output flows
-        self.iter_output_flows().map(move |flow| {
+        Box::new(output_flows_iter.map(move |flow| {
             // Get the costs for this specific commodity flow
             let commodity_specific_costs_per_flow =
                 flow.get_total_cost_per_flow(&self.region_id, year, time_slice);
@@ -486,7 +498,19 @@ impl Asset {
             // Add these to the generic costs to get total cost for this commodity
             let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
             (flow.commodity.id.clone(), marginal_cost)
-        })
+        }))
+    }
+
+    /// Iterate over marginal costs for all SED/SVD output commodities for this asset
+    ///
+    /// See [`iter_marginal_costs_with_filter`] for details.
+    pub fn iter_marginal_costs<'a>(
+        &'a self,
+        prices: &'a CommodityPrices,
+        year: u32,
+        time_slice: &'a TimeSliceID,
+    ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
+        self.iter_marginal_costs_with_filter(prices, year, time_slice, move |_| true)
     }
 
     /// Get the annual capital cost per unit of capacity for this asset

@@ -391,20 +391,15 @@ where
             continue;
         }
 
-        // Only proceed if the asset produces at least one commodity we need prices for
-        // This is to prevent unnecessary overhead in `iter_marginal_costs`
-        if !asset
-            .iter_output_flows()
-            .any(|flow| markets_to_price.contains(&(flow.commodity.id.clone(), region_id.clone())))
-        {
-            continue;
-        }
-
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
-        for (commodity_id, marginal_cost) in asset
-            .iter_marginal_costs(shadow_prices, year, time_slice)
-            .filter(|(cid, _)| markets_to_price.contains(&(cid.clone(), region_id.clone())))
-        {
+        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
+            shadow_prices,
+            year,
+            time_slice,
+            |commodity_id: &CommodityID| {
+                markets_to_price.contains(&(commodity_id.clone(), region_id.clone()))
+            },
+        ) {
             // Update the highest cost for this commodity/region/time slice
             let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
             prices
@@ -430,20 +425,13 @@ where
                 ))
         };
 
-        // Only proceed if the asset produces at least one commodity we need prices for
-        // This is to prevent unnecessary overhead in `iter_marginal_costs`
-        if !asset
-            .iter_output_flows()
-            .any(|flow| should_process(&flow.commodity.id))
-        {
-            continue;
-        }
-
         // Iterate over all the SED/SVD marginal costs for markets we need prices for
-        for (commodity_id, marginal_cost) in asset
-            .iter_marginal_costs(shadow_prices, year, time_slice)
-            .filter(|(cid, _)| should_process(cid))
-        {
+        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
+            shadow_prices,
+            year,
+            time_slice,
+            |cid: &CommodityID| should_process(cid),
+        ) {
             // Update the _lowest_ cost for this commodity/region/time slice
             let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
             prices
@@ -571,10 +559,12 @@ where
             .or_insert_with(|| asset.get_annual_capital_cost_per_flow(annual_activity));
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
-        for (commodity_id, marginal_cost) in asset
-            .iter_marginal_costs(shadow_prices, year, time_slice)
-            .filter(|(cid, _)| markets_to_price.contains(&(cid.clone(), region_id.clone())))
-        {
+        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
+            shadow_prices,
+            year,
+            time_slice,
+            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
+        ) {
             // Add capital cost per flow to marginal cost to get full cost
             let marginal_cost = marginal_cost + annual_capital_cost_per_flow;
 
@@ -624,10 +614,12 @@ where
             });
 
         // Iterate over all the SED/SVD marginal costs for markets we need prices for
-        for (commodity_id, marginal_cost) in asset
-            .iter_marginal_costs(shadow_prices, year, time_slice)
-            .filter(|(cid, _)| should_process(cid))
-        {
+        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
+            shadow_prices,
+            year,
+            time_slice,
+            |cid: &CommodityID| should_process(cid),
+        ) {
             // Add capital cost per flow to marginal cost to get full cost
             let full_cost = marginal_cost + annual_capital_cost_per_flow;
 
