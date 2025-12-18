@@ -47,22 +47,23 @@ pub(crate) use assert_error;
 ///
 /// As well as applying the given file patches, this also sets the allow broken options flag in the
 /// model TOML to true.
-pub(crate) fn build_patched_simple_tempdir(
-    file_patches: Vec<FilePatch>,
-) -> Result<tempfile::TempDir> {
+///
+/// If the patched model cannot be built, for whatever reason, this function will panic.
+pub(crate) fn build_patched_simple_tempdir(file_patches: Vec<FilePatch>) -> tempfile::TempDir {
     let toml_patch = format!(r#"{name} = true"#, name = ALLOW_BROKEN_OPTION_NAME);
 
     ModelPatch::new("examples/simple")
         .with_file_patches(file_patches)
         .with_toml_patch(&toml_patch)
         .build_to_tempdir()
+        .unwrap()
 }
 
 /// Check whether the simple example passes or fails validation after applying file patches
 macro_rules! patch_and_validate_simple {
     ($file_patches:expr) => {{
         (|| -> Result<()> {
-            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches)?;
+            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
             crate::input::load_model(tmp.path())?;
             Ok(())
         })()
@@ -74,7 +75,7 @@ pub(crate) use patch_and_validate_simple;
 macro_rules! patch_and_run_simple {
     ($file_patches:expr) => {{
         (|| -> Result<()> {
-            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches)?;
+            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
             let (model, assets) = crate::input::load_model(tmp.path())?;
             let output_path = tmp.path().join("output");
             std::fs::create_dir_all(&output_path)?;
