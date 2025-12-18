@@ -1020,6 +1020,33 @@ mod tests {
     }
 
     #[rstest]
+    fn test_new_from_limits_with_annual_limit_applied(time_slice_info2: TimeSliceInfo) {
+        let mut limits = HashMap::new();
+
+        // Set an annual upper limit that is stricter than the sum of timeslices
+        limits.insert(
+            TimeSliceSelection::Annual,
+            Dimensionless(0.0)..=Dimensionless(0.01),
+        );
+
+        let result = ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap();
+
+        // Each timeslice upper bound should be capped by the annual upper bound (0.01)
+        for (ts_id, _ts_len) in time_slice_info2.iter() {
+            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            assert_eq!(*ts_limit.end(), Dimensionless(0.01));
+        }
+
+        // The seasonal limit should be capped by the annual upper bound (0.01)
+        let season_limit = result.get_limit(&TimeSliceSelection::Season("winter".into()));
+        assert_eq!(*season_limit.end(), Dimensionless(0.01));
+
+        // The annual limit should reflect the given bound
+        let annual_limit = result.get_limit(&TimeSliceSelection::Annual);
+        assert_eq!(*annual_limit.end(), Dimensionless(0.01));
+    }
+
+    #[rstest]
     fn test_new_from_limits_missing_timeslices_error(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
