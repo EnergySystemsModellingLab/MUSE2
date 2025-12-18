@@ -56,6 +56,8 @@ impl InvestmentSet {
     /// Selects assets for this investment set variant and passes through the shared
     /// context needed by single-market, cycle, or layered selection.
     ///
+    /// # Arguments
+    ///
     /// * `model` – Simulation model supplying parameters, processes, and dispatch.
     /// * `year` – Planning year being solved.
     /// * `demand` – Net demand profiles available to all markets before selection.
