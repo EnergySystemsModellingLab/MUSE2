@@ -654,10 +654,6 @@ impl Asset {
             "Assets with state {0} cannot be divided. Only Future or Selected assets can be divided",
             self.state
         );
-        assert!(
-            self.is_divisible(),
-            "Only assets corresponding to processes with a unit size defined can be divided"
-        );
 
         // Divide the asset into children until all capacity is allocated
         let mut capacity = self.capacity;
