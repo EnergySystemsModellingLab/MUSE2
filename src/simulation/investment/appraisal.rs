@@ -71,24 +71,10 @@ impl AppraisalOutput {
     }
 }
 
+/// Sort commissioned assets first and newer before older
 fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
-    // Favour commissioned assets over non-commissioned
-    if asset1.is_commissioned() && !asset2.is_commissioned() {
-        return Ordering::Less;
-    }
-    if !asset1.is_commissioned() && asset2.is_commissioned() {
-        return Ordering::Greater;
-    }
-
-    // if both commissioned, favour newer ones
-    if asset1.is_commissioned() && asset2.is_commissioned() {
-        return asset1
-            .commission_year()
-            .cmp(&asset2.commission_year())
-            .reverse();
-    }
-
-    Ordering::Equal
+    (asset2.is_commissioned(), asset2.commission_year())
+        .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
 /// Calculate LCOX for a hypothetical investment in the given asset.
