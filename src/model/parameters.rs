@@ -27,6 +27,22 @@ pub fn broken_model_options_allowed() -> bool {
         .expect("Broken options flag not set")
 }
 
+/// Set global flag signalling whether broken model options are allowed
+///
+/// Can only be called once; subsequent calls will panic (except in tests, where it can be called
+/// multiple times so long as the value is the same).
+fn set_broken_model_options_flag(allowed: bool) {
+    let result = BROKEN_OPTIONS_ALLOWED.set(allowed);
+    if result.is_err() {
+        if cfg!(test) {
+            // Sanity check
+            assert_eq!(allowed, broken_model_options_allowed());
+        } else {
+            panic!("Attempted to set BROKEN_OPTIONS_ALLOWED twice");
+        }
+    }
+}
+
 macro_rules! define_unit_param_default {
     ($name:ident, $type: ty, $value: expr) => {
         fn $name() -> $type {
@@ -174,10 +190,7 @@ impl ModelParameters {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
         let model_params: ModelParameters = read_toml(&file_path)?;
 
-        // Set flag signalling whether broken model options are allowed or not
-        BROKEN_OPTIONS_ALLOWED
-            .set(model_params.allow_broken_options)
-            .unwrap(); // Will only fail if there is a race condition, which shouldn't happen
+        set_broken_model_options_flag(model_params.allow_broken_options);
 
         model_params
             .validate()

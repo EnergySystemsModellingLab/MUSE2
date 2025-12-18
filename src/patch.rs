@@ -284,6 +284,10 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
 mod tests {
     use super::*;
     use crate::fixture::assert_error;
+    use crate::input::read_toml;
+    use crate::model::ModelParameters;
+    use crate::patch::{FilePatch, ModelPatch};
+    use std::path::PathBuf;
 
     #[test]
     fn test_modify_base_with_patch() {
@@ -343,5 +347,47 @@ mod tests {
         assert!(merged.contains("field = \"patched\""));
         assert!(merged.contains("[section]"));
         assert!(merged.contains("new_field = \"added\""));
+    }
+
+    #[test]
+    fn test_file_patch() {
+        let base_model_dir = PathBuf::from("examples/simple");
+
+        // Patch with a small change to an asset capacity
+        let assets_patch = FilePatch::new("assets.csv")
+            .delete_row("GASDRV,GBR,A0_GEX,4002.26,2020")
+            .add_row("GASDRV,GBR,A0_GEX,4003.26,2020");
+
+        // Build patched model into a temporary directory
+        let model_dir = ModelPatch::new(&base_model_dir)
+            .with_file_patch(assets_patch)
+            .build_to_tempdir()
+            .unwrap();
+
+        // Check that the appropriate change has been made
+        let assets_path = model_dir.path().join("assets.csv");
+        let assets_content = std::fs::read_to_string(assets_path).unwrap();
+        assert!(!assets_content.contains("GASDRV,GBR,A0_GEX,4002.26,2020"));
+        assert!(assets_content.contains("GASDRV,GBR,A0_GEX,4003.26,2020"));
+    }
+
+    #[test]
+    fn test_toml_patch() {
+        let base_model_dir = PathBuf::from("examples/simple");
+
+        // Patch to add an extra milestone year (2050)
+        let toml_patch = r#"
+            milestone_years = [2020, 2030, 2040, 2050]
+        "#;
+
+        // Build patched model into a temporary directory
+        let model_dir = ModelPatch::new(&base_model_dir)
+            .with_toml_patch(toml_patch)
+            .build_to_tempdir()
+            .unwrap();
+
+        // Check that the appropriate change has been made
+        let toml: ModelParameters = read_toml(&model_dir.path().join("model.toml")).unwrap();
+        assert_eq!(toml.milestone_years, vec![2020, 2030, 2040, 2050]);
     }
 }
