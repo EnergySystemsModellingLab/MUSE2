@@ -718,28 +718,28 @@ fn select_best_assets(
         )?;
 
         // Sort assets by appraisal metric
-        let assets_sorted_by_metric: Vec<_> = outputs_for_opts
+        let assets_sorted_by_metric = outputs_for_opts
             .into_iter()
             .filter(|output| output.capacity > Capacity(0.0))
             .sorted_by(AppraisalOutput::compare_metric)
-            .collect();
+            .collect_vec();
 
-        // check if all options have zero capacity
-        if assets_sorted_by_metric.is_empty() {
-            // In this case, we cannot meet demand, so have to bail out.
-            // This may happen if:
-            // - the asset has zero activity limits for all time slices with demand.
-            // - known issue with the NPV objective
-            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
-            bail!(
-                "No feasible investment options for commodity '{}' after appraisal",
-                &commodity.id
-            )
-        }
-
-        let appraisal_comparison_method = classify_appraisal_comparison_method(
-            &assets_sorted_by_metric.iter().collect::<Vec<_>>(),
+        // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
+        // out.
+        //
+        // This may happen if:
+        // - the asset has zero activity limits for all time slices with
+        // demand.
+        // - known issue with the NPV objective
+        // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
+        ensure!(
+            !assets_sorted_by_metric.is_empty(),
+            "No feasible investment options for commodity '{}' after appraisal",
+            &commodity.id
         );
+
+        let appraisal_comparison_method =
+            classify_appraisal_comparison_method(&assets_sorted_by_metric);
 
         // Determine the best asset based on whether multiple equally-good options exist
         let best_output = match appraisal_comparison_method {
@@ -754,8 +754,10 @@ fn select_best_assets(
                     .count();
 
                 // select from all equally good assets
-                let equally_good_assets: Vec<_> =
-                    assets_sorted_by_metric.into_iter().take(count).collect();
+                let equally_good_assets = assets_sorted_by_metric
+                    .into_iter()
+                    .take(count)
+                    .collect_vec();
                 select_from_assets_with_equal_metric(
                     region_id,
                     &agent.id,

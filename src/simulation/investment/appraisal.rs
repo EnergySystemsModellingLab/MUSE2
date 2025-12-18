@@ -99,11 +99,11 @@ pub enum AppraisalComparisonMethod {
 /// Classify the appropriate method to compare appraisal outputs
 /// given an array of appraisal outputs sorted by metric
 pub fn classify_appraisal_comparison_method(
-    appraisals_sorted_by_metric: &[&AppraisalOutput],
+    appraisals_sorted_by_metric: &[AppraisalOutput],
 ) -> AppraisalComparisonMethod {
     if appraisals_sorted_by_metric.len() >= 2
         && appraisals_sorted_by_metric[0]
-            .compare_metric(appraisals_sorted_by_metric[1])
+            .compare_metric(&appraisals_sorted_by_metric[1])
             .is_eq()
     {
         AppraisalComparisonMethod::EqualMetrics
