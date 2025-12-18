@@ -13,7 +13,7 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::{debug, warn};
+use log::debug;
 use std::collections::HashMap;
 use std::fmt::Display;
 
@@ -620,7 +620,7 @@ fn get_candidate_assets<'a>(
         })
 }
 
-/// Warn if there are multiple equally good outputs
+/// Print debug message if there are multiple equally good outputs
 fn warn_on_equal_appraisal_outputs(
     outputs: &[AppraisalOutput],
     agent_id: &AgentID,
@@ -647,7 +647,7 @@ fn warn_on_equal_appraisal_outputs(
         .join(", ");
 
     if !asset_details.is_empty() {
-        warn!(
+        debug!(
             "Found equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', \
             Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
         );
