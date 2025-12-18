@@ -23,7 +23,6 @@ fn prepare_commodities_graph_for_validation(
     base_graph: &CommoditiesGraph,
     processes: &ProcessMap,
     commodities: &CommodityMap,
-    time_slice_info: &TimeSliceInfo,
     region_id: &RegionID,
     year: u32,
     time_slice_selection: &TimeSliceSelection,
@@ -42,7 +41,7 @@ fn prepare_commodities_graph_for_validation(
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
-        can_be_active(process, &key, time_slice_selection, time_slice_info)
+        can_be_active(process, &key, time_slice_selection)
     });
 
     // Add demand edges
@@ -80,7 +79,6 @@ fn can_be_active(
     process: &Process,
     target: &(RegionID, u32),
     time_slice_selection: &TimeSliceSelection,
-    time_slice_info: &TimeSliceInfo,
 ) -> bool {
     let (target_region, target_year) = target;
 
@@ -92,11 +90,7 @@ fn can_be_active(
             let Some(limits_map) = process.activity_limits.get(target) else {
                 continue;
             };
-            if limits_map
-                .get_limit(time_slice_selection, time_slice_info)
-                .end()
-                > &Dimensionless(0.0)
-            {
+            if limits_map.get_limit(time_slice_selection).end() > &Dimensionless(0.0) {
                 return true;
             }
         }
@@ -220,7 +214,6 @@ pub fn validate_commodity_graphs_for_model(
                     base_graph,
                     processes,
                     commodities,
-                    time_slice_info,
                     region_id,
                     *year,
                     &ts_selection,

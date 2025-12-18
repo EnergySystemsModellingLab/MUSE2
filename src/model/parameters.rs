@@ -1,5 +1,4 @@
 //! Defines the `ModelParameters` struct, which represents the contents of `model.toml`.
-use crate::ISSUES_URL;
 use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
@@ -8,7 +7,6 @@ use crate::units::{Capacity, Dimensionless, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use log::warn;
 use serde::Deserialize;
-use serde_string_enum::DeserializeLabeledStringEnum;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -83,9 +81,6 @@ pub struct ModelParameters {
     /// Don't change unless you know what you're doing.
     #[serde(default = "default_candidate_asset_capacity")]
     pub candidate_asset_capacity: Capacity,
-    /// Defines the strategy used for calculating commodity prices
-    #[serde(default)]
-    pub pricing_strategy: PricingStrategy,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
@@ -113,18 +108,6 @@ pub struct ModelParameters {
     /// Number of years an asset can remain unused before being decommissioned
     #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
-}
-
-/// The strategy used for calculating commodity prices
-#[derive(DeserializeLabeledStringEnum, Debug, PartialEq, Default)]
-pub enum PricingStrategy {
-    /// Take commodity prices directly from the shadow prices
-    #[default]
-    #[string = "shadow_prices"]
-    ShadowPrices,
-    /// Adjust shadow prices for scarcity
-    #[string = "scarcity_adjusted"]
-    ScarcityAdjusted,
 }
 
 /// Check that the `milestone_years` parameter is valid
@@ -212,21 +195,6 @@ impl ModelParameters {
 
         // milestone_years
         check_milestone_years(&self.milestone_years)?;
-
-        // pricing_strategy
-        if self.pricing_strategy == PricingStrategy::ScarcityAdjusted {
-            ensure!(
-                self.allow_broken_options,
-                "The pricing strategy is set to 'scarcity_adjusted', which is known to be broken. \
-                If you are sure that you want to enable it anyway, you need to set the \
-                {ALLOW_BROKEN_OPTION_NAME} option to true."
-            );
-
-            warn!(
-                "The pricing strategy is set to 'scarcity_adjusted'. Commodity prices may be \
-                incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677"
-            );
-        }
 
         // capacity_limit_factor already validated with deserialise_proportion_nonzero
 

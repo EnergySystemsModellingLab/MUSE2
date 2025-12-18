@@ -3,7 +3,7 @@
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
-use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
     ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, MoneyPerFlow,
@@ -32,6 +32,10 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
 /// The value is actually a map itself, keyed by commodity ID.
 pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
 
+/// Map of process investment constraints, keyed by region and year
+pub type ProcessInvestmentConstraintsMap =
+    HashMap<(RegionID, u32), Rc<ProcessInvestmentConstraint>>;
+
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug)]
 pub struct Process {
@@ -57,6 +61,8 @@ pub struct Process {
     /// if capacity is measured in GW and energy is measured in PJ, the `capacity_to_activity` for the
     /// process is 31.536 because 1 GW of capacity can produce 31.536 PJ energy output in a year.
     pub capacity_to_activity: ActivityPerCapacity,
+    /// Investment constraints for this process
+    pub investment_constraints: ProcessInvestmentConstraintsMap,
 }
 
 impl Process {
@@ -237,7 +243,7 @@ impl ActivityLimits {
     /// Add an annual limit
     fn add_annual_limit(&mut self, limit: RangeInclusive<Dimensionless>) -> Result<()> {
         // Get current limit for the year
-        let current_limit = self.get_limit_for_year(&TimeSliceInfo::default());
+        let current_limit = self.get_limit_for_year();
 
         // Ensure that the new limit overlaps with the current limit
         // If not, it's impossible to satisfy both limits, so we must exit with an error
@@ -260,12 +266,11 @@ impl ActivityLimits {
     pub fn get_limit(
         &self,
         time_slice_selection: &TimeSliceSelection,
-        time_slice_info: &TimeSliceInfo,
     ) -> RangeInclusive<Dimensionless> {
         match time_slice_selection {
             TimeSliceSelection::Single(ts_id) => self.get_limit_for_time_slice(ts_id),
             TimeSliceSelection::Season(season) => self.get_limit_for_season(season),
-            TimeSliceSelection::Annual => self.get_limit_for_year(time_slice_info),
+            TimeSliceSelection::Annual => self.get_limit_for_year(),
         }
     }
 
@@ -319,14 +324,16 @@ impl ActivityLimits {
     }
 
     /// Get the limit for the entire year
-    fn get_limit_for_year(&self, time_slice_info: &TimeSliceInfo) -> RangeInclusive<Dimensionless> {
+    fn get_limit_for_year(&self) -> RangeInclusive<Dimensionless> {
         // Get the sum of limits for all seasons
         let mut total_lower = Dimensionless(0.0);
         let mut total_upper = Dimensionless(0.0);
-        for ts_selection in time_slice_info.iter_selections_at_level(TimeSliceLevel::Season) {
-            let TimeSliceSelection::Season(season) = ts_selection else {
-                panic!("Expected season selection")
-            };
+        let seasons = self
+            .time_slice_limits
+            .keys()
+            .map(|ts_id| ts_id.season.clone())
+            .unique();
+        for season in seasons {
             let season_limit = self.get_limit_for_season(&season);
             total_lower += *season_limit.start();
             total_upper += *season_limit.end();
@@ -392,17 +399,28 @@ pub struct ProcessFlow {
 }
 
 impl ProcessFlow {
-    /// Get the cost for this flow with the given parameters.
+    /// Get the cost per unit flow for a given region, year, and time slice.
+    ///
+    /// Includes flow costs and levies/incentives, if any.
+    pub fn get_total_cost_per_flow(
+        &self,
+        region_id: &RegionID,
+        year: u32,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerFlow {
+        self.cost + self.get_levy(region_id, year, time_slice)
+    }
+
+    /// Get the cost for this flow per unit of activity for a given region, year, and time slice.
     ///
     /// This includes cost per unit flow and levies/incentives, if any.
-    pub fn get_total_cost(
+    pub fn get_total_cost_per_activity(
         &self,
         region_id: &RegionID,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        let cost_per_unit = self.cost + self.get_levy(region_id, year, time_slice);
-
+        let cost_per_unit = self.get_total_cost_per_flow(region_id, year, time_slice);
         self.coeff.abs() * cost_per_unit
     }
 
@@ -472,10 +490,19 @@ pub struct ProcessParameter {
     pub discount_rate: Dimensionless,
 }
 
+/// A constraint imposed on investments in the process
+#[derive(PartialEq, Debug, Clone)]
+pub struct ProcessInvestmentConstraint {
+    /// Addition constraint: Yearly limit an agent can invest
+    /// in the process, shared according to the agent's
+    /// proportion of the processes primary commodity demand
+    pub addition_limit: Option<f64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap};
+    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap, PricingStrategy};
     use crate::fixture::{assert_error, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
     use crate::time_slice::TimeSliceSelection;
@@ -539,6 +566,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: levies_prod,
             levies_cons: levies_cons,
             demand: DemandMap::new(),
@@ -558,6 +586,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: levies,
             demand: DemandMap::new(),
@@ -577,6 +606,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: levies,
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -598,6 +628,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: levies_prod,
             levies_cons: levies_cons,
             demand: DemandMap::new(),
@@ -611,6 +642,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -625,6 +657,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -646,6 +679,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -667,6 +701,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -871,7 +906,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(5.0)
         );
     }
@@ -883,7 +918,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost_and_levy.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost_and_levy.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(15.0)
         );
     }
@@ -895,7 +930,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost_and_incentive.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost_and_incentive.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(2.0)
         );
     }
@@ -908,7 +943,7 @@ mod tests {
     ) {
         flow_with_cost.coeff = FlowPerActivity(-2.0);
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(10.0)
         );
     }
@@ -921,7 +956,7 @@ mod tests {
     ) {
         flow_with_cost.coeff = FlowPerActivity(0.0);
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(0.0)
         );
     }
@@ -933,6 +968,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -975,7 +1011,7 @@ mod tests {
         }
 
         // Annual limit should be 0..1
-        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual, &time_slice_info2);
+        let annual_limit = limits.get_limit(&TimeSliceSelection::Annual);
         assert_approx_eq!(Dimensionless, *annual_limit.start(), Dimensionless(0.0));
         assert_approx_eq!(Dimensionless, *annual_limit.end(), Dimensionless(1.0));
     }
@@ -999,11 +1035,35 @@ mod tests {
         }
 
         // The seasonal limit should reflect the given bound
-        let season_limit = result.get_limit(
-            &TimeSliceSelection::Season("winter".into()),
-            &time_slice_info2,
-        );
+        let season_limit = result.get_limit(&TimeSliceSelection::Season("winter".into()));
         assert_eq!(*season_limit.end(), Dimensionless(0.01));
+    }
+
+    #[rstest]
+    fn test_new_from_limits_with_annual_limit_applied(time_slice_info2: TimeSliceInfo) {
+        let mut limits = HashMap::new();
+
+        // Set an annual upper limit that is stricter than the sum of timeslices
+        limits.insert(
+            TimeSliceSelection::Annual,
+            Dimensionless(0.0)..=Dimensionless(0.01),
+        );
+
+        let result = ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap();
+
+        // Each timeslice upper bound should be capped by the annual upper bound (0.01)
+        for (ts_id, _ts_len) in time_slice_info2.iter() {
+            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            assert_eq!(*ts_limit.end(), Dimensionless(0.01));
+        }
+
+        // The seasonal limit should be capped by the annual upper bound (0.01)
+        let season_limit = result.get_limit(&TimeSliceSelection::Season("winter".into()));
+        assert_eq!(*season_limit.end(), Dimensionless(0.01));
+
+        // The annual limit should reflect the given bound
+        let annual_limit = result.get_limit(&TimeSliceSelection::Annual);
+        assert_eq!(*annual_limit.end(), Dimensionless(0.01));
     }
 
     #[rstest]

@@ -1,10 +1,10 @@
 This folder contains the MUSE2 executable for macOS (Apple Silicon), called `muse2`.
 
-When trying to run the `muse2` program, you may see an error message saying "muse2 can't be opened
-because Apple cannot check it for malicious software." To fix this, you should open `muse2` by
-right-clicking on it in your file explorer and clicking "Open". You will be prompted to give
-permission for the program to run. Once you have completed this step, you should be able to run the
-program as normal.
+When you first attempt to run `muse2` from the console, you will probably see an error message about possible malware (this is because it is unsigned code). To fix this, you first need to run:
+
+    xattr -d com.apple.quarantine ./muse2
+
+After this step, you should be able to run `muse2` as normal.
 
 For more information on how to use MUSE2, you can consult the program help:
 

@@ -22,17 +22,6 @@ properties:
     notes: |
       This is the proportion of the maximum required capacity across time slices (for a given
       asset/commodity etc. combination).
-  pricing_strategy:
-    type: string
-    enum: [shadow_prices, scarcity_adjusted]
-    description: Change the algorithm used for calculating commodity prices
-    default: shadow_prices
-    notes: |
-      The `shadow_prices` option just uses the shadow prices for commodity prices.
-
-      The `scarcity_adjusted` option adjusts prices for scarcity. This may cause price instability
-      for assets with more than one output commodity. Do not use this unless you know what you're
-      doing!
   value_of_lost_load:
     type: number
     description: The cost applied to unmet demand
