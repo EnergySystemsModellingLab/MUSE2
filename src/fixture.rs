@@ -45,7 +45,7 @@ pub(crate) use assert_error;
 
 /// Build a patched copy of `examples/simple` to a temporary directory and return the `TempDir`.
 ///
-/// As well as applying the given file patch, this also sets the allow broken options flag in the
+/// As well as applying the given file patches, this also sets the allow broken options flag in the
 /// model TOML to true.
 pub(crate) fn build_patched_simple_tempdir(
     file_patches: Vec<FilePatch>,
@@ -58,7 +58,7 @@ pub(crate) fn build_patched_simple_tempdir(
         .build_to_tempdir()
 }
 
-/// Check whether the simple example passes or fails validation after applying a file patch
+/// Check whether the simple example passes or fails validation after applying file patches
 macro_rules! patch_and_validate_simple {
     ($file_patches:expr) => {{
         (|| -> Result<()> {
@@ -70,7 +70,7 @@ macro_rules! patch_and_validate_simple {
 }
 pub(crate) use patch_and_validate_simple;
 
-/// Check whether the simple example runs successfully after applying a file patch
+/// Check whether the simple example runs successfully after applying file patches
 macro_rules! patch_and_run_simple {
     ($file_patches:expr) => {{
         (|| -> Result<()> {
@@ -388,5 +388,12 @@ mod tests {
         let patch = FilePatch::new("commodities.csv")
             .with_deletion("RSHEAT,Residential heating,svd,daynight");
         assert!(patch_and_validate_simple!(vec![patch]).is_err());
+    }
+
+    #[test]
+    fn test_patch_and_run_simple_fail() {
+        let patch = FilePatch::new("commodities.csv")
+            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+        assert!(patch_and_run_simple!(vec![patch]).is_err());
     }
 }
