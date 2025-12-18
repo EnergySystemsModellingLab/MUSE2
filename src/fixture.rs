@@ -45,16 +45,10 @@ pub(crate) use assert_error;
 
 /// Build a patched copy of `examples/simple` to a temporary directory and return the `TempDir`.
 ///
-/// As well as applying the given file patches, this also sets the allow broken options flag in the
-/// model TOML to true.
-///
 /// If the patched model cannot be built, for whatever reason, this function will panic.
 pub(crate) fn build_patched_simple_tempdir(file_patches: Vec<FilePatch>) -> tempfile::TempDir {
-    let toml_patch = format!(r#"{name} = true"#, name = ALLOW_BROKEN_OPTION_NAME);
-
     ModelPatch::new("examples/simple")
         .with_file_patches(file_patches)
-        .with_toml_patch(&toml_patch)
         .build_to_tempdir()
         .unwrap()
 }
