@@ -1,7 +1,7 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
 use crate::agent::ObjectiveType;
-use crate::asset::AssetRef;
+use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, profitability_index};
 use crate::model::Model;
@@ -67,25 +67,28 @@ impl AppraisalOutput {
             "Appraisal metrics must be equal"
         );
 
-        // Favour commissioned assets over non-commissioned
-        if self.asset.is_commissioned() && !other.asset.is_commissioned() {
-            return Ordering::Less;
-        }
-        if !self.asset.is_commissioned() && other.asset.is_commissioned() {
-            return Ordering::Greater;
-        }
-
-        // if both commissioned, favour newer ones
-        if self.asset.is_commissioned() && other.asset.is_commissioned() {
-            return self
-                .asset
-                .commission_year()
-                .cmp(&other.asset.commission_year())
-                .reverse();
-        }
-
-        Ordering::Equal
+        compare_asset_fallback(&self.asset, &other.asset)
     }
+}
+
+fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
+    // Favour commissioned assets over non-commissioned
+    if asset1.is_commissioned() && !asset2.is_commissioned() {
+        return Ordering::Less;
+    }
+    if !asset1.is_commissioned() && asset2.is_commissioned() {
+        return Ordering::Greater;
+    }
+
+    // if both commissioned, favour newer ones
+    if asset1.is_commissioned() && asset2.is_commissioned() {
+        return asset1
+            .commission_year()
+            .cmp(&asset2.commission_year())
+            .reverse();
+    }
+
+    Ordering::Equal
 }
 
 /// Calculate LCOX for a hypothetical investment in the given asset.
@@ -191,4 +194,45 @@ pub fn appraise_investment(
         ObjectiveType::NetPresentValue => calculate_npv,
     };
     appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::AgentID;
+    use crate::asset::Asset;
+    use crate::fixture::{agent_id, process, region_id};
+    use crate::process::Process;
+    use crate::region::RegionID;
+    use crate::units::Capacity;
+    use rstest::rstest;
+    use std::rc::Rc;
+
+    #[rstest]
+    fn test_compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
+        let process = Rc::new(process);
+        let capacity = Capacity(2.0);
+        let asset1 = Asset::new_commissioned(
+            agent_id.clone(),
+            process.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+        let asset2 =
+            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
+        let asset3 =
+            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
+
+        assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
+        assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
+        assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
+        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
+        assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
+    }
 }

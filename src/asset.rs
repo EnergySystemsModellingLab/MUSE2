@@ -195,6 +195,32 @@ impl Asset {
         )
     }
 
+    /// Create a new commissioned asset
+    ///
+    /// This is only used for testing. WARNING: These assets always have an ID of zero, so can
+    /// create hash collisions. Use with care.
+    #[cfg(test)]
+    pub fn new_commissioned(
+        agent_id: AgentID,
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+    ) -> Result<Self> {
+        Self::new_with_state(
+            AssetState::Commissioned {
+                id: AssetID(0),
+                agent_id,
+                mothballed_year: None,
+            },
+            process,
+            region_id,
+            capacity,
+            commission_year,
+            None,
+        )
+    }
+
     /// Private helper to create an asset with the given state
     fn new_with_state(
         state: AssetState,
