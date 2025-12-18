@@ -139,7 +139,7 @@ impl FilePatch {
     }
 
     /// Add a row to the patch (row should be a comma-joined string, e.g. "a,b,c").
-    pub fn add_row(mut self, row: impl Into<String>) -> Self {
+    pub fn with_addition(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.to_add.insert(v);
@@ -147,7 +147,7 @@ impl FilePatch {
     }
 
     /// Mark a row for deletion from the base (row should be a comma-joined string, e.g. "a,b,c").
-    pub fn delete_row(mut self, row: impl Into<String>) -> Self {
+    pub fn with_deletion(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.to_delete.insert(v);
@@ -296,8 +296,8 @@ mod tests {
         // Create a patch to delete row3,row4 and add row7,row8
         let patch = FilePatch::new("test.csv")
             .with_header("col1,col2")
-            .delete_row("value3,value4")
-            .add_row("value7,value8");
+            .with_deletion("value3,value4")
+            .with_addition("value7,value8");
 
         let modified = modify_base_with_patch(base, &patch).unwrap();
 
@@ -355,8 +355,8 @@ mod tests {
 
         // Patch with a small change to an asset capacity
         let assets_patch = FilePatch::new("assets.csv")
-            .delete_row("GASDRV,GBR,A0_GEX,4002.26,2020")
-            .add_row("GASDRV,GBR,A0_GEX,4003.26,2020");
+            .with_deletion("GASDRV,GBR,A0_GEX,4002.26,2020")
+            .with_addition("GASDRV,GBR,A0_GEX,4003.26,2020");
 
         // Build patched model into a temporary directory
         let model_dir = ModelPatch::new(&base_model_dir)
