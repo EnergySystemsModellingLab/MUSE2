@@ -6,6 +6,8 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
+use crate::model::parameters::ALLOW_BROKEN_OPTION_NAME;
+use crate::patch::{FilePatch, ModelPatch};
 use crate::process::{
     ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessMap,
     ProcessParameter, ProcessParameterMap,
@@ -19,6 +21,7 @@ use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
     MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
 };
+use anyhow::Result;
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -37,6 +40,49 @@ macro_rules! assert_error {
     };
 }
 pub(crate) use assert_error;
+
+/// Build a patched copy of `examples/simple` to a temporary directory and return the `TempDir`.
+///
+/// As well as applying the given file patch, this also sets the allow broken options flag in the
+/// model TOML to true.
+pub(crate) fn build_patched_simple_tempdir(
+    file_patches: Vec<FilePatch>,
+) -> Result<tempfile::TempDir> {
+    let toml_patch = format!(r#"{name} = true"#, name = ALLOW_BROKEN_OPTION_NAME);
+
+    ModelPatch::new("examples/simple")
+        .with_file_patches(file_patches)
+        .with_toml_patch(&toml_patch)
+        .build_to_tempdir()
+}
+
+/// Check whether the simple example passes or fails validation after applying a file patch
+macro_rules! patch_and_validate_simple {
+    ($file_patches:expr) => {{
+        (|| -> Result<()> {
+            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches)?;
+            crate::input::load_model(tmp.path())?;
+            Ok(())
+        })()
+    }};
+}
+pub(crate) use patch_and_validate_simple;
+
+/// Check whether the simple example runs successfully after applying a file patch
+macro_rules! patch_and_run_simple {
+    ($file_patches:expr) => {{
+        (|| -> Result<()> {
+            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches)?;
+            let (model, assets) = crate::input::load_model(tmp.path())?;
+            let output_path = tmp.path().join("output");
+            std::fs::create_dir_all(&output_path)?;
+
+            crate::simulation::run(&model, assets, &output_path, false)?;
+            Ok(())
+        })()
+    }};
+}
+pub(crate) use patch_and_run_simple;
 
 #[fixture]
 pub fn region_id() -> RegionID {
@@ -305,5 +351,29 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         demand,
         unmet_demand,
         metric: 4.14,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patch_and_validate_simple_smoke() {
+        let patches = Vec::new();
+        assert!(patch_and_validate_simple!(patches).is_ok());
+    }
+
+    #[test]
+    fn patch_and_run_simple_smoke() {
+        let patches = Vec::new();
+        assert!(patch_and_run_simple!(patches).is_ok());
+    }
+
+    #[test]
+    fn test_patch_and_validate_simple_fail() {
+        let patch = FilePatch::new("commodities.csv")
+            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+        assert!(patch_and_validate_simple!(vec![patch]).is_err());
     }
 }
