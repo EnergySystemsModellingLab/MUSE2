@@ -1,7 +1,7 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
 use crate::agent::ObjectiveType;
-use crate::asset::{Asset, AssetRef};
+use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::finance::{lcox, profitability_index};
 use crate::model::Model;
@@ -54,27 +54,11 @@ impl AppraisalOutput {
         );
 
         if approx_eq!(f64, self.metric, other.metric) {
-            self.compare_with_equal_metrics(other)
+            Ordering::Equal
         } else {
             self.metric.partial_cmp(&other.metric).unwrap()
         }
     }
-
-    /// Compare this appraisal to another when the metrics are known to be equal.
-    pub fn compare_with_equal_metrics(&self, other: &Self) -> Ordering {
-        assert!(
-            approx_eq!(f64, self.metric, other.metric),
-            "Appraisal metrics must be equal"
-        );
-
-        compare_asset_fallback(&self.asset, &other.asset)
-    }
-}
-
-/// Sort commissioned assets first and newer before older
-fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
-    (asset2.is_commissioned(), asset2.commission_year())
-        .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
 /// Calculate LCOX for a hypothetical investment in the given asset.
@@ -180,45 +164,4 @@ pub fn appraise_investment(
         ObjectiveType::NetPresentValue => calculate_npv,
     };
     appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::agent::AgentID;
-    use crate::asset::Asset;
-    use crate::fixture::{agent_id, process, region_id};
-    use crate::process::Process;
-    use crate::region::RegionID;
-    use crate::units::Capacity;
-    use rstest::rstest;
-    use std::rc::Rc;
-
-    #[rstest]
-    fn test_compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
-        let process = Rc::new(process);
-        let capacity = Capacity(2.0);
-        let asset1 = Asset::new_commissioned(
-            agent_id.clone(),
-            process.clone(),
-            region_id.clone(),
-            capacity,
-            2015,
-        )
-        .unwrap();
-        let asset2 =
-            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
-        let asset3 =
-            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
-
-        assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
-        assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
-        assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
-        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
-        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
-        assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
-        assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
-        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
-        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
-    }
 }

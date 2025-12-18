@@ -14,6 +14,7 @@ use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Display;
 
@@ -721,7 +722,11 @@ fn select_best_assets(
         let assets_sorted_by_metric = outputs_for_opts
             .into_iter()
             .filter(|output| output.capacity > Capacity(0.0))
-            .sorted_by(AppraisalOutput::compare_metric)
+            .sorted_by(|output1, output2| match output1.compare_metric(output2) {
+                // If equal, we fall back on comparing asset properties
+                Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
+                cmp => cmp,
+            })
             .collect_vec();
 
         // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
@@ -787,6 +792,14 @@ fn is_any_remaining_demand(demand: &DemandMap) -> bool {
     demand.values().any(|flow| *flow > Flow(0.0))
 }
 
+/// Compare assets, sorting commissioned before uncommissioned and newer before older.
+///
+/// Used as a fallback to sort assets when they have equal appraisal tool outputs.
+fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
+    (asset2.is_commissioned(), asset2.commission_year())
+        .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
+}
+
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
     mut best_asset: AssetRef,
@@ -833,14 +846,17 @@ fn update_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::AgentID;
+    use crate::asset::Asset;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
-        time_slice_info, time_slice_info2,
+        agent_id, asset, process, process_activity_limits_map, process_flows_map, region_id,
+        svd_commodity, time_slice, time_slice_info, time_slice_info2,
     };
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
+    use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-    use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::rc::Rc;
@@ -925,5 +941,33 @@ mod tests {
         // Time slice 2: skipped due to zero activity limit
         // Maximum = 20.0
         assert_eq!(result, Capacity(20.0));
+    }
+
+    #[rstest]
+    fn test_compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
+        let process = Rc::new(process);
+        let capacity = Capacity(2.0);
+        let asset1 = Asset::new_commissioned(
+            agent_id.clone(),
+            process.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+        let asset2 =
+            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
+        let asset3 =
+            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
+
+        assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
+        assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
+        assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
+        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
+        assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 }
