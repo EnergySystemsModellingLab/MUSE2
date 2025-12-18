@@ -19,10 +19,7 @@ use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{
-    AppraisalComparisonMethod, AppraisalOutput, appraise_investment,
-    classify_appraisal_comparison_method,
-};
+use appraisal::{AppraisalOutput, appraise_investment};
 
 /// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -623,16 +620,19 @@ fn get_candidate_assets<'a>(
         })
 }
 
-fn select_from_assets_with_equal_metric(
-    region_id: &RegionID,
+/// Warn if there are multiple equally good outputs
+fn warn_on_equal_appraisal_outputs(
+    outputs: &[AppraisalOutput],
     agent_id: &AgentID,
     commodity_id: &CommodityID,
-    equally_good_assets: Vec<AppraisalOutput>,
-) -> AppraisalOutput {
-    // Format asset details for diagnostic logging
-    let asset_details = equally_good_assets
+    region_id: &RegionID,
+) {
+    // Get all the outputs which are equal to the one after
+    let asset_details = outputs
         .iter()
-        .map(|output| {
+        .tuple_windows()
+        .take_while(|(a, b)| a.compare_metric(b).is_eq())
+        .map(|(output, _)| {
             format!(
                 "Process id: '{}' (State: {}{})",
                 output.asset.process_id(),
@@ -644,14 +644,14 @@ fn select_from_assets_with_equal_metric(
                     .unwrap_or_default(),
             )
         })
-        .collect::<Vec<_>>()
         .join(", ");
-    let warning_message = format!(
-        "Could not resolve deadlock between equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
-    );
-    warn!("{warning_message}");
-    // Select the first asset arbitrarily from the equally performing options
-    equally_good_assets.into_iter().next().unwrap()
+
+    if !asset_details.is_empty() {
+        warn!(
+            "Found equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', \
+            Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
+        );
+    }
 }
 
 /// Get the best assets for meeting demand for the given commodity
@@ -738,38 +738,15 @@ fn select_best_assets(
             &commodity.id
         );
 
-        let appraisal_comparison_method =
-            classify_appraisal_comparison_method(&assets_sorted_by_metric);
+        // Warn if there are multiple equally good assets
+        warn_on_equal_appraisal_outputs(
+            &assets_sorted_by_metric,
+            &agent.id,
+            &commodity.id,
+            region_id,
+        );
 
-        // Determine the best asset based on whether multiple equally-good options exist
-        let best_output = match appraisal_comparison_method {
-            // there are multiple equally good assets by metric
-            AppraisalComparisonMethod::EqualMetrics => {
-                // Count how many assets have the same metric as the best one
-                let count = assets_sorted_by_metric
-                    .iter()
-                    .take_while(|output| {
-                        AppraisalOutput::compare_metric(&assets_sorted_by_metric[0], output).is_eq()
-                    })
-                    .count();
-
-                // select from all equally good assets
-                let equally_good_assets = assets_sorted_by_metric
-                    .into_iter()
-                    .take(count)
-                    .collect_vec();
-                select_from_assets_with_equal_metric(
-                    region_id,
-                    &agent.id,
-                    &commodity.id,
-                    equally_good_assets,
-                )
-            }
-            // there is a single best asset by metric
-            AppraisalComparisonMethod::Metric => {
-                assets_sorted_by_metric.into_iter().next().unwrap()
-            }
-        };
+        let best_output = assets_sorted_by_metric.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(

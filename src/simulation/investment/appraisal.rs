@@ -88,30 +88,6 @@ impl AppraisalOutput {
     }
 }
 
-/// methods used to compare multiple appraisal outputs
-pub enum AppraisalComparisonMethod {
-    /// If all appraisal outputs have different metrics
-    Metric,
-    /// two or more appraisal outputs have equal metrics
-    EqualMetrics,
-}
-
-/// Classify the appropriate method to compare appraisal outputs
-/// given an array of appraisal outputs sorted by metric
-pub fn classify_appraisal_comparison_method(
-    appraisals_sorted_by_metric: &[AppraisalOutput],
-) -> AppraisalComparisonMethod {
-    if appraisals_sorted_by_metric.len() >= 2
-        && appraisals_sorted_by_metric[0]
-            .compare_metric(&appraisals_sorted_by_metric[1])
-            .is_eq()
-    {
-        AppraisalComparisonMethod::EqualMetrics
-    } else {
-        AppraisalComparisonMethod::Metric
-    }
-}
-
 /// Calculate LCOX for a hypothetical investment in the given asset.
 ///
 /// This is more commonly referred to as Levelised Cost of *Electricity*, but as the model can
