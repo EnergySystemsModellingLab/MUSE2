@@ -8,7 +8,6 @@ use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{
     Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
 };
-use crate::model::parameters::ALLOW_BROKEN_OPTION_NAME;
 use crate::patch::{FilePatch, ModelPatch};
 use crate::process::{
     ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
