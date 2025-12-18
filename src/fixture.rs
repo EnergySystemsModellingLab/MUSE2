@@ -5,7 +5,9 @@ use crate::agent::{
     DecisionRule,
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
-use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
+use crate::commodity::{
+    Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
+};
 use crate::process::{
     ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
     ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
@@ -70,6 +72,7 @@ pub fn svd_commodity() -> Commodity {
         description: "".into(),
         kind: CommodityType::ServiceDemand,
         time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
@@ -83,6 +86,7 @@ pub fn sed_commodity() -> Commodity {
         description: "Test SED commodity".into(),
         kind: CommodityType::SupplyEqualsDemand,
         time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
@@ -96,6 +100,7 @@ pub fn other_commodity() -> Commodity {
         description: "Test other commodity".into(),
         kind: CommodityType::Other,
         time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),

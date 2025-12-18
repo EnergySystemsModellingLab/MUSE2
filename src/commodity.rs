@@ -24,37 +24,35 @@ pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
 ///
 /// Represents a substance (e.g. CO2) or form of energy (e.g. electricity) that can be produced or
 /// consumed by processes.
-#[derive(PartialEq, Debug, Deserialize, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Commodity {
     /// Unique identifier for the commodity (e.g. "ELC")
     pub id: CommodityID,
     /// Text description of commodity (e.g. "electricity")
     pub description: String,
     /// Commodity balance type
-    #[serde(rename = "type")] // NB: we can't name a field type as it's a reserved keyword
     pub kind: CommodityType,
     /// The time slice level for commodity balance
     pub time_slice_level: TimeSliceLevel,
+    /// Defines the strategy used for calculating commodity prices
+    pub pricing_strategy: PricingStrategy,
     /// Production levies for this commodity for different combinations of region, year and time slice.
     ///
     /// May be empty if there are no production levies for this commodity, otherwise there must be
     /// entries for every combination of parameters. Note that these values can be negative,
     /// indicating an incentive.
-    #[serde(skip)]
     pub levies_prod: CommodityLevyMap,
     /// Consumption levies for this commodity for different combinations of region, year and time slice.
     ///
     /// May be empty if there are no consumption levies for this commodity, otherwise there must be
     /// entries for every combination of parameters. Note that these values can be negative,
     /// indicating an incentive.
-    #[serde(skip)]
     pub levies_cons: CommodityLevyMap,
     /// Demand as defined in input files. Will be empty for non-service-demand commodities.
     ///
     /// The [`TimeSliceSelection`] part of the key is always at the same [`TimeSliceLevel`] as the
     /// `time_slice_level` field. E.g. if the `time_slice_level` is seasonal, then there will be
     /// keys representing each season (and not e.g. individual time slices).
-    #[serde(skip)]
     pub demand: DemandMap,
 }
 define_id_getter! {Commodity, CommodityID}
@@ -87,6 +85,26 @@ pub enum CommodityType {
     /// This represents a commodity which can either be produced or consumed, but not both.
     #[string = "oth"]
     Other,
+}
+
+/// The strategy used for calculating commodity prices
+#[derive(Debug, PartialEq, Clone, Deserialize, Hash, Eq)]
+pub enum PricingStrategy {
+    /// Take commodity prices directly from the shadow prices
+    #[serde(rename = "shadow")]
+    Shadow,
+    /// Adjust shadow prices for scarcity
+    #[serde(rename = "scarcity")]
+    ScarcityAdjusted,
+    /// Use marginal cost of highest-cost active asset producing the commodity
+    #[serde(rename = "marginal")]
+    MarginalCost,
+    /// Use full cost of highest-cost active asset producing the commodity
+    #[serde(rename = "full")]
+    FullCost,
+    /// Commodities that should not have prices calculated
+    #[serde(rename = "unpriced")]
+    Unpriced,
 }
 
 #[cfg(test)]

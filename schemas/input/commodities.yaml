@@ -16,12 +16,29 @@ fields:
     description: A human-readable label for the commodity
   - name: type
     type: string
+    enum: [svd, sed, oth]
     description: The type of commodity
     notes: |
       Must be one of `svd` (service demand), `sed` (supply equals demand) or `oth` (other)
   - name: time_slice_level
     type: string
+    enum: [annual, season, daynight]
     description: The time slice level at which constraints for this commodity are applied
     notes: |
       Must be one of `annual` (whole year), `season` (whole season) or `daynight` (a particular time
       of day)
+  - name: pricing_strategy
+    type: string
+    enum: [shadow, marginal, full, scarcity, unpriced]
+    description: The pricing strategy for this commodity
+    notes: |
+      Optional. If specified, must be one of `shadow` (priced using shadow prices from supply-demand
+      constraints), `marginal` (priced at the marginal cost of production) , `full` (priced at the
+      full cost of production including capital costs), `scarcity` (priced adjusted for scarcity),
+      or `unpriced` (not priced at all).
+
+      For `svd` and `sed` commodities, this must be one of `shadow`, `marginal` or `full`. For `oth`
+      commodities, this must be `unpriced`.
+
+      If unspecified, the commodity will use the default pricing strategy according to the commodity
+      type: `shadow` for `svd` and `sed` commodities, and `unpriced` for `oth` commodities.

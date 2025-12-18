@@ -188,7 +188,9 @@ fn validate_agent_commodity_portions(
 mod tests {
     use super::*;
     use crate::agent::{Agent, AgentObjectiveMap, AgentSearchSpaceMap, DecisionRule};
-    use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
+    use crate::commodity::{
+        Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
+    };
     use crate::time_slice::TimeSliceLevel;
     use indexmap::IndexMap;
     use std::rc::Rc;
@@ -216,6 +218,7 @@ mod tests {
                 description: "A commodity".into(),
                 kind: CommodityType::SupplyEqualsDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -260,6 +263,7 @@ mod tests {
                 description: "Another commodity".into(),
                 kind: CommodityType::SupplyEqualsDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),

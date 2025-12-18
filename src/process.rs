@@ -399,17 +399,28 @@ pub struct ProcessFlow {
 }
 
 impl ProcessFlow {
-    /// Get the cost for this flow with the given parameters.
+    /// Get the cost per unit flow for a given region, year, and time slice.
+    ///
+    /// Includes flow costs and levies/incentives, if any.
+    pub fn get_total_cost_per_flow(
+        &self,
+        region_id: &RegionID,
+        year: u32,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerFlow {
+        self.cost + self.get_levy(region_id, year, time_slice)
+    }
+
+    /// Get the cost for this flow per unit of activity for a given region, year, and time slice.
     ///
     /// This includes cost per unit flow and levies/incentives, if any.
-    pub fn get_total_cost(
+    pub fn get_total_cost_per_activity(
         &self,
         region_id: &RegionID,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        let cost_per_unit = self.cost + self.get_levy(region_id, year, time_slice);
-
+        let cost_per_unit = self.get_total_cost_per_flow(region_id, year, time_slice);
         self.coeff.abs() * cost_per_unit
     }
 
@@ -491,7 +502,7 @@ pub struct ProcessInvestmentConstraint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap};
+    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap, PricingStrategy};
     use crate::fixture::{assert_error, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
     use crate::time_slice::TimeSliceSelection;
@@ -555,6 +566,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: levies_prod,
             levies_cons: levies_cons,
             demand: DemandMap::new(),
@@ -574,6 +586,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: levies,
             demand: DemandMap::new(),
@@ -593,6 +606,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: levies,
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -614,6 +628,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: levies_prod,
             levies_cons: levies_cons,
             demand: DemandMap::new(),
@@ -627,6 +642,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
@@ -641,6 +657,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -662,6 +679,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -683,6 +701,7 @@ mod tests {
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
                 time_slice_level: TimeSliceLevel::Annual,
+                pricing_strategy: PricingStrategy::Shadow,
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
@@ -887,7 +906,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(5.0)
         );
     }
@@ -899,7 +918,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost_and_levy.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost_and_levy.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(15.0)
         );
     }
@@ -911,7 +930,7 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         assert_eq!(
-            flow_with_cost_and_incentive.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost_and_incentive.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(2.0)
         );
     }
@@ -924,7 +943,7 @@ mod tests {
     ) {
         flow_with_cost.coeff = FlowPerActivity(-2.0);
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(10.0)
         );
     }
@@ -937,7 +956,7 @@ mod tests {
     ) {
         flow_with_cost.coeff = FlowPerActivity(0.0);
         assert_eq!(
-            flow_with_cost.get_total_cost(&region_id, 2020, &time_slice),
+            flow_with_cost.get_total_cost_per_activity(&region_id, 2020, &time_slice),
             MoneyPerActivity(0.0)
         );
     }
@@ -949,6 +968,7 @@ mod tests {
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
