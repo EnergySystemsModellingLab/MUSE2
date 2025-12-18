@@ -1,5 +1,8 @@
 name: Update Rust toolchain
 on:
+  # HACK!!!!!!!!!!!!!
+  push:
+    branches: [fix-update-toolchain-workflow]
   workflow_dispatch: # allows manual triggering
   schedule:
     - cron: "0 0 * * mon"
