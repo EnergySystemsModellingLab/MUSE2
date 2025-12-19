@@ -25,6 +25,13 @@ impl ModelPatch {
         }
     }
 
+    /// Create a new empty `ModelPatch` for an example model
+    #[cfg(test)]
+    pub fn from_example(name: &str) -> Self {
+        let base_model_dir = PathBuf::from("examples").join(name);
+        ModelPatch::new(base_model_dir)
+    }
+
     /// Add a single `FilePatch` to this `ModelPatch`.
     pub fn with_file_patch(mut self, patch: FilePatch) -> Self {
         self.file_patches.push(patch);
@@ -287,7 +294,6 @@ mod tests {
     use crate::input::read_toml;
     use crate::model::ModelParameters;
     use crate::patch::{FilePatch, ModelPatch};
-    use std::path::PathBuf;
 
     #[test]
     fn test_modify_base_with_patch() {
@@ -351,15 +357,13 @@ mod tests {
 
     #[test]
     fn test_file_patch() {
-        let base_model_dir = PathBuf::from("examples/simple");
-
         // Patch with a small change to an asset capacity
         let assets_patch = FilePatch::new("assets.csv")
             .with_deletion("GASDRV,GBR,A0_GEX,4002.26,2020")
             .with_addition("GASDRV,GBR,A0_GEX,4003.26,2020");
 
         // Build patched model into a temporary directory
-        let model_dir = ModelPatch::new(&base_model_dir)
+        let model_dir = ModelPatch::from_example("simple")
             .with_file_patch(assets_patch)
             .build_to_tempdir()
             .unwrap();
@@ -373,15 +377,13 @@ mod tests {
 
     #[test]
     fn test_toml_patch() {
-        let base_model_dir = PathBuf::from("examples/simple");
-
         // Patch to add an extra milestone year (2050)
         let toml_patch = r#"
             milestone_years = [2020, 2030, 2040, 2050]
         "#;
 
         // Build patched model into a temporary directory
-        let model_dir = ModelPatch::new(&base_model_dir)
+        let model_dir = ModelPatch::from_example("simple")
             .with_toml_patch(toml_patch)
             .build_to_tempdir()
             .unwrap();

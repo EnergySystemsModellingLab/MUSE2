@@ -46,7 +46,7 @@ pub(crate) use assert_error;
 ///
 /// If the patched model cannot be built, for whatever reason, this function will panic.
 pub(crate) fn build_patched_simple_tempdir(file_patches: Vec<FilePatch>) -> tempfile::TempDir {
-    ModelPatch::new("examples/simple")
+    ModelPatch::from_example("simple")
         .with_file_patches(file_patches)
         .build_to_tempdir()
         .unwrap()
