@@ -792,7 +792,9 @@ fn is_any_remaining_demand(demand: &DemandMap) -> bool {
     demand.values().any(|flow| *flow > Flow(0.0))
 }
 
-/// Compare assets, sorting commissioned before uncommissioned and newer before older.
+/// Compare assets as a fallback if metrics are equal.
+///
+/// Commissioned assets are ordered before uncommissioned and newer before older.
 ///
 /// Used as a fallback to sort assets when they have equal appraisal tool outputs.
 fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
