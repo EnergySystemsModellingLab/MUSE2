@@ -39,6 +39,22 @@ use std::slice;
 )]
 pub struct AssetID(u32);
 
+/// A unique identifier for an asset group
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    derive_more::Display,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Deserialize,
+    Serialize,
+)]
+pub struct AssetGroupID(u32);
+
 /// The state of an asset
 ///
 /// New assets are created as either `Future` or `Candidate` assets. `Future` assets (which are
@@ -60,6 +76,8 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
+        /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
+        group_id: Option<AssetGroupID>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -628,6 +646,14 @@ impl Asset {
         }
     }
 
+    /// Get the group ID for this asset
+    pub fn group_id(&self) -> Option<AssetGroupID> {
+        match &self.state {
+            AssetState::Commissioned { group_id, .. } => *group_id,
+            _ => None,
+        }
+    }
+
     /// Get the agent ID for this asset
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
@@ -697,7 +723,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    fn commission(&mut self, id: AssetID, reason: &str) {
+    /// * `group_id` - The ID of the group of this asset, if any.
+    fn commission(&mut self, id: AssetID, group_id: Option<AssetGroupID>, reason: &str) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -714,6 +741,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
+            group_id,
         };
     }
 
@@ -729,27 +757,39 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
-            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        let (id, agent_id, group_id) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                group_id,
+                ..
+            } => (*id, agent_id.clone(), *group_id),
+            _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: Some(year),
+            group_id,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
-            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        let (id, agent_id, group_id) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                group_id,
+                ..
+            } => (*id, agent_id.clone(), *group_id),
+            _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
+            group_id,
         };
     }
 
@@ -759,9 +799,44 @@ impl Asset {
             mothballed_year, ..
         } = &self.state
         else {
-            panic!("Cannot mothballed an asset that hasn't been commissioned")
+            panic!("Cannot mothball an asset that hasn't been commissioned")
         };
         *mothballed_year
+    }
+
+    /// Checks if the assets corresponds to a process that has a `unit_size` and is therefore divisible.
+    pub fn is_divisible(&self) -> bool {
+        self.process.unit_size.is_some()
+    }
+
+    /// Divides an asset if it is divisible and returns a vector of children
+    ///
+    /// The children assets are identical to the parent (including state) but with a capacity defined
+    /// by the `unit_size`. Only Future or Selected assets can be divided.
+    pub fn divide_asset(&self) -> Vec<AssetRef> {
+        assert!(
+            matches!(
+                self.state,
+                AssetState::Future { .. } | AssetState::Selected { .. }
+            ),
+            "Assets with state {0} cannot be divided. Only Future or Selected assets can be divided",
+            self.state
+        );
+
+        // Divide the asset into children until all capacity is allocated
+        let mut capacity = self.capacity;
+        let unit_size = self.process.unit_size.expect(
+            "Only assets corresponding to processes with a unit size defined can be divided",
+        );
+        let mut children = Vec::new();
+        while capacity > Capacity(0.0) {
+            let mut child = self.clone();
+            child.capacity = unit_size.min(capacity);
+            capacity -= child.capacity;
+            children.push(child.into());
+        }
+
+        children
     }
 }
 
@@ -886,7 +961,7 @@ impl Hash for AssetRef {
             }
             AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
                 // We shouldn't currently need to hash Future or Decommissioned assets
-                unimplemented!("Cannot hash Future or Decommissioned assets");
+                panic!("Cannot hash Future or Decommissioned assets");
             }
         }
     }
@@ -914,6 +989,8 @@ pub struct AssetPool {
     decommissioned: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
+    /// Next available group ID number
+    next_group_id: u32,
 }
 
 impl AssetPool {
@@ -927,6 +1004,7 @@ impl AssetPool {
             future: assets,
             decommissioned: Vec::new(),
             next_id: 0,
+            next_group_id: 0,
         }
     }
 
@@ -965,9 +1043,26 @@ impl AssetPool {
                 continue;
             }
 
-            asset.commission(AssetID(self.next_id), "user input");
-            self.next_id += 1;
-            self.active.push(asset.into());
+            // If it is divisible, we divide and commission all the children
+            if asset.is_divisible() {
+                let children = asset.divide_asset();
+                for mut child in children {
+                    child.make_mut().commission(
+                        AssetID(self.next_id),
+                        Some(AssetGroupID(self.next_group_id)),
+                        "user input",
+                    );
+                    self.next_id += 1;
+                    self.active.push(child);
+                }
+                self.next_group_id += 1;
+            }
+            // If not, we just commission it as a single asset
+            else {
+                asset.commission(AssetID(self.next_id), None, "user input");
+                self.next_id += 1;
+                self.active.push(asset.into());
+            }
         }
     }
 
@@ -1085,27 +1180,44 @@ impl AssetPool {
     {
         // Check all assets are either Commissioned or Selected, and, if the latter,
         // then commission them
-        let assets = assets.into_iter().map(|mut asset| match &asset.state {
-            AssetState::Commissioned { .. } => {
-                asset.make_mut().unmothball();
-                asset
-            }
-            AssetState::Selected { .. } => {
-                asset
-                    .make_mut()
-                    .commission(AssetID(self.next_id), "selected");
-                self.next_id += 1;
-                asset
-            }
-            _ => panic!(
-                "Cannot extend asset pool with asset in state {}. Only assets in \
+        for mut asset in assets {
+            match &asset.state {
+                AssetState::Commissioned { .. } => {
+                    asset.make_mut().unmothball();
+                    self.active.push(asset);
+                }
+                AssetState::Selected { .. } => {
+                    // If it is divisible, we divide and commission all the children
+                    if asset.is_divisible() {
+                        for mut child in asset.divide_asset() {
+                            child.make_mut().commission(
+                                AssetID(self.next_id),
+                                Some(AssetGroupID(self.next_group_id)),
+                                "selected",
+                            );
+                            self.next_id += 1;
+                            self.active.push(child);
+                        }
+                        self.next_group_id += 1;
+                    }
+                    // If not, we just commission it as a single asset
+                    else {
+                        asset
+                            .make_mut()
+                            .commission(AssetID(self.next_id), None, "selected");
+                        self.next_id += 1;
+                        self.active.push(asset);
+                    }
+                }
+                _ => panic!(
+                    "Cannot extend asset pool with asset in state {}. Only assets in \
                 Commissioned or Selected states are allowed.",
-                asset.state
-            ),
-        });
+                    asset.state
+                ),
+            }
+        }
 
         // New assets may not have been sorted, but active needs to be sorted by ID
-        self.active.extend(assets);
         self.active.sort();
 
         // Sanity check: all assets should be unique
@@ -1313,6 +1425,19 @@ mod tests {
         .unwrap()
     }
 
+    #[fixture]
+    fn asset_divisible(mut process: Process) -> Asset {
+        process.unit_size = Some(Capacity(4.0));
+        Asset::new_future(
+            "agent1".into(),
+            Rc::new(process),
+            "GBR".into(),
+            Capacity(11.0),
+            2010,
+        )
+        .unwrap()
+    }
+
     #[rstest]
     fn test_asset_get_activity_per_capacity_limits(
         asset_with_activity_limits: Asset,
@@ -1323,6 +1448,37 @@ mod tests {
             asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
             ActivityPerCapacity(0.2)..=ActivityPerCapacity(1.0)
         );
+    }
+
+    #[rstest]
+    fn test_divide_asset(asset_divisible: Asset) {
+        assert!(
+            asset_divisible.is_divisible(),
+            "Divisbile asset cannot be divided!"
+        );
+
+        // Check number of children
+        let children = asset_divisible.divide_asset();
+        let expected_children = (asset_divisible.capacity
+            / asset_divisible.process.unit_size.unwrap())
+        .value()
+        .ceil() as usize;
+        assert_eq!(
+            children.len(),
+            expected_children,
+            "Unexpected number of children"
+        );
+
+        // Check capacity of the children
+        let max_child_capacity = asset_divisible.process.unit_size.unwrap();
+        for child in children.clone() {
+            assert!(
+                child.capacity <= max_child_capacity,
+                "Child capacity is too large!"
+            )
+        }
+        let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
+        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
@@ -1353,6 +1509,25 @@ mod tests {
         // Nothing to commission for this year
         asset_pool.commission_new(2000);
         assert!(asset_pool.iter_active().next().is_none()); // no active assets
+    }
+
+    #[rstest]
+    fn test_asset_pool_commission_new_divisible(asset_divisible: Asset) {
+        let commision_year = asset_divisible.commission_year;
+        let expected_children = (asset_divisible.capacity
+            / asset_divisible.process.unit_size.unwrap())
+        .value()
+        .ceil() as usize;
+        let mut asset_pool = AssetPool::new(vec![asset_divisible.clone()]);
+        assert!(asset_pool.active.is_empty());
+        asset_pool.commission_new(commision_year);
+        assert!(asset_pool.future.is_empty());
+        assert!(!asset_pool.active.is_empty());
+        assert_eq!(asset_pool.active.len(), expected_children);
+        assert_eq!(asset_pool.next_group_id, 1);
+
+        let children_capacity: Capacity = asset_pool.active.iter().map(|a| a.capacity).sum();
+        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
@@ -1467,6 +1642,37 @@ mod tests {
             asset_pool.active[original_count + 1].agent_id(),
             Some(&"agent3".into())
         );
+    }
+
+    #[rstest]
+    fn test_asset_pool_extend_new_divisible_assets(
+        mut asset_pool: AssetPool,
+        mut process: Process,
+    ) {
+        // Start with some commissioned assets
+        asset_pool.commission_new(2020);
+        let original_count = asset_pool.active.len();
+
+        // Create new non-commissioned assets
+        process.unit_size = Some(Capacity(4.0));
+        let process_rc = Rc::new(process);
+        let new_assets: Vec<AssetRef> = vec![
+            Asset::new_selected(
+                "agent2".into(),
+                Rc::clone(&process_rc),
+                "GBR".into(),
+                Capacity(11.0),
+                2015,
+            )
+            .unwrap()
+            .into(),
+        ];
+        let expected_children = (new_assets[0].capacity / new_assets[0].process.unit_size.unwrap())
+            .value()
+            .ceil() as usize;
+
+        asset_pool.extend(new_assets);
+        assert_eq!(asset_pool.active.len(), original_count + expected_children);
     }
 
     #[rstest]
@@ -1694,7 +1900,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset1.commission(AssetID(1), "");
+        asset1.commission(AssetID(1), None, "");
         assert!(asset1.is_commissioned());
         assert_eq!(asset1.id(), Some(AssetID(1)));
 
@@ -1707,7 +1913,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset2.commission(AssetID(2), "");
+        asset2.commission(AssetID(2), None, "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
     }
@@ -1730,7 +1936,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), None, "");
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1762,7 +1968,7 @@ mod tests {
             max_decommission_year,
         )
         .unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), None, "");
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1777,7 +1983,7 @@ mod tests {
     fn test_commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), None, "");
     }
 
     #[rstest]

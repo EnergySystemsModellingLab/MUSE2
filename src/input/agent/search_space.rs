@@ -228,6 +228,7 @@ mod tests {
                     primary_output: None,
                     capacity_to_activity: ActivityPerCapacity(1.0),
                     investment_constraints: ProcessInvestmentConstraintsMap::new(),
+                    unit_size: None,
                 };
                 (id, process.into())
             })
