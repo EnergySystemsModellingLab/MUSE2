@@ -1,13 +1,17 @@
 //! Assets are instances of a process which are owned and invested in by agents.
 use crate::agent::AgentID;
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, CommodityType};
+use crate::finance::annual_capital_cost;
 use crate::process::{
     ActivityLimits, FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter,
 };
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
-use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
+use crate::units::{
+    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerFlow,
+};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -306,6 +310,18 @@ impl Asset {
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }
 
+    /// Get the activity limits for this asset for a given time slice selection
+    pub fn get_activity_limits_for_selection(
+        &self,
+        time_slice_selection: &TimeSliceSelection,
+    ) -> RangeInclusive<Activity> {
+        let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
+        let cap2act = self.process.capacity_to_activity;
+        let lb = self.capacity * cap2act * *activity_per_capacity_limits.start();
+        let ub = self.capacity * cap2act * *activity_per_capacity_limits.end();
+        lb..=ub
+    }
+
     /// Iterate over activity limits for this asset
     pub fn iter_activity_limits(
         &self,
@@ -336,12 +352,22 @@ impl Asset {
             })
     }
 
+    /// Gets the total SED/SVD output per unit of activity for this asset
+    ///
+    /// Note: Since we are summing coefficients from different commodities, this ONLY makes sense
+    /// if these commodities have the same units (e.g., all in PJ). Users are currently not made to
+    /// give units for commodities, so we cannot possibly enforce this. Something to potentially
+    /// address in future.
+    pub fn get_total_output_per_activity(&self) -> FlowPerActivity {
+        self.iter_output_flows().map(|flow| flow.coeff).sum()
+    }
+
     /// Get the operating cost for this asset in a given year and time slice
     pub fn get_operating_cost(&self, year: u32, time_slice: &TimeSliceID) -> MoneyPerActivity {
         // The cost for all commodity flows (including levies/incentives)
-        let flows_cost: MoneyPerActivity = self
+        let flows_cost = self
             .iter_flows()
-            .map(|flow| flow.get_total_cost(&self.region_id, year, time_slice))
+            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
             .sum();
 
         self.process_parameter.variable_operating_cost + flows_cost
@@ -373,15 +399,16 @@ impl Asset {
         })
     }
 
-    /// Get the cost of input flows using the commodity prices in `input_prices`.
+    /// Get the total cost of purchasing input commodities per unit of activity for this asset.
     ///
     /// If a price is missing, there is assumed to be no cost.
     pub fn get_input_cost_from_prices(
         &self,
-        input_prices: &CommodityPrices,
+        prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        -self.get_revenue_from_flows_with_filter(input_prices, time_slice, |x| {
+        // Revenues of input flows are negative costs, so we negate the result
+        -self.get_revenue_from_flows_with_filter(prices, time_slice, |x| {
             x.direction() == FlowDirection::Input
         })
     }
@@ -404,10 +431,140 @@ impl Asset {
             .map(|flow| {
                 flow.coeff
                     * prices
-                        .get(&flow.commodity.id, self.region_id(), time_slice)
+                        .get(&flow.commodity.id, &self.region_id, time_slice)
                         .unwrap_or_default()
             })
             .sum()
+    }
+
+    /// Get the generic activity cost per unit of activity for this asset.
+    ///
+    /// These are all activity-related costs that are not associated with specific SED/SVD outputs.
+    /// Includes levies, flow costs, costs of inputs and variable operating costs
+    fn get_generic_activity_cost(
+        &self,
+        prices: &CommodityPrices,
+        year: u32,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        // The cost of purchasing input commodities
+        let cost_of_inputs = self.get_input_cost_from_prices(prices, time_slice);
+
+        // Flow costs/levies for all flows except SED/SVD outputs
+        let excludes_sed_svd_output = |flow: &&ProcessFlow| {
+            !(flow.direction() == FlowDirection::Output
+                && matches!(
+                    flow.commodity.kind,
+                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                ))
+        };
+        let flow_costs = self
+            .iter_flows()
+            .filter(excludes_sed_svd_output)
+            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
+            .sum();
+
+        cost_of_inputs + flow_costs + self.process_parameter.variable_operating_cost
+    }
+
+    /// Iterate over marginal costs for a filtered set of SED/SVD output commodities for this asset
+    ///
+    /// For each SED/SVD output commodity, the marginal cost is calculated as the sum of:
+    /// - Generic activity costs (variable operating costs, cost of purchasing inputs, plus all
+    ///   levies and flow costs not associated with specific SED/SVD outputs), which are
+    ///   shared equally over all SED/SVD outputs
+    /// - Production levies and flow costs for the specific SED/SVD output commodity
+    pub fn iter_marginal_costs_with_filter<'a>(
+        &'a self,
+        prices: &'a CommodityPrices,
+        year: u32,
+        time_slice: &'a TimeSliceID,
+        filter: impl Fn(&CommodityID) -> bool + 'a,
+    ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
+        // Iterator over SED/SVD output flows matching the filter
+        let mut output_flows_iter = self
+            .iter_output_flows()
+            .filter(move |flow| filter(&flow.commodity.id))
+            .peekable();
+
+        // If there are no output flows after filtering, return an empty iterator
+        if output_flows_iter.peek().is_none() {
+            return Box::new(std::iter::empty::<(CommodityID, MoneyPerFlow)>());
+        }
+
+        // Calculate generic activity costs.
+        // This is all activity costs not associated with specific SED/SVD outputs, which will get
+        // shared equally over all SED/SVD outputs. Includes levies, flow costs, costs of inputs and
+        // variable operating costs
+        let generic_activity_cost = self.get_generic_activity_cost(prices, year, time_slice);
+
+        // Share generic activity costs equally over all SED/SVD outputs
+        // We sum the output coefficients of all SED/SVD commodities to get total output, then
+        // divide costs by this total output to get the generic cost per unit of output.
+        // Note: only works if all SED/SVD outputs have the same units - not currently checked!
+        let total_output_per_activity = self.get_total_output_per_activity();
+        assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
+        let generic_cost_per_flow = generic_activity_cost / total_output_per_activity;
+
+        // Iterate over SED/SVD output flows
+        Box::new(output_flows_iter.map(move |flow| {
+            // Get the costs for this specific commodity flow
+            let commodity_specific_costs_per_flow =
+                flow.get_total_cost_per_flow(&self.region_id, year, time_slice);
+
+            // Add these to the generic costs to get total cost for this commodity
+            let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
+            (flow.commodity.id.clone(), marginal_cost)
+        }))
+    }
+
+    /// Iterate over marginal costs for all SED/SVD output commodities for this asset
+    ///
+    /// See `iter_marginal_costs_with_filter` for details.
+    pub fn iter_marginal_costs<'a>(
+        &'a self,
+        prices: &'a CommodityPrices,
+        year: u32,
+        time_slice: &'a TimeSliceID,
+    ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
+        self.iter_marginal_costs_with_filter(prices, year, time_slice, move |_| true)
+    }
+
+    /// Get the annual capital cost per unit of capacity for this asset
+    pub fn get_annual_capital_cost_per_capacity(&self) -> MoneyPerCapacity {
+        let capital_cost = self.process_parameter.capital_cost;
+        let lifetime = self.process_parameter.lifetime;
+        let discount_rate = self.process_parameter.discount_rate;
+        annual_capital_cost(capital_cost, lifetime, discount_rate)
+    }
+
+    /// Get the annual capital cost per unit of activity for this asset
+    ///
+    /// Total capital costs (cost per capacity * capacity) are shared equally over the year in
+    /// accordance with the annual activity.
+    pub fn get_annual_capital_cost_per_activity(
+        &self,
+        annual_activity: Activity,
+    ) -> MoneyPerActivity {
+        let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
+        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity();
+        assert!(
+            annual_activity > Activity::EPSILON,
+            "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
+        );
+        total_annual_capital_cost / annual_activity
+    }
+
+    /// Get the annual capital cost per unit of output flow for this asset
+    ///
+    /// Total capital costs (cost per capacity * capacity) are shared equally across all output
+    /// flows in accordance with the annual activity and total output per unit of activity.
+    pub fn get_annual_capital_cost_per_flow(&self, annual_activity: Activity) -> MoneyPerFlow {
+        let annual_capital_cost_per_activity =
+            self.get_annual_capital_cost_per_activity(annual_activity);
+        let total_output_per_activity = self.get_total_output_per_activity();
+        assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
+        annual_capital_cost_per_activity / total_output_per_activity
     }
 
     /// Maximum activity for this asset
@@ -423,6 +580,17 @@ impl Asset {
     /// Iterate over the asset's flows
     pub fn iter_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
         self.flows.values()
+    }
+
+    /// Iterate over the asset's output SED/SVD flows
+    pub fn iter_output_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
+        self.flows.values().filter(|flow| {
+            flow.direction() == FlowDirection::Output
+                && matches!(
+                    flow.commodity.kind,
+                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                )
+        })
     }
 
     /// Get the primary output flow (if any) for this asset
@@ -870,7 +1038,7 @@ impl AssetPool {
                     the start of the simulation",
                     asset.process_id(),
                     asset.commission_year,
-                    asset.process_parameter().lifetime
+                    asset.process_parameter.lifetime
                 );
                 continue;
             }
