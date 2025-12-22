@@ -257,9 +257,7 @@ mod tests {
         region_ids: IndexSet<RegionID>,
     ) {
         // Valid map
-        assert!(
-            validate_commodity_levy_map(&cost_map, &region_ids, &[2020], &time_slice_info).is_ok()
-        );
+        validate_commodity_levy_map(&cost_map, &region_ids, &[2020], &time_slice_info).unwrap();
     }
 
     #[rstest]

@@ -229,16 +229,14 @@ mod tests {
         let mut map = AgentCommodityPortionsMap::new();
         map.insert(("commodity1".into(), 2020), Dimensionless(1.0));
         let agent_commodity_portions = HashMap::from([("agent1".into(), map)]);
-        assert!(
-            validate_agent_commodity_portions(
-                &agent_commodity_portions,
-                &agents,
-                &commodities,
-                &region_ids,
-                &milestone_years
-            )
-            .is_ok()
-        );
+        validate_agent_commodity_portions(
+            &agent_commodity_portions,
+            &agents,
+            &commodities,
+            &region_ids,
+            &milestone_years,
+        )
+        .unwrap();
 
         // Invalid case: portions do not sum to 1
         let mut map_v2 = AgentCommodityPortionsMap::new();

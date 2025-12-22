@@ -254,10 +254,8 @@ mod tests {
             years: "2020".into(),
             search_space: "A;B".into(),
         };
-        assert!(
-            raw.into_agent_search_space(&agents, &processes, &commodity_ids, &[2020])
-                .is_ok()
-        );
+        raw.into_agent_search_space(&agents, &processes, &commodity_ids, &[2020])
+            .unwrap();
     }
 
     #[rstest]

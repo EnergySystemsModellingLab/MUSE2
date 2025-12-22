@@ -244,10 +244,7 @@ mod tests {
         ];
 
         // Valid
-        assert!(
-            read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020])
-                .is_ok()
-        );
+        read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020]).unwrap();
     }
 
     #[rstest]
@@ -405,15 +402,13 @@ mod tests {
             commodity_id: "commodity1".to_string(),
             demand: Flow(10.0),
         };
-        assert!(
-            read_demand_from_iter(
-                std::iter::once(demand),
-                &svd_commodities,
-                &region_ids,
-                &[2020, 2030]
-            )
-            .is_err()
-        );
+        read_demand_from_iter(
+            std::iter::once(demand),
+            &svd_commodities,
+            &region_ids,
+            &[2020, 2030],
+        )
+        .unwrap_err();
     }
 
     /// Create an example demand file in `dir_path`

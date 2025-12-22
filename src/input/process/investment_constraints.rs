@@ -336,11 +336,11 @@ mod tests {
     fn validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
         let valid = validate_raw_constraint(10.0);
-        assert!(valid.is_ok());
+        valid.unwrap();
 
         // Valid: addition constraint with zero value
         let valid = validate_raw_constraint(0.0);
-        assert!(valid.is_ok());
+        valid.unwrap();
 
         // Not valid: addition constraint with negative value
         let invalid = validate_raw_constraint(-10.0);
