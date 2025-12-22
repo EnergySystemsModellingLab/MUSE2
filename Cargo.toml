@@ -54,6 +54,7 @@ pedantic = {level = "deny", priority = -1}
 redundant_test_prefix = "deny"
 assertions_on_result_states = "deny"
 get_unwrap = "deny"
+if_then_some_else_none = "deny"
 # Whitelist some lints from "pedantic" group
 similar_names = "allow"
 must_use_candidate = "allow"

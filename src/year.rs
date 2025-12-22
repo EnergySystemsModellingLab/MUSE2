@@ -6,11 +6,7 @@ use itertools::Itertools;
 /// Parse a single year from a string and check it is in `valid_years`
 fn parse_and_validate_year(s: &str, valid_years: &[u32]) -> Option<u32> {
     let year = s.trim().parse::<u32>().ok()?;
-    if valid_years.binary_search(&year).is_ok() {
-        Some(year)
-    } else {
-        None
-    }
+    valid_years.binary_search(&year).is_ok().then_some(year)
 }
 
 /// Parse a string of years separated by semicolons into a vector of u32 years.

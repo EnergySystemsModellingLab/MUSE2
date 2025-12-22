@@ -294,14 +294,13 @@ impl Solution<'_> {
         self.constraint_keys
             .activity_keys
             .zip_duals(self.solution.dual_rows())
-            .filter_map(move |((asset, ts_selection), dual)| {
-                if matches!(ts_selection, TimeSliceSelection::Single(_)) {
-                    // `iter(...).next()` is safe here because we just matched Single(_)
-                    let (time_slice, _) = ts_selection.iter(self.time_slice_info).next().unwrap();
-                    Some((asset, time_slice, dual))
-                } else {
-                    None
-                }
+            .filter(|&((_asset, ts_selection), _dual)| {
+                matches!(ts_selection, TimeSliceSelection::Single(_))
+            })
+            .map(|((asset, ts_selection), dual)| {
+                // `unwrap` is safe here because we just matched Single(_)
+                let (time_slice, _) = ts_selection.iter(self.time_slice_info).next().unwrap();
+                (asset, time_slice, dual)
             })
     }
 
