@@ -62,7 +62,8 @@ macro_rules! patch_and_validate_simple {
         })()
     }};
 }
-pub(crate) use patch_and_validate_simple;
+// Currently unused outside this file
+// pub(crate) use patch_and_validate_simple;
 
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! patch_and_run_simple {
@@ -78,7 +79,8 @@ macro_rules! patch_and_run_simple {
         })()
     }};
 }
-pub(crate) use patch_and_run_simple;
+// Currently unused outside this file
+// pub(crate) use patch_and_run_simple;
 
 #[fixture]
 pub fn region_id() -> RegionID {
