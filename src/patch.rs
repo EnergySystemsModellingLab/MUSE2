@@ -110,7 +110,7 @@ impl ModelPatch {
 }
 
 /// Structure to hold patches for a model csv file.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FilePatch {
     /// The file that this patch applies to (e.g. "agents.csv")
     filename: String,
