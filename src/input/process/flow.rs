@@ -355,7 +355,10 @@ mod tests {
     }
 
     #[rstest]
-    fn single_output_infer_primary(#[from(svd_commodity)] commodity: Commodity, process: Process) {
+    fn test_single_output_infer_primary(
+        #[from(svd_commodity)] commodity: Commodity,
+        process: Process,
+    ) {
         let milestone_years = vec![2010, 2020];
         let commodity = Rc::new(commodity);
         let (mut processes, flows_map) = build_maps(
@@ -374,7 +377,7 @@ mod tests {
     }
 
     #[rstest]
-    fn multiple_outputs_error(
+    fn test_multiple_outputs_error(
         #[from(svd_commodity)] commodity1: Commodity,
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
@@ -397,7 +400,7 @@ mod tests {
     }
 
     #[rstest]
-    fn explicit_primary_output(
+    fn test_explicit_primary_output(
         #[from(svd_commodity)] commodity1: Commodity,
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
@@ -427,7 +430,7 @@ mod tests {
     }
 
     #[rstest]
-    fn all_inputs_no_primary(
+    fn test_all_inputs_no_primary(
         #[from(svd_commodity)] commodity1: Commodity,
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
@@ -455,7 +458,7 @@ mod tests {
     }
 
     #[rstest]
-    fn flows_not_in_all_milestone_years(
+    fn test_flows_not_in_all_milestone_years(
         #[from(svd_commodity)] commodity1: Commodity,
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
@@ -482,7 +485,7 @@ mod tests {
     }
 
     #[rstest]
-    fn flows_only_milestone_years(
+    fn test_flows_only_milestone_years(
         #[from(svd_commodity)] commodity1: Commodity,
         #[from(sed_commodity)] commodity2: Commodity,
         process: Process,
