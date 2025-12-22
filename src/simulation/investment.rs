@@ -13,16 +13,14 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::{debug, warn};
+use log::debug;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{
-    AppraisalComparisonMethod, AppraisalOutput, appraise_investment,
-    classify_appraisal_comparison_method,
-};
+use appraisal::{AppraisalOutput, appraise_investment};
 
 /// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -55,6 +53,8 @@ impl InvestmentSet {
 
     /// Selects assets for this investment set variant and passes through the shared
     /// context needed by single-market, cycle, or layered selection.
+    ///
+    /// # Arguments
     ///
     /// * `model` – Simulation model supplying parameters, processes, and dispatch.
     /// * `year` – Planning year being solved.
@@ -621,35 +621,45 @@ fn get_candidate_assets<'a>(
         })
 }
 
-fn select_from_assets_with_equal_metric(
-    region_id: &RegionID,
+/// Print debug message if there are multiple equally good outputs
+fn warn_on_equal_appraisal_outputs(
+    outputs: &[AppraisalOutput],
     agent_id: &AgentID,
     commodity_id: &CommodityID,
-    equally_good_assets: Vec<AppraisalOutput>,
-) -> AppraisalOutput {
-    // Format asset details for diagnostic logging
-    let asset_details = equally_good_assets
+    region_id: &RegionID,
+) {
+    if outputs.is_empty() {
+        return;
+    }
+
+    // Count the number of identical (or nearly identical) appraisal outputs
+    let num_identical = outputs[1..]
         .iter()
-        .map(|output| {
-            format!(
-                "Process id: '{}' (State: {}{})",
-                output.asset.process_id(),
-                output.asset.state(),
-                output
-                    .asset
-                    .id()
-                    .map(|id| format!(", Asset id: {id}"))
-                    .unwrap_or_default(),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    let warning_message = format!(
-        "Could not resolve deadlock between equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
-    );
-    warn!("{warning_message}");
-    // Select the first asset arbitrarily from the equally performing options
-    equally_good_assets.into_iter().next().unwrap()
+        .take_while(|output| outputs[0].compare_metric(output).is_eq())
+        .count();
+
+    if num_identical > 0 {
+        let asset_details = outputs[..=num_identical]
+            .iter()
+            .map(|output| {
+                let asset = &output.asset;
+                format!(
+                    "Process ID: '{}' (State: {}{}, Commission year: {})",
+                    asset.process_id(),
+                    asset.state(),
+                    asset
+                        .id()
+                        .map(|id| format!(", Asset ID: {id}"))
+                        .unwrap_or_default(),
+                    asset.commission_year()
+                )
+            })
+            .join(", ");
+        debug!(
+            "Found equally good appraisals for Agent ID: {agent_id}, Commodity: '{commodity_id}', \
+            Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
+        );
+    }
 }
 
 /// Get the best assets for meeting demand for the given commodity
@@ -716,56 +726,39 @@ fn select_best_assets(
         )?;
 
         // Sort assets by appraisal metric
-        let assets_sorted_by_metric: Vec<_> = outputs_for_opts
+        let assets_sorted_by_metric = outputs_for_opts
             .into_iter()
             .filter(|output| output.capacity > Capacity(0.0))
-            .sorted_by(AppraisalOutput::compare_metric)
-            .collect();
+            .sorted_by(|output1, output2| match output1.compare_metric(output2) {
+                // If equal, we fall back on comparing asset properties
+                Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
+                cmp => cmp,
+            })
+            .collect_vec();
 
-        // check if all options have zero capacity
-        if assets_sorted_by_metric.is_empty() {
-            // In this case, we cannot meet demand, so have to bail out.
-            // This may happen if:
-            // - the asset has zero activity limits for all time slices with demand.
-            // - known issue with the NPV objective
-            // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
-            bail!(
-                "No feasible investment options for commodity '{}' after appraisal",
-                &commodity.id
-            )
-        }
-
-        let appraisal_comparison_method = classify_appraisal_comparison_method(
-            &assets_sorted_by_metric.iter().collect::<Vec<_>>(),
+        // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
+        // out.
+        //
+        // This may happen if:
+        // - the asset has zero activity limits for all time slices with
+        // demand.
+        // - known issue with the NPV objective
+        // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
+        ensure!(
+            !assets_sorted_by_metric.is_empty(),
+            "No feasible investment options for commodity '{}' after appraisal",
+            &commodity.id
         );
 
-        // Determine the best asset based on whether multiple equally-good options exist
-        let best_output = match appraisal_comparison_method {
-            // there are multiple equally good assets by metric
-            AppraisalComparisonMethod::EqualMetrics => {
-                // Count how many assets have the same metric as the best one
-                let count = assets_sorted_by_metric
-                    .iter()
-                    .take_while(|output| {
-                        AppraisalOutput::compare_metric(&assets_sorted_by_metric[0], output).is_eq()
-                    })
-                    .count();
+        // Warn if there are multiple equally good assets
+        warn_on_equal_appraisal_outputs(
+            &assets_sorted_by_metric,
+            &agent.id,
+            &commodity.id,
+            region_id,
+        );
 
-                // select from all equally good assets
-                let equally_good_assets: Vec<_> =
-                    assets_sorted_by_metric.into_iter().take(count).collect();
-                select_from_assets_with_equal_metric(
-                    region_id,
-                    &agent.id,
-                    &commodity.id,
-                    equally_good_assets,
-                )
-            }
-            // there is a single best asset by metric
-            AppraisalComparisonMethod::Metric => {
-                assets_sorted_by_metric.into_iter().next().unwrap()
-            }
-        };
+        let best_output = assets_sorted_by_metric.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(
@@ -804,6 +797,16 @@ fn select_best_assets(
 /// Check whether there is any remaining demand that is unmet in any time slice
 fn is_any_remaining_demand(demand: &DemandMap) -> bool {
     demand.values().any(|flow| *flow > Flow(0.0))
+}
+
+/// Compare assets as a fallback if metrics are equal.
+///
+/// Commissioned assets are ordered before uncommissioned and newer before older.
+///
+/// Used as a fallback to sort assets when they have equal appraisal tool outputs.
+fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
+    (asset2.is_commissioned(), asset2.commission_year())
+        .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
@@ -852,14 +855,17 @@ fn update_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::AgentID;
+    use crate::asset::Asset;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
-        time_slice_info, time_slice_info2,
+        agent_id, asset, process, process_activity_limits_map, process_flows_map, region_id,
+        svd_commodity, time_slice, time_slice_info, time_slice_info2,
     };
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
+    use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-    use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::rc::Rc;
@@ -944,5 +950,33 @@ mod tests {
         // Time slice 2: skipped due to zero activity limit
         // Maximum = 20.0
         assert_eq!(result, Capacity(20.0));
+    }
+
+    #[rstest]
+    fn test_compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
+        let process = Rc::new(process);
+        let capacity = Capacity(2.0);
+        let asset1 = Asset::new_commissioned(
+            agent_id.clone(),
+            process.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+        let asset2 =
+            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
+        let asset3 =
+            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
+
+        assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
+        assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
+        assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
+        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
+        assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 }
