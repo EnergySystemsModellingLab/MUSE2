@@ -674,7 +674,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[rstest]
-    fn test_write_assets(assets: AssetPool) {
+    fn write_assets(assets: AssetPool) {
         let dir = tempdir().unwrap();
 
         // Write an asset
@@ -696,7 +696,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_flows(assets: AssetPool, commodity_id: CommodityID, time_slice: TimeSliceID) {
+    fn write_flows(assets: AssetPool, commodity_id: CommodityID, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let asset = assets.iter_active().next().unwrap();
         let flow_map = indexmap! {
@@ -729,7 +729,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_prices(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
+    fn write_prices(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let price = MoneyPerFlow(42.0);
         let mut prices = CommodityPrices::default();
@@ -762,7 +762,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_commodity_balance_duals(
+    fn write_commodity_balance_duals(
         commodity_id: CommodityID,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -804,11 +804,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_unmet_demand(
-        commodity_id: CommodityID,
-        region_id: RegionID,
-        time_slice: TimeSliceID,
-    ) {
+    fn write_unmet_demand(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let value = Flow(0.5);
@@ -846,7 +842,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_activity(assets: AssetPool, time_slice: TimeSliceID) {
+    fn write_activity(assets: AssetPool, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let activity = Activity(100.5);
@@ -892,7 +888,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_activity_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
+    fn write_activity_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let activity = Activity(100.5);
@@ -936,7 +932,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_solver_values() {
+    fn write_solver_values() {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let objective_value = Money(1234.56);
@@ -967,7 +963,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_appraisal_results(asset: Asset, appraisal_output: AppraisalOutput) {
+    fn write_appraisal_results(asset: Asset, appraisal_output: AppraisalOutput) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let dir = tempdir().unwrap();
@@ -1002,7 +998,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_write_appraisal_time_slice_results(
+    fn write_appraisal_time_slice_results(
         asset: Asset,
         appraisal_output: AppraisalOutput,
         time_slice: TimeSliceID,
@@ -1047,7 +1043,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_output_directory_new_directory() {
+    fn create_output_directory_new_directory() {
         let temp_dir = tempdir().unwrap();
         let output_dir = temp_dir.path().join("new_output");
 
@@ -1059,7 +1055,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_output_directory_existing_empty_directory() {
+    fn create_output_directory_existing_empty_directory() {
         let temp_dir = tempdir().unwrap();
         let output_dir = temp_dir.path().join("empty_output");
 
@@ -1074,7 +1070,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_output_directory_existing_with_files_no_overwrite() {
+    fn create_output_directory_existing_with_files_no_overwrite() {
         let temp_dir = tempdir().unwrap();
         let output_dir = temp_dir.path().join("output_with_files");
 
@@ -1094,7 +1090,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_output_directory_existing_with_files_allow_overwrite() {
+    fn create_output_directory_existing_with_files_allow_overwrite() {
         let temp_dir = tempdir().unwrap();
         let output_dir = temp_dir.path().join("output_with_files");
 
@@ -1112,7 +1108,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_output_directory_nested_path() {
+    fn create_output_directory_nested_path() {
         let temp_dir = tempdir().unwrap();
         let output_dir = temp_dir.path().join("nested").join("path").join("output");
 
@@ -1124,7 +1120,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_output_directory_existing_subdirs_with_files_allow_overwrite() {
+    fn create_output_directory_existing_subdirs_with_files_allow_overwrite() {
         let temp_dir = tempdir().unwrap();
         let output_dir = temp_dir.path().join("output_with_subdirs");
 

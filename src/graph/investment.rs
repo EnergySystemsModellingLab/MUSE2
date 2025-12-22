@@ -509,7 +509,7 @@ mod tests {
     use std::rc::Rc;
 
     #[test]
-    fn test_order_sccs_simple_cycle() {
+    fn order_sccs_simple_cycle() {
         let markets = ["A", "B", "C"].map(|id| InvestmentSet::Single((id.into(), "GBR".into())));
 
         // Create graph with cycle edges plus an extra dependency B ← D (see doc comment)
@@ -549,10 +549,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_solve_investment_order_linear_graph(
-        sed_commodity: Commodity,
-        svd_commodity: Commodity,
-    ) {
+    fn solve_investment_order_linear_graph(sed_commodity: Commodity, svd_commodity: Commodity) {
         // Create a simple linear graph: A -> B -> C
         let mut graph = Graph::new();
 
@@ -582,7 +579,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_solve_investment_order_cyclic_graph(sed_commodity: Commodity) {
+    fn solve_investment_order_cyclic_graph(sed_commodity: Commodity) {
         // Create a simple cyclic graph: A -> B -> A
         let mut graph = Graph::new();
 
@@ -610,10 +607,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_solve_investment_order_layered_graph(
-        sed_commodity: Commodity,
-        svd_commodity: Commodity,
-    ) {
+    fn solve_investment_order_layered_graph(sed_commodity: Commodity, svd_commodity: Commodity) {
         // Create a graph with layers:
         //     A
         //    / \
@@ -657,10 +651,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_solve_investment_order_multiple_regions(
-        sed_commodity: Commodity,
-        svd_commodity: Commodity,
-    ) {
+    fn solve_investment_order_multiple_regions(sed_commodity: Commodity, svd_commodity: Commodity) {
         // Create a simple linear graph: A -> B -> C
         let mut graph = Graph::new();
 

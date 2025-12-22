@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_valid(
+    fn validate_commodity_levies_map_valid(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
         region_ids: IndexSet<RegionID>,
@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_invalid_missing_region(
+    fn validate_commodity_levies_map_invalid_missing_region(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
     ) {
@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_invalid_missing_year(
+    fn validate_commodity_levies_map_invalid_missing_year(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
         region_ids: IndexSet<RegionID>,
@@ -289,7 +289,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_invalid(
+    fn validate_commodity_levies_map_invalid(
         cost_map: CommodityLevyMap,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -314,7 +314,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_add_missing_region_to_commodity_levy_map(
+    fn add_missing_region_to_commodity_levy_map_works(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
         region_id: RegionID,

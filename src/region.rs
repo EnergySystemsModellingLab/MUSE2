@@ -41,7 +41,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_region_str() {
+    fn parse_region_str_works() {
         let region_ids: IndexSet<RegionID> = ["GBR".into(), "USA".into()].into_iter().collect();
 
         // List of regions

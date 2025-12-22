@@ -132,7 +132,7 @@ mod tests {
     #[rstest]
     #[case::max_decommission_year_provided(Some(2015))]
     #[case::max_decommission_year_not_provided(None)]
-    fn test_read_assets_from_iter_valid(
+    fn read_assets_from_iter_valid(
         #[case] max_decommission_year: Option<u32>,
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
@@ -195,7 +195,7 @@ mod tests {
             commission_year: 2010,
             max_decommission_year: Some(2005),
         })]
-    fn test_read_assets_from_iter_invalid(
+    fn read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,

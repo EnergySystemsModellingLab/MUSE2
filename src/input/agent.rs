@@ -164,7 +164,7 @@ mod tests {
     use std::iter;
 
     #[test]
-    fn test_read_agents_file_from_iter() {
+    fn read_agents_file_from_iter_works() {
         // Valid case
         let region_ids = IndexSet::from(["GBR".into()]);
         let agent = AgentRaw {

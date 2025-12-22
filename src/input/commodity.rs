@@ -204,13 +204,13 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_commodity() {
+    fn validate_commodity_works() {
         let commodity = make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Shadow);
         assert!(validate_commodity(&commodity).is_ok());
     }
 
     #[test]
-    fn test_validate_commodity_other_priced() {
+    fn validate_commodity_other_priced() {
         let commodity = make_commodity(CommodityType::Other, PricingStrategy::MarginalCost);
         assert_error!(
             validate_commodity(&commodity),
@@ -219,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_commodity_sed_unpriced() {
+    fn validate_commodity_sed_unpriced() {
         let commodity =
             make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Unpriced);
         assert_error!(

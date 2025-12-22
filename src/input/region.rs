@@ -43,7 +43,7 @@ AP,Asia Pacific"
     }
 
     #[test]
-    fn test_read_regions() {
+    fn read_regions_works() {
         let dir = tempdir().unwrap();
         create_regions_file(dir.path());
         let regions = read_regions(dir.path()).unwrap();

@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_constraints_only_uses_milestone_years_within_process_range(processes: ProcessMap) {
+    fn read_constraints_only_uses_milestone_years_within_process_range(processes: ProcessMap) {
         // Process years are 2010..=2020 from the fixture (excludes 2008)
         let milestone_years = vec![2008, 2012, 2016];
 
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_process_investment_constraints_from_iter(processes: ProcessMap) {
+    fn read_process_investment_constraints_from_iter_works(processes: ProcessMap) {
         // Create milestone years matching the process years
         let milestone_years: Vec<u32> = vec![2010, 2015, 2020];
 
@@ -261,7 +261,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_constraints_all_regions_all_years(processes: ProcessMap) {
+    fn read_constraints_all_regions_all_years(processes: ProcessMap) {
         // Create milestone years matching the process years
         let milestone_years: Vec<u32> = vec![2010, 2015, 2020];
 
@@ -308,7 +308,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_constraints_year_outside_milestone_years(processes: ProcessMap) {
+    fn read_constraints_year_outside_milestone_years(processes: ProcessMap) {
         // Create constraint with year outside milestone years
         // Process years are 2010..=2020 from the fixture
         let milestone_years = vec![2010, 2015, 2020];
@@ -333,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_addition_with_finite_value() {
+    fn validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
         let valid = validate_raw_constraint(10.0);
         assert!(valid.is_ok());
@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_addition_rejects_infinite() {
+    fn validate_addition_rejects_infinite() {
         // Invalid: infinite value
         let invalid = validate_raw_constraint(f64::INFINITY);
         assert_error!(

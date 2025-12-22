@@ -21,7 +21,7 @@ fn get_version_from_citation_cff() -> Result<String> {
 }
 
 #[test]
-fn test_citation_cff_version() {
+fn citation_cff_version() {
     assert_eq!(
         env!("CARGO_PKG_VERSION"),
         get_version_from_citation_cff().unwrap(),

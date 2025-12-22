@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_objective_parameter_single() {
+    fn check_objective_parameter_single() {
         // DecisionRule::Single
         let decision_rule = DecisionRule::Single;
         let objective = objective!(None, None);
@@ -194,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_objective_parameter_weighted() {
+    fn check_objective_parameter_weighted() {
         // DecisionRule::Weighted
         let decision_rule = DecisionRule::Weighted;
         let objective = objective!(Some(Dimensionless(1.0)), None);
@@ -206,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_objective_parameter_lexico() {
+    fn check_objective_parameter_lexico() {
         // DecisionRule::Lexicographical
         let decision_rule = DecisionRule::Lexicographical { tolerance: 1.0 };
         let objective = objective!(None, Some(1));
@@ -229,10 +229,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_agent_objectives_from_iter_valid(
-        agents: AgentMap,
-        objective_raw: AgentObjectiveRaw,
-    ) {
+    fn read_agent_objectives_from_iter_valid(agents: AgentMap, objective_raw: AgentObjectiveRaw) {
         let milestone_years = [2020];
         let expected = iter::once((
             "agent1".into(),
@@ -249,7 +246,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_agent_objectives_from_iter_invalid_no_objective_for_agent(agents: AgentMap) {
+    fn read_agent_objectives_from_iter_invalid_no_objective_for_agent(agents: AgentMap) {
         // Missing objective for agent
         assert_error!(
             read_agent_objectives_from_iter(iter::empty(), &agents, &[2020]),
@@ -258,7 +255,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_agent_objectives_from_iter_invalid_no_objective_for_year(
+    fn read_agent_objectives_from_iter_invalid_no_objective_for_year(
         agents: AgentMap,
         objective_raw: AgentObjectiveRaw,
     ) {
@@ -270,7 +267,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_agent_objectives_from_iter_invalid_bad_param(agents: AgentMap) {
+    fn read_agent_objectives_from_iter_invalid_bad_param(agents: AgentMap) {
         // Bad parameter
         let bad_objective = AgentObjectiveRaw {
             agent_id: "agent1".into(),

@@ -196,7 +196,7 @@ mod tests {
     use std::rc::Rc;
 
     #[test]
-    fn test_validate_agent_commodity_portions() {
+    fn validate_agent_commodity_portions_works() {
         let region_ids = IndexSet::from([RegionID::new("region1"), RegionID::new("region2")]);
         let milestone_years = [2020];
         let agents = IndexMap::from([(
