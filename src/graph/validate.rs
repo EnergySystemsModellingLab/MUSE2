@@ -240,7 +240,7 @@ mod tests {
     use std::rc::Rc;
 
     #[rstest]
-    fn test_validate_commodities_graph(
+    fn validate_commodities_graph_works(
         other_commodity: Commodity,
         sed_commodity: Commodity,
         svd_commodity: Commodity,
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodities_graph_invalid_svd_consumed(
+    fn validate_commodities_graph_invalid_svd_consumed(
         svd_commodity: Commodity,
         sed_commodity: Commodity,
         other_commodity: Commodity,
@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodities_graph_invalid_svd_not_produced(svd_commodity: Commodity) {
+    fn validate_commodities_graph_invalid_svd_not_produced(svd_commodity: Commodity) {
         let mut graph = Graph::new();
         let mut commodities = CommodityMap::new();
 
@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodities_graph_invalid_sed(sed_commodity: Commodity) {
+    fn validate_commodities_graph_invalid_sed(sed_commodity: Commodity) {
         let mut graph = Graph::new();
         let mut commodities = CommodityMap::new();
 
@@ -336,7 +336,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodities_graph_invalid_oth(
+    fn validate_commodities_graph_invalid_oth(
         other_commodity: Commodity,
         sed_commodity: Commodity,
     ) {

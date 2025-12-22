@@ -347,7 +347,7 @@ mod tests {
 
     /// Test a normal read
     #[test]
-    fn test_read_csv() {
+    fn read_csv_works() {
         let dir = tempdir().unwrap();
         let file_path = create_csv_file(dir.path(), "id,value\nhello,1\nworld,2\n");
         let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_toml() {
+    fn read_toml_works() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.toml");
         {
@@ -439,7 +439,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialise_proportion_nonzero() {
+    fn deserialise_proportion_nonzero_works() {
         // Valid inputs
         assert_eq!(deserialise_f64(0.01), Ok(Dimensionless(0.01)));
         assert_eq!(deserialise_f64(0.5), Ok(Dimensionless(0.5)));
@@ -454,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_values_sum_to_one_approx() {
+    fn check_values_sum_to_one_approx_works() {
         // Single input, valid
         assert!(check_values_sum_to_one_approx([Dimensionless(1.0)].into_iter()).is_ok());
 
@@ -488,12 +488,12 @@ mod tests {
     #[case(&[2,1],false)]
     #[case(&[1,1],false)]
     #[case(&[1,3,2,4], false)]
-    fn test_is_sorted_and_unique(#[case] values: &[u32], #[case] expected: bool) {
+    fn is_sorted_and_unique_works(#[case] values: &[u32], #[case] expected: bool) {
         assert_eq!(is_sorted_and_unique(values), expected);
     }
 
     #[test]
-    fn test_format_items_with_cap() {
+    fn format_items_with_cap_works() {
         let items = vec!["a", "b", "c"];
         assert_eq!(format_items_with_cap(&items), r#"["a", "b", "c"]"#);
 

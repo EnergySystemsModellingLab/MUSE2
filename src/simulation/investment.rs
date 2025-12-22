@@ -871,7 +871,7 @@ mod tests {
     use std::rc::Rc;
 
     #[rstest]
-    fn test_get_demand_limiting_capacity(
+    fn get_demand_limiting_capacity_works(
         time_slice: TimeSliceID,
         time_slice_info: TimeSliceInfo,
         svd_commodity: Commodity,
@@ -905,7 +905,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_demand_limiting_capacity_multiple_time_slices(
+    fn get_demand_limiting_capacity_multiple_time_slices(
         time_slice_info2: TimeSliceInfo,
         svd_commodity: Commodity,
         mut process: Process,
@@ -953,7 +953,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
+    fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
         let process = Rc::new(process);
         let capacity = Capacity(2.0);
         let asset1 = Asset::new_commissioned(

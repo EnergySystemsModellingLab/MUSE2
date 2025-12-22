@@ -3,6 +3,6 @@ mod regression;
 use regression::run_regression_test;
 
 #[test]
-fn test_regression_muse1_default() {
+fn regression_muse1_default() {
     run_regression_test("muse1_default");
 }

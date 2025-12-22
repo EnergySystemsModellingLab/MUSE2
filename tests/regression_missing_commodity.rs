@@ -3,6 +3,6 @@ mod regression;
 use regression::run_regression_test;
 
 #[test]
-fn test_regression_missing_commodity() {
+fn regression_missing_commodity() {
     run_regression_test("missing_commodity");
 }

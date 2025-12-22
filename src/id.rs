@@ -164,7 +164,7 @@ mod tests {
     #[case("some commodity")]
     #[case("PROCESS")]
     #[case("café")] // unicode supported
-    fn test_deserialise_id_valid(#[case] id: &str) {
+    fn deserialise_id_valid(#[case] id: &str) {
         assert_eq!(deserialise_id(id).unwrap().id.to_string(), id);
     }
 
@@ -174,7 +174,7 @@ mod tests {
     #[case("annual")]
     #[case("ALL")]
     #[case(" ALL ")]
-    fn test_deserialise_id_invalid(#[case] id: &str) {
+    fn deserialise_id_invalid(#[case] id: &str) {
         assert!(deserialise_id(id).is_err());
     }
 }

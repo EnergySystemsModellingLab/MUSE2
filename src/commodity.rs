@@ -113,7 +113,7 @@ mod tests {
     use crate::time_slice::TimeSliceSelection;
 
     #[test]
-    fn test_demand_map() {
+    fn demand_map_works() {
         let ts_selection = TimeSliceSelection::Single(TimeSliceID {
             season: "all-year".into(),
             time_of_day: "all-day".into(),
@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn test_commodity_levy_map() {
+    fn commodity_levy_map_works() {
         let ts = TimeSliceID {
             season: "winter".into(),
             time_of_day: "day".into(),

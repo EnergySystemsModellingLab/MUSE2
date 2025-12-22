@@ -123,7 +123,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_settings_load_from_path_no_file() {
+    fn settings_load_from_path_no_file() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(SETTINGS_FILE_NAME); // NB: doesn't exist
         assert_eq!(
@@ -133,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_settings_load_from_path() {
+    fn settings_load_from_path() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(SETTINGS_FILE_NAME);
 
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn test_default_file_contents() {
+    fn default_file_contents() {
         assert!(!Settings::default_file_contents().is_empty());
     }
 }

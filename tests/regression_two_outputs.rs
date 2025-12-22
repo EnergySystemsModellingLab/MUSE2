@@ -3,6 +3,6 @@ mod regression;
 use regression::run_regression_test;
 
 #[test]
-fn test_regression_two_outputs() {
+fn regression_two_outputs() {
     run_regression_test("two_outputs");
 }
