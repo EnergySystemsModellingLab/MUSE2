@@ -97,9 +97,9 @@ impl Settings {
         // Iterate through the generated TOML, commenting out lines and adding docs
         let mut out = DEFAULT_SETTINGS_FILE_HEADER.to_string();
         for line in settings_raw.split('\n') {
-            if let Some(last) = line.find('=') {
+            if let Some((field, _)) = line.split_once('=') {
                 // Add documentation from doc comments
-                let field = line[..last].trim();
+                let field = field.trim();
 
                 // Use doc comment to document parameter. All fields should have doc comments.
                 let docs = Settings::get_field_docs(field).expect("Missing doc comment for field");
