@@ -41,7 +41,7 @@ edit = "0.1.5"
 [dev-dependencies]
 map-macro = "0.3.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
-yaml-rust2 = {version = "0.10.4", default-features = false}
+yaml-rust2 = {version = "0.11.0", default-features = false}
 
 [build-dependencies]
 built = {version = "0.8.0", features = ["chrono", "git2"]}
