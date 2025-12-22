@@ -47,11 +47,11 @@ impl Display for TimeSliceID {
 }
 
 impl<'de> Deserialize<'de> for TimeSliceID {
-    fn deserialize<D>(deserialiser: D) -> std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let s: &str = Deserialize::deserialize(deserialiser)?;
+        let s: &str = Deserialize::deserialize(deserializer)?;
         let (season, time_of_day) = s.split('.').collect_tuple().ok_or_else(|| {
             D::Error::custom(format!(
                 "Invalid input '{s}': Should be in form season.time_of_day"
@@ -65,11 +65,11 @@ impl<'de> Deserialize<'de> for TimeSliceID {
 }
 
 impl Serialize for TimeSliceID {
-    fn serialize<S>(&self, serialiser: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serialiser.collect_str(self)
+        serializer.collect_str(self)
     }
 }
 
