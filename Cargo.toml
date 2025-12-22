@@ -55,6 +55,7 @@ redundant_test_prefix = "deny"
 assertions_on_result_states = "deny"
 get_unwrap = "deny"
 if_then_some_else_none = "deny"
+renamed_function_params = "deny"
 # Whitelist some lints from "pedantic" group
 similar_names = "allow"
 must_use_candidate = "allow"
