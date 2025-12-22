@@ -97,7 +97,7 @@ fn compare_lines(
         if !compare_line(num, &line1, &line2, file_name, errors) {
             errors.push(format!(
                 "{file_name}: line {num}:\n    + \"{line1}\"\n    - \"{line2}\""
-            ))
+            ));
         }
     }
 }
@@ -109,8 +109,8 @@ fn compare_line(
     file_name: &str,
     errors: &mut Vec<String>,
 ) -> bool {
-    let fields1 = line1.split(",").collect_vec();
-    let fields2 = line2.split(",").collect_vec();
+    let fields1 = line1.split(',').collect_vec();
+    let fields2 = line2.split(',').collect_vec();
     if fields1.len() != fields2.len() {
         errors.push(format!(
             "{}: line {}: Different number of fields: {} vs {}",
@@ -152,7 +152,10 @@ fn get_csv_file_names(dir_path: &Path) -> Vec<String> {
     for entry in entries {
         let file_name = entry.unwrap().file_name();
         let file_name = file_name.to_str().unwrap();
-        if file_name.ends_with(".csv") {
+        if Path::new(file_name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+        {
             file_names.push(file_name.to_string());
         }
     }

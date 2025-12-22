@@ -378,9 +378,7 @@ mod tests {
     #[test]
     fn test_toml_patch() {
         // Patch to add an extra milestone year (2050)
-        let toml_patch = r#"
-            milestone_years = [2020, 2030, 2040, 2050]
-        "#;
+        let toml_patch = "milestone_years = [2020, 2030, 2040, 2050]\n";
 
         // Build patched model into a temporary directory
         let model_dir = ModelPatch::from_example("simple")

@@ -7,8 +7,7 @@ fn get_version_from_citation_cff() -> Result<String> {
     let citation = fs::read_to_string("CITATION.cff")?;
     let yaml = YamlLoader::load_from_str(&citation)?;
     let yaml = yaml
-        .iter()
-        .next()
+        .first()
         .context("Empty YAML file")?
         .as_hash()
         .context("Not YAML object")?;
@@ -28,5 +27,5 @@ fn test_citation_cff_version() {
         get_version_from_citation_cff().unwrap(),
         "Software version in Cargo.toml and CITATION.cff must match. If you are making a new \
         release, please also update the CITATION.cff file."
-    )
+    );
 }

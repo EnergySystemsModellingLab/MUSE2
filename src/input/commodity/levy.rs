@@ -246,7 +246,7 @@ mod tests {
         let cost = MoneyPerFlow(1.0);
 
         let mut map = CommodityLevyMap::new();
-        map.insert(("GBR".into(), 2020, time_slice.clone()), cost.clone());
+        map.insert(("GBR".into(), 2020, time_slice.clone()), cost);
         map
     }
 

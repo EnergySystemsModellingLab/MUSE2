@@ -122,7 +122,7 @@ mod tests {
         let mut map = DemandMap::new();
         map.insert(("North".into(), 2020, ts_selection.clone()), value);
 
-        assert_eq!(map[&("North".into(), 2020, ts_selection)], value)
+        assert_eq!(map[&("North".into(), 2020, ts_selection)], value);
     }
 
     #[test]
@@ -134,7 +134,7 @@ mod tests {
         let value = MoneyPerFlow(0.5);
         let mut map = CommodityLevyMap::new();
         assert!(
-            map.insert(("GBR".into(), 2010, ts.clone()), value.clone())
+            map.insert(("GBR".into(), 2010, ts.clone()), value)
                 .is_none()
         );
         assert_eq!(map[&("GBR".into(), 2010, ts)], value);

@@ -1305,11 +1305,21 @@ mod tests {
         ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
         MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow,
     };
+    use float_cmp::assert_approx_eq;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
     use rstest::{fixture, rstest};
     use std::iter;
     use std::rc::Rc;
+
+    /// Number of expected children for divisible asset
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    fn expected_children_for_divisible(asset: &Asset) -> usize {
+        (asset.capacity / asset.process.unit_size.expect("Asset is not divisible"))
+            .value()
+            .ceil() as usize
+    }
 
     #[rstest]
     fn test_get_input_cost_from_prices(
@@ -1341,7 +1351,7 @@ mod tests {
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
         // Should be -coeff * price = -(-2.0) * 3.0 = 6.0
-        assert_eq!(cost.0, 6.0);
+        assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
     }
 
     #[rstest]
@@ -1486,10 +1496,7 @@ mod tests {
 
         // Check number of children
         let children = asset_divisible.divide_asset();
-        let expected_children = (asset_divisible.capacity
-            / asset_divisible.process.unit_size.unwrap())
-        .value()
-        .ceil() as usize;
+        let expected_children = expected_children_for_divisible(&asset_divisible);
         assert_eq!(
             children.len(),
             expected_children,
@@ -1502,7 +1509,7 @@ mod tests {
             assert!(
                 child.capacity <= max_child_capacity,
                 "Child capacity is too large!"
-            )
+            );
         }
         let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
         assert_eq!(asset_divisible.capacity, children_capacity);
@@ -1541,10 +1548,7 @@ mod tests {
     #[rstest]
     fn test_asset_pool_commission_new_divisible(asset_divisible: Asset) {
         let commision_year = asset_divisible.commission_year;
-        let expected_children = (asset_divisible.capacity
-            / asset_divisible.process.unit_size.unwrap())
-        .value()
-        .ceil() as usize;
+        let expected_children = expected_children_for_divisible(&asset_divisible);
         let mut asset_pool = AssetPool::new(vec![asset_divisible.clone()]);
         assert!(asset_pool.active.is_empty());
         asset_pool.commission_new(commision_year);
@@ -1694,10 +1698,7 @@ mod tests {
             .unwrap()
             .into(),
         ];
-        let expected_children = (new_assets[0].capacity / new_assets[0].process.unit_size.unwrap())
-            .value()
-            .ceil() as usize;
-
+        let expected_children = expected_children_for_divisible(&new_assets[0]);
         asset_pool.extend(new_assets);
         assert_eq!(asset_pool.active.len(), original_count + expected_children);
     }

@@ -28,7 +28,7 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
-    /// Create an example regions file in dir_path
+    /// Create an example regions file in `dir_path`
     fn create_regions_file(dir_path: &Path) {
         let file_path = dir_path.join(REGIONS_FILE_NAME);
         let mut file = File::create(file_path).unwrap();
@@ -72,6 +72,6 @@ AP,Asia Pacific"
                     }
                 ),
             ])
-        )
+        );
     }
 }

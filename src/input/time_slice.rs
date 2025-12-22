@@ -107,7 +107,7 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
-    /// Create an example time slices file in dir_path
+    /// Create an example time slices file in `dir_path`
     fn create_time_slices_file(dir_path: &Path) {
         let file_path = dir_path.join(TIME_SLICES_FILE_NAME);
         let mut file = File::create(file_path).unwrap();

@@ -831,8 +831,8 @@ mod tests {
         let expected = UnmetDemandRow {
             milestone_year,
             run_description,
-            commodity_id: commodity_id,
-            region_id: region_id,
+            commodity_id,
+            region_id,
             time_slice,
             value,
         };
@@ -989,7 +989,7 @@ mod tests {
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             capacity: Capacity(42.0),
-            capacity_coefficient: MoneyPerCapacity(3.14),
+            capacity_coefficient: MoneyPerCapacity(2.14),
             metric: 4.14,
         };
         let records: Vec<AppraisalResultsRow> =
@@ -1129,7 +1129,7 @@ mod tests {
         let output_dir = temp_dir.path().join("output_with_subdirs");
 
         // Create directory structure with files
-        fs::create_dir_all(&output_dir.join("subdir")).unwrap();
+        fs::create_dir_all(output_dir.join("subdir")).unwrap();
         fs::write(output_dir.join("file1.txt"), "content1").unwrap();
         fs::write(output_dir.join("subdir").join("file2.txt"), "content2").unwrap();
 
