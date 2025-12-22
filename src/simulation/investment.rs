@@ -628,29 +628,35 @@ fn warn_on_equal_appraisal_outputs(
     commodity_id: &CommodityID,
     region_id: &RegionID,
 ) {
-    // Get all the outputs which are equal to the one after
-    let asset_details = outputs
-        .iter()
-        .tuple_windows()
-        .take_while(|(a, b)| a.compare_metric(b).is_eq())
-        .map(|(output, _)| {
-            let asset = &output.asset;
-            format!(
-                "Process id: '{}' (State: {}{}, Commission year: {})",
-                asset.process_id(),
-                asset.state(),
-                asset
-                    .id()
-                    .map(|id| format!(", Asset id: {id}"))
-                    .unwrap_or_default(),
-                asset.commission_year()
-            )
-        })
-        .join(", ");
+    if outputs.is_empty() {
+        return;
+    }
 
-    if !asset_details.is_empty() {
+    // Count the number of identical (or nearly identical) appraisal outputs
+    let num_identical = outputs[1..]
+        .iter()
+        .take_while(|output| outputs[0].compare_metric(output).is_eq())
+        .count();
+
+    if num_identical > 0 {
+        let asset_details = outputs[..=num_identical]
+            .iter()
+            .map(|output| {
+                let asset = &output.asset;
+                format!(
+                    "Process ID: '{}' (State: {}{}, Commission year: {})",
+                    asset.process_id(),
+                    asset.state(),
+                    asset
+                        .id()
+                        .map(|id| format!(", Asset ID: {id}"))
+                        .unwrap_or_default(),
+                    asset.commission_year()
+                )
+            })
+            .join(", ");
         debug!(
-            "Found equally good appraisals for Agent id: {agent_id}, Commodity: '{commodity_id}', \
+            "Found equally good appraisals for Agent ID: {agent_id}, Commodity: '{commodity_id}', \
             Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
         );
     }
