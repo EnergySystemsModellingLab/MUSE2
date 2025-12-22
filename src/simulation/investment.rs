@@ -634,15 +634,16 @@ fn warn_on_equal_appraisal_outputs(
         .tuple_windows()
         .take_while(|(a, b)| a.compare_metric(b).is_eq())
         .map(|(output, _)| {
+            let asset = &output.asset;
             format!(
-                "Process id: '{}' (State: {}{})",
-                output.asset.process_id(),
-                output.asset.state(),
-                output
-                    .asset
+                "Process id: '{}' (State: {}{}, Commission year: {})",
+                asset.process_id(),
+                asset.state(),
+                asset
                     .id()
                     .map(|id| format!(", Asset id: {id}"))
                     .unwrap_or_default(),
+                asset.commission_year()
             )
         })
         .join(", ");
