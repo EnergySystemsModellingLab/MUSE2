@@ -316,7 +316,11 @@ fn validate_secondary_flows(
 mod tests {
     use super::*;
     use crate::commodity::Commodity;
-    use crate::fixture::{assert_error, process, sed_commodity, svd_commodity};
+    use crate::fixture::{
+        assert_error, assert_validate_fails_with_simple, assert_validate_ok_simple, process,
+        sed_commodity, svd_commodity,
+    };
+    use crate::patch::FilePatch;
     use crate::process::{FlowType, Process, ProcessFlow, ProcessMap};
     use crate::units::{FlowPerActivity, MoneyPerFlow};
     use indexmap::IndexMap;
@@ -495,5 +499,54 @@ mod tests {
         );
         validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
             .unwrap();
+    }
+
+    #[test]
+    fn flows_different_direction_different_years() {
+        let patch = FilePatch::new("process_flows.csv")
+            .with_deletion("GASPRC,GASPRD,all,all,-1.05,fixed,")
+            .with_addition("GASPRC,GASPRD,all,2020;2030,-1.05,fixed,")
+            .with_addition("GASPRC,GASPRD,all,2040,1.05,fixed,");
+        assert_validate_fails_with_simple!(
+            vec![patch],
+            "Flow of commodity GASPRD in region GBR for process GASPRC behaves as input or output in different years."
+        );
+    }
+
+    #[test]
+    fn missing_flow() {
+        let patch = FilePatch::new("process_flows.csv")
+            .with_deletion("GASPRC,GASPRD,all,all,-1.05,fixed,")
+            .with_addition("GASPRC,GASPRD,all,2020;2030,-1.05,fixed,");
+        assert_validate_fails_with_simple!(
+            vec![patch],
+            "Flow of commodity GASPRD in region GBR for process GASPRC does not cover all milestone years within the process range of activity."
+        );
+    }
+
+    #[test]
+    fn coeff_zero() {
+        let patch = FilePatch::new("process_flows.csv")
+            .with_deletion("GASPRC,GASPRD,all,all,-1.05,fixed,")
+            .with_addition("GASPRC,GASPRD,all,2020;2030,-1.05,fixed,")
+            .with_addition("GASPRC,GASPRD,all,2040,0,fixed,");
+        assert_validate_ok_simple!(vec![patch]);
+    }
+
+    #[test]
+    fn flows_not_needed_before_time_horizon() {
+        // NB: Time horizon starts at 2020 for simple example
+        //
+        // Flows are only needed for milestone years. Check that users can omit them for
+        // non-milestone years.
+        let patches = vec![
+            FilePatch::new("processes.csv")
+                .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
+                .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0"),
+            FilePatch::new("process_flows.csv")
+                .with_deletion("GASPRC,GASPRD,all,all,-1.05,fixed,")
+                .with_addition("GASPRC,GASPRD,all,2020;2030;2040,-1.05,fixed,"),
+        ];
+        assert_validate_ok_simple!(patches);
     }
 }
