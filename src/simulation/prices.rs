@@ -7,8 +7,9 @@ use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use anyhow::Result;
+use indexmap::IndexMap;
 use itertools::iproduct;
-use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
+use std::collections::{HashMap, HashSet};
 
 /// Iterator item type for asset activity iterators
 type Item<'a> = (&'a AssetRef, &'a TimeSliceID, Activity);
@@ -98,7 +99,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
 #[derive(Default, Clone)]
-pub struct CommodityPrices(BTreeMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
+pub struct CommodityPrices(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
 impl CommodityPrices {
     /// Insert a price for the given commodity, region and time slice
@@ -150,7 +151,9 @@ impl CommodityPrices {
     }
 
     /// Iterate over the price map's keys
-    pub fn keys(&self) -> btree_map::Keys<'_, (CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+    pub fn keys(
+        &self,
+    ) -> indexmap::map::Keys<'_, (CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
         self.0.keys()
     }
 
@@ -236,8 +239,7 @@ impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerF
 
 impl IntoIterator for CommodityPrices {
     type Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow);
-    type IntoIter =
-        std::collections::btree_map::IntoIter<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>;
+    type IntoIter = indexmap::map::IntoIter<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -704,6 +706,7 @@ mod tests {
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(1.0),
             investment_constraints: HashMap::new(),
+            unit_size: None,
         }
     }
 
