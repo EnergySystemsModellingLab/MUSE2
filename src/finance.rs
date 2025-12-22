@@ -28,13 +28,29 @@ pub fn annual_capital_cost(
     capital_cost * crf
 }
 
+/// Represents the profitability index of an investment
+/// in terms of it's annualised components.
+pub struct ProfitabilityIndex {
+    /// the total annualised surplus of an asset
+    pub total_annualised_surplus: Money,
+    /// the total annualised fixed cost of an asset
+    pub annualised_fixed_cost: Money,
+}
+
+impl ProfitabilityIndex {
+    /// Calculates the value of the profitability index.
+    pub fn value(&self) -> Dimensionless {
+        self.total_annualised_surplus / self.annualised_fixed_cost
+    }
+}
+
 /// Calculates an annual profitability index based on capacity and activity.
 pub fn profitability_index(
     capacity: Capacity,
     annual_fixed_cost: MoneyPerCapacity,
     activity: &IndexMap<TimeSliceID, Activity>,
     activity_surpluses: &IndexMap<TimeSliceID, MoneyPerActivity>,
-) -> Dimensionless {
+) -> ProfitabilityIndex {
     // Calculate the annualised fixed costs
     let annualised_fixed_cost = annual_fixed_cost * capacity;
 
@@ -45,7 +61,10 @@ pub fn profitability_index(
         total_annualised_surplus += activity_surplus * *activity;
     }
 
-    total_annualised_surplus / annualised_fixed_cost
+    ProfitabilityIndex {
+        total_annualised_surplus,
+        annualised_fixed_cost,
+    }
 }
 
 /// Calculates annual LCOX based on capacity and activity.
@@ -171,7 +190,7 @@ mod tests {
             &activity_surpluses,
         );
 
-        assert_approx_eq!(Dimensionless, result, Dimensionless(expected));
+        assert_approx_eq!(Dimensionless, result.value(), Dimensionless(expected));
     }
 
     #[test]
@@ -183,7 +202,7 @@ mod tests {
 
         let result =
             profitability_index(capacity, annual_fixed_cost, &activity, &activity_surpluses);
-        assert_eq!(result, Dimensionless(0.0));
+        assert_eq!(result.value(), Dimensionless(0.0));
     }
 
     #[rstest]

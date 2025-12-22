@@ -360,6 +360,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         activity,
         demand,
         unmet_demand,
+        metric_precedence: 0,
         metric: 4.14,
     }
 }
