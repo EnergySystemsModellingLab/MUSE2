@@ -573,8 +573,8 @@ mod tests {
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
             pricing_strategy: PricingStrategy::Shadow,
-            levies_prod: levies_prod,
-            levies_cons: levies_cons,
+            levies_prod,
+            levies_cons,
             demand: DemandMap::new(),
         })
     }
@@ -635,8 +635,8 @@ mod tests {
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
             pricing_strategy: PricingStrategy::Shadow,
-            levies_prod: levies_prod,
-            levies_cons: levies_cons,
+            levies_prod,
+            levies_cons,
             demand: DemandMap::new(),
         })
     }
@@ -719,7 +719,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_no_levies(
+    fn get_levy_no_levies(
         commodity_no_levies: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -738,7 +738,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_with_levy(
+    fn get_levy_with_levy(
         commodity_with_levy: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -757,7 +757,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_with_incentive(
+    fn get_levy_with_incentive(
         commodity_with_incentive: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -776,7 +776,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_different_region(commodity_with_levy: Rc<Commodity>, time_slice: TimeSliceID) {
+    fn get_levy_different_region(commodity_with_levy: Rc<Commodity>, time_slice: TimeSliceID) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
             coeff: FlowPerActivity(1.0),
@@ -791,7 +791,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_different_year(
+    fn get_levy_different_year(
         commodity_with_levy: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -810,7 +810,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_different_time_slice(commodity_with_levy: Rc<Commodity>, region_id: RegionID) {
+    fn get_levy_different_time_slice(commodity_with_levy: Rc<Commodity>, region_id: RegionID) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
             coeff: FlowPerActivity(1.0),
@@ -830,7 +830,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_consumption_positive_coeff(
+    fn get_levy_consumption_positive_coeff(
         commodity_with_consumption_levy: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -849,7 +849,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_consumption_negative_coeff(
+    fn get_levy_consumption_negative_coeff(
         commodity_with_consumption_levy: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -868,7 +868,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_production_positive_coeff(
+    fn get_levy_production_positive_coeff(
         commodity_with_production_levy: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -887,7 +887,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_levy_production_negative_coeff(
+    fn get_levy_production_negative_coeff(
         commodity_with_production_levy: Rc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -906,7 +906,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_total_cost_base_cost(
+    fn get_total_cost_base_cost(
         flow_with_cost: ProcessFlow,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -918,7 +918,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_total_cost_with_levy(
+    fn get_total_cost_with_levy(
         flow_with_cost_and_levy: ProcessFlow,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -930,7 +930,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_total_cost_with_incentive(
+    fn get_total_cost_with_incentive(
         flow_with_cost_and_incentive: ProcessFlow,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -942,7 +942,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_total_cost_negative_coeff(
+    fn get_total_cost_negative_coeff(
         mut flow_with_cost: ProcessFlow,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -955,7 +955,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_get_total_cost_zero_coeff(
+    fn get_total_cost_zero_coeff(
         mut flow_with_cost: ProcessFlow,
         region_id: RegionID,
         time_slice: TimeSliceID,
@@ -968,7 +968,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_input_and_is_output() {
+    fn is_input_and_is_output() {
         let commodity = Rc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
@@ -1005,12 +1005,12 @@ mod tests {
     }
 
     #[rstest]
-    fn test_new_with_full_availability(time_slice_info2: TimeSliceInfo) {
+    fn new_with_full_availability(time_slice_info2: TimeSliceInfo) {
         let limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
 
         // Each timeslice from the info should be present in the limits
         for (ts_id, ts_len) in time_slice_info2.iter() {
-            let l = limits.get_limit_for_time_slice(&ts_id);
+            let l = limits.get_limit_for_time_slice(ts_id);
             // Lower bound should be zero and upper bound equal to timeslice length
             assert_eq!(*l.start(), Dimensionless(0.0));
             assert_eq!(*l.end(), Dimensionless(ts_len.value()));
@@ -1023,7 +1023,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_new_from_limits_with_seasonal_limit_applied(time_slice_info2: TimeSliceInfo) {
+    fn new_from_limits_with_seasonal_limit_applied(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
         // Set a seasonal upper limit that is stricter than the sum of timeslices
@@ -1036,7 +1036,7 @@ mod tests {
 
         // Each timeslice upper bound should be capped by the seasonal upper bound (0.01)
         for (ts_id, _ts_len) in time_slice_info2.iter() {
-            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            let ts_limit = result.get_limit_for_time_slice(ts_id);
             assert_eq!(*ts_limit.end(), Dimensionless(0.01));
         }
 
@@ -1046,7 +1046,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_new_from_limits_with_annual_limit_applied(time_slice_info2: TimeSliceInfo) {
+    fn new_from_limits_with_annual_limit_applied(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
         // Set an annual upper limit that is stricter than the sum of timeslices
@@ -1059,7 +1059,7 @@ mod tests {
 
         // Each timeslice upper bound should be capped by the annual upper bound (0.01)
         for (ts_id, _ts_len) in time_slice_info2.iter() {
-            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            let ts_limit = result.get_limit_for_time_slice(ts_id);
             assert_eq!(*ts_limit.end(), Dimensionless(0.01));
         }
 
@@ -1073,7 +1073,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_new_from_limits_missing_timeslices_error(time_slice_info2: TimeSliceInfo) {
+    fn new_from_limits_missing_timeslices_error(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
         // Add a single timeslice limit but do not provide limits for all timeslices
@@ -1090,7 +1090,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_new_from_limits_incompatible_limits(time_slice_info2: TimeSliceInfo) {
+    fn new_from_limits_incompatible_limits(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
         // Time slice limits capping activity to 0.1 in each ts

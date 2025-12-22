@@ -242,7 +242,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_search_space_raw_into_search_space_valid(
+    fn search_space_raw_into_search_space_valid(
         agents: AgentMap,
         processes: ProcessMap,
         commodity_ids: HashSet<CommodityID>,
@@ -254,14 +254,12 @@ mod tests {
             years: "2020".into(),
             search_space: "A;B".into(),
         };
-        assert!(
-            raw.into_agent_search_space(&agents, &processes, &commodity_ids, &[2020])
-                .is_ok()
-        );
+        raw.into_agent_search_space(&agents, &processes, &commodity_ids, &[2020])
+            .unwrap();
     }
 
     #[rstest]
-    fn test_search_space_raw_into_search_space_invalid_commodity_id(
+    fn search_space_raw_into_search_space_invalid_commodity_id(
         agents: AgentMap,
         processes: ProcessMap,
         commodity_ids: HashSet<CommodityID>,
@@ -280,7 +278,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_search_space_raw_into_search_space_invalid_process_id(
+    fn search_space_raw_into_search_space_invalid_process_id(
         agents: AgentMap,
         processes: ProcessMap,
         commodity_ids: HashSet<CommodityID>,

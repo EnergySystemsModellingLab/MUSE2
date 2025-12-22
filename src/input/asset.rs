@@ -132,7 +132,7 @@ mod tests {
     #[rstest]
     #[case::max_decommission_year_provided(Some(2015))]
     #[case::max_decommission_year_not_provided(None)]
-    fn test_read_assets_from_iter_valid(
+    fn read_assets_from_iter_valid(
         #[case] max_decommission_year: Option<u32>,
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
@@ -144,7 +144,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
-            max_decommission_year: max_decommission_year,
+            max_decommission_year,
         };
         let asset_out = Asset::new_future_with_max_decommission(
             "agent1".into(),
@@ -195,14 +195,12 @@ mod tests {
             commission_year: 2010,
             max_decommission_year: Some(2005),
         })]
-    fn test_read_assets_from_iter_invalid(
+    fn read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
-        assert!(
-            read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).is_err()
-        );
+        read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap_err();
     }
 }

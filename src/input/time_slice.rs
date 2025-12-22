@@ -107,7 +107,7 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
-    /// Create an example time slices file in dir_path
+    /// Create an example time slices file in `dir_path`
     fn create_time_slices_file(dir_path: &Path) {
         let file_path = dir_path.join(TIME_SLICES_FILE_NAME);
         let mut file = File::create(file_path).unwrap();
@@ -123,7 +123,7 @@ autumn,evening,0.25"
     }
 
     #[test]
-    fn test_read_time_slice_info() {
+    fn read_time_slice_info_works() {
         let dir = tempdir().unwrap();
         create_time_slices_file(dir.path());
 
@@ -184,7 +184,7 @@ autumn,evening,0.25"
     }
 
     #[test]
-    fn test_read_time_slice_info_non_existent() {
+    fn read_time_slice_info_non_existent() {
         let actual = read_time_slice_info(tempdir().unwrap().path());
         assert_eq!(actual.unwrap(), TimeSliceInfo::default());
     }

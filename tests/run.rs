@@ -14,7 +14,7 @@ fn get_model_dir() -> PathBuf {
 ///
 /// We also check that the logger is initialised after it is run.
 #[test]
-fn test_handle_run_command() {
+fn handle_run_command_works() {
     unsafe { std::env::set_var("MUSE2_LOG_LEVEL", "off") };
 
     assert!(!is_logger_initialised());

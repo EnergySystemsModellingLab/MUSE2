@@ -97,9 +97,9 @@ impl Settings {
         // Iterate through the generated TOML, commenting out lines and adding docs
         let mut out = DEFAULT_SETTINGS_FILE_HEADER.to_string();
         for line in settings_raw.split('\n') {
-            if let Some(last) = line.find('=') {
+            if let Some((field, _)) = line.split_once('=') {
                 // Add documentation from doc comments
-                let field = line[..last].trim();
+                let field = field.trim();
 
                 // Use doc comment to document parameter. All fields should have doc comments.
                 let docs = Settings::get_field_docs(field).expect("Missing doc comment for field");
@@ -123,7 +123,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_settings_load_from_path_no_file() {
+    fn settings_load_from_path_no_file() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(SETTINGS_FILE_NAME); // NB: doesn't exist
         assert_eq!(
@@ -133,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_settings_load_from_path() {
+    fn settings_load_from_path() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(SETTINGS_FILE_NAME);
 
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn test_default_file_contents() {
+    fn default_file_contents() {
         assert!(!Settings::default_file_contents().is_empty());
     }
 }

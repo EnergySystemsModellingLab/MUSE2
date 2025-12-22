@@ -235,7 +235,7 @@ mod tests {
     #[case("..0.9", Dimensionless(0.0)..=Dimensionless(0.9))] // Empty lower
     #[case("0.1..", Dimensionless(0.1)..=Dimensionless(1.0))] // Empty upper
     #[case("0.5..0.5", Dimensionless(0.5)..=Dimensionless(0.5))] // Equality
-    fn test_parse_availabilities_string_valid(
+    fn parse_availabilities_string_valid(
         #[case] input: &str,
         #[case] expected: RangeInclusive<Dimensionless>,
     ) {
@@ -263,7 +263,7 @@ mod tests {
         "0.5",
         "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: 0.5"
     )]
-    fn test_parse_availabilities_string_invalid(#[case] input: &str, #[case] error_msg: &str) {
+    fn parse_availabilities_string_invalid(#[case] input: &str, #[case] error_msg: &str) {
         assert_error!(parse_availabilities_string(input), error_msg);
     }
 
@@ -271,7 +271,7 @@ mod tests {
     #[case("0.1..", Year(0.1), Dimensionless(0.01)..=Dimensionless(0.1))] // Lower bound
     #[case("..0.5", Year(0.1), Dimensionless(0.0)..=Dimensionless(0.05))] // Upper bound
     #[case("0.5..0.5", Year(0.1), Dimensionless(0.05)..=Dimensionless(0.05))] // Equality
-    fn test_to_bounds(
+    fn to_bounds(
         #[case] limits: &str,
         #[case] ts_length: Year,
         #[case] expected: RangeInclusive<Dimensionless>,

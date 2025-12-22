@@ -6,11 +6,7 @@ use itertools::Itertools;
 /// Parse a single year from a string and check it is in `valid_years`
 fn parse_and_validate_year(s: &str, valid_years: &[u32]) -> Option<u32> {
     let year = s.trim().parse::<u32>().ok()?;
-    if valid_years.binary_search(&year).is_ok() {
-        Some(year)
-    } else {
-        None
-    }
+    valid_years.binary_search(&year).is_ok().then_some(year)
 }
 
 /// Parse a string of years separated by semicolons into a vector of u32 years.
@@ -132,7 +128,7 @@ mod tests {
     #[case("..2023", &[2020,2025], &[2020])] // Empty start
     #[case("2021..", &[2020,2025], &[2025])] // Empty end
     #[case("..", &[2020,2025], &[2020,2025])]
-    fn test_parse_year_str_valid(
+    fn parse_year_str_valid(
         #[case] input: &str,
         #[case] milestone_years: &[u32],
         #[case] expected: &[u32],
@@ -151,7 +147,7 @@ mod tests {
     #[case("2021..2024", &[2020,2025], "No valid years found in year range string 2021..2024")]
     #[case("..2020..2025", &[2020,2025], "Year range must be of the form 'start..end', 'start..' or '..end'. Invalid: ..2020..2025")]
     #[case("2020...2025", &[2020,2025], "Invalid end year in range: .2025")]
-    fn test_parse_year_str_invalid(
+    fn parse_year_str_invalid(
         #[case] input: &str,
         #[case] milestone_years: &[u32],
         #[case] error_msg: &str,

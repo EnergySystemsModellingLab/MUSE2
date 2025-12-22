@@ -204,26 +204,26 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_commodity() {
+    fn validate_commodity_works() {
         let commodity = make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Shadow);
-        assert!(validate_commodity(&commodity).is_ok());
+        validate_commodity(&commodity).unwrap();
     }
 
     #[test]
-    fn test_validate_commodity_other_priced() {
-        let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::MarginalCost);
+    fn validate_commodity_other_priced() {
+        let commodity = make_commodity(CommodityType::Other, PricingStrategy::MarginalCost);
         assert_error!(
-            validate_commodity(&mut commodity),
+            validate_commodity(&commodity),
             "Commodity ELC of type Other must be unpriced. Update its pricing strategy to 'unpriced' or 'default'."
         );
     }
 
     #[test]
-    fn test_validate_commodity_sed_unpriced() {
-        let mut commodity =
+    fn validate_commodity_sed_unpriced() {
+        let commodity =
             make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Unpriced);
         assert_error!(
-            validate_commodity(&mut commodity),
+            validate_commodity(&commodity),
             "Commodity ELC of type SupplyEqualsDemand cannot be unpriced. Update its pricing strategy to a valid option."
         );
     }

@@ -30,7 +30,7 @@ pub struct TimeSliceID {
 impl From<&str> for TimeSliceID {
     fn from(value: &str) -> Self {
         let (season, time_of_day) = value
-            .split(".")
+            .split('.')
             .collect_tuple()
             .expect("Time slice not in form season.time_of_day");
         TimeSliceID {
@@ -47,11 +47,11 @@ impl Display for TimeSliceID {
 }
 
 impl<'de> Deserialize<'de> for TimeSliceID {
-    fn deserialize<D>(deserialiser: D) -> std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let s: &str = Deserialize::deserialize(deserialiser)?;
+        let s: &str = Deserialize::deserialize(deserializer)?;
         let (season, time_of_day) = s.split('.').collect_tuple().ok_or_else(|| {
             D::Error::custom(format!(
                 "Invalid input '{s}': Should be in form season.time_of_day"
@@ -65,11 +65,11 @@ impl<'de> Deserialize<'de> for TimeSliceID {
 }
 
 impl Serialize for TimeSliceID {
-    fn serialize<S>(&self, serialiser: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serialiser.collect_str(self)
+        serializer.collect_str(self)
     }
 }
 
@@ -440,10 +440,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_ts_selection_iter_annual(
-        time_slice_info1: TimeSliceInfo,
-        time_slices1: [TimeSliceID; 2],
-    ) {
+    fn ts_selection_iter_annual(time_slice_info1: TimeSliceInfo, time_slices1: [TimeSliceID; 2]) {
         assert_equal(
             TimeSliceSelection::Annual.iter(&time_slice_info1),
             time_slices1.iter().map(|ts| (ts, Year(0.5))),
@@ -451,10 +448,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_ts_selection_iter_season(
-        time_slice_info1: TimeSliceInfo,
-        time_slices1: [TimeSliceID; 2],
-    ) {
+    fn ts_selection_iter_season(time_slice_info1: TimeSliceInfo, time_slices1: [TimeSliceID; 2]) {
         assert_equal(
             TimeSliceSelection::Season("winter".into()).iter(&time_slice_info1),
             iter::once((&time_slices1[0], Year(0.5))),
@@ -462,10 +456,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_ts_selection_iter_single(
-        time_slice_info1: TimeSliceInfo,
-        time_slices1: [TimeSliceID; 2],
-    ) {
+    fn ts_selection_iter_single(time_slice_info1: TimeSliceInfo, time_slices1: [TimeSliceID; 2]) {
         let ts = time_slice_info1
             .get_time_slice_id_from_str("summer.night")
             .unwrap();
@@ -505,7 +496,7 @@ mod tests {
     #[case(TimeSliceSelection::Single("winter.day".into()), TimeSliceLevel::Annual, None)]
     #[case(TimeSliceSelection::Single("winter.day".into()), TimeSliceLevel::Season, None)]
     #[case(TimeSliceSelection::Single("winter.day".into()), TimeSliceLevel::DayNight, Some(vec![("winter.day", Year(0.25))]))]
-    fn test_ts_selection_iter_at_level(
+    fn ts_selection_iter_at_level(
         time_slice_info2: TimeSliceInfo,
         #[case] selection: TimeSliceSelection,
         #[case] level: TimeSliceLevel,
@@ -527,7 +518,7 @@ mod tests {
     #[case(TimeSliceSelection::Single("winter.day".into()), TimeSliceLevel::Annual, None)]
     #[case(TimeSliceSelection::Single("winter.day".into()), TimeSliceLevel::Season, None)]
     #[case(TimeSliceSelection::Single("winter.day".into()), TimeSliceLevel::DayNight, Some(vec![("winter.day", Dimensionless(8.0))]))]
-    fn test_calculate_share(
+    fn calculate_share(
         time_slice_info2: TimeSliceInfo,
         #[case] selection: TimeSliceSelection,
         #[case] level: TimeSliceLevel,

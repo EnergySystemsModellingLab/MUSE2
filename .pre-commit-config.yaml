@@ -51,6 +51,7 @@ repos:
     rev: v1.0
     hooks:
       - id: clippy
+        args: ["--all-targets", "--", "-D", "warnings"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.6
     hooks:
