@@ -230,6 +230,7 @@ impl Asset {
                 id: AssetID(0),
                 agent_id,
                 mothballed_year: None,
+                group_id: None,
             },
             process,
             region_id,
