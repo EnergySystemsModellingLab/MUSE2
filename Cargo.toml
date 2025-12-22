@@ -50,6 +50,8 @@ built = {version = "0.8.0", features = ["chrono", "git2"]}
 # Disallow lints from "all" and "pedantic" groups by default
 all = {level = "deny", priority = -1}
 pedantic = {level = "deny", priority = -1}
+# Extra lints to disallow
+redundant_test_prefix = "deny"
 # Whitelist some lints from "pedantic" group
 similar_names = "allow"
 must_use_candidate = "allow"
