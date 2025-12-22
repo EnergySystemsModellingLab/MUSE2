@@ -62,7 +62,6 @@ macro_rules! patch_and_validate_simple {
         })()
     }};
 }
-#[allow(unused_imports)]
 pub(crate) use patch_and_validate_simple;
 
 /// Check whether validation succeeds for simple example with patches
@@ -76,7 +75,6 @@ macro_rules! assert_validate_ok_simple {
 pub(crate) use assert_validate_ok_simple;
 
 // Check whether validation fails with specific message
-#[allow(unused_macros)]
 macro_rules! assert_validate_fails_with_simple {
     ($file_patches:expr, $expected_msg:expr) => {
         let result = crate::fixture::patch_and_validate_simple!($file_patches);
@@ -91,7 +89,6 @@ macro_rules! assert_validate_fails_with_simple {
         assert_eq!(msg, $expected_msg);
     };
 }
-#[allow(unused_imports)]
 pub(crate) use assert_validate_fails_with_simple;
 
 /// Check whether the simple example runs successfully after applying file patches
@@ -108,17 +105,14 @@ macro_rules! patch_and_run_simple {
         })()
     }};
 }
-#[allow(unused_imports)]
 pub(crate) use patch_and_run_simple;
 
 /// Check whether the simple example runs successfully after applying file patches
-#[allow(unused_macros)]
 macro_rules! assert_patched_runs_ok_simple {
     ($file_patches:expr) => {
         assert!(crate::fixture::patch_and_run_simple!($file_patches).is_ok())
     };
 }
-#[allow(unused_imports)]
 pub(crate) use assert_patched_runs_ok_simple;
 
 #[fixture]

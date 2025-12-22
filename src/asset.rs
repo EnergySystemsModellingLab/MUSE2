@@ -1295,9 +1295,11 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        assert_error, asset, process, process_activity_limits_map, process_flows_map,
-        process_parameter_map, region_id, svd_commodity, time_slice, time_slice_info,
+        assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple, asset,
+        process, process_activity_limits_map, process_flows_map, process_parameter_map, region_id,
+        svd_commodity, time_slice, time_slice_info,
     };
+    use crate::patch::FilePatch;
     use crate::process::{FlowType, Process, ProcessFlow, ProcessParameter};
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
@@ -2017,5 +2019,54 @@ mod tests {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
         asset.decommission(2025, "");
+    }
+
+    #[test]
+    fn commission_year_before_time_horizon() {
+        let processes_patch = FilePatch::new("processes.csv")
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0");
+
+        // Check we can run model with asset commissioned before time horizon (simple starts in
+        // 2020)
+        let patches = vec![
+            processes_patch.clone(),
+            FilePatch::new("assets.csv").with_addition("GASDRV,GBR,A0_GEX,4002.26,1980"),
+        ];
+        assert_patched_runs_ok_simple!(patches);
+
+        // This should fail if it is not one of the years supported by the process, though
+        let patches = vec![
+            processes_patch,
+            FilePatch::new("assets.csv").with_addition("GASDRV,GBR,A0_GEX,4002.26,1970"),
+        ];
+        assert_validate_fails_with_simple!(
+            patches,
+            "Agent A0_GEX has asset with commission year 1970, not within process GASDRV commission years: 1980..=2040"
+        );
+    }
+
+    #[test]
+    fn commission_year_after_time_horizon() {
+        let processes_patch = FilePatch::new("processes.csv")
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0");
+
+        // Check we can run model with asset commissioned after time horizon (simple ends in 2040)
+        let patches = vec![
+            processes_patch.clone(),
+            FilePatch::new("assets.csv").with_addition("GASDRV,GBR,A0_GEX,4002.26,2050"),
+        ];
+        assert_patched_runs_ok_simple!(patches);
+
+        // This should fail if it is not one of the years supported by the process, though
+        let patches = vec![
+            processes_patch,
+            FilePatch::new("assets.csv").with_addition("GASDRV,GBR,A0_GEX,4002.26,2060"),
+        ];
+        assert_validate_fails_with_simple!(
+            patches,
+            "Agent A0_GEX has asset with commission year 2060, not within process GASDRV commission years: 2020..=2050"
+        );
     }
 }
