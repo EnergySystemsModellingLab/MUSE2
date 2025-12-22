@@ -449,7 +449,7 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
     let max_rank = ranks.values().copied().max().unwrap_or(0);
     let mut groups: Vec<Vec<InvestmentSet>> = vec![Vec::new(); max_rank + 1];
     for node_idx in order {
-        let rank = *ranks.get(node_idx).unwrap();
+        let rank = ranks[node_idx];
         let w = graph.node_weight(*node_idx).unwrap().clone();
         groups[rank].push(w);
     }
