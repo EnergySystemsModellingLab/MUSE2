@@ -367,13 +367,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn patch_and_validate_simple_smoke() {
+    fn patch_and_validate_simple_ok() {
         let patches = Vec::new();
         assert!(patch_and_validate_simple!(patches).is_ok());
     }
 
     #[test]
-    fn patch_and_run_simple_smoke() {
+    fn patch_and_run_simple_ok() {
         let patches = Vec::new();
         assert!(patch_and_run_simple!(patches).is_ok());
     }
