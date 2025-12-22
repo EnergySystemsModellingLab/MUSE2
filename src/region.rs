@@ -63,10 +63,10 @@ mod tests {
 
         // Empty string
         let result = parse_region_str("", &region_ids);
-        assert!(result.is_err());
+        result.unwrap_err();
 
         // Invalid region
         let result = parse_region_str("GBR;INVALID", &region_ids);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 }

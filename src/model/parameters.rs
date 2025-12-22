@@ -257,8 +257,8 @@ mod tests {
     #[test]
     fn check_milestone_years_works() {
         // Valid
-        assert!(check_milestone_years(&[1]).is_ok());
-        assert!(check_milestone_years(&[1, 2]).is_ok());
+        check_milestone_years(&[1]).unwrap();
+        check_milestone_years(&[1, 2]).unwrap();
 
         // Invalid
         assert!(check_milestone_years(&[]).is_err());

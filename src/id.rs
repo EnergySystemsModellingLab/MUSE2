@@ -175,6 +175,6 @@ mod tests {
     #[case("ALL")]
     #[case(" ALL ")]
     fn deserialise_id_invalid(#[case] id: &str) {
-        assert!(deserialise_id(id).is_err());
+        deserialise_id(id).unwrap_err();
     }
 }

@@ -363,10 +363,8 @@ mod tests {
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
             None,
         );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
-        );
+        validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+            .unwrap();
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity.id.clone())
@@ -416,10 +414,8 @@ mod tests {
             .into_iter(),
             None,
         );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
-        );
+        validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+            .unwrap();
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             Some(commodity2.id.clone())
@@ -444,10 +440,8 @@ mod tests {
             .into_iter(),
             None,
         );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
-        );
+        validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+            .unwrap();
         assert_eq!(
             processes.values().exactly_one().unwrap().primary_output,
             None
@@ -499,9 +493,7 @@ mod tests {
             .into_iter(),
             Some(milestone_years.clone()),
         );
-        assert!(
-            validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
-                .is_ok()
-        );
+        validate_flows_and_update_primary_output(&mut processes, &flows_map, &milestone_years)
+            .unwrap();
     }
 }

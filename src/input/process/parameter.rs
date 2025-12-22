@@ -239,7 +239,7 @@ mod tests {
 
         param_map.insert(process_id, process_parameter_map.clone());
         let result = check_process_parameters(&processes, &param_map, &milestone_years);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[rstest]
@@ -257,7 +257,7 @@ mod tests {
         param_map.insert(process_id, process_parameter_map);
 
         let result = check_process_parameters(&processes, &param_map, &milestone_years);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[rstest]

@@ -371,13 +371,13 @@ mod tests {
     #[test]
     fn patch_and_validate_simple_ok() {
         let patches = Vec::new();
-        assert!(patch_and_validate_simple!(patches).is_ok());
+        patch_and_validate_simple!(patches).unwrap();
     }
 
     #[test]
     fn patch_and_run_simple_ok() {
         let patches = Vec::new();
-        assert!(patch_and_run_simple!(patches).is_ok());
+        patch_and_run_simple!(patches).unwrap();
     }
 
     #[test]

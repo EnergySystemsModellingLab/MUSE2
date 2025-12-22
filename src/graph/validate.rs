@@ -263,7 +263,7 @@ mod tests {
         graph.add_edge(node_c, node_d, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
-        assert!(validate_commodities_graph(&graph, &commodities, TimeSliceLevel::Annual).is_ok());
+        validate_commodities_graph(&graph, &commodities, TimeSliceLevel::Annual).unwrap();
     }
 
     #[rstest]

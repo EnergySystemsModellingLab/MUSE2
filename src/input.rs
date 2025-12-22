@@ -429,7 +429,7 @@ mod tests {
             writeln!(file, "bad toml syntax").unwrap();
         }
 
-        assert!(read_toml::<Record>(&file_path).is_err());
+        read_toml::<Record>(&file_path).unwrap_err();
     }
 
     /// Deserialise value with `deserialise_proportion_nonzero()`
@@ -446,23 +446,21 @@ mod tests {
         assert_eq!(deserialise_f64(1.0), Ok(Dimensionless(1.0)));
 
         // Invalid inputs
-        assert!(deserialise_f64(0.0).is_err());
-        assert!(deserialise_f64(-1.0).is_err());
-        assert!(deserialise_f64(2.0).is_err());
-        assert!(deserialise_f64(f64::NAN).is_err());
-        assert!(deserialise_f64(f64::INFINITY).is_err());
+        deserialise_f64(0.0).unwrap_err();
+        deserialise_f64(-1.0).unwrap_err();
+        deserialise_f64(2.0).unwrap_err();
+        deserialise_f64(f64::NAN).unwrap_err();
+        deserialise_f64(f64::INFINITY).unwrap_err();
     }
 
     #[test]
     fn check_values_sum_to_one_approx_works() {
         // Single input, valid
-        assert!(check_values_sum_to_one_approx([Dimensionless(1.0)].into_iter()).is_ok());
+        check_values_sum_to_one_approx([Dimensionless(1.0)].into_iter()).unwrap();
 
         // Multiple inputs, valid
-        assert!(
-            check_values_sum_to_one_approx([Dimensionless(0.4), Dimensionless(0.6)].into_iter())
-                .is_ok()
-        );
+        check_values_sum_to_one_approx([Dimensionless(0.4), Dimensionless(0.6)].into_iter())
+            .unwrap();
 
         // Single input, invalid
         assert!(check_values_sum_to_one_approx([Dimensionless(0.5)].into_iter()).is_err());

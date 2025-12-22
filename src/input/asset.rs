@@ -201,8 +201,6 @@ mod tests {
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
-        assert!(
-            read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).is_err()
-        );
+        read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap_err();
     }
 }

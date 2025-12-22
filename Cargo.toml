@@ -52,6 +52,7 @@ all = {level = "deny", priority = -1}
 pedantic = {level = "deny", priority = -1}
 # Extra lints to disallow
 redundant_test_prefix = "deny"
+assertions_on_result_states = "deny"
 # Whitelist some lints from "pedantic" group
 similar_names = "allow"
 must_use_candidate = "allow"

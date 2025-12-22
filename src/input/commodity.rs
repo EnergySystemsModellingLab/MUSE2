@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn validate_commodity_works() {
         let commodity = make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Shadow);
-        assert!(validate_commodity(&commodity).is_ok());
+        validate_commodity(&commodity).unwrap();
     }
 
     #[test]

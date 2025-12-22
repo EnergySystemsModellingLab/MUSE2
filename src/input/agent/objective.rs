@@ -186,7 +186,7 @@ mod tests {
         // DecisionRule::Single
         let decision_rule = DecisionRule::Single;
         let objective = objective!(None, None);
-        assert!(check_objective_parameter(&objective, &decision_rule).is_ok());
+        check_objective_parameter(&objective, &decision_rule).unwrap();
         let objective = objective!(Some(Dimensionless(1.0)), None);
         assert!(check_objective_parameter(&objective, &decision_rule).is_err());
         let objective = objective!(None, Some(1));
@@ -198,7 +198,7 @@ mod tests {
         // DecisionRule::Weighted
         let decision_rule = DecisionRule::Weighted;
         let objective = objective!(Some(Dimensionless(1.0)), None);
-        assert!(check_objective_parameter(&objective, &decision_rule).is_ok());
+        check_objective_parameter(&objective, &decision_rule).unwrap();
         let objective = objective!(None, None);
         assert!(check_objective_parameter(&objective, &decision_rule).is_err());
         let objective = objective!(None, Some(1));
@@ -210,7 +210,7 @@ mod tests {
         // DecisionRule::Lexicographical
         let decision_rule = DecisionRule::Lexicographical { tolerance: 1.0 };
         let objective = objective!(None, Some(1));
-        assert!(check_objective_parameter(&objective, &decision_rule).is_ok());
+        check_objective_parameter(&objective, &decision_rule).unwrap();
         let objective = objective!(None, None);
         assert!(check_objective_parameter(&objective, &decision_rule).is_err());
         let objective = objective!(Some(Dimensionless(1.0)), None);

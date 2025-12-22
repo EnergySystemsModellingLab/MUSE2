@@ -204,7 +204,7 @@ mod tests {
                 regions: "GBR".into(),
             },
         ];
-        assert!(read_agents_file_from_iter(agents.into_iter(), &region_ids).is_err());
+        read_agents_file_from_iter(agents.into_iter(), &region_ids).unwrap_err();
 
         // Lexico tolerance missing for lexico decision rule
         let agent = AgentRaw {
@@ -214,6 +214,6 @@ mod tests {
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
         };
-        assert!(read_agents_file_from_iter(iter::once(agent), &region_ids).is_err());
+        read_agents_file_from_iter(iter::once(agent), &region_ids).unwrap_err();
     }
 }
