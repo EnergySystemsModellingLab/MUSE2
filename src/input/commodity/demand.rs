@@ -419,7 +419,7 @@ mod tests {
         );
     }
 
-    /// Create an example demand file in dir_path
+    /// Create an example demand file in `dir_path`
     fn create_demand_file(dir_path: &Path) {
         let file_path = dir_path.join(DEMAND_FILE_NAME);
         let mut file = File::create(file_path).unwrap();

@@ -139,7 +139,7 @@ mod tests {
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
-            addition_limit: addition_limit,
+            addition_limit,
         };
         constraint.validate()
     }
@@ -182,8 +182,7 @@ mod tests {
             if ![2012, 2016].contains(&year) {
                 assert!(
                     !process_constraints.contains_key(&(gbr_region.clone(), year)),
-                    "Should not contain constraint for year {}",
-                    year
+                    "Should not contain constraint for year {year}"
                 );
             }
         }
@@ -295,12 +294,12 @@ mod tests {
         for &year in &milestone_years {
             let gbr_constraint = process_constraints
                 .get(&(gbr_region.clone(), year))
-                .expect(&format!("GBR {} constraint should exist", year));
+                .unwrap_or_else(|| panic!("GBR {year} constraint should exist"));
             assert_eq!(gbr_constraint.addition_limit, Some(75.0));
 
             let usa_constraint = process_constraints
                 .get(&(usa_region.clone(), year))
-                .expect(&format!("USA {} constraint should exist", year));
+                .unwrap_or_else(|| panic!("USA {year} constraint should exist"));
             assert_eq!(usa_constraint.addition_limit, Some(75.0));
         }
 

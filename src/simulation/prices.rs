@@ -664,6 +664,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_process(
         flows: IndexMap<CommodityID, ProcessFlow>,
         region_id: &RegionID,

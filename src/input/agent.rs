@@ -169,14 +169,14 @@ mod tests {
         let region_ids = IndexSet::from(["GBR".into()]);
         let agent = AgentRaw {
             id: "agent".into(),
-            description: "".into(),
+            description: String::new(),
             decision_rule: "single".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
         };
         let agent_out = Agent {
             id: "agent".into(),
-            description: "".into(),
+            description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
@@ -191,14 +191,14 @@ mod tests {
         let agents = [
             AgentRaw {
                 id: "agent".into(),
-                description: "".into(),
+                description: String::new(),
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
             },
             AgentRaw {
                 id: "agent".into(),
-                description: "".into(),
+                description: String::new(),
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
@@ -209,7 +209,7 @@ mod tests {
         // Lexico tolerance missing for lexico decision rule
         let agent = AgentRaw {
             id: "agent".into(),
-            description: "".into(),
+            description: String::new(),
             decision_rule: "lexico".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),

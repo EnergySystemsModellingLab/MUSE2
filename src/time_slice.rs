@@ -30,7 +30,7 @@ pub struct TimeSliceID {
 impl From<&str> for TimeSliceID {
     fn from(value: &str) -> Self {
         let (season, time_of_day) = value
-            .split(".")
+            .split('.')
             .collect_tuple()
             .expect("Time slice not in form season.time_of_day");
         TimeSliceID {

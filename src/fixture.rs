@@ -111,7 +111,7 @@ pub fn commodity_id() -> CommodityID {
 pub fn svd_commodity() -> Commodity {
     Commodity {
         id: "commodity1".into(),
-        description: "".into(),
+        description: String::new(),
         kind: CommodityType::ServiceDemand,
         time_slice_level: TimeSliceLevel::DayNight,
         pricing_strategy: PricingStrategy::Shadow,
@@ -188,7 +188,7 @@ pub fn process_parameter() -> ProcessParameter {
 }
 
 #[fixture]
-/// Create a ProcessParameterMap with the specified parameters for each region and year
+/// Create a `ProcessParameterMap` with the specified parameters for each region and year
 pub fn process_parameter_map(
     region_ids: IndexSet<RegionID>,
     process_parameter: ProcessParameter,
@@ -202,13 +202,13 @@ pub fn process_parameter_map(
 }
 
 #[fixture]
-/// Create a ProcessAvailabilities with full availability for all time slices
+/// Create a `ProcessAvailabilities` with full availability for all time slices
 pub fn process_activity_limits(time_slice_info: TimeSliceInfo) -> ActivityLimits {
     ActivityLimits::new_with_full_availability(&time_slice_info)
 }
 
 #[fixture]
-/// Create a ProcessActivityLimitsMap with full availability for each region and year
+/// Create a `ProcessActivityLimitsMap` with full availability for each region and year
 pub fn process_activity_limits_map(
     region_ids: IndexSet<RegionID>,
     process_activity_limits: ActivityLimits,
@@ -221,20 +221,20 @@ pub fn process_activity_limits_map(
 }
 
 #[fixture]
-/// Create an empty set of ProcessInvestmentConstraints for a given region/year
-/// Returns a HashMap keyed by (RegionID, year) with empty Rc<ProcessInvestmentConstraint>
+/// Create an empty set of `ProcessInvestmentConstraints` for a given region/year
+/// Returns a `HashMap` keyed by (`RegionID`, year) with empty Rc<ProcessInvestmentConstraint>
 pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
     HashMap::new()
 }
 
 #[fixture]
-/// Create an empty set of ProcessFlows for a given region/year
+/// Create an empty set of `ProcessFlows` for a given region/year
 pub fn process_flows() -> Rc<IndexMap<CommodityID, ProcessFlow>> {
     Rc::new(IndexMap::new())
 }
 
 #[fixture]
-/// Create a ProcessFlowsMap with the provided flows for each region/year
+/// Create a `ProcessFlowsMap` with the provided flows for each region/year
 pub fn process_flows_map(
     region_ids: IndexSet<RegionID>,
     process_flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
@@ -281,7 +281,7 @@ pub fn agents() -> AgentMap {
         "agent1".into(),
         Agent {
             id: "agent1".into(),
-            description: "".into(),
+            description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
@@ -353,7 +353,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         asset: AssetRef::from(asset),
         capacity: Capacity(42.0),
         coefficients: ObjectiveCoefficients {
-            capacity_coefficient: MoneyPerCapacity(3.14),
+            capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
             unmet_demand_coefficient: MoneyPerFlow(10000.0),
         },

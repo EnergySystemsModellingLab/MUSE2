@@ -337,7 +337,7 @@ mod tests {
         }
     }
 
-    /// Create an example CSV file in dir_path
+    /// Create an example CSV file in `dir_path`
     fn create_csv_file(dir_path: &Path, contents: &str) -> PathBuf {
         let file_path = dir_path.join("test.csv");
         let mut file = File::create(&file_path).unwrap();
@@ -432,7 +432,7 @@ mod tests {
         assert!(read_toml::<Record>(&file_path).is_err());
     }
 
-    /// Deserialise value with deserialise_proportion_nonzero()
+    /// Deserialise value with `deserialise_proportion_nonzero()`
     fn deserialise_f64(value: f64) -> Result<Dimensionless, ValueError> {
         let deserialiser: F64Deserializer<ValueError> = value.into_deserializer();
         deserialise_proportion_nonzero(deserialiser)
@@ -489,7 +489,7 @@ mod tests {
     #[case(&[1,1],false)]
     #[case(&[1,3,2,4], false)]
     fn test_is_sorted_and_unique(#[case] values: &[u32], #[case] expected: bool) {
-        assert_eq!(is_sorted_and_unique(values), expected)
+        assert_eq!(is_sorted_and_unique(values), expected);
     }
 
     #[test]

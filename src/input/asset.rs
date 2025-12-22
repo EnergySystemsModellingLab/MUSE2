@@ -144,7 +144,7 @@ mod tests {
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
             commission_year: 2010,
-            max_decommission_year: max_decommission_year,
+            max_decommission_year,
         };
         let asset_out = Asset::new_future_with_max_decommission(
             "agent1".into(),

@@ -573,8 +573,8 @@ mod tests {
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
             pricing_strategy: PricingStrategy::Shadow,
-            levies_prod: levies_prod,
-            levies_cons: levies_cons,
+            levies_prod,
+            levies_cons,
             demand: DemandMap::new(),
         })
     }
@@ -635,8 +635,8 @@ mod tests {
             kind: CommodityType::ServiceDemand,
             time_slice_level: TimeSliceLevel::Annual,
             pricing_strategy: PricingStrategy::Shadow,
-            levies_prod: levies_prod,
-            levies_cons: levies_cons,
+            levies_prod,
+            levies_cons,
             demand: DemandMap::new(),
         })
     }
@@ -1010,7 +1010,7 @@ mod tests {
 
         // Each timeslice from the info should be present in the limits
         for (ts_id, ts_len) in time_slice_info2.iter() {
-            let l = limits.get_limit_for_time_slice(&ts_id);
+            let l = limits.get_limit_for_time_slice(ts_id);
             // Lower bound should be zero and upper bound equal to timeslice length
             assert_eq!(*l.start(), Dimensionless(0.0));
             assert_eq!(*l.end(), Dimensionless(ts_len.value()));
@@ -1036,7 +1036,7 @@ mod tests {
 
         // Each timeslice upper bound should be capped by the seasonal upper bound (0.01)
         for (ts_id, _ts_len) in time_slice_info2.iter() {
-            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            let ts_limit = result.get_limit_for_time_slice(ts_id);
             assert_eq!(*ts_limit.end(), Dimensionless(0.01));
         }
 
@@ -1059,7 +1059,7 @@ mod tests {
 
         // Each timeslice upper bound should be capped by the annual upper bound (0.01)
         for (ts_id, _ts_len) in time_slice_info2.iter() {
-            let ts_limit = result.get_limit_for_time_slice(&ts_id);
+            let ts_limit = result.get_limit_for_time_slice(ts_id);
             assert_eq!(*ts_limit.end(), Dimensionless(0.01));
         }
 

@@ -344,7 +344,7 @@ mod tests {
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
         let years = years.unwrap_or(process.years.clone().collect());
-        let map: Rc<IndexMap<_, _>> = Rc::new(flows.clone().collect());
+        let map: Rc<IndexMap<_, _>> = Rc::new(flows.collect());
         let flows_inner = iproduct!(&process.regions, years)
             .map(|(region_id, year)| ((region_id.clone(), year), map.clone()))
             .collect();
