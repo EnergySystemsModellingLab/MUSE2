@@ -58,61 +58,10 @@ impl AppraisalOutput {
         );
 
         if approx_eq!(f64, self.metric, other.metric) {
-            self.compare_with_equal_metrics(other)
+            Ordering::Equal
         } else {
             self.metric.partial_cmp(&other.metric).unwrap()
         }
-    }
-
-    /// Compare this appraisal to another when the metrics are known to be equal.
-    pub fn compare_with_equal_metrics(&self, other: &Self) -> Ordering {
-        assert!(
-            approx_eq!(f64, self.metric, other.metric),
-            "Appraisal metrics must be equal"
-        );
-
-        // Favour commissioned assets over non-commissioned
-        if self.asset.is_commissioned() && !other.asset.is_commissioned() {
-            return Ordering::Less;
-        }
-        if !self.asset.is_commissioned() && other.asset.is_commissioned() {
-            return Ordering::Greater;
-        }
-
-        // if both commissioned, favour newer ones
-        if self.asset.is_commissioned() && other.asset.is_commissioned() {
-            return self
-                .asset
-                .commission_year()
-                .cmp(&other.asset.commission_year())
-                .reverse();
-        }
-
-        Ordering::Equal
-    }
-}
-
-/// methods used to compare multiple appraisal outputs
-pub enum AppraisalComparisonMethod {
-    /// If all appraisal outputs have different metrics
-    Metric,
-    /// two or more appraisal outputs have equal metrics
-    EqualMetrics,
-}
-
-/// Classify the appropriate method to compare appraisal outputs
-/// given an array of appraisal outputs sorted by metric
-pub fn classify_appraisal_comparison_method(
-    appraisals_sorted_by_metric: &[&AppraisalOutput],
-) -> AppraisalComparisonMethod {
-    if appraisals_sorted_by_metric.len() >= 2
-        && appraisals_sorted_by_metric[0]
-            .compare_metric(appraisals_sorted_by_metric[1])
-            .is_eq()
-    {
-        AppraisalComparisonMethod::EqualMetrics
-    } else {
-        AppraisalComparisonMethod::Metric
     }
 }
 

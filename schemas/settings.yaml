@@ -29,10 +29,10 @@ properties:
   results_root:
     type: string
     description: Results root path to save MUSE2 results
-    default: ""
+    default: "muse2_results"
     notes: Defaults to a "muse2_results" folder within the current working directory.
   graph_results_root:
     type: string
     description: Results root path to save MUSE2 graph outputs
-    default: ""
+    default: "muse2_graphs"
     notes: Defaults to a "muse2_graphs" folder within the current working directory.

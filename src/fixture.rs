@@ -5,7 +5,10 @@ use crate::agent::{
     DecisionRule,
 };
 use crate::asset::{Asset, AssetPool, AssetRef};
-use crate::commodity::{Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap};
+use crate::commodity::{
+    Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
+};
+use crate::patch::{FilePatch, ModelPatch};
 use crate::process::{
     ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
     ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
@@ -19,6 +22,7 @@ use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
     MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
 };
+use anyhow::Result;
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -37,6 +41,46 @@ macro_rules! assert_error {
     };
 }
 pub(crate) use assert_error;
+
+/// Build a patched copy of `examples/simple` to a temporary directory and return the `TempDir`.
+///
+/// If the patched model cannot be built, for whatever reason, this function will panic.
+pub(crate) fn build_patched_simple_tempdir(file_patches: Vec<FilePatch>) -> tempfile::TempDir {
+    ModelPatch::from_example("simple")
+        .with_file_patches(file_patches)
+        .build_to_tempdir()
+        .unwrap()
+}
+
+/// Check whether the simple example passes or fails validation after applying file patches
+macro_rules! patch_and_validate_simple {
+    ($file_patches:expr) => {{
+        (|| -> Result<()> {
+            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
+            crate::input::load_model(tmp.path())?;
+            Ok(())
+        })()
+    }};
+}
+// Currently unused outside this file
+// pub(crate) use patch_and_validate_simple;
+
+/// Check whether the simple example runs successfully after applying file patches
+macro_rules! patch_and_run_simple {
+    ($file_patches:expr) => {{
+        (|| -> Result<()> {
+            let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
+            let (model, assets) = crate::input::load_model(tmp.path())?;
+            let output_path = tmp.path().join("output");
+            std::fs::create_dir_all(&output_path)?;
+
+            crate::simulation::run(&model, assets, &output_path, false)?;
+            Ok(())
+        })()
+    }};
+}
+// Currently unused outside this file
+// pub(crate) use patch_and_run_simple;
 
 #[fixture]
 pub fn region_id() -> RegionID {
@@ -70,6 +114,7 @@ pub fn svd_commodity() -> Commodity {
         description: "".into(),
         kind: CommodityType::ServiceDemand,
         time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
@@ -83,6 +128,7 @@ pub fn sed_commodity() -> Commodity {
         description: "Test SED commodity".into(),
         kind: CommodityType::SupplyEqualsDemand,
         time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
@@ -96,6 +142,7 @@ pub fn other_commodity() -> Commodity {
         description: "Test other commodity".into(),
         kind: CommodityType::Other,
         time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
@@ -219,6 +266,7 @@ pub fn process(
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
         investment_constraints: process_investment_constraints,
+        unit_size: None,
     }
 }
 
@@ -314,5 +362,36 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         unmet_demand,
         metric_precedence: 0,
         metric: 4.14,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patch_and_validate_simple_ok() {
+        let patches = Vec::new();
+        assert!(patch_and_validate_simple!(patches).is_ok());
+    }
+
+    #[test]
+    fn patch_and_run_simple_ok() {
+        let patches = Vec::new();
+        assert!(patch_and_run_simple!(patches).is_ok());
+    }
+
+    #[test]
+    fn test_patch_and_validate_simple_fail() {
+        let patch = FilePatch::new("commodities.csv")
+            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+        assert!(patch_and_validate_simple!(vec![patch]).is_err());
+    }
+
+    #[test]
+    fn test_patch_and_run_simple_fail() {
+        let patch = FilePatch::new("commodities.csv")
+            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+        assert!(patch_and_run_simple!(vec![patch]).is_err());
     }
 }

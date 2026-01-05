@@ -1,13 +1,17 @@
 //! Assets are instances of a process which are owned and invested in by agents.
 use crate::agent::AgentID;
-use crate::commodity::CommodityID;
+use crate::commodity::{CommodityID, CommodityType};
+use crate::finance::annual_capital_cost;
 use crate::process::{
     ActivityLimits, FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter,
 };
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
-use crate::units::{Activity, ActivityPerCapacity, Capacity, MoneyPerActivity};
+use crate::units::{
+    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerFlow,
+};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -35,6 +39,22 @@ use std::slice;
 )]
 pub struct AssetID(u32);
 
+/// A unique identifier for an asset group
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    derive_more::Display,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Deserialize,
+    Serialize,
+)]
+pub struct AssetGroupID(u32);
+
 /// The state of an asset
 ///
 /// New assets are created as either `Future` or `Candidate` assets. `Future` assets (which are
@@ -56,6 +76,8 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
+        /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
+        group_id: Option<AssetGroupID>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -191,6 +213,33 @@ impl Asset {
         )
     }
 
+    /// Create a new commissioned asset
+    ///
+    /// This is only used for testing. WARNING: These assets always have an ID of zero, so can
+    /// create hash collisions. Use with care.
+    #[cfg(test)]
+    pub fn new_commissioned(
+        agent_id: AgentID,
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+    ) -> Result<Self> {
+        Self::new_with_state(
+            AssetState::Commissioned {
+                id: AssetID(0),
+                agent_id,
+                mothballed_year: None,
+                group_id: None,
+            },
+            process,
+            region_id,
+            capacity,
+            commission_year,
+            None,
+        )
+    }
+
     /// Private helper to create an asset with the given state
     fn new_with_state(
         state: AssetState,
@@ -288,6 +337,18 @@ impl Asset {
         (cap2act * *limits.start())..=(cap2act * *limits.end())
     }
 
+    /// Get the activity limits for this asset for a given time slice selection
+    pub fn get_activity_limits_for_selection(
+        &self,
+        time_slice_selection: &TimeSliceSelection,
+    ) -> RangeInclusive<Activity> {
+        let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
+        let cap2act = self.process.capacity_to_activity;
+        let lb = self.capacity * cap2act * *activity_per_capacity_limits.start();
+        let ub = self.capacity * cap2act * *activity_per_capacity_limits.end();
+        lb..=ub
+    }
+
     /// Iterate over activity limits for this asset
     pub fn iter_activity_limits(
         &self,
@@ -318,12 +379,22 @@ impl Asset {
             })
     }
 
+    /// Gets the total SED/SVD output per unit of activity for this asset
+    ///
+    /// Note: Since we are summing coefficients from different commodities, this ONLY makes sense
+    /// if these commodities have the same units (e.g., all in PJ). Users are currently not made to
+    /// give units for commodities, so we cannot possibly enforce this. Something to potentially
+    /// address in future.
+    pub fn get_total_output_per_activity(&self) -> FlowPerActivity {
+        self.iter_output_flows().map(|flow| flow.coeff).sum()
+    }
+
     /// Get the operating cost for this asset in a given year and time slice
     pub fn get_operating_cost(&self, year: u32, time_slice: &TimeSliceID) -> MoneyPerActivity {
         // The cost for all commodity flows (including levies/incentives)
-        let flows_cost: MoneyPerActivity = self
+        let flows_cost = self
             .iter_flows()
-            .map(|flow| flow.get_total_cost(&self.region_id, year, time_slice))
+            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
             .sum();
 
         self.process_parameter.variable_operating_cost + flows_cost
@@ -355,15 +426,16 @@ impl Asset {
         })
     }
 
-    /// Get the cost of input flows using the commodity prices in `input_prices`.
+    /// Get the total cost of purchasing input commodities per unit of activity for this asset.
     ///
     /// If a price is missing, there is assumed to be no cost.
     pub fn get_input_cost_from_prices(
         &self,
-        input_prices: &CommodityPrices,
+        prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        -self.get_revenue_from_flows_with_filter(input_prices, time_slice, |x| {
+        // Revenues of input flows are negative costs, so we negate the result
+        -self.get_revenue_from_flows_with_filter(prices, time_slice, |x| {
             x.direction() == FlowDirection::Input
         })
     }
@@ -386,10 +458,140 @@ impl Asset {
             .map(|flow| {
                 flow.coeff
                     * prices
-                        .get(&flow.commodity.id, self.region_id(), time_slice)
+                        .get(&flow.commodity.id, &self.region_id, time_slice)
                         .unwrap_or_default()
             })
             .sum()
+    }
+
+    /// Get the generic activity cost per unit of activity for this asset.
+    ///
+    /// These are all activity-related costs that are not associated with specific SED/SVD outputs.
+    /// Includes levies, flow costs, costs of inputs and variable operating costs
+    fn get_generic_activity_cost(
+        &self,
+        prices: &CommodityPrices,
+        year: u32,
+        time_slice: &TimeSliceID,
+    ) -> MoneyPerActivity {
+        // The cost of purchasing input commodities
+        let cost_of_inputs = self.get_input_cost_from_prices(prices, time_slice);
+
+        // Flow costs/levies for all flows except SED/SVD outputs
+        let excludes_sed_svd_output = |flow: &&ProcessFlow| {
+            !(flow.direction() == FlowDirection::Output
+                && matches!(
+                    flow.commodity.kind,
+                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                ))
+        };
+        let flow_costs = self
+            .iter_flows()
+            .filter(excludes_sed_svd_output)
+            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
+            .sum();
+
+        cost_of_inputs + flow_costs + self.process_parameter.variable_operating_cost
+    }
+
+    /// Iterate over marginal costs for a filtered set of SED/SVD output commodities for this asset
+    ///
+    /// For each SED/SVD output commodity, the marginal cost is calculated as the sum of:
+    /// - Generic activity costs (variable operating costs, cost of purchasing inputs, plus all
+    ///   levies and flow costs not associated with specific SED/SVD outputs), which are
+    ///   shared equally over all SED/SVD outputs
+    /// - Production levies and flow costs for the specific SED/SVD output commodity
+    pub fn iter_marginal_costs_with_filter<'a>(
+        &'a self,
+        prices: &'a CommodityPrices,
+        year: u32,
+        time_slice: &'a TimeSliceID,
+        filter: impl Fn(&CommodityID) -> bool + 'a,
+    ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
+        // Iterator over SED/SVD output flows matching the filter
+        let mut output_flows_iter = self
+            .iter_output_flows()
+            .filter(move |flow| filter(&flow.commodity.id))
+            .peekable();
+
+        // If there are no output flows after filtering, return an empty iterator
+        if output_flows_iter.peek().is_none() {
+            return Box::new(std::iter::empty::<(CommodityID, MoneyPerFlow)>());
+        }
+
+        // Calculate generic activity costs.
+        // This is all activity costs not associated with specific SED/SVD outputs, which will get
+        // shared equally over all SED/SVD outputs. Includes levies, flow costs, costs of inputs and
+        // variable operating costs
+        let generic_activity_cost = self.get_generic_activity_cost(prices, year, time_slice);
+
+        // Share generic activity costs equally over all SED/SVD outputs
+        // We sum the output coefficients of all SED/SVD commodities to get total output, then
+        // divide costs by this total output to get the generic cost per unit of output.
+        // Note: only works if all SED/SVD outputs have the same units - not currently checked!
+        let total_output_per_activity = self.get_total_output_per_activity();
+        assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
+        let generic_cost_per_flow = generic_activity_cost / total_output_per_activity;
+
+        // Iterate over SED/SVD output flows
+        Box::new(output_flows_iter.map(move |flow| {
+            // Get the costs for this specific commodity flow
+            let commodity_specific_costs_per_flow =
+                flow.get_total_cost_per_flow(&self.region_id, year, time_slice);
+
+            // Add these to the generic costs to get total cost for this commodity
+            let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
+            (flow.commodity.id.clone(), marginal_cost)
+        }))
+    }
+
+    /// Iterate over marginal costs for all SED/SVD output commodities for this asset
+    ///
+    /// See `iter_marginal_costs_with_filter` for details.
+    pub fn iter_marginal_costs<'a>(
+        &'a self,
+        prices: &'a CommodityPrices,
+        year: u32,
+        time_slice: &'a TimeSliceID,
+    ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
+        self.iter_marginal_costs_with_filter(prices, year, time_slice, move |_| true)
+    }
+
+    /// Get the annual capital cost per unit of capacity for this asset
+    pub fn get_annual_capital_cost_per_capacity(&self) -> MoneyPerCapacity {
+        let capital_cost = self.process_parameter.capital_cost;
+        let lifetime = self.process_parameter.lifetime;
+        let discount_rate = self.process_parameter.discount_rate;
+        annual_capital_cost(capital_cost, lifetime, discount_rate)
+    }
+
+    /// Get the annual capital cost per unit of activity for this asset
+    ///
+    /// Total capital costs (cost per capacity * capacity) are shared equally over the year in
+    /// accordance with the annual activity.
+    pub fn get_annual_capital_cost_per_activity(
+        &self,
+        annual_activity: Activity,
+    ) -> MoneyPerActivity {
+        let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
+        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity();
+        assert!(
+            annual_activity > Activity::EPSILON,
+            "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
+        );
+        total_annual_capital_cost / annual_activity
+    }
+
+    /// Get the annual capital cost per unit of output flow for this asset
+    ///
+    /// Total capital costs (cost per capacity * capacity) are shared equally across all output
+    /// flows in accordance with the annual activity and total output per unit of activity.
+    pub fn get_annual_capital_cost_per_flow(&self, annual_activity: Activity) -> MoneyPerFlow {
+        let annual_capital_cost_per_activity =
+            self.get_annual_capital_cost_per_activity(annual_activity);
+        let total_output_per_activity = self.get_total_output_per_activity();
+        assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
+        annual_capital_cost_per_activity / total_output_per_activity
     }
 
     /// Maximum activity for this asset
@@ -405,6 +607,17 @@ impl Asset {
     /// Iterate over the asset's flows
     pub fn iter_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
         self.flows.values()
+    }
+
+    /// Iterate over the asset's output SED/SVD flows
+    pub fn iter_output_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
+        self.flows.values().filter(|flow| {
+            flow.direction() == FlowDirection::Output
+                && matches!(
+                    flow.commodity.kind,
+                    CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+                )
+        })
     }
 
     /// Get the primary output flow (if any) for this asset
@@ -456,6 +669,14 @@ impl Asset {
             AssetState::Commissioned { id, .. } | AssetState::Decommissioned { id, .. } => {
                 Some(*id)
             }
+            _ => None,
+        }
+    }
+
+    /// Get the group ID for this asset
+    pub fn group_id(&self) -> Option<AssetGroupID> {
+        match &self.state {
+            AssetState::Commissioned { group_id, .. } => *group_id,
             _ => None,
         }
     }
@@ -529,7 +750,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    fn commission(&mut self, id: AssetID, reason: &str) {
+    /// * `group_id` - The ID of the group of this asset, if any.
+    fn commission(&mut self, id: AssetID, group_id: Option<AssetGroupID>, reason: &str) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -546,6 +768,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
+            group_id,
         };
     }
 
@@ -561,27 +784,39 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
-            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        let (id, agent_id, group_id) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                group_id,
+                ..
+            } => (*id, agent_id.clone(), *group_id),
+            _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: Some(year),
+            group_id,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
-            _ => panic!("Cannot mothballed an asset that hasn't been commissioned"),
+        let (id, agent_id, group_id) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                group_id,
+                ..
+            } => (*id, agent_id.clone(), *group_id),
+            _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
+            group_id,
         };
     }
 
@@ -591,9 +826,44 @@ impl Asset {
             mothballed_year, ..
         } = &self.state
         else {
-            panic!("Cannot mothballed an asset that hasn't been commissioned")
+            panic!("Cannot mothball an asset that hasn't been commissioned")
         };
         *mothballed_year
+    }
+
+    /// Checks if the assets corresponds to a process that has a `unit_size` and is therefore divisible.
+    pub fn is_divisible(&self) -> bool {
+        self.process.unit_size.is_some()
+    }
+
+    /// Divides an asset if it is divisible and returns a vector of children
+    ///
+    /// The children assets are identical to the parent (including state) but with a capacity defined
+    /// by the `unit_size`. Only Future or Selected assets can be divided.
+    pub fn divide_asset(&self) -> Vec<AssetRef> {
+        assert!(
+            matches!(
+                self.state,
+                AssetState::Future { .. } | AssetState::Selected { .. }
+            ),
+            "Assets with state {0} cannot be divided. Only Future or Selected assets can be divided",
+            self.state
+        );
+
+        // Divide the asset into children until all capacity is allocated
+        let mut capacity = self.capacity;
+        let unit_size = self.process.unit_size.expect(
+            "Only assets corresponding to processes with a unit size defined can be divided",
+        );
+        let mut children = Vec::new();
+        while capacity > Capacity(0.0) {
+            let mut child = self.clone();
+            child.capacity = unit_size.min(capacity);
+            capacity -= child.capacity;
+            children.push(child.into());
+        }
+
+        children
     }
 }
 
@@ -718,7 +988,7 @@ impl Hash for AssetRef {
             }
             AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
                 // We shouldn't currently need to hash Future or Decommissioned assets
-                unimplemented!("Cannot hash Future or Decommissioned assets");
+                panic!("Cannot hash Future or Decommissioned assets");
             }
         }
     }
@@ -746,6 +1016,8 @@ pub struct AssetPool {
     decommissioned: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
+    /// Next available group ID number
+    next_group_id: u32,
 }
 
 impl AssetPool {
@@ -759,6 +1031,7 @@ impl AssetPool {
             future: assets,
             decommissioned: Vec::new(),
             next_id: 0,
+            next_group_id: 0,
         }
     }
 
@@ -792,14 +1065,31 @@ impl AssetPool {
                     the start of the simulation",
                     asset.process_id(),
                     asset.commission_year,
-                    asset.process_parameter().lifetime
+                    asset.process_parameter.lifetime
                 );
                 continue;
             }
 
-            asset.commission(AssetID(self.next_id), "user input");
-            self.next_id += 1;
-            self.active.push(asset.into());
+            // If it is divisible, we divide and commission all the children
+            if asset.is_divisible() {
+                let children = asset.divide_asset();
+                for mut child in children {
+                    child.make_mut().commission(
+                        AssetID(self.next_id),
+                        Some(AssetGroupID(self.next_group_id)),
+                        "user input",
+                    );
+                    self.next_id += 1;
+                    self.active.push(child);
+                }
+                self.next_group_id += 1;
+            }
+            // If not, we just commission it as a single asset
+            else {
+                asset.commission(AssetID(self.next_id), None, "user input");
+                self.next_id += 1;
+                self.active.push(asset.into());
+            }
         }
     }
 
@@ -917,27 +1207,44 @@ impl AssetPool {
     {
         // Check all assets are either Commissioned or Selected, and, if the latter,
         // then commission them
-        let assets = assets.into_iter().map(|mut asset| match &asset.state {
-            AssetState::Commissioned { .. } => {
-                asset.make_mut().unmothball();
-                asset
-            }
-            AssetState::Selected { .. } => {
-                asset
-                    .make_mut()
-                    .commission(AssetID(self.next_id), "selected");
-                self.next_id += 1;
-                asset
-            }
-            _ => panic!(
-                "Cannot extend asset pool with asset in state {}. Only assets in \
+        for mut asset in assets {
+            match &asset.state {
+                AssetState::Commissioned { .. } => {
+                    asset.make_mut().unmothball();
+                    self.active.push(asset);
+                }
+                AssetState::Selected { .. } => {
+                    // If it is divisible, we divide and commission all the children
+                    if asset.is_divisible() {
+                        for mut child in asset.divide_asset() {
+                            child.make_mut().commission(
+                                AssetID(self.next_id),
+                                Some(AssetGroupID(self.next_group_id)),
+                                "selected",
+                            );
+                            self.next_id += 1;
+                            self.active.push(child);
+                        }
+                        self.next_group_id += 1;
+                    }
+                    // If not, we just commission it as a single asset
+                    else {
+                        asset
+                            .make_mut()
+                            .commission(AssetID(self.next_id), None, "selected");
+                        self.next_id += 1;
+                        self.active.push(asset);
+                    }
+                }
+                _ => panic!(
+                    "Cannot extend asset pool with asset in state {}. Only assets in \
                 Commissioned or Selected states are allowed.",
-                asset.state
-            ),
-        });
+                    asset.state
+                ),
+            }
+        }
 
         // New assets may not have been sorted, but active needs to be sorted by ID
-        self.active.extend(assets);
         self.active.sort();
 
         // Sanity check: all assets should be unique
@@ -1145,6 +1452,19 @@ mod tests {
         .unwrap()
     }
 
+    #[fixture]
+    fn asset_divisible(mut process: Process) -> Asset {
+        process.unit_size = Some(Capacity(4.0));
+        Asset::new_future(
+            "agent1".into(),
+            Rc::new(process),
+            "GBR".into(),
+            Capacity(11.0),
+            2010,
+        )
+        .unwrap()
+    }
+
     #[rstest]
     fn test_asset_get_activity_per_capacity_limits(
         asset_with_activity_limits: Asset,
@@ -1155,6 +1475,37 @@ mod tests {
             asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
             ActivityPerCapacity(0.2)..=ActivityPerCapacity(1.0)
         );
+    }
+
+    #[rstest]
+    fn test_divide_asset(asset_divisible: Asset) {
+        assert!(
+            asset_divisible.is_divisible(),
+            "Divisbile asset cannot be divided!"
+        );
+
+        // Check number of children
+        let children = asset_divisible.divide_asset();
+        let expected_children = (asset_divisible.capacity
+            / asset_divisible.process.unit_size.unwrap())
+        .value()
+        .ceil() as usize;
+        assert_eq!(
+            children.len(),
+            expected_children,
+            "Unexpected number of children"
+        );
+
+        // Check capacity of the children
+        let max_child_capacity = asset_divisible.process.unit_size.unwrap();
+        for child in children.clone() {
+            assert!(
+                child.capacity <= max_child_capacity,
+                "Child capacity is too large!"
+            )
+        }
+        let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
+        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
@@ -1185,6 +1536,25 @@ mod tests {
         // Nothing to commission for this year
         asset_pool.commission_new(2000);
         assert!(asset_pool.iter_active().next().is_none()); // no active assets
+    }
+
+    #[rstest]
+    fn test_asset_pool_commission_new_divisible(asset_divisible: Asset) {
+        let commision_year = asset_divisible.commission_year;
+        let expected_children = (asset_divisible.capacity
+            / asset_divisible.process.unit_size.unwrap())
+        .value()
+        .ceil() as usize;
+        let mut asset_pool = AssetPool::new(vec![asset_divisible.clone()]);
+        assert!(asset_pool.active.is_empty());
+        asset_pool.commission_new(commision_year);
+        assert!(asset_pool.future.is_empty());
+        assert!(!asset_pool.active.is_empty());
+        assert_eq!(asset_pool.active.len(), expected_children);
+        assert_eq!(asset_pool.next_group_id, 1);
+
+        let children_capacity: Capacity = asset_pool.active.iter().map(|a| a.capacity).sum();
+        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
@@ -1299,6 +1669,37 @@ mod tests {
             asset_pool.active[original_count + 1].agent_id(),
             Some(&"agent3".into())
         );
+    }
+
+    #[rstest]
+    fn test_asset_pool_extend_new_divisible_assets(
+        mut asset_pool: AssetPool,
+        mut process: Process,
+    ) {
+        // Start with some commissioned assets
+        asset_pool.commission_new(2020);
+        let original_count = asset_pool.active.len();
+
+        // Create new non-commissioned assets
+        process.unit_size = Some(Capacity(4.0));
+        let process_rc = Rc::new(process);
+        let new_assets: Vec<AssetRef> = vec![
+            Asset::new_selected(
+                "agent2".into(),
+                Rc::clone(&process_rc),
+                "GBR".into(),
+                Capacity(11.0),
+                2015,
+            )
+            .unwrap()
+            .into(),
+        ];
+        let expected_children = (new_assets[0].capacity / new_assets[0].process.unit_size.unwrap())
+            .value()
+            .ceil() as usize;
+
+        asset_pool.extend(new_assets);
+        assert_eq!(asset_pool.active.len(), original_count + expected_children);
     }
 
     #[rstest]
@@ -1526,7 +1927,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset1.commission(AssetID(1), "");
+        asset1.commission(AssetID(1), None, "");
         assert!(asset1.is_commissioned());
         assert_eq!(asset1.id(), Some(AssetID(1)));
 
@@ -1539,7 +1940,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset2.commission(AssetID(2), "");
+        asset2.commission(AssetID(2), None, "");
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
     }
@@ -1562,7 +1963,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), None, "");
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1594,7 +1995,7 @@ mod tests {
             max_decommission_year,
         )
         .unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), None, "");
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(1)));
 
@@ -1609,7 +2010,7 @@ mod tests {
     fn test_commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), "");
+        asset.commission(AssetID(1), None, "");
     }
 
     #[rstest]

@@ -30,3 +30,10 @@ fields:
     type: number
     description: Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the maximum activity per year for one unit of capacity.
     notes: Must be >=0. Optional (defaults to 1.0).
+  - name: unit_size
+    type: number
+    description: Capacity of the units in which an asset for this process will be divided into when commissioned, if any.
+    notes:
+      If present, must be >0. Optional (defaults to None). It should be noted that making this number too small with respect the typical
+      size of an asset might create hundreds or thousands of children assets, with a very negative effect on the performance. Users are advised
+      to use this feature with care.
