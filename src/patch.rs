@@ -296,7 +296,7 @@ mod tests {
     use crate::patch::{FilePatch, ModelPatch};
 
     #[test]
-    fn test_modify_base_with_patch() {
+    fn modify_base_with_patch_works() {
         let base = "col1,col2\nvalue1,value2\nvalue3,value4\nvalue5,value6\n";
 
         // Create a patch to delete row3,row4 and add row7,row8
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn test_modify_base_with_patch_mismatched_header() {
+    fn modify_base_with_patch_mismatched_header() {
         let base = "col1,col2\nvalue1,value2\n";
 
         // Create a patch with a mismatched header
@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_model_toml_basic() {
+    fn merge_model_toml_basic() {
         let base = r#"
             field = "data"
             [section]
@@ -356,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_patch() {
+    fn file_patch() {
         // Patch with a small change to an asset capacity
         let assets_patch = FilePatch::new("assets.csv")
             .with_deletion("GASDRV,GBR,A0_GEX,4002.26,2020")
@@ -376,11 +376,9 @@ mod tests {
     }
 
     #[test]
-    fn test_toml_patch() {
+    fn toml_patch() {
         // Patch to add an extra milestone year (2050)
-        let toml_patch = r#"
-            milestone_years = [2020, 2030, 2040, 2050]
-        "#;
+        let toml_patch = "milestone_years = [2020, 2030, 2040, 2050]\n";
 
         // Build patched model into a temporary directory
         let model_dir = ModelPatch::from_example("simple")

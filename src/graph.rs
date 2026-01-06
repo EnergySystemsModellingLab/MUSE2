@@ -91,14 +91,7 @@ fn get_flow_for_year(
         if *region != target_region {
             continue;
         }
-        if year
-            + process
-                .parameters
-                .get(&(region.clone(), *year))
-                .unwrap()
-                .lifetime
-            >= target_year
-        {
+        if year + process.parameters[&(region.clone(), *year)].lifetime >= target_year {
             return Some(value.clone());
         }
     }

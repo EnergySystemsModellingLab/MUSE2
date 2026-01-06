@@ -1305,14 +1305,24 @@ mod tests {
         ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
         MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow,
     };
+    use float_cmp::assert_approx_eq;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
     use rstest::{fixture, rstest};
     use std::iter;
     use std::rc::Rc;
 
+    /// Number of expected children for divisible asset
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    fn expected_children_for_divisible(asset: &Asset) -> usize {
+        (asset.capacity / asset.process.unit_size.expect("Asset is not divisible"))
+            .value()
+            .ceil() as usize
+    }
+
     #[rstest]
-    fn test_get_input_cost_from_prices(
+    fn get_input_cost_from_prices_works(
         region_id: RegionID,
         svd_commodity: Commodity,
         mut process: Process,
@@ -1341,7 +1351,7 @@ mod tests {
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
         // Should be -coeff * price = -(-2.0) * 3.0 = 6.0
-        assert_eq!(cost.0, 6.0);
+        assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
     }
 
     #[rstest]
@@ -1349,7 +1359,7 @@ mod tests {
     #[case(Capacity(0.5))]
     #[case(Capacity(1.0))]
     #[case(Capacity(100.0))]
-    fn test_asset_new_valid(process: Process, #[case] capacity: Capacity) {
+    fn asset_new_valid(process: Process, #[case] capacity: Capacity) {
         let agent_id = AgentID("agent1".into());
         let region_id = RegionID("GBR".into());
         let asset = Asset::new_future(agent_id, process.into(), region_id, capacity, 2015).unwrap();
@@ -1363,7 +1373,7 @@ mod tests {
     #[case(Capacity(f64::NAN))]
     #[case(Capacity(f64::INFINITY))]
     #[case(Capacity(f64::NEG_INFINITY))]
-    fn test_asset_new_invalid_capacity(process: Process, #[case] capacity: Capacity) {
+    fn asset_new_invalid_capacity(process: Process, #[case] capacity: Capacity) {
         let agent_id = AgentID("agent1".into());
         let region_id = RegionID("GBR".into());
         assert_error!(
@@ -1373,7 +1383,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_new_invalid_commission_year(process: Process) {
+    fn asset_new_invalid_commission_year(process: Process) {
         let agent_id = AgentID("agent1".into());
         let region_id = RegionID("GBR".into());
         assert_error!(
@@ -1383,7 +1393,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_new_invalid_region(process: Process) {
+    fn asset_new_invalid_region(process: Process) {
         let agent_id = AgentID("agent1".into());
         let region_id = RegionID("FRA".into());
         assert_error!(
@@ -1466,7 +1476,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_get_activity_per_capacity_limits(
+    fn asset_get_activity_per_capacity_limits(
         asset_with_activity_limits: Asset,
         time_slice: TimeSliceID,
     ) {
@@ -1478,7 +1488,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_divide_asset(asset_divisible: Asset) {
+    fn divide_asset_works(asset_divisible: Asset) {
         assert!(
             asset_divisible.is_divisible(),
             "Divisbile asset cannot be divided!"
@@ -1486,10 +1496,7 @@ mod tests {
 
         // Check number of children
         let children = asset_divisible.divide_asset();
-        let expected_children = (asset_divisible.capacity
-            / asset_divisible.process.unit_size.unwrap())
-        .value()
-        .ceil() as usize;
+        let expected_children = expected_children_for_divisible(&asset_divisible);
         assert_eq!(
             children.len(),
             expected_children,
@@ -1502,14 +1509,14 @@ mod tests {
             assert!(
                 child.capacity <= max_child_capacity,
                 "Child capacity is too large!"
-            )
+            );
         }
         let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
         assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
-    fn test_asset_pool_new(asset_pool: AssetPool) {
+    fn asset_pool_new(asset_pool: AssetPool) {
         // Should be in order of commission year
         assert!(asset_pool.active.is_empty());
         assert!(asset_pool.future.len() == 2);
@@ -1518,33 +1525,30 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_commission_new1(mut asset_pool: AssetPool) {
+    fn asset_pool_commission_new1(mut asset_pool: AssetPool) {
         // Asset to be commissioned in this year
         asset_pool.commission_new(2010);
         assert_equal(asset_pool.iter_active(), iter::once(&asset_pool.active[0]));
     }
 
     #[rstest]
-    fn test_asset_pool_commission_new2(mut asset_pool: AssetPool) {
+    fn asset_pool_commission_new2(mut asset_pool: AssetPool) {
         // Commission year has passed
         asset_pool.commission_new(2011);
         assert_equal(asset_pool.iter_active(), iter::once(&asset_pool.active[0]));
     }
 
     #[rstest]
-    fn test_asset_pool_commission_new3(mut asset_pool: AssetPool) {
+    fn asset_pool_commission_new3(mut asset_pool: AssetPool) {
         // Nothing to commission for this year
         asset_pool.commission_new(2000);
         assert!(asset_pool.iter_active().next().is_none()); // no active assets
     }
 
     #[rstest]
-    fn test_asset_pool_commission_new_divisible(asset_divisible: Asset) {
+    fn asset_pool_commission_new_divisible(asset_divisible: Asset) {
         let commision_year = asset_divisible.commission_year;
-        let expected_children = (asset_divisible.capacity
-            / asset_divisible.process.unit_size.unwrap())
-        .value()
-        .ceil() as usize;
+        let expected_children = expected_children_for_divisible(&asset_divisible);
         let mut asset_pool = AssetPool::new(vec![asset_divisible.clone()]);
         assert!(asset_pool.active.is_empty());
         asset_pool.commission_new(commision_year);
@@ -1558,7 +1562,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_commission_already_decommissioned(asset: Asset) {
+    fn asset_pool_commission_already_decommissioned(asset: Asset) {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new(vec![asset]);
         assert!(asset_pool.active.is_empty());
@@ -1567,7 +1571,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_decommission_old(mut asset_pool: AssetPool) {
+    fn asset_pool_decommission_old(mut asset_pool: AssetPool) {
         asset_pool.commission_new(2020);
         assert!(asset_pool.future.is_empty());
         assert_eq!(asset_pool.active.len(), 2);
@@ -1593,14 +1597,14 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_get(mut asset_pool: AssetPool) {
+    fn asset_pool_get(mut asset_pool: AssetPool) {
         asset_pool.commission_new(2020);
         assert_eq!(asset_pool.get(AssetID(0)), Some(&asset_pool.active[0]));
         assert_eq!(asset_pool.get(AssetID(1)), Some(&asset_pool.active[1]));
     }
 
     #[rstest]
-    fn test_asset_pool_extend_empty(mut asset_pool: AssetPool) {
+    fn asset_pool_extend_empty(mut asset_pool: AssetPool) {
         // Start with commissioned assets
         asset_pool.commission_new(2020);
         let original_count = asset_pool.active.len();
@@ -1612,7 +1616,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_extend_existing_assets(mut asset_pool: AssetPool) {
+    fn asset_pool_extend_existing_assets(mut asset_pool: AssetPool) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
         assert_eq!(asset_pool.active.len(), 2);
@@ -1627,7 +1631,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_extend_new_assets(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_new_assets(mut asset_pool: AssetPool, process: Process) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
         let original_count = asset_pool.active.len();
@@ -1672,10 +1676,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_extend_new_divisible_assets(
-        mut asset_pool: AssetPool,
-        mut process: Process,
-    ) {
+    fn asset_pool_extend_new_divisible_assets(mut asset_pool: AssetPool, mut process: Process) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
         let original_count = asset_pool.active.len();
@@ -1694,16 +1695,13 @@ mod tests {
             .unwrap()
             .into(),
         ];
-        let expected_children = (new_assets[0].capacity / new_assets[0].process.unit_size.unwrap())
-            .value()
-            .ceil() as usize;
-
+        let expected_children = expected_children_for_divisible(&new_assets[0]);
         asset_pool.extend(new_assets);
         assert_eq!(asset_pool.active.len(), original_count + expected_children);
     }
 
     #[rstest]
-    fn test_asset_pool_extend_mixed_assets(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_mixed_assets(mut asset_pool: AssetPool, process: Process) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
 
@@ -1736,7 +1734,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_extend_maintains_sort_order(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_maintains_sort_order(mut asset_pool: AssetPool, process: Process) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
 
@@ -1774,7 +1772,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_extend_no_duplicates_expected(mut asset_pool: AssetPool) {
+    fn asset_pool_extend_no_duplicates_expected(mut asset_pool: AssetPool) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
         let original_count = asset_pool.active.len();
@@ -1792,7 +1790,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_extend_increments_next_id(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_increments_next_id(mut asset_pool: AssetPool, process: Process) {
         // Start with some commissioned assets
         asset_pool.commission_new(2020);
         assert_eq!(asset_pool.next_id, 2); // Should be 2 after commissioning 2 assets
@@ -1829,7 +1827,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_mothball_unretained(mut asset_pool: AssetPool) {
+    fn asset_pool_mothball_unretained(mut asset_pool: AssetPool) {
         // Commission some assets
         asset_pool.commission_new(2020);
         assert_eq!(asset_pool.active.len(), 2);
@@ -1848,7 +1846,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_decommission_unused(mut asset_pool: AssetPool) {
+    fn asset_pool_decommission_unused(mut asset_pool: AssetPool) {
         // Commission some assets
         asset_pool.commission_new(2020);
         assert_eq!(asset_pool.active.len(), 2);
@@ -1875,7 +1873,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_pool_decommission_if_not_active_none_active(mut asset_pool: AssetPool) {
+    fn asset_pool_decommission_if_not_active_none_active(mut asset_pool: AssetPool) {
         // Commission some assets
         asset_pool.commission_new(2020);
         let all_assets = asset_pool.active.clone();
@@ -1896,7 +1894,7 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot mothball asset that has not been commissioned")]
-    fn test_asset_pool_decommission_if_not_active_non_commissioned_asset(
+    fn asset_pool_decommission_if_not_active_non_commissioned_asset(
         mut asset_pool: AssetPool,
         process: Process,
     ) {
@@ -1916,7 +1914,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_asset_commission(process: Process) {
+    fn asset_commission(process: Process) {
         // Test successful commissioning of Future asset
         let process_rc = Rc::new(process);
         let mut asset1 = Asset::new_future(
@@ -1948,7 +1946,7 @@ mod tests {
     #[rstest]
     #[case::commission_during_process_lifetime(2024, 2024)]
     #[case::decommission_after_process_lifetime_ends(2026, 2025)]
-    fn test_asset_decommission(
+    fn asset_decommission(
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
         process: Process,
@@ -1978,7 +1976,7 @@ mod tests {
     #[case::decommission_before_predefined_max_year(2024, 2024, Some(2025))]
     #[case::decommission_during_process_lifetime_end_no_max_year(2024, 2024, None)]
     #[case::decommission_after_process_lifetime_end_no_max_year(2026, 2025, None)]
-    fn test_asset_decommission_with_max_decommission_year_predefined(
+    fn asset_decommission_with_max_decommission_year_predefined(
         #[case] requested_decommission_year: u32,
         #[case] expected_decommission_year: u32,
         #[case] max_decommission_year: Option<u32>,
@@ -2007,7 +2005,7 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Assets with state Candidate cannot be commissioned")]
-    fn test_commission_wrong_states(process: Process) {
+    fn commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
         asset.commission(AssetID(1), None, "");
@@ -2015,7 +2013,7 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot decommission an asset that hasn't been commissioned")]
-    fn test_decommission_wrong_state(process: Process) {
+    fn decommission_wrong_state(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
         asset.decommission(2025, "");

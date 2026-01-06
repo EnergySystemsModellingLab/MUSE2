@@ -164,19 +164,19 @@ mod tests {
     use std::iter;
 
     #[test]
-    fn test_read_agents_file_from_iter() {
+    fn read_agents_file_from_iter_works() {
         // Valid case
         let region_ids = IndexSet::from(["GBR".into()]);
         let agent = AgentRaw {
             id: "agent".into(),
-            description: "".into(),
+            description: String::new(),
             decision_rule: "single".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
         };
         let agent_out = Agent {
             id: "agent".into(),
-            description: "".into(),
+            description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
@@ -191,29 +191,29 @@ mod tests {
         let agents = [
             AgentRaw {
                 id: "agent".into(),
-                description: "".into(),
+                description: String::new(),
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
             },
             AgentRaw {
                 id: "agent".into(),
-                description: "".into(),
+                description: String::new(),
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
             },
         ];
-        assert!(read_agents_file_from_iter(agents.into_iter(), &region_ids).is_err());
+        read_agents_file_from_iter(agents.into_iter(), &region_ids).unwrap_err();
 
         // Lexico tolerance missing for lexico decision rule
         let agent = AgentRaw {
             id: "agent".into(),
-            description: "".into(),
+            description: String::new(),
             decision_rule: "lexico".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
         };
-        assert!(read_agents_file_from_iter(iter::once(agent), &region_ids).is_err());
+        read_agents_file_from_iter(iter::once(agent), &region_ids).unwrap_err();
     }
 }

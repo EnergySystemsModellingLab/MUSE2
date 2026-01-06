@@ -255,10 +255,10 @@ mod tests {
     }
 
     #[test]
-    fn test_check_milestone_years() {
+    fn check_milestone_years_works() {
         // Valid
-        assert!(check_milestone_years(&[1]).is_ok());
-        assert!(check_milestone_years(&[1, 2]).is_ok());
+        check_milestone_years(&[1]).unwrap();
+        check_milestone_years(&[1, 2]).unwrap();
 
         // Invalid
         assert!(check_milestone_years(&[]).is_err());
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn test_model_params_from_path() {
+    fn model_params_from_path() {
         let dir = tempdir().unwrap();
         {
             let mut file = File::create(dir.path().join(MODEL_PARAMETERS_FILE_NAME)).unwrap();
@@ -289,7 +289,7 @@ mod tests {
     #[case(f64::INFINITY, false)] // Invalid: infinite value
     #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
     #[case(f64::NAN, false)] // Invalid: NaN value
-    fn test_check_value_of_lost_load(#[case] value: f64, #[case] expected_valid: bool) {
+    fn check_value_of_lost_load_works(#[case] value: f64, #[case] expected_valid: bool) {
         let money_per_flow = MoneyPerFlow::new(value);
         let result = check_value_of_lost_load(money_per_flow);
 
@@ -307,7 +307,7 @@ mod tests {
     #[case(100, true)] // Valid large value
     #[case(u32::MAX, true)] // Valid maximum value
     #[case(0, false)] // Invalid: zero
-    fn test_check_max_ironing_out_iterations(#[case] value: u32, #[case] expected_valid: bool) {
+    fn check_max_ironing_out_iterations_works(#[case] value: u32, #[case] expected_valid: bool) {
         let result = check_max_ironing_out_iterations(value);
 
         assert_validation_result(
@@ -329,7 +329,7 @@ mod tests {
     #[case(f64::INFINITY, false)] // Invalid: infinite value
     #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
     #[case(f64::NAN, false)] // Invalid: NaN value
-    fn test_check_price_tolerance(#[case] value: f64, #[case] expected_valid: bool) {
+    fn check_price_tolerance_works(#[case] value: f64, #[case] expected_valid: bool) {
         let dimensionless = Dimensionless::new(value);
         let result = check_price_tolerance(dimensionless);
 
@@ -349,7 +349,7 @@ mod tests {
     #[case(f64::INFINITY, false)] // Invalid: infinite value
     #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
     #[case(f64::NAN, false)] // Invalid: NaN value
-    fn test_check_capacity_margin(#[case] value: f64, #[case] expected_valid: bool) {
+    fn check_capacity_margin_works(#[case] value: f64, #[case] expected_valid: bool) {
         let result = check_capacity_margin(value);
 
         assert_validation_result(
