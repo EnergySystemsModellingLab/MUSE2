@@ -71,6 +71,7 @@ pub fn lcox(
 }
 
 #[cfg(test)]
+#[allow(clippy::unreadable_literal)]
 mod tests {
     use super::*;
     use crate::time_slice::TimeSliceID;
@@ -83,7 +84,7 @@ mod tests {
     #[case(10, 0.0, 0.1)] // Other edge case: discount_rate==0
     #[case(10, 0.05, 0.1295045749654567)]
     #[case(5, 0.03, 0.2183545714005762)]
-    fn test_capital_recovery_factor(
+    fn capital_recovery_factor_works(
         #[case] lifetime: u32,
         #[case] discount_rate: f64,
         #[case] expected: f64,
@@ -97,7 +98,7 @@ mod tests {
     #[case(500.0, 5, 0.03, 109.17728570028798)]
     #[case(1000.0, 0, 0.05, 0.0)] // Zero lifetime
     #[case(2000.0, 20, 0.0, 100.0)] // Zero discount rate
-    fn test_annual_capital_cost(
+    fn annual_capital_cost_works(
         #[case] capital_cost: f64,
         #[case] lifetime: u32,
         #[case] discount_rate: f64,
@@ -131,7 +132,7 @@ mod tests {
         vec![("winter", "day", 50.0)],
         f64::INFINITY // Zero capacity case
     )]
-    fn test_profitability_index(
+    fn profitability_index_works(
         #[case] capacity: f64,
         #[case] annual_fixed_cost: f64,
         #[case] activity_data: Vec<(&str, &str, f64)>,
@@ -175,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_profitability_index_zero_activity() {
+    fn profitability_index_zero_activity() {
         let capacity = Capacity(100.0);
         let annual_fixed_cost = MoneyPerCapacity(50.0);
         let activity = indexmap! {};
@@ -199,7 +200,7 @@ mod tests {
         vec![("winter", "day", 0.0)],
         200.0 // (50*100 + 25*0) / 25 = 5000/25
     )]
-    fn test_lcox(
+    fn lcox_works(
         #[case] capacity: f64,
         #[case] annual_fixed_cost: f64,
         #[case] activity_data: Vec<(&str, &str, f64)>,

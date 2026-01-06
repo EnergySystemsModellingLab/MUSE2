@@ -246,24 +246,22 @@ mod tests {
         let cost = MoneyPerFlow(1.0);
 
         let mut map = CommodityLevyMap::new();
-        map.insert(("GBR".into(), 2020, time_slice.clone()), cost.clone());
+        map.insert(("GBR".into(), 2020, time_slice.clone()), cost);
         map
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_valid(
+    fn validate_commodity_levies_map_valid(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
         region_ids: IndexSet<RegionID>,
     ) {
         // Valid map
-        assert!(
-            validate_commodity_levy_map(&cost_map, &region_ids, &[2020], &time_slice_info).is_ok()
-        );
+        validate_commodity_levy_map(&cost_map, &region_ids, &[2020], &time_slice_info).unwrap();
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_invalid_missing_region(
+    fn validate_commodity_levies_map_invalid_missing_region(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
     ) {
@@ -276,7 +274,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_invalid_missing_year(
+    fn validate_commodity_levies_map_invalid_missing_year(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
         region_ids: IndexSet<RegionID>,
@@ -289,7 +287,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_validate_commodity_levies_map_invalid(
+    fn validate_commodity_levies_map_invalid(
         cost_map: CommodityLevyMap,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -314,7 +312,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_add_missing_region_to_commodity_levy_map(
+    fn add_missing_region_to_commodity_levy_map_works(
         cost_map: CommodityLevyMap,
         time_slice_info: TimeSliceInfo,
         region_id: RegionID,
