@@ -49,6 +49,10 @@ impl AppraisalOutput {
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
+        assert!(
+            !(self.metric.value().is_nan() || other.metric.value().is_nan()),
+            "Appraisal metric cannot be NaN"
+        );
         self.metric.compare(other.metric.as_ref())
     }
 }
@@ -89,7 +93,6 @@ pub struct LCOXMetric {
 impl LCOXMetric {
     /// Creates a new `LCOXMetric` with the given cost.
     pub fn new(cost: f64) -> Self {
-        // assert!(!cost.is_nan(), "LCOX metric cannot be NaN");
         Self { cost }
     }
 }
