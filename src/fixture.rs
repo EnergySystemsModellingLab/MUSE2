@@ -72,7 +72,7 @@ macro_rules! assert_validate_ok_simple {
 }
 pub(crate) use assert_validate_ok_simple;
 
-// Check whether validation fails with specific message
+/// Check whether validation fails with specific message
 macro_rules! assert_validate_fails_with_simple {
     ($file_patches:expr, $expected_msg:expr) => {
         let result = crate::fixture::patch_and_validate_simple!($file_patches);
