@@ -28,7 +28,7 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
-    /// Create an example regions file in dir_path
+    /// Create an example regions file in `dir_path`
     fn create_regions_file(dir_path: &Path) {
         let file_path = dir_path.join(REGIONS_FILE_NAME);
         let mut file = File::create(file_path).unwrap();
@@ -43,7 +43,7 @@ AP,Asia Pacific"
     }
 
     #[test]
-    fn test_read_regions() {
+    fn read_regions_works() {
         let dir = tempdir().unwrap();
         create_regions_file(dir.path());
         let regions = read_regions(dir.path()).unwrap();
@@ -72,6 +72,6 @@ AP,Asia Pacific"
                     }
                 ),
             ])
-        )
+        );
     }
 }

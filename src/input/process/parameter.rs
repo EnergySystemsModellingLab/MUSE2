@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn test_param_raw_into_param_ok() {
+    fn param_raw_into_param_ok() {
         // No missing values
         let raw = create_param_raw(1, Some(Dimensionless(1.0)));
         assert_eq!(
@@ -239,7 +239,7 @@ mod tests {
 
         param_map.insert(process_id, process_parameter_map.clone());
         let result = check_process_parameters(&processes, &param_map, &milestone_years);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[rstest]
@@ -257,7 +257,7 @@ mod tests {
         param_map.insert(process_id, process_parameter_map);
 
         let result = check_process_parameters(&processes, &param_map, &milestone_years);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[rstest]
@@ -283,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn test_param_raw_validate_bad_lifetime() {
+    fn param_raw_validate_bad_lifetime() {
         // lifetime = 0
         assert!(
             create_param_raw(0, Some(Dimensionless(1.0)))
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn test_param_raw_validate_bad_discount_rate() {
+    fn param_raw_validate_bad_discount_rate() {
         // discount rate = -1
         assert!(
             create_param_raw(1, Some(Dimensionless(-1.0)))

@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_valid(
+    fn read_demand_slices_from_iter_valid(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -205,8 +205,27 @@ mod tests {
         );
     }
 
+    fn demand_slice_entry(
+        season: &str,
+        time_of_day: &str,
+        fraction: Dimensionless,
+    ) -> ((CommodityID, RegionID, TimeSliceSelection), Dimensionless) {
+        (
+            (
+                "commodity1".into(),
+                "GBR".into(),
+                TimeSliceID {
+                    season: season.into(),
+                    time_of_day: time_of_day.into(),
+                }
+                .into(),
+            ),
+            fraction,
+        )
+    }
+
     #[rstest]
-    fn test_read_demand_slices_from_iter_valid_multiple_time_slices(
+    fn read_demand_slices_from_iter_valid_multiple_time_slices(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -265,24 +284,6 @@ mod tests {
             },
         ];
 
-        fn demand_slice_entry(
-            season: &str,
-            time_of_day: &str,
-            fraction: Dimensionless,
-        ) -> ((CommodityID, RegionID, TimeSliceSelection), Dimensionless) {
-            (
-                (
-                    "commodity1".into(),
-                    "GBR".into(),
-                    TimeSliceID {
-                        season: season.into(),
-                        time_of_day: time_of_day.into(),
-                    }
-                    .into(),
-                ),
-                fraction,
-            )
-        }
         let expected = DemandSliceMap::from_iter([
             demand_slice_entry("summer", "day", Dimensionless(3.0 / 16.0)),
             demand_slice_entry("summer", "night", Dimensionless(5.0 / 16.0)),
@@ -303,7 +304,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_empty_file(
+    fn read_demand_slices_from_iter_invalid_empty_file(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -322,7 +323,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_bad_commodity(
+    fn read_demand_slices_from_iter_invalid_bad_commodity(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -347,7 +348,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_bad_region(
+    fn read_demand_slices_from_iter_invalid_bad_region(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -372,7 +373,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_bad_time_slice(
+    fn read_demand_slices_from_iter_invalid_bad_time_slice(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -397,7 +398,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_missing_time_slices(
+    fn read_demand_slices_from_iter_invalid_missing_time_slices(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -445,7 +446,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_duplicate_time_slice(
+    fn read_demand_slices_from_iter_invalid_duplicate_time_slice(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -471,7 +472,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_season_time_slice_conflict(
+    fn read_demand_slices_from_iter_invalid_season_time_slice_conflict(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,
@@ -503,7 +504,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_slices_from_iter_invalid_bad_fractions(
+    fn read_demand_slices_from_iter_invalid_bad_fractions(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         time_slice_info: TimeSliceInfo,

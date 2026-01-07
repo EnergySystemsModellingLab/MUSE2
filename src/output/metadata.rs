@@ -19,6 +19,7 @@ const METADATA_FILE_NAME: &str = "metadata.toml";
 /// The `built` script produces a Rust file containing constants for package
 /// name, version, target, rustc version, build time, and optional git metadata.
 #[allow(clippy::doc_markdown)]
+#[allow(clippy::needless_raw_strings)]
 mod built_info {
     // The file has been placed there by the build script.
     include!(concat!(env!("OUT_DIR"), "/built.rs"));

@@ -224,7 +224,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[rstest]
-    fn test_read_demand_from_iter(svd_commodity: Commodity, region_ids: IndexSet<RegionID>) {
+    fn read_demand_from_iter_works(svd_commodity: Commodity, region_ids: IndexSet<RegionID>) {
         let svd_commodities = get_svd_map(&svd_commodity);
         let demand = [
             Demand {
@@ -242,14 +242,11 @@ mod tests {
         ];
 
         // Valid
-        assert!(
-            read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020])
-                .is_ok()
-        );
+        read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020]).unwrap();
     }
 
     #[rstest]
-    fn test_read_demand_from_iter_bad_commodity_id(
+    fn read_demand_from_iter_bad_commodity_id(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -282,7 +279,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_from_iter_bad_region_id(
+    fn read_demand_from_iter_bad_region_id(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -309,10 +306,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_from_iter_bad_year(
-        svd_commodity: Commodity,
-        region_ids: IndexSet<RegionID>,
-    ) {
+    fn read_demand_from_iter_bad_year(svd_commodity: Commodity, region_ids: IndexSet<RegionID>) {
         // Bad year
         let svd_commodities = get_svd_map(&svd_commodity);
         let demand = [
@@ -341,7 +335,7 @@ mod tests {
     #[case(f64::NAN)]
     #[case(f64::NEG_INFINITY)]
     #[case(f64::INFINITY)]
-    fn test_read_demand_from_iter_bad_demand(
+    fn read_demand_from_iter_bad_demand(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
         #[case] quantity: f64,
@@ -361,7 +355,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_from_iter_multiple_entries(
+    fn read_demand_from_iter_multiple_entries(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -394,7 +388,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_from_iter_missing_year(
+    fn read_demand_from_iter_missing_year(
         svd_commodity: Commodity,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -406,18 +400,16 @@ mod tests {
             commodity_id: "commodity1".to_string(),
             demand: Flow(10.0),
         };
-        assert!(
-            read_demand_from_iter(
-                std::iter::once(demand),
-                &svd_commodities,
-                &region_ids,
-                &[2020, 2030]
-            )
-            .is_err()
-        );
+        read_demand_from_iter(
+            std::iter::once(demand),
+            &svd_commodities,
+            &region_ids,
+            &[2020, 2030],
+        )
+        .unwrap_err();
     }
 
-    /// Create an example demand file in dir_path
+    /// Create an example demand file in `dir_path`
     fn create_demand_file(dir_path: &Path) {
         let file_path = dir_path.join(DEMAND_FILE_NAME);
         let mut file = File::create(file_path).unwrap();
@@ -431,7 +423,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_demand_file(svd_commodity: Commodity, region_ids: IndexSet<RegionID>) {
+    fn read_demand_file_works(svd_commodity: Commodity, region_ids: IndexSet<RegionID>) {
         let svd_commodities = get_svd_map(&svd_commodity);
         let dir = tempdir().unwrap();
         create_demand_file(dir.path());

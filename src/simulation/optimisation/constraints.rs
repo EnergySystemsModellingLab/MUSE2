@@ -176,11 +176,7 @@ where
             // For SED commodities, the LHS must be >=0 and for SVD commodities, it must be >=
             // the exogenous demand supplied by the user
             let min = if commodity.kind == CommodityType::ServiceDemand {
-                commodity
-                    .demand
-                    .get(&(region_id.clone(), year, ts_selection.clone()))
-                    .unwrap()
-                    .value()
+                commodity.demand[&(region_id.clone(), year, ts_selection.clone())].value()
             } else {
                 0.0
             };

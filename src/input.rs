@@ -339,7 +339,7 @@ mod tests {
         }
     }
 
-    /// Create an example CSV file in dir_path
+    /// Create an example CSV file in `dir_path`
     fn create_csv_file(dir_path: &Path, contents: &str) -> PathBuf {
         let file_path = dir_path.join("test.csv");
         let mut file = File::create(&file_path).unwrap();
@@ -349,7 +349,7 @@ mod tests {
 
     /// Test a normal read
     #[test]
-    fn test_read_csv() {
+    fn read_csv_works() {
         let dir = tempdir().unwrap();
         let file_path = create_csv_file(dir.path(), "id,value\nhello,1\nworld,2\n");
         let records: Vec<Record> = read_csv(&file_path).unwrap().collect();
@@ -410,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_toml() {
+    fn read_toml_works() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.toml");
         {
@@ -431,40 +431,38 @@ mod tests {
             writeln!(file, "bad toml syntax").unwrap();
         }
 
-        assert!(read_toml::<Record>(&file_path).is_err());
+        read_toml::<Record>(&file_path).unwrap_err();
     }
 
-    /// Deserialise value with deserialise_proportion_nonzero()
+    /// Deserialise value with `deserialise_proportion_nonzero()`
     fn deserialise_f64(value: f64) -> Result<Dimensionless, ValueError> {
         let deserialiser: F64Deserializer<ValueError> = value.into_deserializer();
         deserialise_proportion_nonzero(deserialiser)
     }
 
     #[test]
-    fn test_deserialise_proportion_nonzero() {
+    fn deserialise_proportion_nonzero_works() {
         // Valid inputs
         assert_eq!(deserialise_f64(0.01), Ok(Dimensionless(0.01)));
         assert_eq!(deserialise_f64(0.5), Ok(Dimensionless(0.5)));
         assert_eq!(deserialise_f64(1.0), Ok(Dimensionless(1.0)));
 
         // Invalid inputs
-        assert!(deserialise_f64(0.0).is_err());
-        assert!(deserialise_f64(-1.0).is_err());
-        assert!(deserialise_f64(2.0).is_err());
-        assert!(deserialise_f64(f64::NAN).is_err());
-        assert!(deserialise_f64(f64::INFINITY).is_err());
+        deserialise_f64(0.0).unwrap_err();
+        deserialise_f64(-1.0).unwrap_err();
+        deserialise_f64(2.0).unwrap_err();
+        deserialise_f64(f64::NAN).unwrap_err();
+        deserialise_f64(f64::INFINITY).unwrap_err();
     }
 
     #[test]
-    fn test_check_values_sum_to_one_approx() {
+    fn check_values_sum_to_one_approx_works() {
         // Single input, valid
-        assert!(check_values_sum_to_one_approx([Dimensionless(1.0)].into_iter()).is_ok());
+        check_values_sum_to_one_approx([Dimensionless(1.0)].into_iter()).unwrap();
 
         // Multiple inputs, valid
-        assert!(
-            check_values_sum_to_one_approx([Dimensionless(0.4), Dimensionless(0.6)].into_iter())
-                .is_ok()
-        );
+        check_values_sum_to_one_approx([Dimensionless(0.4), Dimensionless(0.6)].into_iter())
+            .unwrap();
 
         // Single input, invalid
         assert!(check_values_sum_to_one_approx([Dimensionless(0.5)].into_iter()).is_err());
@@ -490,12 +488,12 @@ mod tests {
     #[case(&[2,1],false)]
     #[case(&[1,1],false)]
     #[case(&[1,3,2,4], false)]
-    fn test_is_sorted_and_unique(#[case] values: &[u32], #[case] expected: bool) {
-        assert_eq!(is_sorted_and_unique(values), expected)
+    fn is_sorted_and_unique_works(#[case] values: &[u32], #[case] expected: bool) {
+        assert_eq!(is_sorted_and_unique(values), expected);
     }
 
     #[test]
-    fn test_format_items_with_cap() {
+    fn format_items_with_cap_works() {
         let items = vec!["a", "b", "c"];
         assert_eq!(format_items_with_cap(&items), r#"["a", "b", "c"]"#);
 

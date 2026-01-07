@@ -141,13 +141,13 @@ mod tests {
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
-            addition_limit: addition_limit,
+            addition_limit,
         };
         constraint.validate()
     }
 
     #[rstest]
-    fn test_read_constraints_only_uses_milestone_years_within_process_range(processes: ProcessMap) {
+    fn read_constraints_only_uses_milestone_years_within_process_range(processes: ProcessMap) {
         // Process years are 2010..=2020 from the fixture (excludes 2008)
         let milestone_years = vec![2008, 2012, 2016];
 
@@ -184,15 +184,14 @@ mod tests {
             if ![2012, 2016].contains(&year) {
                 assert!(
                     !process_constraints.contains_key(&(gbr_region.clone(), year)),
-                    "Should not contain constraint for year {}",
-                    year
+                    "Should not contain constraint for year {year}"
                 );
             }
         }
     }
 
     #[rstest]
-    fn test_read_process_investment_constraints_from_iter(processes: ProcessMap) {
+    fn read_process_investment_constraints_from_iter_works(processes: ProcessMap) {
         // Create milestone years matching the process years
         let milestone_years: Vec<u32> = vec![2010, 2015, 2020];
 
@@ -264,7 +263,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_constraints_all_regions_all_years(processes: ProcessMap) {
+    fn read_constraints_all_regions_all_years(processes: ProcessMap) {
         // Create milestone years matching the process years
         let milestone_years: Vec<u32> = vec![2010, 2015, 2020];
 
@@ -297,12 +296,12 @@ mod tests {
         for &year in &milestone_years {
             let gbr_constraint = process_constraints
                 .get(&(gbr_region.clone(), year))
-                .expect(&format!("GBR {} constraint should exist", year));
+                .unwrap_or_else(|| panic!("GBR {year} constraint should exist"));
             assert_eq!(gbr_constraint.addition_limit, Some(75.0));
 
             let usa_constraint = process_constraints
                 .get(&(usa_region.clone(), year))
-                .expect(&format!("USA {} constraint should exist", year));
+                .unwrap_or_else(|| panic!("USA {year} constraint should exist"));
             assert_eq!(usa_constraint.addition_limit, Some(75.0));
         }
 
@@ -311,7 +310,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_read_constraints_year_outside_milestone_years(processes: ProcessMap) {
+    fn read_constraints_year_outside_milestone_years(processes: ProcessMap) {
         // Create constraint with year outside milestone years
         // Process years are 2010..=2020 from the fixture
         let milestone_years = vec![2010, 2015, 2020];
@@ -336,14 +335,14 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_addition_with_finite_value() {
+    fn validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
         let valid = validate_raw_constraint(10.0);
-        assert!(valid.is_ok());
+        valid.unwrap();
 
         // Valid: addition constraint with zero value
         let valid = validate_raw_constraint(0.0);
-        assert!(valid.is_ok());
+        valid.unwrap();
 
         // Not valid: addition constraint with negative value
         let invalid = validate_raw_constraint(-10.0);
@@ -354,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_addition_rejects_infinite() {
+    fn validate_addition_rejects_infinite() {
         // Invalid: infinite value
         let invalid = validate_raw_constraint(f64::INFINITY);
         assert_error!(

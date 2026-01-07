@@ -670,6 +670,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_process(
         flows: IndexMap<CommodityID, ProcessFlow>,
         region_id: &RegionID,
@@ -738,7 +739,7 @@ mod tests {
     #[case(MoneyPerFlow(0.0), MoneyPerFlow(-10.0), Dimensionless(0.1), false)] // comparing zero and negative
     #[case(MoneyPerFlow(10.0), MoneyPerFlow(0.0), Dimensionless(0.1), false)] // comparing positive and zero
     #[case(MoneyPerFlow(-10.0), MoneyPerFlow(0.0), Dimensionless(0.1), false)] // comparing negative and zero
-    fn test_within_tolerance_scenarios(
+    fn within_tolerance_scenarios(
         #[case] price1: MoneyPerFlow,
         #[case] price2: MoneyPerFlow,
         #[case] tolerance: Dimensionless,
@@ -762,7 +763,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_time_slice_weighted_averages(
+    fn time_slice_weighted_averages(
         commodity_id: CommodityID,
         region_id: RegionID,
         time_slice_info: TimeSliceInfo,
@@ -780,7 +781,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_marginal_cost_example(
+    fn marginal_cost_example(
         sed_commodity: Commodity,
         other_commodity: Commodity,
         region_id: RegionID,
@@ -855,7 +856,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_full_cost_example(
+    fn full_cost_example(
         sed_commodity: Commodity,
         other_commodity: Commodity,
         region_id: RegionID,

@@ -41,7 +41,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_region_str() {
+    fn parse_region_str_works() {
         let region_ids: IndexSet<RegionID> = ["GBR".into(), "USA".into()].into_iter().collect();
 
         // List of regions
@@ -63,10 +63,10 @@ mod tests {
 
         // Empty string
         let result = parse_region_str("", &region_ids);
-        assert!(result.is_err());
+        result.unwrap_err();
 
         // Invalid region
         let result = parse_region_str("GBR;INVALID", &region_ids);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 }
