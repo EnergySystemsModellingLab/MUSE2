@@ -44,7 +44,7 @@ pub trait UnitType:
 
 macro_rules! base_unit_struct {
     ($name:ident) => {
-        /// A unit type representing a dimensionless value.
+        /// A basic unit type wrapper around an `f64` scalar value.
         #[derive(
             Debug,
             Clone,

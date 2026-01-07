@@ -1,4 +1,8 @@
-//! Defines the `ModelParameters` struct, which represents the contents of `model.toml`.
+//! Read and validate model parameters from `model.toml`.
+//!
+//! This module defines the `ModelParameters` struct and helpers for loading and
+//! validating the `model.toml` configuration used by the model. Validation
+//! functions ensure sensible numeric ranges and invariants for runtime use.
 use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
@@ -12,20 +16,31 @@ use std::sync::OnceLock;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
 
-/// The name of the option used to gate other, broken options.
+/// The key in `model.toml` which enables known-broken model options.
+///
+/// If this option is present and true, the model will permit certain
+/// experimental or unsafe behaviours that are normally disallowed.
 pub const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
 
-/// Whether broken options have been enabled by an option in the model config file
+/// Global flag indicating whether broken model options have been enabled.
+///
+/// This is stored in a `OnceLock` and must be set exactly once during
+/// startup (see `set_broken_model_options_flag`).
 static BROKEN_OPTIONS_ALLOWED: OnceLock<bool> = OnceLock::new();
 
-/// Whether broken model options have been enabled in the config file or not
+/// Return whether broken model options were enabled by the loaded config.
+///
+/// # Panics
+///
+/// Panics if the global flag has not been set yet (the flag should be set by
+/// `ModelParameters::from_path` during program initialization).
 pub fn broken_model_options_allowed() -> bool {
     *BROKEN_OPTIONS_ALLOWED
         .get()
         .expect("Broken options flag not set")
 }
 
-/// Set global flag signalling whether broken model options are allowed
+/// Set the global flag indicating whether broken model options are allowed.
 ///
 /// Can only be called once; subsequent calls will panic (except in tests, where it can be called
 /// multiple times so long as the value is the same).

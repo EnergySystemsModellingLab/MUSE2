@@ -1,4 +1,4 @@
-//! Code for reading process investment constraints CSV file
+//! Code for reading process investment constraints from a CSV file.
 use super::super::input_err_msg;
 use crate::input::{read_csv_optional, try_insert};
 use crate::process::{
@@ -41,7 +41,7 @@ impl ProcessInvestmentConstraintRaw {
 /// Read the process investment constraints CSV file.
 ///
 /// This file contains information about investment constraints that limit how processes can be
-/// deployed, either through growth rates, absolute additions, or capacity limits.
+/// deployed (growth rates, absolute additions, capacity limits).
 ///
 /// # Arguments
 ///
@@ -51,7 +51,8 @@ impl ProcessInvestmentConstraintRaw {
 ///
 /// # Returns
 ///
-/// A map keyed by process ID containing investment constraints maps, or an error.
+/// A `HashMap<ProcessID, ProcessInvestmentConstraintsMap>` mapping process IDs to their
+/// investment-constraints maps, or an error.
 pub fn read_process_investment_constraints(
     model_dir: &Path,
     processes: &ProcessMap,
@@ -63,17 +64,18 @@ pub fn read_process_investment_constraints(
         .with_context(|| input_err_msg(&file_path))
 }
 
-/// Process raw process investment constraint input data into a constraints map.
+/// Process raw investment-constraint records into a constraints map.
 ///
 /// # Arguments
 ///
-/// * `iter` - Iterator of raw process investment constraint records
-/// * `processes` - Map of processes to validate against
-/// * `milestone_years` - Milestone years of simulation to validate against
+/// * `iter` - Iterator over `ProcessInvestmentConstraintRaw` records
+/// * `processes` - Map of known processes to validate against
+/// * `milestone_years` - Milestone years used by the model
 ///
 /// # Returns
 ///
-/// A map keyed by process ID containing investment constraints maps, or an error.
+/// A `HashMap<ProcessID, ProcessInvestmentConstraintsMap>` mapping process IDs to their
+/// investment-constraints maps, or an error.
 fn read_process_investment_constraints_from_iter<I>(
     iter: I,
     processes: &ProcessMap,

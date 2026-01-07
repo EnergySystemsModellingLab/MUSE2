@@ -1,7 +1,7 @@
 //! Code for working with time slices.
 //!
-//! Time slices provide a mechanism for users to indicate production etc. varies with the time of
-//! day and time of year.
+//! Time slices provide a mechanism for users to indicate that production (or other quantities)
+//! varies with time of day and season.
 use crate::id::{IDCollection, define_id_type};
 use crate::units::{Dimensionless, Year};
 use anyhow::{Context, Result};

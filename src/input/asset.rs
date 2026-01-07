@@ -1,4 +1,4 @@
-//! Code for reading [Asset]s from a CSV file.
+//! Code for reading [`Asset`]s from a CSV file.
 use super::{input_err_msg, read_csv_optional};
 use crate::agent::AgentID;
 use crate::asset::Asset;
@@ -31,7 +31,7 @@ struct AssetRaw {
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `agent_ids` - All possible process IDs
+/// * `agent_ids` - All possible agent IDs
 /// * `processes` - The model's processes
 /// * `region_ids` - All possible region IDs
 ///
@@ -55,7 +55,7 @@ pub fn read_assets(
 /// # Arguments
 ///
 /// * `iter` - Iterator of `AssetRaw`s
-/// * `agent_ids` - All possible process IDs
+/// * `agent_ids` - All possible agent IDs
 /// * `processes` - The model's processes
 /// * `region_ids` - All possible region IDs
 ///

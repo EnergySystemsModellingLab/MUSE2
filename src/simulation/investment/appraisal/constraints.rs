@@ -41,7 +41,7 @@ pub fn add_capacity_constraint(
 /// Constrains the activity variables to be within the asset's activity limits.
 ///
 /// The behaviour depends on whether the asset is commissioned or a candidate:
-/// - For an commissioned asset, the activity limits have fixed bounds based on the asset's (fixed)
+/// - For a commissioned asset, the activity limits have fixed bounds based on the asset's (fixed)
 ///   capacity.
 /// - For a candidate asset, the activity limits depend on the capacity of the asset, which is
 ///   itself variable. The constraints are therefore applied to both the capacity and activity
@@ -123,8 +123,10 @@ fn add_activity_constraints_for_candidate(
 
 /// Adds demand constraints to the problem.
 ///
-/// Constrains supply to be less than or equal to demand, which adapts based on the commodity's
-/// balance level.
+/// Constrains supply to be less than or equal to demand. This is implemented as an equality
+/// across each time-slice selection: supply (activity terms, scaled by flow coefficients) plus
+/// the `unmet_demand` variables equals the total demand for that selection, so non-negative
+/// `unmet_demand` enforces supply ≤ demand. The selections follow the commodity's balance level.
 pub fn add_demand_constraints(
     problem: &mut Problem,
     asset: &AssetRef,

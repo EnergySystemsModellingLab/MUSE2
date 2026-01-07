@@ -105,7 +105,7 @@ fn parse_years_range(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
 
     ensure!(
         end > start,
-        "End year must be biger than start year in range {s}"
+        "End year must be bigger than start year in range {s}"
     );
     let years: Vec<_> = (start..=end).filter(|y| valid_years.contains(y)).collect();
     ensure!(

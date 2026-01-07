@@ -1,4 +1,4 @@
-//! Code for reading process availabilities CSV file
+//! Code for reading process availabilities from a CSV file.
 use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
@@ -28,8 +28,9 @@ struct ProcessAvailabilityRaw {
 impl ProcessAvailabilityRaw {
     /// Calculate fraction of annual energy as availability multiplied by the length of time covered.
     ///
-    /// The resulting limits are max/min energy produced/consumed in the covered time period per
-    /// `capacity_to_activity` units of capacity.
+    /// The resulting limits are the max/min energy produced or consumed in the covered time
+    /// period, scaled to the time slice length and expressed per `capacity_to_activity` units of
+    /// capacity.
     fn to_bounds(&self, length: Year) -> Result<RangeInclusive<Dimensionless>> {
         // Parse availability_range string
         let availability_range = parse_availabilities_string(&self.limits)?;
@@ -105,14 +106,13 @@ fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>>
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `processes` - Map of processes
-/// * `time_slice_info` - Information about seasons and times of day
-/// * `milestone_years` - Milestone years of simulation
+/// * `processes` - Map of known processes
+/// * `time_slice_info` - Time slice configuration
 ///
 /// # Returns
 ///
-/// A [`HashMap`] with process IDs as the keys and [`ProcessActivityLimitsMap`]s as the values or an
-/// error.
+/// A `HashMap<ProcessID, ProcessActivityLimitsMap>` mapping each process ID to its activity
+/// limits, or an error.
 pub fn read_process_availabilities(
     model_dir: &Path,
     processes: &ProcessMap,

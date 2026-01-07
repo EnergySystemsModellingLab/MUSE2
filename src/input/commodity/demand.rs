@@ -1,5 +1,4 @@
-//! Code for working with demand for a given commodity. Demand can vary by region, year and time
-//! slice.
+//! Code for handling commodity demands. Demands may vary by region, year, and time slice.
 use super::super::{format_items_with_cap, input_err_msg, read_csv};
 use super::demand_slicing::{DemandSliceMap, read_demand_slices};
 use crate::commodity::{Commodity, CommodityID, CommodityType, DemandMap};
@@ -33,7 +32,7 @@ struct Demand {
 /// A map relating commodity, region and year to annual demand
 pub type AnnualDemandMap = HashMap<(CommodityID, RegionID, u32), (TimeSliceLevel, Flow)>;
 
-/// A map containing a references to commodities
+/// A map containing references to commodities
 pub type BorrowedCommodityMap<'a> = HashMap<CommodityID, &'a Commodity>;
 
 /// Reads demand data from CSV files.
@@ -41,14 +40,14 @@ pub type BorrowedCommodityMap<'a> = HashMap<CommodityID, &'a Commodity>;
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `commodity_ids` - All possible IDs of commodities
-/// * `region_ids` - All possible IDs for regions
+/// * `commodity_ids` - All possible commodity IDs
+/// * `region_ids` - Known region identifiers
 /// * `time_slice_info` - Information about seasons and times of day
-/// * `milestone_years` - All milestone years
+/// * `milestone_years` - Milestone years used by the model
 ///
 /// # Returns
 ///
-/// This function returns [`DemandMap`]s grouped by commodity ID.
+/// A `HashMap<CommodityID, DemandMap>` mapping each commodity to its `DemandMap`.
 pub fn read_demand(
     model_dir: &Path,
     commodities: &IndexMap<CommodityID, Commodity>,
@@ -80,7 +79,7 @@ pub fn read_demand(
 ///
 /// # Returns
 ///
-/// Annual demand data, grouped by commodity, region and milestone year.
+/// An `AnnualDemandMap` mapping `(CommodityID, RegionID, year)` to `(TimeSliceLevel, Flow)`.
 fn read_demand_file(
     model_dir: &Path,
     svd_commodities: &BorrowedCommodityMap,
@@ -104,8 +103,7 @@ fn read_demand_file(
 ///
 /// # Returns
 ///
-/// A map of demand and time slice level for every combination of commodity, region and milestone
-/// year.
+/// An `AnnualDemandMap` mapping `(CommodityID, RegionID, year)` to `(TimeSliceLevel, Flow)`.
 fn read_demand_from_iter<I>(
     iter: I,
     svd_commodities: &BorrowedCommodityMap,
@@ -180,8 +178,8 @@ where
 ///
 /// # Returns
 ///
-/// [`DemandMap`]s for combinations of region, year and time slice, grouped by the commodity to
-/// which the demand applies.
+/// A `HashMap<CommodityID, DemandMap>` mapping each commodity to its `DemandMap`, which contains
+/// demand values for combinations of region, year and time slice.
 fn compute_demand_maps(
     time_slice_info: &TimeSliceInfo,
     demand: &AnnualDemandMap,

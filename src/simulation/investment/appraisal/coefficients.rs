@@ -11,8 +11,9 @@ use std::collections::HashMap;
 
 /// Map storing cost coefficients for an asset.
 ///
-/// These are calculated according to the objective type of the agent owning the asset.
-/// Map storing coefficients for each variable
+/// These coefficients are calculated according to the agent's `ObjectiveType` and are used by
+/// the investment appraisal routines. The map contains the per-capacity and per-activity cost
+/// coefficients used in the appraisal optimisation, together with the unmet-demand penalty.
 #[derive(Clone)]
 pub struct ObjectiveCoefficients {
     /// Cost per unit of capacity
@@ -52,6 +53,9 @@ pub fn calculate_coefficients_for_assets(
 }
 
 /// Calculates the cost coefficients for LCOX.
+///
+/// For LCOX the activity coefficient is calculated as operating cost minus revenue from
+/// non-primary flows. The unmet demand coefficient is set from the model `value_of_lost_load`.
 pub fn calculate_coefficients_for_lcox(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
@@ -80,6 +84,11 @@ pub fn calculate_coefficients_for_lcox(
 }
 
 /// Calculates the cost coefficients for NPV.
+///
+/// For NPV the activity coefficient is revenue (including primary output) minus operating
+/// cost; a small positive epsilon is added to activity coefficients so that assets with
+/// near-zero net value still appear in dispatch. Capacity costs and unmet-demand penalties
+/// are set to zero for the NPV objective.
 pub fn calculate_coefficients_for_npv(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
@@ -124,7 +133,7 @@ fn calculate_activity_coefficient_for_lcox(
     // Revenue from flows excluding the primary output
     let revenue_from_flows = asset.get_revenue_from_flows_excluding_primary(prices, time_slice);
 
-    // The activity coefficient is the operating cost minus the revenue from flows
+    // The activity coefficient is the operating cost minus the revenue from non-primary flows
     operating_cost - revenue_from_flows
 }
 
@@ -142,6 +151,6 @@ fn calculate_activity_coefficient_for_npv(
     // Revenue from flows including the primary output
     let revenue_from_flows = asset.get_revenue_from_flows(prices, time_slice);
 
-    // The activity coefficient is the revenue from flows minus the operating cost
+    // The activity coefficient is the revenue from flows minus the operating cost (net revenue)
     revenue_from_flows - operating_cost
 }
