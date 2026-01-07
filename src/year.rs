@@ -147,7 +147,7 @@ mod tests {
     #[case("2021;2020", &[2020, 2021],"Years must be in order and unique")] // out of order
     #[case("2021;2020;2021", &[2020, 2021],"Years must be in order and unique")] // duplicate
     #[case("2021;2020..2021", &[2020, 2021],"Both ';' and '..' found in year string 2021;2020..2021. Discrete years and ranges cannot be mixed.")]
-    #[case("2021..2020", &[2020, 2021],"End year must be biger than start year in range 2021..2020")] // out of order
+    #[case("2021..2020", &[2020, 2021],"End year must be bigger than start year in range 2021..2020")] // out of order
     #[case("2021..2024", &[2020,2025], "No valid years found in year range string 2021..2024")]
     #[case("..2020..2025", &[2020,2025], "Year range must be of the form 'start..end', 'start..' or '..end'. Invalid: ..2020..2025")]
     #[case("2020...2025", &[2020,2025], "Invalid end year in range: .2025")]
