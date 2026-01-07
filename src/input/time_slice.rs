@@ -21,9 +21,9 @@ struct TimeSliceRaw {
     fraction: Year,
 }
 
-/// Get the specified ID from `set` or insert if it doesn't exist.
+/// Get the specified ID in `set`, if present, inserting it if not.
 ///
-/// The purpose of returning an ID is to deduplicate values and reduce memory usage.
+/// By returning an existing ID, we can avoid having extra copies.
 fn get_or_insert<T: IDLike>(id: T, set: &mut IndexSet<T>) -> T {
     // Sadly there's no entry API for HashSets: https://github.com/rust-lang/rfcs/issues/1490
     if let Ok(id) = set.get_id(&id) {

@@ -55,7 +55,8 @@ pub fn calculate_coefficients_for_assets(
 /// Calculates the cost coefficients for LCOX.
 ///
 /// For LCOX the activity coefficient is calculated as operating cost minus revenue from
-/// non-primary flows. The unmet demand coefficient is set from the model `value_of_lost_load`.
+/// non-primary flows. The unmet demand coefficient is set from the model parameter
+/// `value_of_lost_load`.
 pub fn calculate_coefficients_for_lcox(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,

@@ -16,8 +16,8 @@ type Item<'a> = (&'a AssetRef, &'a TimeSliceID, Activity);
 
 /// Calculate commodity prices.
 ///
-/// Calculate endogenous commodity prices for each commodity/region/time-slice according to
-/// the commodity's configured `PricingStrategy`.
+/// Calculate prices for each commodity/region/time-slice according to the commodity's configured
+/// `PricingStrategy`.
 ///
 /// # Arguments
 ///

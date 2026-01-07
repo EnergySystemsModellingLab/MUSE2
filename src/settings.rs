@@ -72,7 +72,7 @@ impl Settings {
     ///
     /// # Returns
     ///
-    /// The program settings as a `Settings` struct or an error if the file is invalid.
+    /// The program settings as a `Settings` struct or an error if loading fails.
     pub fn load() -> Result<Settings> {
         Self::load_from_path(&get_settings_file_path())
     }

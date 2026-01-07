@@ -34,8 +34,8 @@ pub enum InvestmentSet {
     /// Assets are selected for a single market using `select_assets_for_single_market`
     Single((CommodityID, RegionID)),
     /// Assets are selected for a group of markets which forms a cycle.
-    /// Experimental: handled by `select_assets_for_cycle` and guarded by the
-    /// `allow_broken_options`/`ALLOW_BROKEN_OPTION_NAME` parameter in the model.
+    /// Experimental: handled by `select_assets_for_cycle` and guarded by the broken options
+    /// parameter.
     Cycle(Vec<(CommodityID, RegionID)>),
     /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
@@ -158,8 +158,8 @@ impl Display for InvestmentSet {
 ///
 /// # Returns
 ///
-/// A list of `AssetRef` for assets selected (including retained commissioned assets)
-/// for the given planning `year`.
+/// The assets selected (including retained commissioned assets) for the given planning `year` or an
+/// error.
 pub fn perform_agent_investment(
     model: &Model,
     year: u32,
