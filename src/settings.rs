@@ -68,11 +68,11 @@ impl Default for Settings {
 impl Settings {
     /// Read the contents of a settings file from the model directory.
     ///
-    /// If the file is not present, default values for settings will be used
+    /// If the file is not present, default settings will be used.
     ///
     /// # Returns
     ///
-    /// The program settings as a `Settings` struct or an error if the file is invalid
+    /// The program settings as a `Settings` struct or an error if loading fails.
     pub fn load() -> Result<Settings> {
         Self::load_from_path(&get_settings_file_path())
     }
@@ -86,7 +86,7 @@ impl Settings {
         read_toml(file_path)
     }
 
-    /// The contents of the default settings file
+    /// The contents of the default settings file.
     pub fn default_file_contents() -> String {
         // Settings object with default values for params
         let settings = Settings::default();
@@ -94,7 +94,8 @@ impl Settings {
         // Convert to TOML
         let settings_raw = toml::to_string(&settings).expect("Could not convert settings to TOML");
 
-        // Iterate through the generated TOML, commenting out lines and adding docs
+        // Iterate through the generated TOML, commenting out parameter lines and inserting
+        // their documentation comments
         let mut out = DEFAULT_SETTINGS_FILE_HEADER.to_string();
         for line in settings_raw.split('\n') {
             if let Some((field, _)) = line.split_once('=') {

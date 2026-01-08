@@ -1,4 +1,4 @@
-//! Code for reading the agent objectives CSV file.
+//! Code for reading agent objectives from a CSV file.
 use super::super::{input_err_msg, read_csv, try_insert};
 use crate::ISSUES_URL;
 use crate::agent::{AgentID, AgentMap, AgentObjectiveMap, DecisionRule, ObjectiveType};
@@ -17,11 +17,11 @@ const AGENT_OBJECTIVES_FILE_NAME: &str = "agent_objectives.csv";
 /// An objective for an agent with associated parameters
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct AgentObjectiveRaw {
-    /// Unique agent id identifying the agent this objective belongs to
+    /// Unique agent id identifying the agent this objective belongs to.
     agent_id: AgentID,
     /// The year(s) the objective is relevant for
     years: String,
-    /// Acronym identifying the objective (e.g. LCOX)
+    /// Acronym identifying the objective (e.g. LCOX).
     objective_type: ObjectiveType,
     /// For the weighted sum decision rule, the set of weights to apply to each objective.
     decision_weight: Option<Dimensionless>,
@@ -39,7 +39,7 @@ struct AgentObjectiveRaw {
 ///
 /// # Returns
 ///
-/// A map of Agents, with the agent ID as the key
+/// A `HashMap` mapping `AgentID` to `AgentObjectiveMap`.
 pub fn read_agent_objectives(
     model_dir: &Path,
     agents: &AgentMap,

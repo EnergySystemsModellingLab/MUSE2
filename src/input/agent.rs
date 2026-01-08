@@ -42,12 +42,13 @@ struct AgentRaw {
 ///
 /// * `model_dir` - Folder containing model configuration files
 /// * `commodities` - Commodities for the model
-/// * `process_ids` - The possible valid process IDs
+/// * `processes` - Processes available in the model
 /// * `region_ids` - The possible valid region IDs
+/// * `milestone_years` - Milestone years in the model
 ///
 /// # Returns
 ///
-/// A map of Agents, with the agent ID as the key
+/// A map of agents keyed by agent ID
 pub fn read_agents(
     model_dir: &Path,
     commodities: &CommodityMap,
@@ -89,17 +90,16 @@ pub fn read_agents(
     Ok(agents)
 }
 
-/// Read agents info from the agents.csv file.
+/// Read agents info from the `agents.csv` file.
 ///
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `commodities` - Commodities for the model
-/// * `process_ids` - The possible valid process IDs
+/// * `region_ids` - The possible valid region IDs
 ///
 /// # Returns
 ///
-/// A map of Agents, with the agent ID as the key
+/// A map of agents keyed by agent ID
 fn read_agents_file(model_dir: &Path, region_ids: &IndexSet<RegionID>) -> Result<AgentMap> {
     let file_path = model_dir.join(AGENT_FILE_NAME);
     let agents_csv = read_csv(&file_path)?;

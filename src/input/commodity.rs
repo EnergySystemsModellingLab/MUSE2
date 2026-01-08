@@ -1,4 +1,4 @@
-//! Code for reading in commodity-related data from CSV files.
+//! Code for reading commodity-related data from CSV files.
 use super::{input_err_msg, read_csv};
 use crate::ISSUES_URL;
 use crate::commodity::{
@@ -43,7 +43,7 @@ struct CommodityRaw {
 ///
 /// # Returns
 ///
-/// A map containing commodities, grouped by commodity ID or an error.
+/// An `IndexMap` mapping `CommodityID` to `Commodity`, or an error.
 pub fn read_commodities(
     model_dir: &Path,
     region_ids: &IndexSet<RegionID>,

@@ -1,4 +1,4 @@
-//! Code for reading in time slice info from a CSV file.
+//! Code for reading time slice info from a CSV file.
 use super::{
     IDLike, check_values_sum_to_one_approx, deserialise_proportion_nonzero, input_err_msg, read_csv,
 };
@@ -21,9 +21,9 @@ struct TimeSliceRaw {
     fraction: Year,
 }
 
-/// Get the specified ID from `set` or insert if it doesn't exist.
+/// Get the specified ID in `set`, if present, inserting it if not.
 ///
-/// The purpose of returning an ID is so that we can dedup memory.
+/// By returning an existing ID, we can avoid having extra copies.
 fn get_or_insert<T: IDLike>(id: T, set: &mut IndexSet<T>) -> T {
     // Sadly there's no entry API for HashSets: https://github.com/rust-lang/rfcs/issues/1490
     if let Ok(id) = set.get_id(&id) {

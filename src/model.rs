@@ -27,7 +27,7 @@ pub struct Model {
     pub time_slice_info: TimeSliceInfo,
     /// Regions for the simulation
     pub regions: RegionMap,
-    /// Commodity ordering for each region and year
+    /// Commodity ordering for each milestone year
     pub investment_order: HashMap<u32, Vec<InvestmentSet>>,
 }
 

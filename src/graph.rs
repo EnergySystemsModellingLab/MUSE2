@@ -69,12 +69,11 @@ impl Display for GraphEdge {
 
 /// Helper function to return a possible flow operating in the requested year
 ///
-/// We are interested only on the flows direction, which are always the same for all years. So this
-/// function checks if the process can be operating in the target year and region and, if so, it
-/// returns its flows. It considers not only when the process can be commissioned, but also the
-/// lifetime of the process, since a process can be opperating many years after the commission time
-/// window is over. If the process cannot be opperating in the target year and region, None is
-/// returned.
+/// We are only interested in the flow directions, which are constant across years. This
+/// function checks whether the process can be operating in the target region and year and, if so,
+/// returns its flows. It considers both the commission year and the process lifetime, since a
+/// process may operate for years after its commission window. If the process cannot be operating
+/// in the target region/year, `None` is returned.
 fn get_flow_for_year(
     process: &Process,
     target: (RegionID, u32),
@@ -85,7 +84,7 @@ fn get_flow_for_year(
     }
 
     // Otherwise we try to find one that operates in the target year. It is assumed that
-    // parameters are defined in the same (region, year) combinations than flows, at least.
+    // parameters are defined for at least the same (region, year) combinations as flows.
     let (target_region, target_year) = target;
     for ((region, year), value) in &process.flows {
         if *region != target_region {

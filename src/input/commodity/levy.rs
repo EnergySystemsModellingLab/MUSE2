@@ -1,4 +1,4 @@
-//! Code for reading in the commodity levies CSV file.
+//! Code for reading commodity levies from a CSV file.
 use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::commodity::{BalanceType, CommodityID, CommodityLevyMap};
 use crate::id::IDCollection;
@@ -32,7 +32,7 @@ struct CommodityLevyRaw {
     value: MoneyPerFlow,
 }
 
-/// Read costs associated with each commodity from levies CSV file.
+/// Read costs associated with each commodity from `commodity_levies.csv`.
 ///
 /// # Arguments
 ///
@@ -44,7 +44,8 @@ struct CommodityLevyRaw {
 ///
 /// # Returns
 ///
-/// A map containing levies, grouped by commodity ID or an error.
+/// A `HashMap<CommodityID, HashMap<BalanceType, CommodityLevyMap>>` mapping each commodity to
+/// its per-balance-type levy maps.
 pub fn read_commodity_levies(
     model_dir: &Path,
     commodity_ids: &IndexSet<CommodityID>,
@@ -64,7 +65,7 @@ pub fn read_commodity_levies(
     .with_context(|| input_err_msg(&file_path))
 }
 
-/// Read costs associated with each commodity from an iterator over raw cost entries.
+/// Read commodity levies from an iterator of raw entries.
 ///
 /// # Arguments
 ///
@@ -76,7 +77,8 @@ pub fn read_commodity_levies(
 ///
 /// # Returns
 ///
-/// A map containing levies, grouped by commodity ID.
+/// A `HashMap<CommodityID, HashMap<BalanceType, CommodityLevyMap>>` grouping levy maps by
+/// commodity and balance type.
 fn read_commodity_levies_iter<I>(
     iter: I,
     commodity_ids: &IndexSet<CommodityID>,
@@ -172,14 +174,14 @@ where
     Ok(map)
 }
 
-/// Add missing region to commodity levy map with zero cost for all years and time slices.
+/// Add a missing region to a commodity levy map with zero cost for all years and time slices.
 ///
 /// # Arguments
 ///
 /// * `map` - The commodity levy map to update
 /// * `region_id` - The region ID to add
-/// * `milestone_years` - All milestone years
-/// * `time_slice_info` - Information about time slices
+/// * `milestone_years` - Milestone years used by the model
+/// * `time_slice_info` - Time slice configuration
 fn add_missing_region_to_commodity_levy_map(
     map: &mut CommodityLevyMap,
     region_id: &RegionID,
@@ -202,12 +204,12 @@ fn add_missing_region_to_commodity_levy_map(
 ///
 /// * `map` - The commodity levy map to validate
 /// * `regions` - The set of regions that should be covered
-/// * `milestone_years` - All milestone years
-/// * `time_slice_info` - Information about time slices
+/// * `milestone_years` - Milestone years used by the model
+/// * `time_slice_info` - Time slice configuration
 ///
 /// # Returns
 ///
-/// Nothing if the map is valid. An error if the map is missing any entries.
+/// `Ok(())` if the map is valid; an error if any entries are missing.
 fn validate_commodity_levy_map(
     map: &CommodityLevyMap,
     regions: &IndexSet<RegionID>,

@@ -33,7 +33,9 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 pub enum InvestmentSet {
     /// Assets are selected for a single market using `select_assets_for_single_market`
     Single((CommodityID, RegionID)),
-    /// Assets are selected for a group of markets which forms a cycle. NOT YET IMPLEMENTED.
+    /// Assets are selected for a group of markets which forms a cycle.
+    /// Experimental: handled by `select_assets_for_cycle` and guarded by the broken options
+    /// parameter.
     Cycle(Vec<(CommodityID, RegionID)>),
     /// Assets are selected for a layer of independent `InvestmentSet`s
     Layer(Vec<InvestmentSet>),
@@ -150,9 +152,14 @@ impl Display for InvestmentSet {
 ///
 /// * `model` - The model
 /// * `year` - Current milestone year
-/// * `assets` - The asset pool
+/// * `existing_assets` - The asset pool (commissioned and otherwise)
 /// * `prices` - Commodity prices calculated in the previous full system dispatch
 /// * `writer` - Data writer
+///
+/// # Returns
+///
+/// The assets selected (including retained commissioned assets) for the given planning `year` or an
+/// error.
 pub fn perform_agent_investment(
     model: &Model,
     year: u32,

@@ -100,7 +100,7 @@ fn can_be_active(
 
 /// Validates that the commodity graph follows the rules for different commodity types.
 ///
-/// It takes as input a graph created by `create_commodities_graph_for_validation`, which is built
+/// It takes as input a graph prepared by `prepare_commodities_graph_for_validation`, which is built
 /// for a specific time slice selection (must match the `time_slice_level` passed to this function).
 ///
 /// The validation is only performed for commodities with the specified time slice level. For full

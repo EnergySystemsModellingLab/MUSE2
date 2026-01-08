@@ -1,4 +1,4 @@
-//! Demand slicing determines how annual demand is distributed across the year.
+//! Demand slicing distributes annual demand across time slices.
 use super::super::{check_values_sum_to_one_approx, input_err_msg, read_csv};
 use crate::commodity::CommodityID;
 use crate::id::IDCollection;
@@ -26,15 +26,19 @@ struct DemandSlice {
 /// A map relating commodity, region and time slice selection to the fraction of annual demand
 pub type DemandSliceMap = HashMap<(CommodityID, RegionID, TimeSliceSelection), Dimensionless>;
 
-/// Read demand slices from specified model directory.
+/// Read demand slices from the specified model directory.
 ///
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `svd_commodities` - Map of service demand commodities
-/// * `region_ids` - All possible IDs for regions
-/// * `commodity_regions` - Pairs of commodities + regions listed in demand CSV file
-/// * `time_slice_info` - Information about seasons and times of day
+/// * `svd_commodities` - Map of service-demand commodities
+/// * `region_ids` - Known region identifiers
+/// * `time_slice_info` - Time slice configuration (seasons and times of day)
+///
+/// # Returns
+///
+/// A [`DemandSliceMap`] mapping `(CommodityID, RegionID, TimeSliceSelection)` to the fraction
+/// of annual demand for that commodity/region/time-slice selection.
 pub fn read_demand_slices(
     model_dir: &Path,
     svd_commodities: &BorrowedCommodityMap,

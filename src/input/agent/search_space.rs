@@ -1,4 +1,4 @@
-//! Code for reading the agent search space CSV file.
+//! Code for reading agent search space data from a CSV file.
 use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::agent::{Agent, AgentID, AgentMap, AgentSearchSpaceMap};
 use crate::commodity::CommodityID;
@@ -34,7 +34,7 @@ struct AgentSearchSpace {
     agent_id: AgentID,
     /// The commodity to apply the search space to
     commodity_id: CommodityID,
-    /// The year(s) the objective is relevant for
+    /// The year(s) the search space applies to
     years: Vec<u32>,
     /// The agent's search space
     search_space: Rc<Vec<Rc<Process>>>,
@@ -103,7 +103,7 @@ fn parse_search_space_str(search_space: &str, processes: &ProcessMap) -> Result<
 ///
 /// # Returns
 ///
-/// A map of Agents, with the agent ID as the key
+/// A `HashMap` mapping `AgentID` to `AgentSearchSpaceMap`.
 pub fn read_agent_search_space(
     model_dir: &Path,
     agents: &AgentMap,

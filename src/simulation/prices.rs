@@ -1,4 +1,4 @@
-//! Code for updating the simulation state.
+//! Code for calculating commodity prices used by the simulation.
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, PricingStrategy};
 use crate::model::Model;
@@ -16,13 +16,19 @@ type Item<'a> = (&'a AssetRef, &'a TimeSliceID, Activity);
 
 /// Calculate commodity prices.
 ///
-/// Prices for each commodity are calculated based on their respective pricing strategies.
+/// Calculate prices for each commodity/region/time-slice according to the commodity's configured
+/// `PricingStrategy`.
 ///
 /// # Arguments
 ///
 /// * `model` - The model
 /// * `solution` - Solution to dispatch optimisation
 /// * `year` - The year for which prices are being calculated
+///
+/// # Returns
+///
+/// A `CommodityPrices` mapping `(commodity, region, time_slice)` to `MoneyPerFlow` representing
+/// endogenous prices computed from the optimisation solution.
 pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<CommodityPrices> {
     // Compute shadow prices for all SED/SVD commodities (needed by all strategies)
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
