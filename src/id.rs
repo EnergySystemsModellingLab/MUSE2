@@ -103,7 +103,7 @@ pub(crate) use define_id_getter;
 
 /// A data structure containing a set of IDs
 pub trait IDCollection<ID: IDLike> {
-    /// Check if the ID is in the collection, returning a copy of it if found.
+    /// Check if the ID is in the collection, returning a reference to it if found.
     ///
     /// # Arguments
     ///
@@ -111,7 +111,7 @@ pub trait IDCollection<ID: IDLike> {
     ///
     /// # Returns
     ///
-    /// A copy of the ID in `self`, or an error if not found.
+    /// A reference to the ID in `self`, or an error if not found.
     fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID>;
 }
 

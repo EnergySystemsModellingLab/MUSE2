@@ -21,7 +21,7 @@ pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
 /// A map for the agent's search space, keyed by commodity and year
 pub type AgentSearchSpaceMap = HashMap<(CommodityID, u32), Rc<Vec<Rc<Process>>>>;
 
-/// A map of objectives for an agent, keyed by commodity and year.
+/// A map of objectives for an agent, keyed by year.
 ///
 /// NB: As we currently only support the "single" decision rule, the only parameter we need for
 /// objectives is the type.

@@ -1,4 +1,4 @@
-//! Functionality for running the MUSE2 simulation.
+//! Functionality for running the MUSE2 simulation across milestone years.
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
@@ -35,7 +35,7 @@ pub fn run(
 
     // Iterate over milestone years
     let mut year_iter = model.iter_years().peekable();
-    let year = year_iter.next().unwrap(); // NB: There will be at least one year
+    let year = year_iter.next().unwrap(); // Unwrap is safe: model must contain at least one milestone year
 
     info!("Milestone year: {year}");
 
@@ -73,7 +73,7 @@ pub fn run(
         // Take all the active assets as a list of existing assets
         let existing_assets = assets.take();
 
-        // Ironing out loop
+        // Iterative loop to "iron out" prices via repeated investment and dispatch
         let mut ironing_out_iter = 0;
         let selected_assets: Vec<AssetRef> = loop {
             // Add context to the writer

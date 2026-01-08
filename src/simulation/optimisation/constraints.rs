@@ -11,12 +11,22 @@ use indexmap::IndexMap;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
+    /// Row offset in the solver's row ordering corresponding to the first key in `keys`.
+    ///
+    /// This offset is used to index into the solver duals vector when mapping dual
+    /// values back to the stored `keys`.
     offset: usize,
+    /// Keys for each constraint row. The number of keys equals the number of rows
+    /// covered starting at `offset`.
     keys: Vec<T>,
 }
 
 impl<T> KeysWithOffset<T> {
-    /// Zip the keys with the corresponding dual values in the solution, accounting for the offset
+    /// Zip the keys with the corresponding dual values in the solution, accounting for the offset.
+    ///
+    /// The returned iterator yields pairs of `(key, dual)` where `dual` is wrapped in the
+    /// unit type `U: UnitType`. The method asserts that the provided `duals` slice contains
+    /// at least `offset + keys.len()` elements.
     pub fn zip_duals<'a, U>(&'a self, duals: &'a [f64]) -> impl Iterator<Item = (&'a T, U)>
     where
         U: UnitType,
@@ -99,6 +109,10 @@ where
 ///
 /// See description in [the dispatch optimisation documentation][1].
 ///
+/// Returns a `CommodityBalanceKeys` where `offset` is the row index of the first
+/// commodity-balance constraint added to `problem` and `keys` lists the
+/// `(commodity, region, time_selection)` entries in the same order as the rows.
+///
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#commodity-balance-for--cin-mathbfcmathrmsed-
 fn add_commodity_balance_constraints<'a, I>(
     problem: &mut Problem,
@@ -112,6 +126,8 @@ where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
 {
     // Row offset in problem. This line **must** come before we add more constraints.
+    // It denotes the index in the solver's row ordering that corresponds to the first
+    // commodity-balance row added below and is used later to slice the duals array.
     let offset = problem.num_rows();
 
     let mut keys = Vec::new();
@@ -164,6 +180,8 @@ where
             } else {
                 0.0
             };
+            // Consume collected terms into a row. `terms.drain(..)` ensures the vector is
+            // emptied for the next selection.
             problem.add_row(min.., terms.drain(..));
             keys.push((
                 commodity_id.clone(),
@@ -183,6 +201,12 @@ where
 ///
 /// See description in [the dispatch optimisation documentation][1].
 ///
+/// Returns an `ActivityKeys` where `offset` is the row index of the first
+/// activity constraint added and `keys` enumerates the `(asset, time_selection)`
+/// entries in the same row order. Note that for flexible-capacity assets two rows
+/// (upper and lower bounds) are added per selection; in that case the same key is
+/// stored twice to match the solver ordering.
+///
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
 fn add_activity_constraints<'a, I>(
     problem: &mut Problem,
@@ -194,6 +218,8 @@ where
     I: Iterator<Item = &'a AssetRef> + 'a,
 {
     // Row offset in problem. This line **must** come before we add more constraints.
+    // It denotes the index into the solver's row ordering for the first activity constraint
+    // added below and is used when mapping duals back to assets/time selections.
     let offset = problem.num_rows();
 
     let mut keys = Vec::new();

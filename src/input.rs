@@ -51,7 +51,7 @@ impl<K: Eq + Hash, V> Insert<K, V> for IndexMap<K, V> {
 
 /// Read a series of type `T`s from a CSV file.
 ///
-/// Will raise an error if the file is empty.
+/// Returns an error if the file is empty.
 ///
 /// # Arguments
 ///
@@ -178,9 +178,11 @@ where
     iter.into_iter().tuple_windows().all(|(a, b)| a < b)
 }
 
-/// Inserts a key-value pair into a `HashMap` if the key does not already exist.
+/// Insert a key-value pair into a map implementing the `Insert` trait if the key does not
+/// already exist.
 ///
-/// If the key already exists, it returns an error with a message indicating the key's existence.
+/// If the key already exists, this returns an error with a message indicating the key's
+/// existence.
 pub fn try_insert<M, K, V>(map: &mut M, key: &K, value: V) -> Result<()>
 where
     M: Insert<K, V>,

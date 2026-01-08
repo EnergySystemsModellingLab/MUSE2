@@ -1,4 +1,4 @@
-//! Code for reading process flows file
+//! Code for reading process flows from a CSV file.
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::{
@@ -57,7 +57,18 @@ impl ProcessFlowRaw {
     }
 }
 
-/// Read process flows from a CSV file
+/// Read process flows from a CSV file.
+///
+/// # Arguments
+///
+/// * `model_dir` - Folder containing model configuration files
+/// * `processes` - Mutable map of known processes (may be updated)
+/// * `commodities` - Map of known commodities
+/// * `milestone_years` - Milestone years used by the model
+///
+/// # Returns
+///
+/// A `HashMap<ProcessID, ProcessFlowsMap>` mapping process IDs to their flows.
 pub fn read_process_flows(
     model_dir: &Path,
     processes: &mut ProcessMap,
@@ -70,7 +81,18 @@ pub fn read_process_flows(
         .with_context(|| input_err_msg(&file_path))
 }
 
-/// Read '`ProcessFlowRaw`' records from an iterator and convert them into '`ProcessFlow`' records.
+/// Read `ProcessFlowRaw` records from an iterator and convert them into `ProcessFlow` records.
+///
+/// # Arguments
+///
+/// * `iter` - Iterator over `ProcessFlowRaw` records
+/// * `processes` - Mutable map of known processes used for validation and updates
+/// * `commodities` - Map of known commodities
+/// * `milestone_years` - Milestone years used by the model
+///
+/// # Returns
+///
+/// A `HashMap<ProcessID, ProcessFlowsMap>` mapping process IDs to their flows.
 fn read_process_flows_from_iter<I>(
     iter: I,
     processes: &mut ProcessMap,

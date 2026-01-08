@@ -1,4 +1,4 @@
-//! Code for reading process-related information from CSV files.
+//! Code for reading process data from CSV files.
 use super::{input_err_msg, read_csv};
 use crate::commodity::CommodityMap;
 use crate::id::IDCollection;
@@ -53,7 +53,7 @@ define_id_getter! {ProcessRaw, ProcessID}
 ///
 /// # Returns
 ///
-/// This function returns a map of processes, with the IDs as keys.
+/// A `ProcessMap` mapping `ProcessID` to `Process`.
 pub fn read_processes(
     model_dir: &Path,
     commodities: &CommodityMap,

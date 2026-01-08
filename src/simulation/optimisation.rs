@@ -115,7 +115,7 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `markets` - The subset of markets the problem is being run for
+    /// * `markets_to_allow_unmet_demand` - The subset of markets to add unmet demand variables for
     fn add_unmet_demand_variables(
         &mut self,
         problem: &mut Problem,
@@ -369,8 +369,9 @@ fn filter_input_prices(
 
 /// Provides the interface for running the dispatch optimisation.
 ///
-/// The caller can allow the dispatch run to return without error when demand is not met by calling
-/// the `with_unmet_demand_allowed` method.
+/// The run will attempt to meet unmet demand: if the solver reports infeasibility
+/// the implementation will rerun including unmet-demand variables to identify offending
+/// markets and provide a clearer error message.
 ///
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
@@ -464,7 +465,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// This is an internal function as callers always want to save results.
     fn run_no_save(&self) -> Result<Solution<'model>> {
-        // If the user provided no markets to balance, we all use of them
+        // If the user provided no markets to balance, we use all of them
         let all_markets: Vec<_>;
         let markets_to_balance = if self.markets_to_balance.is_empty() {
             all_markets = self.model.iter_markets().collect();

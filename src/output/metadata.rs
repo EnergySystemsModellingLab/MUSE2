@@ -1,4 +1,9 @@
-//! Code for writing metadata to file
+//! Write run, build and platform metadata to a TOML file.
+//!
+//! This module collects information about the current run (model path and
+//! start time), build information provided by the `built` script, and basic
+//! platform details. The aggregated metadata is written as `metadata.toml` in
+//! the output directory.
 use anyhow::Result;
 use chrono::prelude::*;
 use platform_info::{PlatformInfo, PlatformInfoAPI, UNameAPI};
@@ -6,10 +11,13 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 
-/// The output file name for metadata
+/// The output filename used for metadata.
 const METADATA_FILE_NAME: &str = "metadata.toml";
 
-/// Information about the program build via `built` crate
+/// Build-time information included by the build script (via the `built` crate).
+///
+/// The `built` script produces a Rust file containing constants for package
+/// name, version, target, rustc version, build time, and optional git metadata.
 #[allow(clippy::doc_markdown)]
 #[allow(clippy::needless_raw_strings)]
 mod built_info {
@@ -17,7 +25,8 @@ mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-/// Get information about program version from git
+/// Return a short git commit hash for the build, or `"unknown"` when not
+/// available. If the source tree was dirty at build time, `-dirty` is appended.
 fn get_git_hash() -> String {
     let Some(hash) = built_info::GIT_COMMIT_HASH_SHORT else {
         return "unknown".into();
@@ -30,7 +39,10 @@ fn get_git_hash() -> String {
     }
 }
 
-/// Metadata about the program run, build and version information for MUSE and the user's system
+/// Top-level metadata structure serialized to TOML.
+///
+/// Contains information about the run, the program build, and the host
+/// platform. This is written to `metadata.toml` by `write_metadata`.
 #[derive(Serialize)]
 struct Metadata<'a> {
     run: RunMetadata<'a>,
@@ -116,7 +128,16 @@ impl Default for PlatformMetadata {
     }
 }
 
-/// Write metadata to the specified output path in TOML format
+/// Write metadata to `metadata.toml` in the given output directory.
+///
+/// # Arguments
+///
+/// * `output_path` - Directory where `metadata.toml` will be written.
+/// * `model_path` - Path to the model that was executed (recorded in the metadata).
+///
+/// # Errors
+///
+/// Returns an error if serializing the metadata or writing the file fails.
 pub fn write_metadata(output_path: &Path, model_path: &Path) -> Result<()> {
     let metadata = Metadata {
         run: RunMetadata::new(model_path),

@@ -63,7 +63,7 @@ pub struct AssetGroupID(u32);
 /// determined by the investment algorithm.
 ///
 /// `Future` and `Candidate` assets can be converted to `Commissioned` assets by calling
-/// `commission_future` or `commission_candidate` respectively.
+/// the `commission` method (or via pool operations that commission future/selected assets).
 ///
 /// `Commissioned` assets can be decommissioned by calling `decommission`.
 #[derive(Clone, Debug, PartialEq, strum::Display)]
@@ -826,12 +826,12 @@ impl Asset {
             mothballed_year, ..
         } = &self.state
         else {
-            panic!("Cannot mothball an asset that hasn't been commissioned")
+            panic!("Cannot get mothballed year for an asset that hasn't been commissioned")
         };
         *mothballed_year
     }
 
-    /// Checks if the assets corresponds to a process that has a `unit_size` and is therefore divisible.
+    /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
     pub fn is_divisible(&self) -> bool {
         self.process.unit_size.is_some()
     }

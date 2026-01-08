@@ -1,4 +1,4 @@
-//! Code for reading the agent commodities CSV file.
+//! Code for reading agent commodity portions from a CSV file.
 use super::super::{deserialise_proportion_nonzero, input_err_msg, read_csv, try_insert};
 use crate::agent::{AgentCommodityPortionsMap, AgentID, AgentMap};
 use crate::commodity::{CommodityMap, CommodityType};
@@ -33,10 +33,14 @@ struct AgentCommodityPortionRaw {
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
+/// * `agents` - Known agents in the model
+/// * `commodities` - Known commodities in the model
+/// * `region_ids` - Known region identifiers
+/// * `milestone_years` - Milestone years used by the model
 ///
 /// # Returns
 ///
-/// A map of Agents, with the agent ID as the key
+/// A `HashMap` mapping `AgentID` to `AgentCommodityPortionsMap`.
 pub fn read_agent_commodity_portions(
     model_dir: &Path,
     agents: &AgentMap,

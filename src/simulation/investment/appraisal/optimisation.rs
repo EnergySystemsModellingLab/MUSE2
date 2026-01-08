@@ -14,6 +14,9 @@ use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 
 /// A decision variable in the optimisation
+///
+/// This alias represents a column created in the `highs` solver. Callers rely on the order
+/// in which columns are added to the problem when extracting solution values.
 pub type Variable = highs::Col;
 
 /// Map storing variables for the optimisation problem
@@ -133,6 +136,9 @@ pub fn perform_optimisation(
     let solution_values = solution.columns();
     Ok(ResultsMap {
         capacity: Capacity::new(solution_values[0]),
+        // The mapping below assumes the column ordering documented on `VariableMap::add_to_problem`:
+        // index 0 = capacity, next `n` entries = activities (in the same key order as
+        // `cost_coefficients.activity_coefficients`), remaining entries = unmet demand.
         activity: variables
             .activity_vars
             .keys()

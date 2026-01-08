@@ -1,4 +1,4 @@
-//! The command line interface for the simulation.
+//! Command-line interface for the MUSE2 simulation.
 use crate::graph::save_commodity_graphs_for_model;
 use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
@@ -105,7 +105,7 @@ impl Commands {
     }
 }
 
-/// Parse CLI arguments and start MUSE2
+/// Parse CLI arguments and run the requested command or show help.
 pub fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 

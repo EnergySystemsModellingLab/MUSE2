@@ -65,6 +65,11 @@ impl AppraisalOutput {
 ///
 /// This is more commonly referred to as Levelised Cost of *Electricity*, but as the model can
 /// include other flows, we use the term LCOX.
+///
+/// # Returns
+///
+/// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
+/// The returned `metric` is the LCOX value (lower is better).
 fn calculate_lcox(
     model: &Model,
     asset: &AssetRef,
@@ -107,6 +112,12 @@ fn calculate_lcox(
 }
 
 /// Calculate NPV for a hypothetical investment in the given asset.
+///
+/// # Returns
+///
+/// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
+/// The returned `metric` is the negative of the profitability index so that, like LCOX,
+/// lower metric values indicate a more desirable investment (i.e. higher NPV).
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
@@ -150,6 +161,11 @@ fn calculate_npv(
 }
 
 /// Appraise the given investment with the specified objective type
+///
+/// # Returns
+///
+/// The `AppraisalOutput` produced by the selected appraisal method. The `metric` field is
+/// comparable across methods where lower values indicate a better investment.
 pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
