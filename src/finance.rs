@@ -29,12 +29,12 @@ pub fn annual_capital_cost(
 }
 
 /// Represents the profitability index of an investment
-/// in terms of it's annualised components.
+/// in terms of its annualised components.
 #[derive(Debug, Clone, Copy)]
 pub struct ProfitabilityIndex {
-    /// the total annualised surplus of an asset
+    /// The total annualised surplus of an asset
     pub total_annualised_surplus: Money,
-    /// the total annualised fixed cost of an asset
+    /// The total annualised fixed cost of an asset
     pub annualised_fixed_cost: Money,
 }
 
@@ -150,12 +150,6 @@ mod tests {
         vec![("q1", "peak", 40.0)],
         0.04 // Expected PI: (5*40) / (50*100) = 200/5000 = 0.04
     )]
-    #[case(
-        0.0, 100.0,
-        vec![("winter", "day", 10.0)],
-        vec![("winter", "day", 50.0)],
-        f64::INFINITY // Zero capacity case
-    )]
     fn profitability_index_works(
         #[case] capacity: f64,
         #[case] annual_fixed_cost: f64,
@@ -209,6 +203,18 @@ mod tests {
         let result =
             profitability_index(capacity, annual_fixed_cost, &activity, &activity_surpluses);
         assert_eq!(result.value(), Dimensionless(0.0));
+    }
+
+    #[test]
+    #[should_panic(expected = "Annualised fixed cost cannot be zero")]
+    fn profitability_index_panics_on_zero_cost() {
+        let result = profitability_index(
+            Capacity(0.0),
+            MoneyPerCapacity(100.0),
+            &indexmap! {},
+            &indexmap! {},
+        );
+        result.value();
     }
 
     #[rstest]

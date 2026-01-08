@@ -31,7 +31,7 @@ pub struct AppraisalOutput {
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// The hypothetical unmet demand following investment in this asset
     pub unmet_demand: DemandMap,
-    /// The comparison metric to compare investment decisions (lower is better)
+    /// The comparison metric to compare investment decisions
     pub metric: Box<dyn MetricTrait>,
     /// Capacity and activity coefficients used in the appraisal
     pub coefficients: ObjectiveCoefficients,
@@ -246,7 +246,7 @@ fn calculate_lcox(
 ///
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 /// The returned `metric` is the negative of the profitability index so that, like LCOX,
-/// lower metric values indicate a more desirable investment (i.e. higher NPV).
+/// higher metric values indicate a more desirable investment (i.e. higher NPV).
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
@@ -294,7 +294,7 @@ fn calculate_npv(
 /// # Returns
 ///
 /// The `AppraisalOutput` produced by the selected appraisal method. The `metric` field is
-/// comparable across methods where lower values indicate a better investment.
+/// comparable across methods.
 pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
