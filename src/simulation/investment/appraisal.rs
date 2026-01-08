@@ -245,8 +245,6 @@ fn calculate_lcox(
 /// # Returns
 ///
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
-/// The returned `metric` is the negative of the profitability index so that, like LCOX,
-/// higher metric values indicate a more desirable investment (i.e. higher NPV).
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
@@ -294,7 +292,7 @@ fn calculate_npv(
 /// # Returns
 ///
 /// The `AppraisalOutput` produced by the selected appraisal method. The `metric` field is
-/// comparable across methods.
+/// comparable with other appraisals of the same type (npv/lcox).
 pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
