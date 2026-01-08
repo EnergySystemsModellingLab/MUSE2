@@ -41,6 +41,10 @@ pub struct ProfitabilityIndex {
 impl ProfitabilityIndex {
     /// Calculates the value of the profitability index.
     pub fn value(&self) -> Dimensionless {
+        assert!(
+            self.annualised_fixed_cost != Money(0.0),
+            "Annualised fixed cost cannot be zero when calculating profitability index."
+        );
         self.total_annualised_surplus / self.annualised_fixed_cost
     }
 }
