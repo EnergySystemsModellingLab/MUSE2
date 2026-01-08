@@ -6,7 +6,7 @@ use crate::commodity::Commodity;
 use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity};
+use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use indexmap::IndexMap;
@@ -87,19 +87,19 @@ pub trait MetricTrait: Any + Send + Sync {
 #[derive(Debug, Clone)]
 pub struct LCOXMetric {
     /// The calculated cost value for this LCOX metric
-    pub cost: f64,
+    pub cost: MoneyPerActivity,
 }
 
 impl LCOXMetric {
     /// Creates a new `LCOXMetric` with the given cost.
-    pub fn new(cost: f64) -> Self {
+    pub fn new(cost: MoneyPerActivity) -> Self {
         Self { cost }
     }
 }
 
 impl MetricTrait for LCOXMetric {
     fn value(&self) -> f64 {
-        self.cost
+        self.cost.value()
     }
 
     fn compare(&self, other: &dyn MetricTrait) -> Ordering {
@@ -108,7 +108,7 @@ impl MetricTrait for LCOXMetric {
             .downcast_ref::<Self>()
             .expect("Cannot compare metrics of different types");
 
-        if approx_eq!(f64, self.cost, other.cost) {
+        if approx_eq!(MoneyPerActivity, self.cost, other.cost) {
             Ordering::Equal
         } else {
             // Lower cost is better
@@ -138,7 +138,7 @@ impl NPVMetric {
 
     /// Returns true if this metric represents a zero fixed cost case.
     fn is_zero_fixed_cost(&self) -> bool {
-        self.profitability_index.annualised_fixed_cost.value() == 0.0
+        self.profitability_index.annualised_fixed_cost == Money(0.0)
     }
 }
 
@@ -164,10 +164,10 @@ impl MetricTrait for NPVMetric {
         match (self.is_zero_fixed_cost(), other.is_zero_fixed_cost()) {
             // Both have zero fixed cost: compare total surplus (higher is better)
             (true, true) => {
-                let self_surplus = self.profitability_index.total_annualised_surplus.value();
-                let other_surplus = other.profitability_index.total_annualised_surplus.value();
+                let self_surplus = self.profitability_index.total_annualised_surplus;
+                let other_surplus = other.profitability_index.total_annualised_surplus;
 
-                if approx_eq!(f64, self_surplus, other_surplus) {
+                if approx_eq!(Money, self_surplus, other_surplus) {
                     Ordering::Equal
                 } else {
                     other_surplus.partial_cmp(&self_surplus).unwrap()
@@ -175,10 +175,10 @@ impl MetricTrait for NPVMetric {
             }
             // Both have non-zero fixed cost: compare profitability index (higher is better)
             (false, false) => {
-                let self_pi = self.profitability_index.value().value();
-                let other_pi = other.profitability_index.value().value();
+                let self_pi = self.profitability_index.value();
+                let other_pi = other.profitability_index.value();
 
-                if approx_eq!(f64, self_pi, other_pi) {
+                if approx_eq!(Dimensionless, self_pi, other_pi) {
                     Ordering::Equal
                 } else {
                     other_pi.partial_cmp(&self_pi).unwrap()
@@ -225,7 +225,7 @@ fn calculate_lcox(
         capacity: results.capacity,
         activity: results.activity,
         unmet_demand: results.unmet_demand,
-        metric: Box::new(LCOXMetric::new(cost_index.value())),
+        metric: Box::new(LCOXMetric::new(cost_index)),
         coefficients: coefficients.clone(),
         demand: demand.clone(),
     })
@@ -251,7 +251,7 @@ fn calculate_npv(
 
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
-        annual_fixed_cost.value() >= 0.0,
+        annual_fixed_cost >= MoneyPerCapacity(0.0),
         "The current NPV calculation does not support negative annual fixed costs"
     );
 

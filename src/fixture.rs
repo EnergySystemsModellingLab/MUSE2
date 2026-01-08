@@ -361,7 +361,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         activity,
         demand,
         unmet_demand,
-        metric: Box::new(LCOXMetric::new(4.14)),
+        metric: Box::new(LCOXMetric::new(MoneyPerActivity(4.14))),
     }
 }
 
