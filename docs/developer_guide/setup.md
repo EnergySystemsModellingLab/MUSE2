@@ -41,18 +41,12 @@ We provide a [justfile] for some common developer tasks.
 We recommend that developers use `rustup` to install the Rust toolchain. Follow the instructions on
 [the `rustup` website](https://rustup.rs/).
 
-Once you have done so, select the `stable` toolchain (used by this project) as your default with:
+This project defines the required version of the Rust toolchain in [`rust-toolchain.toml`]. The
+first time you attempt to run `cargo` (see [Building and developing MUSE2]), this toolchain should
+be downloaded and installed automatically by `rustup`.
 
-```sh
-rustup default stable
-```
-
-As the project uses the latest stable toolchain, you may see build errors if your toolchain is out
-of date. You can update to the latest version with:
-
-```sh
-rustup update stable
-```
+[`rust-toolchain.toml`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/rust-toolchain.toml
+[Building and developing MUSE2]: ./coding.md
 
 #### Installing C++ tools for HiGHS
 
