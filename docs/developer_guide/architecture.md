@@ -18,3 +18,27 @@ used to provide this interface.
 
 [cli]: ../command_line_help.md
 [`clap`]: <https://docs.rs/clap/latest/clap/>
+
+## Error handling
+
+One of the distinctive features of the Rust programming language is its approach to error handling.
+There are two usual ways to signal that an error has occurred: either by returning it from a
+function like any other value (usually via the [`Result`] enum) or by "panicking", which usually
+results in termination of the program[^1]. See [the official docs] for more information.
+
+In the case of MUSE2, we use the [`anyhow`] crate for error handling, which provides some useful
+helpers for passing error messages up the call stack and attaching additional context. For any
+user-facing error (e.g. caused by a malformed input file), you should return an error wrapped in a
+`Result`, so that it can be logged. For purely developer-facing errors, such as functions called
+with bad arguments, you should instead [`panic!`]. Note that users should **NEVER** be able to
+trigger a panic in MUSE2 and any case where this happens should be treated as a bug. We use the
+[`human-panic`] crate to direct users to report the bug if a panic occurs in a release build.
+
+[^1]: Technically, panics [can be caught](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html),
+      but this is unusual and we don't do it in MUSE2
+
+[`Result`]: https://doc.rust-lang.org/std/result/
+[the official docs]: https://doc.rust-lang.org/book/ch09-00-error-handling.html
+[`anyhow`]: https://docs.rs/anyhow
+[`panic!`]: https://doc.rust-lang.org/std/macro.panic.html
+[`human-panic`]: https://docs.rs/human-panic/
