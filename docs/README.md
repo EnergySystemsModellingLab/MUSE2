@@ -15,4 +15,4 @@ If you are a developer, please see the [developer guide].
 [model description]: ./model/
 [dispatch optimisation formulation]: ./model/dispatch_optimisation.md
 [glossary]: ./glossary.md
-[developer guide]: ./developer_guide.md
+[developer guide]: ./developer_guide/
