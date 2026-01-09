@@ -56,6 +56,45 @@ pass these errors up the callstack via `anyhow` (see above).
 
 Note that the log level is configurable at runtime; see [user guide][logging-docs] for details.
 
+## Writing tests
+
+This repository includes tests for many aspects of MUSE2's functionality (both unit tests and
+integration tests). These can be run with `cargo test`. All tests must pass for submitted code; this
+is enforced via a [GitHub Actions workflow][ci-workflow]. Newly added code should include tests,
+wherever feasible. Code coverage is tracked with [Codecov]. There is good documentation on how to
+write tests in Rust [in the Rust book][tests-docs].
+
+You may wish to use [test fixtures] for your unit tests. While Rust's built-in testing framework
+does not support test fixtures directly, the [`rstest`] crate, which is already included as a
+dependency for MUSE2, provides this functionality. You should prefer adding test fixtures over
+copy-pasting the same data structures between different tests. For common data structures (e.g.
+commodities, assets etc.), there are fixtures for these already provided in [`fixture.rs`]. You
+should use these where possible rather than creating new fixtures.
+
+As the fixtures needed for many tests are potentially complicated, there are also helper macros for
+testing that validation/running fails/succeeds for modified versions of example models. For more
+information, see [`fixture.rs`]. As this method is likely to lead to terser code compared to using
+fixtures, it should be preferred for new tests.
+
+We check whether each of the bundled example models (see below) runs successfully to completion as
+regression tests. We also check that the output has not substantially changed (i.e. that the numbers
+in the outputs are within a tolerance), which helps catch accidental changes to the behaviour of
+MUSE2. Of course, often we _do_ want to change the behaviour of MUSE2 as the model evolves. In this
+case, you can regenerate test data by running:
+
+```sh
+just regenerate_test_data
+```
+
+If you do so, please verify that the changes to the output files are at least roughly what was
+expected, before you commit these updated test files.
+
 [`log`]: https://docs.rs/log
 [`fern`]: https://docs.rs/fern
 [logging-docs]: ../user_guide.md#setting-the-log-level
+[ci-workflow]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/.github/workflows/cargo-test.yml
+[Codecov]: https://about.codecov.io/
+[tests-docs]: https://doc.rust-lang.org/book/ch11-01-writing-tests.html
+[test fixtures]: https://en.wikipedia.org/wiki/Test_fixture
+[`rstest`]: https://docs.rs/rstest
+[`fixture.rs`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/src/fixture.rs
