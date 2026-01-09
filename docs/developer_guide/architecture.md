@@ -98,3 +98,19 @@ expected, before you commit these updated test files.
 [test fixtures]: https://en.wikipedia.org/wiki/Test_fixture
 [`rstest`]: https://docs.rs/rstest
 [`fixture.rs`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/src/fixture.rs
+
+## Example models
+
+MUSE2 provides a number of example models, to showcase its functionality and help users get started
+with creating their own. These models live in the [`examples`] folder of the repository and are also
+bundled with the MUSE2 executable ([see user guide for more detail][user-guide-example-models]).
+
+As these are intended as both a kind of documentation and templates, they should be ideally kept as
+simple as possible.
+
+If you add a new example model, please also add a regression test ([see here for an
+example][regression-test-example]).
+
+[`examples`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/examples/
+[user-guide-example-models]: https://energysystemsmodellinglab.github.io/MUSE2/user_guide.html#example-models
+[regression-test-example]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/tests/regression_muse1_default.rs
