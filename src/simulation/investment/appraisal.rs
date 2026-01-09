@@ -3,13 +3,14 @@ use super::DemandMap;
 use crate::agent::ObjectiveType;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
-use crate::finance::{lcox, profitability_index};
+use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity};
+use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use indexmap::IndexMap;
+use std::any::Any;
 use std::cmp::Ordering;
 
 pub mod coefficients;
@@ -30,8 +31,8 @@ pub struct AppraisalOutput {
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// The hypothetical unmet demand following investment in this asset
     pub unmet_demand: DemandMap,
-    /// The comparison metric to compare investment decisions (lower is better)
-    pub metric: f64,
+    /// The comparison metric to compare investment decisions
+    pub metric: Box<dyn MetricTrait>,
     /// Capacity and activity coefficients used in the appraisal
     pub coefficients: ObjectiveCoefficients,
     /// Demand profile used in the appraisal
@@ -49,15 +50,148 @@ impl AppraisalOutput {
     /// possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
         assert!(
-            !(self.metric.is_nan() || other.metric.is_nan()),
+            !(self.metric.value().is_nan() || other.metric.value().is_nan()),
             "Appraisal metric cannot be NaN"
         );
+        self.metric.compare(other.metric.as_ref())
+    }
+}
 
-        if approx_eq!(f64, self.metric, other.metric) {
+/// Trait for appraisal metrics that can be compared.
+///
+/// Implementers define how their values should be compared to determine
+/// which investment option is preferable through the `compare` method.
+pub trait MetricTrait: Any + Send + Sync {
+    /// Returns the numeric value of this metric.
+    fn value(&self) -> f64;
+
+    /// Compares this metric with another of the same type.
+    ///
+    /// Returns `Ordering::Less` if `self` is better than `other`,
+    /// `Ordering::Greater` if `other` is better, or `Ordering::Equal`
+    /// if they are approximately equal.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `other` is not the same concrete type as `self`.
+    fn compare(&self, other: &dyn MetricTrait) -> Ordering;
+
+    /// Helper for downcasting to enable type-safe comparison.
+    fn as_any(&self) -> &dyn Any;
+}
+
+/// Levelised Cost of X (LCOX) metric.
+///
+/// Represents the average cost per unit of output. Lower values indicate
+/// more cost-effective investments.
+#[derive(Debug, Clone)]
+pub struct LCOXMetric {
+    /// The calculated cost value for this LCOX metric
+    pub cost: MoneyPerActivity,
+}
+
+impl LCOXMetric {
+    /// Creates a new `LCOXMetric` with the given cost.
+    pub fn new(cost: MoneyPerActivity) -> Self {
+        Self { cost }
+    }
+}
+
+impl MetricTrait for LCOXMetric {
+    fn value(&self) -> f64 {
+        self.cost.value()
+    }
+
+    fn compare(&self, other: &dyn MetricTrait) -> Ordering {
+        let other = other
+            .as_any()
+            .downcast_ref::<Self>()
+            .expect("Cannot compare metrics of different types");
+
+        if approx_eq!(MoneyPerActivity, self.cost, other.cost) {
             Ordering::Equal
         } else {
-            self.metric.partial_cmp(&other.metric).unwrap()
+            // Lower cost is better
+            self.cost.partial_cmp(&other.cost).unwrap()
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Net Present Value (NPV) metric
+#[derive(Debug, Clone)]
+pub struct NPVMetric {
+    /// Profitability index data for this NPV metric
+    pub profitability_index: ProfitabilityIndex,
+}
+
+impl NPVMetric {
+    /// Creates a new `NPVMetric` with the given profitability index.
+    pub fn new(profitability_index: ProfitabilityIndex) -> Self {
+        Self {
+            profitability_index,
+        }
+    }
+
+    /// Returns true if this metric represents a zero fixed cost case.
+    fn is_zero_fixed_cost(&self) -> bool {
+        self.profitability_index.annualised_fixed_cost == Money(0.0)
+    }
+}
+
+impl MetricTrait for NPVMetric {
+    fn value(&self) -> f64 {
+        if self.is_zero_fixed_cost() {
+            self.profitability_index.total_annualised_surplus.value()
+        } else {
+            self.profitability_index.value().value()
+        }
+    }
+
+    /// Higher profitability index values indicate more profitable investments.
+    /// When annual fixed cost is zero, the profitability index is infinite and
+    /// total surplus is used for comparison instead.
+    fn compare(&self, other: &dyn MetricTrait) -> Ordering {
+        let other = other
+            .as_any()
+            .downcast_ref::<Self>()
+            .expect("Cannot compare metrics of different types");
+
+        // Handle comparison based on fixed cost status
+        match (self.is_zero_fixed_cost(), other.is_zero_fixed_cost()) {
+            // Both have zero fixed cost: compare total surplus (higher is better)
+            (true, true) => {
+                let self_surplus = self.profitability_index.total_annualised_surplus;
+                let other_surplus = other.profitability_index.total_annualised_surplus;
+
+                if approx_eq!(Money, self_surplus, other_surplus) {
+                    Ordering::Equal
+                } else {
+                    other_surplus.partial_cmp(&self_surplus).unwrap()
+                }
+            }
+            // Both have non-zero fixed cost: compare profitability index (higher is better)
+            (false, false) => {
+                let self_pi = self.profitability_index.value();
+                let other_pi = other.profitability_index.value();
+
+                if approx_eq!(Dimensionless, self_pi, other_pi) {
+                    Ordering::Equal
+                } else {
+                    other_pi.partial_cmp(&self_pi).unwrap()
+                }
+            }
+            // Zero fixed cost is always better than non-zero fixed cost
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -78,7 +212,6 @@ fn calculate_lcox(
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    // Perform optimisation to calculate capacity, activity and unmet demand
     let results = perform_optimisation(
         asset,
         max_capacity,
@@ -89,23 +222,19 @@ fn calculate_lcox(
         highs::Sense::Minimise,
     )?;
 
-    // Calculate LCOX for the hypothetical investment
-    let annual_fixed_cost = coefficients.capacity_coefficient;
-    let activity_costs = &coefficients.activity_coefficients;
     let cost_index = lcox(
         results.capacity,
-        annual_fixed_cost,
+        coefficients.capacity_coefficient,
         &results.activity,
-        activity_costs,
+        &coefficients.activity_coefficients,
     );
 
-    // Return appraisal output
     Ok(AppraisalOutput {
         asset: asset.clone(),
         capacity: results.capacity,
         activity: results.activity,
         unmet_demand: results.unmet_demand,
-        metric: cost_index.value(),
+        metric: Box::new(LCOXMetric::new(cost_index)),
         coefficients: coefficients.clone(),
         demand: demand.clone(),
     })
@@ -116,8 +245,6 @@ fn calculate_lcox(
 /// # Returns
 ///
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
-/// The returned `metric` is the negative of the profitability index so that, like LCOX,
-/// lower metric values indicate a more desirable investment (i.e. higher NPV).
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
@@ -126,7 +253,6 @@ fn calculate_npv(
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    // Perform optimisation to calculate capacity, activity and unmet demand
     let results = perform_optimisation(
         asset,
         max_capacity,
@@ -137,24 +263,25 @@ fn calculate_npv(
         highs::Sense::Maximise,
     )?;
 
-    // Calculate profitability index for the hypothetical investment
     let annual_fixed_cost = annual_fixed_cost(asset);
-    let activity_surpluses = &coefficients.activity_coefficients;
+    assert!(
+        annual_fixed_cost >= MoneyPerCapacity(0.0),
+        "The current NPV calculation does not support negative annual fixed costs"
+    );
+
     let profitability_index = profitability_index(
         results.capacity,
         annual_fixed_cost,
         &results.activity,
-        activity_surpluses,
+        &coefficients.activity_coefficients,
     );
 
-    // Return appraisal output
-    // Higher profitability index is better, so we make it negative for comparison
     Ok(AppraisalOutput {
         asset: asset.clone(),
         capacity: results.capacity,
         activity: results.activity,
         unmet_demand: results.unmet_demand,
-        metric: -profitability_index.value(),
+        metric: Box::new(NPVMetric::new(profitability_index)),
         coefficients: coefficients.clone(),
         demand: demand.clone(),
     })
@@ -165,7 +292,7 @@ fn calculate_npv(
 /// # Returns
 ///
 /// The `AppraisalOutput` produced by the selected appraisal method. The `metric` field is
-/// comparable across methods where lower values indicate a better investment.
+/// comparable with other appraisals of the same type (npv/lcox).
 pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
