@@ -15,3 +15,4 @@
   - [Model Diagrams](model/model_diagrams.md)
 - [Glossary](glossary.md)
 - [Developer Guide](developer_guide.md)
+- [API documentation](./api/muse2/README.md)
