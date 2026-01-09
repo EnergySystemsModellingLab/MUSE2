@@ -42,3 +42,20 @@ trigger a panic in MUSE2 and any case where this happens should be treated as a 
 [`anyhow`]: https://docs.rs/anyhow
 [`panic!`]: https://doc.rust-lang.org/std/macro.panic.html
 [`human-panic`]: https://docs.rs/human-panic/
+
+## Logging
+
+MUSE2 makes use of the [`log`] crate, which provides a number of macros for logging at different
+levels (e.g. `info!`, `warn!` etc.). This crate just provides the helper macros and does not provide
+a logging backend. For the backend, we use [`fern`], which deals with formatting and (in the case of
+simulation runs) writing to log files. A few simple commands print to the console directly without
+using the logging framework (e.g. `muse2 example list`), but for code run as part of model
+validation and simulation runs, you should use the `log` macros rather than printing to the console
+directly. Note that you should generally not use the `error!` macro directly, but should instead
+pass these errors up the callstack via `anyhow` (see above).
+
+Note that the log level is configurable at runtime; see [user guide][logging-docs] for details.
+
+[`log`]: https://docs.rs/log
+[`fern`]: https://docs.rs/fern
+[logging-docs]: ../user_guide.md#setting-the-log-level
