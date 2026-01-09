@@ -17,5 +17,6 @@
 - [Developer Guide](developer_guide/README.md)
   - [Setting up your development environment](developer_guide/setup.md)
   - [Building and developing MUSE2](developer_guide/coding.md)
+  - [Architecture and coding style](developer_guide/architecture.md)
   - [Developing the documentation](developer_guide/docs.md)
 - [API documentation](./api/muse2/README.md)
