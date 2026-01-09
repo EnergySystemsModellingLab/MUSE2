@@ -114,3 +114,22 @@ example][regression-test-example]).
 [`examples`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/examples/
 [user-guide-example-models]: https://energysystemsmodellinglab.github.io/MUSE2/user_guide.html#example-models
 [regression-test-example]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/tests/regression_muse1_default.rs
+
+## Unit types
+
+We define a number of types for units used commonly in MUSE2, such as activity, capacity etc. These
+are simple wrappers around `f64`s, but provide additional type safety, ensuring that the wrong types
+are not passed to functions, for example. Certain arithmetic operations involving types are also
+defined: for example, if you divide a variable of type [`Money`] by one of type [`Activity`], you
+get a result of type [`MoneyPerActivity`].
+
+These types should be used in preference to plain `f64`s, where possible. For variables which are
+unitless, there is a [`Dimensionless`] type to make this explicit.
+
+For more information, consult [the documentation for the `units` module][units-module-docs].
+
+[`Money`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Money.html
+[`Activity`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Activity.html
+[`MoneyPerActivity`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.MoneyPerActivity.html
+[`Dimensionless`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Dimensionless.html
+[units-module-docs]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/index.html
