@@ -62,8 +62,32 @@ macro_rules! patch_and_validate_simple {
         })()
     }};
 }
-// Currently unused outside this file
-// pub(crate) use patch_and_validate_simple;
+pub(crate) use patch_and_validate_simple;
+
+/// Check whether validation succeeds for simple example with patches
+macro_rules! assert_validate_ok_simple {
+    ($file_patches:expr) => {
+        assert!(crate::fixture::patch_and_validate_simple!($file_patches).is_ok())
+    };
+}
+pub(crate) use assert_validate_ok_simple;
+
+/// Check whether validation fails with specific message
+macro_rules! assert_validate_fails_with_simple {
+    ($file_patches:expr, $expected_msg:expr) => {
+        let result = crate::fixture::patch_and_validate_simple!($file_patches);
+        let msg = result
+            .unwrap_err()
+            .chain()
+            .skip(1)
+            .next()
+            .unwrap()
+            .to_string();
+
+        assert_eq!(msg, $expected_msg);
+    };
+}
+pub(crate) use assert_validate_fails_with_simple;
 
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! patch_and_run_simple {
@@ -79,8 +103,15 @@ macro_rules! patch_and_run_simple {
         })()
     }};
 }
-// Currently unused outside this file
-// pub(crate) use patch_and_run_simple;
+pub(crate) use patch_and_run_simple;
+
+/// Check whether the simple example runs successfully after applying file patches
+macro_rules! assert_patched_runs_ok_simple {
+    ($file_patches:expr) => {
+        assert!(crate::fixture::patch_and_run_simple!($file_patches).is_ok())
+    };
+}
+pub(crate) use assert_patched_runs_ok_simple;
 
 #[fixture]
 pub fn region_id() -> RegionID {
