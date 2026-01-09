@@ -203,6 +203,6 @@ For each asset option:
   AFC \* cap_r + \sum_{t} act_t \* AC_t \\)), divided by the annual output
   \\( \sum_t act_t \\).
 
-[overall MUSE2 workflow]: ./model_description.md#framework-overview
+[overall MUSE2 workflow]: ./README.md#framework-overview
 [Dispatch Optimisation Formulation]: ./dispatch_optimisation.md
-[ironing-out loop]: ./model_description.md#framework-overview
+[ironing-out loop]: ./README.md#framework-overview
