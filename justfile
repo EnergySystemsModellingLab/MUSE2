@@ -16,7 +16,7 @@ help:
 
 # Generate test coverage in HTML format
 coverage *ARGS:
-    @cargo llvm-cov --html
+    @cargo llvm-cov --html {{ARGS}}
 
 # Regenerate data for regression tests
 regenerate_test_data:

@@ -61,7 +61,7 @@ These define the fundamental categories used to define the energy system.
 - \\( season\\_ slice[h,t] \\): Binary indicator; \\( 1 \\) if time slice \\( t \\) is in season \\(
   h \\), \\( 0 \\) otherwise. Facilitates seasonal aggregation.
 
-- \\( balance\\_ level[c,r] \\): Defines the temporal resolution (’timeslice’, ’seasonal’, ’annual’)
+- \\( balance\\_ level[c,r] \\): Defines the temporal resolution ('timeslice', 'seasonal', 'annual')
   at which the supply-demand balance for commodity \\( c \\) in region \\( r \\) must be enforced.
 
 - \\( demand[r,c] \\): Total annual exogenously specified demand (\\( \ge 0 \\)) for commodity \\( c
@@ -131,7 +131,7 @@ component of the overall system cost that the model seeks to minimise.
 
 ### A.4. Constraints (Capacity & Availability for standard assets \\( a \in \mathbf{A}^{std} \\))
 
-These constraints ensure that each standard asset’s operation respects its physical capacity and
+These constraints ensure that each standard asset's operation respects its physical capacity and
 time-varying availability limits. For all \\( a \in \mathbf{A}^{std}, r, t \\):
 
 - Asset activity \\( act[a,r,t] \\) is constrained by its available capacity, considering its

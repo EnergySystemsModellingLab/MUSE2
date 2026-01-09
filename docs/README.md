@@ -12,7 +12,7 @@ If you are a developer, please see the [developer guide].
 [the older MUSE tool]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 [user guide]: ./user_guide.md
 [command line help]: ./command_line_help.md
-[model description]: ./model/model_description.md
+[model description]: ./model/
 [dispatch optimisation formulation]: ./model/dispatch_optimisation.md
 [glossary]: ./glossary.md
-[developer guide]: ./developer_guide.md
+[developer guide]: ./developer_guide/
