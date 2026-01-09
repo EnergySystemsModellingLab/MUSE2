@@ -131,14 +131,14 @@ providing investment and dynamic decommissioning decisions.
 #### Tool A: NPV
 
 This method is used when decision rule is single objective and objective is annualised profit for
-agents’ serving commodity \\( c \\). This method iteratively builds a supply portfolio by selecting
+agents' serving commodity \\( c \\). This method iteratively builds a supply portfolio by selecting
 options that offer the highest annualised profit for serving the current commodity demand. The
 economic evaluation uses \\( \pi_{prevMSY} \\) prices and takes account of asset-specific
 operational constraints (e.g., minimum load levels) and the balance level of the target commodity
 (time slice profile, seasonal or annual). For each asset option:
 
 - **Optimise capacity and dispatch to maximise annualised profit:** Solve a small optimisation
-  sub-problem to maximise the asset’s surplus, subject to its operational rules and the specific
+  sub-problem to maximise the asset's surplus, subject to its operational rules and the specific
   demand tranche it is being asked to serve. \\(\varepsilon \approx 1×10^{-14}\\) is added to each
   \\(AC_t \\) to allow assets which are breakeven (or very close to breakeven) to be dispatched.
 
@@ -153,7 +153,7 @@ operational constraints (e.g., minimum load levels) and the balance level of the
     than capacity, applied to its activity profile \\( act_t \\).
 
   - A demand constraint, where output cannot exceed demand in the tranche, which adapts based on the
-    commodity’s balance level (time slice, season, annual).
+    commodity's balance level (time slice, season, annual).
 
   - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
@@ -164,7 +164,7 @@ operational constraints (e.g., minimum load levels) and the balance level of the
 
 #### Tool B: LCOX
 
-This method is used when decision rule is single objective and objective is LCOX for agents’ serving
+This method is used when decision rule is single objective and objective is LCOX for agents' serving
 commodity \\( c \\). This method constructs a supply portfolio (from new candidates \\( ca \\), new
 import infrastructure \\( ca_{import} \\), and available existing assets \\( ex \\)) to meet target
 \\( U_{c} \\) at the lowest cost for the investor. As above, the appraisal for each option
@@ -175,7 +175,7 @@ commodities are set to zero, and the commodity of interest is assumed to have ze
 For each asset option:
 
 - **Optimise capacity and dispatch to minimise annualised cost:** Solve a small optimisation
-  sub-problem to maximise the asset’s surplus, subject to its operational rules and the specific
+  sub-problem to maximise the asset's surplus, subject to its operational rules and the specific
   demand tranche it is being asked to serve.
 
   \\[
@@ -190,7 +190,7 @@ For each asset option:
     than capacity, applied to its activity profile \\( act_t \\).
 
   - A demand constraint, where output from the asset plus VoLL-related outputs must equal demand in
-    each timeslice of the tranche, which adapts based on the commodity’s balance level (time slice,
+    each timeslice of the tranche, which adapts based on the commodity's balance level (time slice,
     season, annual).
 
   - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
