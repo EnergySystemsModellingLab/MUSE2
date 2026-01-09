@@ -133,3 +133,24 @@ For more information, consult [the documentation for the `units` module][units-m
 [`MoneyPerActivity`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.MoneyPerActivity.html
 [`Dimensionless`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Dimensionless.html
 [units-module-docs]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/index.html
+
+## Input and output files
+
+The input layer, defined in the [`input` module][input-module-docs], is the portion of the code
+responsible for loading data from disk and validating it. This includes the `model.toml` file and a
+number of CSV files; [see the file format documentation for details][input-file-format-docs].
+
+In general, we try to perform as much validation as possible within the input layer, so that we can
+provide users with detailed error messages, rather than waiting until errors in the input data
+become apparent in the simulation run (or, worse, are missed!). A certain amount of type safety is
+given by the [`serde`] crate (e.g. checking that fields which should be integers are really
+integers), but we also carry out many other validation checks (e.g. checking that there is a
+producer for every required commodity in the first year).
+
+For every input (and output) file, we define a schema which is used to automatically generate
+[documentation about the file formats][file-format-docs].
+
+[input-module-docs]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/input/index.html
+[input-file-format-docs]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/input_files.html
+[file-format-docs]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/
+[`serde`]: https://serde.rs/
