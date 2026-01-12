@@ -123,31 +123,26 @@ impl MetricTrait for LCOXMetric {
 
 /// Net Present Value (NPV) metric
 #[derive(Debug, Clone)]
-pub struct NPVMetric {
-    /// Profitability index data for this NPV metric
-    pub profitability_index: ProfitabilityIndex,
-}
+pub struct NPVMetric(ProfitabilityIndex);
 
 impl NPVMetric {
     /// Creates a new `NPVMetric` with the given profitability index.
     pub fn new(profitability_index: ProfitabilityIndex) -> Self {
-        Self {
-            profitability_index,
-        }
+        Self(profitability_index)
     }
 
     /// Returns true if this metric represents a zero fixed cost case.
     fn is_zero_fixed_cost(&self) -> bool {
-        self.profitability_index.annualised_fixed_cost == Money(0.0)
+        self.0.annualised_fixed_cost == Money(0.0)
     }
 }
 
 impl MetricTrait for NPVMetric {
     fn value(&self) -> f64 {
         if self.is_zero_fixed_cost() {
-            self.profitability_index.total_annualised_surplus.value()
+            self.0.total_annualised_surplus.value()
         } else {
-            self.profitability_index.value().value()
+            self.0.value().value()
         }
     }
 
@@ -164,8 +159,8 @@ impl MetricTrait for NPVMetric {
         match (self.is_zero_fixed_cost(), other.is_zero_fixed_cost()) {
             // Both have zero fixed cost: compare total surplus (higher is better)
             (true, true) => {
-                let self_surplus = self.profitability_index.total_annualised_surplus;
-                let other_surplus = other.profitability_index.total_annualised_surplus;
+                let self_surplus = self.0.total_annualised_surplus;
+                let other_surplus = other.0.total_annualised_surplus;
 
                 if approx_eq!(Money, self_surplus, other_surplus) {
                     Ordering::Equal
@@ -175,8 +170,8 @@ impl MetricTrait for NPVMetric {
             }
             // Both have non-zero fixed cost: compare profitability index (higher is better)
             (false, false) => {
-                let self_pi = self.profitability_index.value();
-                let other_pi = other.profitability_index.value();
+                let self_pi = self.0.value();
+                let other_pi = other.0.value();
 
                 if approx_eq!(Dimensionless, self_pi, other_pi) {
                     Ordering::Equal
