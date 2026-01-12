@@ -56,8 +56,8 @@ You can also install the [`muse2` crate from crates.io][muse2-crate], though thi
 method is only recommended for developers.
 
 [our releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases
-[the documentation]: https://energysystemsmodellinglab.github.io/MUSE2/introduction.html
-[the developer guide]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide.html
+[the documentation]: https://energysystemsmodellinglab.github.io/MUSE2/
+[the developer guide]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/
 [muse2-crate]: https://crates.io/crates/muse2
 
 ## Citing this repository
