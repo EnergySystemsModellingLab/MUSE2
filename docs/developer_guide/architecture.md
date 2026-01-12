@@ -170,4 +170,4 @@ checking that there is a producer for every required commodity in the first year
 
 [file-format-docs]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/
 [`serde`]: https://serde.rs/
-[Developing the documentation]: ./docs.md#Documenting-file-formats
+[Developing the documentation]: ./docs.md#documenting-file-formats
