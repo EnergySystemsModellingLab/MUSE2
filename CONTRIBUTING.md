@@ -190,4 +190,4 @@ on how to write the documentation.
 
 ## Developer Setup
 
-Please see the [developer guide](docs/developer_guide.md).
+Please see the [developer guide](docs/developer_guide/).
