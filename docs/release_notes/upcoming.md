@@ -16,65 +16,57 @@ ready to be released, carry out the following steps:
 
 ## New features
 
-- You can now set both upper and lower bounds for process availabilities ([#363])
-- Default output root path is now configurable in `settings.toml` ([#370])
+- You can now set both upper and lower bounds for process availabilities ([#1018])
+- Default output root path is now configurable in `settings.toml` ([#1003])
 - If demand cannot be satisfied by the simulation, we now inform users what the offending
-  commodities and time slices are ([#636])
-- Trim whitespace from fields when reading in CSV files ([#648])
+  commodities and time slices are ([#767])
+- Trim whitespace from fields when reading in CSV files ([#976])
 - Assets can now be commissioned after a specified number of years with the `mothball_years`
-  parameter ([#649])
-- Default to no availability limits if user doesn't provide any for a process ([#743])
-- Allow user to specify ranges of years in input files ([#845])
-- Users can now omit empty CSV files ([#909])
+  parameter ([#1022])
+- Default to no availability limits if user doesn't provide any for a process ([#1018])
+- Allow user to specify ranges of years in input files ([#1017])
+- Users can now omit empty CSV files ([#961])
 - Users can now optionally specify an explicit decommission year for an asset in `assets.csv` input
-  file ([#916])
-- Allow for adding both a `prod` and `cons` levy to a commodity ([#945])
-- Availability limits can now be provided at multiple levels for a process ([#958])
-- Pricing strategy can now vary by commodity ([#1013], [#1019])
+  file ([#966])
+- Allow for adding both a `prod` and `cons` levy to a commodity ([#969])
+- Availability limits can now be provided at multiple levels for a process ([#1018])
+- Pricing strategy can now vary by commodity ([#1021])
 
 ## Experimental features
 
 - Assets can now be made divisible to represent many individual assets, such as a fleet of gas
-  boilers (albeit the current implementation is slow; [#936]). These fleets can be partially
-  decommissioned ([#911]).
+  boilers (albeit the current implementation is slow; [#1030]). These fleets can be partially
+  decommissioned.
 - Users can now have circular dependencies between commodities, such as a hydrogen power plant that
   itself requires electricity (though the current solution likely won't work in every situation;
-  [#794])
+  [#986])
 - There are new options for pricing strategy (`full` and `marginal`), which take capital costs into
-  account ([#1009])
+  account ([#1021])
 
 ## Bug fixes
 
 - Fix: process availability constraints were wrongly being applied to individual time slices,
-  regardless of time slice level ([#957])
-- Various fixes to process flows and availabilities input code for non-milestone years ([#770],
-  [#859], [#866], [#931])
-- Users can now set demand to zero in `demand.csv` ([#850])
-- Fix: sign for levies of type `net` was wrong for inputs ([#944])
-- Fix `--overwrite` option for `save-graphs` command ([#982])
+  regardless of time slice level ([#1018])
+- Various fixes to process flows and availabilities input code for non-milestone years ([#868],
+  [#1000], [#1010])
+- Users can now set demand to zero in `demand.csv` ([#871])
+- Fix: sign for levies of type `net` was wrong for inputs ([#969])
+- Fix `--overwrite` option for `save-graphs` command ([#1001])
 
-[#363]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/363
-[#370]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/370
-[#636]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/636
-[#648]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/648
-[#649]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/649
-[#743]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/743
-[#770]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/770
-[#794]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/794
-[#845]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/845
-[#850]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/850
-[#859]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/859
-[#866]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/866
-[#909]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/909
-[#911]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/911
-[#916]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/916
-[#931]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/931
-[#936]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/936
-[#944]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/944
-[#945]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/945
-[#957]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/957
-[#958]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/958
-[#982]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/982
-[#1009]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/1009
-[#1013]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/1013
-[#1019]: https://github.com/EnergySystemsModellingLab/MUSE2/issues/1019
+[#767]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/767
+[#868]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/868
+[#871]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/871
+[#961]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/961
+[#966]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/966
+[#969]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/969
+[#976]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/976
+[#986]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/986
+[#1000]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1000
+[#1001]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1001
+[#1003]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1003
+[#1010]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1010
+[#1017]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1017
+[#1018]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1018
+[#1021]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1021
+[#1022]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1022
+[#1030]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1030
