@@ -71,7 +71,7 @@ simulation runs) writing to log files. A few simple commands print to the consol
 using the logging framework (e.g. `muse2 example list`), but for code run as part of model
 validation and simulation runs, you should use the `log` macros rather than printing to the console
 directly. Note that you should generally not use the `error!` macro directly, but should instead
-pass these errors up the callstack via `anyhow` (see above).
+pass these errors up the call stack via `anyhow` (see above).
 
 Note that the log level is configurable at runtime; see [user guide][logging-docs] for details.
 
