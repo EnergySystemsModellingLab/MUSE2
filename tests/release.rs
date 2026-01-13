@@ -1,6 +1,7 @@
 //! Check the CITATION.cff file
 use anyhow::{Context, Result};
 use std::fs;
+use std::path::Path;
 use yaml_rust2::{Yaml, YamlLoader};
 
 fn get_version_from_citation_cff() -> Result<String> {
@@ -27,5 +28,14 @@ fn citation_cff_version() {
         get_version_from_citation_cff().unwrap(),
         "Software version in Cargo.toml and CITATION.cff must match. If you are making a new \
         release, please also update the CITATION.cff file."
+    );
+}
+
+#[test]
+fn release_notes_file_exists() {
+    let path = format!("docs/release_notes/v{}.md", env!("CARGO_PKG_VERSION"));
+    assert!(
+        Path::new(&path).exists(),
+        "Release notes doc doesn't exist: {path}"
     );
 }
