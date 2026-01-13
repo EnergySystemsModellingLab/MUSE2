@@ -45,7 +45,7 @@ fn check_link_to_release_notes(path: &Path) {
 }
 
 #[test]
-fn release_notes_file_exists() {
+fn release_notes_exist_and_linked() {
     let path = format!("docs/release_notes/v{MUSE2_VERSION}.md");
     assert!(
         Path::new(&path).exists(),
