@@ -124,7 +124,7 @@ MUSE2 provides a number of example models, to showcase its functionality and hel
 with creating their own. These models live in the [`examples`] folder of the repository and are also
 bundled with the MUSE2 executable ([see user guide for more detail][user-guide-example-models]).
 
-As these are intended as both a kind of documentation and templates, they should be ideally kept as
+As these are intended as both a kind of documentation and templates, they should ideally be kept as
 simple as possible.
 
 If you add a new example model, please also add a regression test ([see here for an
