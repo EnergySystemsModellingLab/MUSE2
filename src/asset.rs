@@ -1495,83 +1495,48 @@ mod tests {
     }
 
     #[rstest]
-    fn divide_asset_exact_multiple(mut process: Process) {
-        // Create asset where capacity is exactly divisible by unit_size
-        process.unit_size = Some(Capacity(4.0));
+    #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
+    #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
+    #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
+    #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
+    fn divide_asset(
+        mut process: Process,
+        #[case] capacity: Capacity,
+        #[case] unit_size: Capacity,
+        #[case] n_expected_children: usize,
+    ) {
+        process.unit_size = Some(unit_size);
         let asset = Asset::new_future(
             "agent1".into(),
             Rc::new(process),
             "GBR".into(),
-            Capacity(12.0), // 12 / 4 = 3 exact
+            capacity,
             2010,
         )
         .unwrap();
 
         assert!(asset.is_divisible(), "Asset should be divisible!");
 
-        // Check number of children
-        let children = asset.divide_asset();
-        assert_eq!(children.len(), 3, "Expected exactly 3 children");
-
-        // Check capacity of the children
-        let expected_child_capacity = Capacity(4.0);
-        for child in children.clone() {
-            assert_eq!(
-                child.capacity, expected_child_capacity,
-                "Child capacity should equal unit_size"
-            );
-        }
-
-        // Total combined capacity should equal parent capacity (exact division)
-        let total_child_capacity: Capacity = children.iter().map(|child| child.capacity).sum();
-        assert_eq!(
-            total_child_capacity, asset.capacity,
-            "Total capacity should match parent exactly"
-        );
-    }
-
-    #[rstest]
-    fn divide_asset_rounded_up(mut process: Process) {
-        // Create asset where capacity is NOT exactly divisible by unit_size
-        process.unit_size = Some(Capacity(4.0));
-        let asset = Asset::new_future(
-            "agent1".into(),
-            Rc::new(process),
-            "GBR".into(),
-            Capacity(11.0), // 11 / 4 = 2.75, rounds up to 3
-            2010,
-        )
-        .unwrap();
-
-        assert!(asset.is_divisible(), "Asset should be divisible!");
-
-        // Check number of children
         let children = asset.divide_asset();
         assert_eq!(
             children.len(),
-            3,
-            "Expected 3 children (rounded up from 2.75)"
+            n_expected_children,
+            "Unexpected number of children"
         );
 
-        // Check capacity of the children
-        let expected_child_capacity = Capacity(4.0);
+        // Check all children have capacity equal to unit_size
         for child in children.clone() {
             assert_eq!(
-                child.capacity, expected_child_capacity,
+                child.capacity, unit_size,
                 "Child capacity should equal unit_size"
             );
         }
 
-        // Total combined capacity should be greater than parent capacity (rounded up)
+        // Check total capacity is >= parent capacity
         let total_child_capacity: Capacity = children.iter().map(|child| child.capacity).sum();
-        assert_eq!(
-            total_child_capacity,
-            Capacity(12.0),
-            "Total capacity should be 12.0 (rounded up from 11.0)"
-        );
         assert!(
-            total_child_capacity > asset.capacity,
-            "Total capacity should exceed parent capacity"
+            total_child_capacity >= asset.capacity,
+            "Total capacity should be >= parent capacity"
         );
     }
 
