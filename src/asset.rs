@@ -838,32 +838,36 @@ impl Asset {
 
     /// Divides an asset if it is divisible and returns a vector of children
     ///
-    /// The children assets are identical to the parent (including state) but with a capacity defined
-    /// by the `unit_size`. Only Future or Selected assets can be divided.
+    /// The children assets are identical to the parent (including state) but with a capacity
+    /// defined by the `unit_size`. From a parent asset of capacity `C` and unit size `U`,
+    /// `n = ceil(C / U)` children assets are created, each with capacity `U`. In other words, the
+    /// total combined capacity of the children assets may be larger than that of the parent asset,
+    /// if `C` is not an exact multiple of `U`.
     pub fn divide_asset(&self) -> Vec<AssetRef> {
         assert!(
             matches!(
                 self.state,
                 AssetState::Future { .. } | AssetState::Selected { .. }
             ),
-            "Assets with state {0} cannot be divided. Only Future or Selected assets can be divided",
+            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
             self.state
         );
 
-        // Divide the asset into children until all capacity is allocated
-        let mut capacity = self.capacity;
         let unit_size = self.process.unit_size.expect(
             "Only assets corresponding to processes with a unit size defined can be divided",
         );
-        let mut children = Vec::new();
-        while capacity > Capacity(0.0) {
-            let mut child = self.clone();
-            child.capacity = unit_size.min(capacity);
-            capacity -= child.capacity;
-            children.push(child.into());
-        }
 
-        children
+        // Calculate the number of units corresponding to the asset's capacity
+        // Safe because capacity and unit_size are both positive finite numbers
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n_units = (self.capacity / unit_size).value().ceil() as usize;
+
+        // Divide the asset into `n_units` children of size `unit_size`
+        let mut child_asset = self.clone();
+        child_asset.capacity = unit_size;
+        (0..n_units)
+            .map(|_| AssetRef::from(Rc::new(child_asset.clone())))
+            .collect()
     }
 }
 
@@ -1072,8 +1076,7 @@ impl AssetPool {
 
             // If it is divisible, we divide and commission all the children
             if asset.is_divisible() {
-                let children = asset.divide_asset();
-                for mut child in children {
+                for mut child in asset.divide_asset() {
                     child.make_mut().commission(
                         AssetID(self.next_id),
                         Some(AssetGroupID(self.next_group_id)),
@@ -1490,31 +1493,84 @@ mod tests {
     }
 
     #[rstest]
-    fn divide_asset_works(asset_divisible: Asset) {
-        assert!(
-            asset_divisible.is_divisible(),
-            "Divisbile asset cannot be divided!"
-        );
+    fn divide_asset_exact_multiple(mut process: Process) {
+        // Create asset where capacity is exactly divisible by unit_size
+        process.unit_size = Some(Capacity(4.0));
+        let asset = Asset::new_future(
+            "agent1".into(),
+            Rc::new(process),
+            "GBR".into(),
+            Capacity(12.0), // 12 / 4 = 3 exact
+            2010,
+        )
+        .unwrap();
+
+        assert!(asset.is_divisible(), "Asset should be divisible!");
 
         // Check number of children
-        let children = asset_divisible.divide_asset();
-        let expected_children = expected_children_for_divisible(&asset_divisible);
+        let children = asset.divide_asset();
+        assert_eq!(children.len(), 3, "Expected exactly 3 children");
+
+        // Check capacity of the children
+        let expected_child_capacity = Capacity(4.0);
+        for child in children.clone() {
+            assert_eq!(
+                child.capacity, expected_child_capacity,
+                "Child capacity should equal unit_size"
+            );
+        }
+
+        // Total combined capacity should equal parent capacity (exact division)
+        let total_child_capacity: Capacity = children.iter().map(|child| child.capacity).sum();
+        assert_eq!(
+            total_child_capacity, asset.capacity,
+            "Total capacity should match parent exactly"
+        );
+    }
+
+    #[rstest]
+    fn divide_asset_rounded_up(mut process: Process) {
+        // Create asset where capacity is NOT exactly divisible by unit_size
+        process.unit_size = Some(Capacity(4.0));
+        let asset = Asset::new_future(
+            "agent1".into(),
+            Rc::new(process),
+            "GBR".into(),
+            Capacity(11.0), // 11 / 4 = 2.75, rounds up to 3
+            2010,
+        )
+        .unwrap();
+
+        assert!(asset.is_divisible(), "Asset should be divisible!");
+
+        // Check number of children
+        let children = asset.divide_asset();
         assert_eq!(
             children.len(),
-            expected_children,
-            "Unexpected number of children"
+            3,
+            "Expected 3 children (rounded up from 2.75)"
         );
 
         // Check capacity of the children
-        let max_child_capacity = asset_divisible.process.unit_size.unwrap();
+        let expected_child_capacity = Capacity(4.0);
         for child in children.clone() {
-            assert!(
-                child.capacity <= max_child_capacity,
-                "Child capacity is too large!"
+            assert_eq!(
+                child.capacity, expected_child_capacity,
+                "Child capacity should equal unit_size"
             );
         }
-        let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
-        assert_eq!(asset_divisible.capacity, children_capacity);
+
+        // Total combined capacity should be greater than parent capacity (rounded up)
+        let total_child_capacity: Capacity = children.iter().map(|child| child.capacity).sum();
+        assert_eq!(
+            total_child_capacity,
+            Capacity(12.0),
+            "Total capacity should be 12.0 (rounded up from 11.0)"
+        );
+        assert!(
+            total_child_capacity > asset.capacity,
+            "Total capacity should exceed parent capacity"
+        );
     }
 
     #[rstest]
@@ -1558,9 +1614,6 @@ mod tests {
         assert!(!asset_pool.active.is_empty());
         assert_eq!(asset_pool.active.len(), expected_children);
         assert_eq!(asset_pool.next_group_id, 1);
-
-        let children_capacity: Capacity = asset_pool.active.iter().map(|a| a.capacity).sum();
-        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
