@@ -28,16 +28,18 @@ fields:
     notes: Must be >= to `start_year`
   - name: capacity_to_activity
     type: number
-    description: Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the maximum activity per year for one unit of capacity.
+    description: Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the
+      maximum activity per year for one unit of capacity.
     notes: Must be >=0. Optional (defaults to 1.0).
   - name: unit_size
     type: number
-    description: Capacity of the units in which an asset for this process will be divided into when commissioned, if any.
-    notes:
-      If present, must be >0. Optional (defaults to None). Assets with a defined unit size are divided into n = ceil(C / U) equal units, where C is
-      overall capacity and U is unit_size (i.e. rounding up the number of units, which may result in a total capacity greater than C, if
+    description: Capacity of the units in which an asset for this process will be divided into when
+      commissioned, if any.
+    notes: If present, must be >0. Optional (defaults to None). Assets with a defined unit size are
+      divided into n = ceil(C / U) equal units, where C is overall capacity and U is unit_size
+      (i.e. rounding up the number of units, which may result in a total capacity greater than C, if
       C is not an exact multiple of U).
 
-      It should be noted that making this number too small with respect the typical
-      size of an asset might create hundreds or thousands of children assets, with a very negative effect on the performance. Users are advised
-      to use this feature with care.
+      It should be noted that making this number too small with respect the typical size of an asset
+      might create hundreds or thousands of children assets, with a very negative effect on the
+      performance. Users are advised to use this feature with care.
