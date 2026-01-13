@@ -40,6 +40,6 @@ fields:
       (i.e. rounding up the number of units, which may result in a total capacity greater than C, if
       C is not an exact multiple of U).
 
-      It should be noted that making this number too small with respect the typical size of an asset
-      might create hundreds or thousands of children assets, with a very negative effect on the
-      performance. Users are advised to use this feature with care.
+      It should be noted that making this number too small with respect to the typical size of an
+      asset might create hundreds or thousands of children assets, with a very negative effect on
+      the performance. Users are advised to use this feature with care.

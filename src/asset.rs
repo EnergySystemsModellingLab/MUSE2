@@ -838,10 +838,10 @@ impl Asset {
 
     /// Divides an asset if it is divisible and returns a vector of children
     ///
-    /// The children assets are identical to the parent (including state) but with a capacity
+    /// The child assets are identical to the parent (including state) but with a capacity
     /// defined by the `unit_size`. From a parent asset of capacity `C` and unit size `U`,
-    /// `n = ceil(C / U)` children assets are created, each with capacity `U`. In other words, the
-    /// total combined capacity of the children assets may be larger than that of the parent asset,
+    /// `n = ceil(C / U)` child assets are created, each with capacity `U`. In other words, the
+    /// total combined capacity of the children may be larger than that of the parent,
     /// if `C` is not an exact multiple of `U`.
     ///
     /// Only `Future` and `Selected` assets can be divided.
@@ -865,11 +865,12 @@ impl Asset {
         let n_units = (self.capacity / unit_size).value().ceil() as usize;
 
         // Divide the asset into `n_units` children of size `unit_size`
-        let mut child_asset = self.clone();
-        child_asset.capacity = unit_size;
-        (0..n_units)
-            .map(|_| AssetRef::from(Rc::new(child_asset.clone())))
-            .collect()
+        let child_asset = Self {
+            capacity: unit_size,
+            ..self.clone()
+        };
+        let child_asset = AssetRef::from(Rc::new(child_asset));
+        std::iter::repeat_n(child_asset, n_units).collect()
     }
 }
 
