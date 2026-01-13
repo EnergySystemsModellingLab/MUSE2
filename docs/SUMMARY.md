@@ -19,3 +19,4 @@
   - [Building and developing MUSE2](developer_guide/coding.md)
   - [Developing the documentation](developer_guide/docs.md)
 - [API documentation](./api/muse2/README.md)
+- [Release notes](release_notes/README.md)
