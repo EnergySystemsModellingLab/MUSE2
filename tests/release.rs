@@ -1,4 +1,4 @@
-//! Check the CITATION.cff file
+//! Check the CITATION.cff file and release notes
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
@@ -34,7 +34,7 @@ fn citation_cff_version() {
     );
 }
 
-/// A crude check that release notes for the current version is referenced the given path
+/// A crude check that release notes for the current version are referenced in the given path
 fn check_link_to_release_notes(path: &Path) {
     let contents = fs::read_to_string(path).unwrap();
     assert!(
