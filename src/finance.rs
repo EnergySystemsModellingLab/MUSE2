@@ -2,6 +2,7 @@
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use indexmap::IndexMap;
+use serde::Serialize;
 
 /// Calculates the capital recovery factor (CRF) for a given lifetime and discount rate.
 ///
@@ -30,7 +31,7 @@ pub fn annual_capital_cost(
 
 /// Represents the profitability index of an investment
 /// in terms of its annualised components.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct ProfitabilityIndex {
     /// The total annualised surplus of an asset
     pub total_annualised_surplus: Money,

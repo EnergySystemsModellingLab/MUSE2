@@ -9,7 +9,9 @@ use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
+use erased_serde::Serialize as ErasedSerialize;
 use indexmap::IndexMap;
+use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
 
@@ -57,11 +59,15 @@ impl AppraisalOutput {
     }
 }
 
+/// Supertrait for appraisal metrics that can be serialised and compared.
+pub trait MetricTrait: ComparableMetric + ErasedSerialize {}
+erased_serde::serialize_trait_object!(MetricTrait);
+
 /// Trait for appraisal metrics that can be compared.
 ///
 /// Implementers define how their values should be compared to determine
 /// which investment option is preferable through the `compare` method.
-pub trait MetricTrait: Any + Send + Sync {
+pub trait ComparableMetric: Any + Send + Sync {
     /// Returns the numeric value of this metric.
     fn value(&self) -> f64;
 
@@ -74,7 +80,7 @@ pub trait MetricTrait: Any + Send + Sync {
     /// # Panics
     ///
     /// Panics if `other` is not the same concrete type as `self`.
-    fn compare(&self, other: &dyn MetricTrait) -> Ordering;
+    fn compare(&self, other: &dyn ComparableMetric) -> Ordering;
 
     /// Helper for downcasting to enable type-safe comparison.
     fn as_any(&self) -> &dyn Any;
@@ -84,7 +90,7 @@ pub trait MetricTrait: Any + Send + Sync {
 ///
 /// Represents the average cost per unit of output. Lower values indicate
 /// more cost-effective investments.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct LCOXMetric {
     /// The calculated cost value for this LCOX metric
     pub cost: MoneyPerActivity,
@@ -97,12 +103,12 @@ impl LCOXMetric {
     }
 }
 
-impl MetricTrait for LCOXMetric {
+impl ComparableMetric for LCOXMetric {
     fn value(&self) -> f64 {
         self.cost.value()
     }
 
-    fn compare(&self, other: &dyn MetricTrait) -> Ordering {
+    fn compare(&self, other: &dyn ComparableMetric) -> Ordering {
         let other = other
             .as_any()
             .downcast_ref::<Self>()
@@ -121,8 +127,11 @@ impl MetricTrait for LCOXMetric {
     }
 }
 
+/// `LCOXMetric` implements the `MetricTrait` supertrait.
+impl MetricTrait for LCOXMetric {}
+
 /// Net Present Value (NPV) metric
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NPVMetric(ProfitabilityIndex);
 
 impl NPVMetric {
@@ -137,7 +146,7 @@ impl NPVMetric {
     }
 }
 
-impl MetricTrait for NPVMetric {
+impl ComparableMetric for NPVMetric {
     fn value(&self) -> f64 {
         if self.is_zero_fixed_cost() {
             self.0.total_annualised_surplus.value()
@@ -149,7 +158,7 @@ impl MetricTrait for NPVMetric {
     /// Higher profitability index values indicate more profitable investments.
     /// When annual fixed cost is zero, the profitability index is infinite and
     /// total surplus is used for comparison instead.
-    fn compare(&self, other: &dyn MetricTrait) -> Ordering {
+    fn compare(&self, other: &dyn ComparableMetric) -> Ordering {
         let other = other
             .as_any()
             .downcast_ref::<Self>()
@@ -189,6 +198,9 @@ impl MetricTrait for NPVMetric {
         self
     }
 }
+
+/// `NPVMetric` implements the `MetricTrait` supertrait.
+impl MetricTrait for NPVMetric {}
 
 /// Calculate LCOX for a hypothetical investment in the given asset.
 ///
