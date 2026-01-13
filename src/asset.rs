@@ -843,6 +843,8 @@ impl Asset {
     /// `n = ceil(C / U)` children assets are created, each with capacity `U`. In other words, the
     /// total combined capacity of the children assets may be larger than that of the parent asset,
     /// if `C` is not an exact multiple of `U`.
+    ///
+    /// Only `Future` and `Selected` assets can be divided.
     pub fn divide_asset(&self) -> Vec<AssetRef> {
         assert!(
             matches!(
