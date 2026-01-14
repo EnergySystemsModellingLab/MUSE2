@@ -19,6 +19,8 @@ Fixes # (issue)
 
 - [ ] All tests pass: `$ cargo test`
 - [ ] The documentation builds and looks OK: `$ cargo doc`
+- [ ] Update release notes for the latest release if this PR adds a new feature or fixes a bug
+      present in the previous release
 
 ## Further checks
 

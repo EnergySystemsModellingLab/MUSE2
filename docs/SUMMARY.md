@@ -20,3 +20,6 @@
   - [Architecture and coding style](developer_guide/architecture.md)
   - [Developing the documentation](developer_guide/docs.md)
 - [API documentation](./api/muse2/README.md)
+- [Release notes](release_notes/README.md)
+  - [MUSE2 v2.0.0 (October 14, 2025)](release_notes/v2.0.0.md)
+  - [Next unreleased version](release_notes/upcoming.md)
