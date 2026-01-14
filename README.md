@@ -112,4 +112,4 @@ specification. Contributions of any kind welcome!
 
 ## Copyright
 
-Copyright © 2025 Imperial College London
+Copyright © 2026 Imperial College London
