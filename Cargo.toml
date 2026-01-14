@@ -20,7 +20,7 @@ itertools = "0.14.0"
 serde = {version = "1.0.228", features = ["derive", "rc"]}
 serde_string_enum = "0.2.1"
 tempfile = "3.24.0"
-toml = "0.9.10"
+toml = "0.9.11"
 unicase = "2.9.0"
 fern = {version = "0.7.1", features = ["chrono", "colored"]}
 chrono = "0.4"
