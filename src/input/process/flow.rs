@@ -563,8 +563,8 @@ mod tests {
         // non-milestone years.
         let patches = vec![
             FilePatch::new("processes.csv")
-                .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
-                .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0"),
+                .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
+                .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0,"),
             FilePatch::new("process_flows.csv")
                 .with_deletion("GASPRC,GASPRD,all,all,-1.05,fixed,")
                 .with_addition("GASPRC,GASPRD,all,2020;2030;2040,-1.05,fixed,"),

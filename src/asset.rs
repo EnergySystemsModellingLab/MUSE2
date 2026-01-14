@@ -838,32 +838,40 @@ impl Asset {
 
     /// Divides an asset if it is divisible and returns a vector of children
     ///
-    /// The children assets are identical to the parent (including state) but with a capacity defined
-    /// by the `unit_size`. Only Future or Selected assets can be divided.
+    /// The child assets are identical to the parent (including state) but with a capacity
+    /// defined by the `unit_size`. From a parent asset of capacity `C` and unit size `U`,
+    /// `n = ceil(C / U)` child assets are created, each with capacity `U`. In other words, the
+    /// total combined capacity of the children may be larger than that of the parent,
+    /// if `C` is not an exact multiple of `U`.
+    ///
+    /// Only `Future` and `Selected` assets can be divided.
     pub fn divide_asset(&self) -> Vec<AssetRef> {
         assert!(
             matches!(
                 self.state,
                 AssetState::Future { .. } | AssetState::Selected { .. }
             ),
-            "Assets with state {0} cannot be divided. Only Future or Selected assets can be divided",
+            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
             self.state
         );
 
-        // Divide the asset into children until all capacity is allocated
-        let mut capacity = self.capacity;
         let unit_size = self.process.unit_size.expect(
             "Only assets corresponding to processes with a unit size defined can be divided",
         );
-        let mut children = Vec::new();
-        while capacity > Capacity(0.0) {
-            let mut child = self.clone();
-            child.capacity = unit_size.min(capacity);
-            capacity -= child.capacity;
-            children.push(child.into());
-        }
 
-        children
+        // Calculate the number of units corresponding to the asset's capacity
+        // Safe because capacity and unit_size are both positive finite numbers, so their ratio
+        // must also be positive and finite.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n_units = (self.capacity / unit_size).value().ceil() as usize;
+
+        // Divide the asset into `n_units` children of size `unit_size`
+        let child_asset = Self {
+            capacity: unit_size,
+            ..self.clone()
+        };
+        let child_asset = AssetRef::from(Rc::new(child_asset));
+        std::iter::repeat_n(child_asset, n_units).collect()
     }
 }
 
@@ -1072,8 +1080,7 @@ impl AssetPool {
 
             // If it is divisible, we divide and commission all the children
             if asset.is_divisible() {
-                let children = asset.divide_asset();
-                for mut child in children {
+                for mut child in asset.divide_asset() {
                     child.make_mut().commission(
                         AssetID(self.next_id),
                         Some(AssetGroupID(self.next_group_id)),
@@ -1490,31 +1497,49 @@ mod tests {
     }
 
     #[rstest]
-    fn divide_asset_works(asset_divisible: Asset) {
-        assert!(
-            asset_divisible.is_divisible(),
-            "Divisbile asset cannot be divided!"
-        );
+    #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
+    #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
+    #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
+    #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
+    fn divide_asset(
+        mut process: Process,
+        #[case] capacity: Capacity,
+        #[case] unit_size: Capacity,
+        #[case] n_expected_children: usize,
+    ) {
+        process.unit_size = Some(unit_size);
+        let asset = Asset::new_future(
+            "agent1".into(),
+            Rc::new(process),
+            "GBR".into(),
+            capacity,
+            2010,
+        )
+        .unwrap();
 
-        // Check number of children
-        let children = asset_divisible.divide_asset();
-        let expected_children = expected_children_for_divisible(&asset_divisible);
+        assert!(asset.is_divisible(), "Asset should be divisible!");
+
+        let children = asset.divide_asset();
         assert_eq!(
             children.len(),
-            expected_children,
+            n_expected_children,
             "Unexpected number of children"
         );
 
-        // Check capacity of the children
-        let max_child_capacity = asset_divisible.process.unit_size.unwrap();
+        // Check all children have capacity equal to unit_size
         for child in children.clone() {
-            assert!(
-                child.capacity <= max_child_capacity,
-                "Child capacity is too large!"
+            assert_eq!(
+                child.capacity, unit_size,
+                "Child capacity should equal unit_size"
             );
         }
-        let children_capacity: Capacity = children.iter().map(|a| a.capacity).sum();
-        assert_eq!(asset_divisible.capacity, children_capacity);
+
+        // Check total capacity is >= parent capacity
+        let total_child_capacity: Capacity = children.iter().map(|child| child.capacity).sum();
+        assert!(
+            total_child_capacity >= asset.capacity,
+            "Total capacity should be >= parent capacity"
+        );
     }
 
     #[rstest]
@@ -1558,9 +1583,6 @@ mod tests {
         assert!(!asset_pool.active.is_empty());
         assert_eq!(asset_pool.active.len(), expected_children);
         assert_eq!(asset_pool.next_group_id, 1);
-
-        let children_capacity: Capacity = asset_pool.active.iter().map(|a| a.capacity).sum();
-        assert_eq!(asset_divisible.capacity, children_capacity);
     }
 
     #[rstest]
@@ -2024,8 +2046,8 @@ mod tests {
     #[test]
     fn commission_year_before_time_horizon() {
         let processes_patch = FilePatch::new("processes.csv")
-            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
-            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0");
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0,");
 
         // Check we can run model with asset commissioned before time horizon (simple starts in
         // 2020)
@@ -2049,8 +2071,8 @@ mod tests {
     #[test]
     fn commission_year_after_time_horizon() {
         let processes_patch = FilePatch::new("processes.csv")
-            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
-            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0");
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0,");
 
         // Check we can run model with asset commissioned after time horizon (simple ends in 2040)
         let patches = vec![

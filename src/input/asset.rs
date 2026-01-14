@@ -7,8 +7,10 @@ use crate::process::ProcessMap;
 use crate::region::RegionID;
 use crate::units::Capacity;
 use anyhow::{Context, Result, ensure};
+use float_cmp::approx_eq;
 use indexmap::IndexSet;
 use itertools::Itertools;
+use log::warn;
 use serde::Deserialize;
 use std::path::Path;
 use std::rc::Rc;
@@ -102,6 +104,24 @@ where
             asset.commission_year,
             asset.agent_id,
         );
+
+        // Check that capacity is approximately a multiple of the process unit size
+        // If not, raise a warning
+        if let Some(unit_size) = process.unit_size {
+            let ratio = (asset.capacity / unit_size).value();
+            if !approx_eq!(f64, ratio, ratio.ceil()) {
+                let n_units = ratio.ceil();
+                warn!(
+                    "Asset capacity {} for process {} is not a multiple of unit size {}. \
+                     Asset will be divided into {} units with combined capacity of {}.",
+                    asset.capacity,
+                    asset.process_id,
+                    unit_size,
+                    n_units,
+                    unit_size.value() * n_units
+                );
+            }
+        }
 
         Asset::new_future_with_max_decommission(
             agent_id.clone(),

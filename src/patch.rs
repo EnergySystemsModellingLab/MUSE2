@@ -26,7 +26,6 @@ impl ModelPatch {
     }
 
     /// Create a new empty `ModelPatch` for an example model
-    #[cfg(test)]
     pub fn from_example(name: &str) -> Self {
         let base_model_dir = PathBuf::from("examples").join(name);
         ModelPatch::new(base_model_dir)
@@ -62,7 +61,7 @@ impl ModelPatch {
     }
 
     /// Build this `ModelPatch` into `out_dir` (creating/overwriting files there).
-    fn build<O: AsRef<Path>>(&self, out_dir: O) -> Result<()> {
+    pub fn build<O: AsRef<Path>>(&self, out_dir: O) -> Result<()> {
         let base_dir = self.base_model_dir.as_path();
         let out_path = out_dir.as_ref();
 
