@@ -584,32 +584,13 @@ fn get_demand_limiting_units(
     commodity: &Commodity,
     demand: &DemandMap,
 ) -> u32 {
-    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
-    let mut n_units = 0;
+    let capacity = get_demand_limiting_capacity(time_slice_info, asset, commodity, demand);
     let unit_size = asset.unit_size().unwrap();
 
-    for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     {
-        let demand_for_selection: Flow = time_slice_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| demand[time_slice])
-            .sum();
-
-        // Calculate max number of units required for this time slice selection
-        // For commodities with a coarse time slice level, we have to allow the possibility that all
-        // of the demand gets served by production in a single time slice
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
-            let max_flow_per_cap =
-                *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
-            if max_flow_per_cap != FlowPerCapacity(0.0) {
-                let capacity = demand_for_selection / max_flow_per_cap;
-                n_units = n_units.max((capacity / unit_size).value().ceil() as u32);
-            }
-        }
+        (capacity / unit_size).value().ceil() as u32
     }
-
-    n_units
 }
 
 /// Get options from existing and potential assets for the given parameters
