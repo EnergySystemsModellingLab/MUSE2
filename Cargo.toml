@@ -27,7 +27,7 @@ chrono = "0.4"
 clap = {version = "4.5.54", features = ["cargo", "derive"]}
 include_dir = "0.7.4"
 highs = "2.0.0"
-indexmap = "2.12.1"
+indexmap = "2.13.0"
 human-panic = "2.0.6"
 clap-markdown = "0.1.5"
 platform-info = "2.0.5"
