@@ -577,22 +577,6 @@ fn get_demand_limiting_capacity(
     capacity
 }
 
-/// Get the maximum required number of units across time slices (for a divisible asset)
-fn get_demand_limiting_units(
-    time_slice_info: &TimeSliceInfo,
-    asset: &Asset,
-    commodity: &Commodity,
-    demand: &DemandMap,
-) -> u32 {
-    let capacity = get_demand_limiting_capacity(time_slice_info, asset, commodity, demand);
-    let unit_size = asset.unit_size().unwrap();
-
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    {
-        (capacity / unit_size).value().ceil() as u32
-    }
-}
-
 /// Get options from existing and potential assets for the given parameters
 fn get_asset_options<'a>(
     time_slice_info: &'a TimeSliceInfo,
@@ -636,14 +620,12 @@ fn get_candidate_assets<'a>(
 
             // Set capacity based on demand
             // This will serve as the upper limit when appraising the asset
-            let capacity = match asset.unit_size() {
-                Some(unit_size) => {
-                    let n_units =
-                        get_demand_limiting_units(time_slice_info, &asset, commodity, demand);
-                    Capacity(unit_size.value() * n_units as f64)
-                }
-                None => get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand),
-            };
+            // If the asset is divisible, round capacity to the nearest multiple of the unit size
+            let mut capacity =
+                get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
+            if asset.is_divisible() {
+                capacity = asset.round_capacity_to_unit_size(capacity);
+            }
             asset.set_capacity(capacity);
 
             asset.into()
@@ -730,16 +712,13 @@ fn select_best_assets(
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
             let max_capacity = (!asset.is_commissioned()).then(|| {
-                let max_capacity = model.parameters.capacity_limit_factor * asset.capacity();
-                // For divisible assets, this needs to be rounded up to the nearest multiple of
-                // the process unit size
-                if let Some(unit_size) = asset.unit_size() {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    {
-                        let n_units = (max_capacity / unit_size).value().ceil() as u32;
-                        return Capacity(unit_size.value() * n_units as f64);
-                    }
+                let mut max_capacity = model.parameters.capacity_limit_factor * asset.capacity();
+
+                // For divisible assets, round up to the nearest multiple of the process unit size
+                if asset.is_divisible() {
+                    max_capacity = asset.round_capacity_to_unit_size(max_capacity);
                 }
+
                 let remaining_capacity = remaining_candidate_capacity[asset];
                 max_capacity.min(remaining_capacity)
             });
