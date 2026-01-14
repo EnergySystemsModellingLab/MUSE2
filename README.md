@@ -10,6 +10,9 @@
 
 # MUSE2
 
+> :warning: **Please note that MUSE2 currently only works with simple models and is not yet suitable
+for use in research.** :warning:
+
 MUSE2 (**M**od**U**lar energy systems **S**imulation **E**nvironment) is a tool for running
 simulations of energy systems, written in Rust. Its purpose is to provide users with a framework to
 simulate pathways of energy system transition, usually in the context of climate change mitigation.
@@ -17,9 +20,6 @@ simulate pathways of energy system transition, usually in the context of climate
 It is the successor to [MUSE], which is written in Python. It was developed following re-design of
 MUSE to address a range of legacy issues that are challenging to address via upgrades to the
 existing MUSE framework, and to implement the framework in the high-performance Rust language.
-
-Please note that MUSE2 currently only works with simple models and is not yet suitable for use in
-research.
 
 To download the latest version of MUSE2 for your platform, please visit [the releases page].
 
