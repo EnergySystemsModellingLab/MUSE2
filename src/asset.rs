@@ -2045,8 +2045,8 @@ mod tests {
     #[test]
     fn commission_year_before_time_horizon() {
         let processes_patch = FilePatch::new("processes.csv")
-            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
-            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0");
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0,");
 
         // Check we can run model with asset commissioned before time horizon (simple starts in
         // 2020)
@@ -2070,8 +2070,8 @@ mod tests {
     #[test]
     fn commission_year_after_time_horizon() {
         let processes_patch = FilePatch::new("processes.csv")
-            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0")
-            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0");
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0,");
 
         // Check we can run model with asset commissioned after time horizon (simple ends in 2040)
         let patches = vec![

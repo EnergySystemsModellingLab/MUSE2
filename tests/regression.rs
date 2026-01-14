@@ -1,8 +1,11 @@
 //! Common code for running regression tests.
+use anyhow::Result;
 use float_cmp::approx_eq;
 use itertools::Itertools;
 use muse2::cli::RunOpts;
 use muse2::cli::example::handle_example_run_command;
+use muse2::cli::handle_run_command;
+use muse2::patch::{FilePatch, ModelPatch};
 use muse2::settings::Settings;
 use std::env;
 use std::fs::{File, read_dir};
@@ -18,23 +21,48 @@ const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 /// Run a regression test for an example model
 #[allow(dead_code)]
 pub fn run_regression_test(example_name: &str) {
-    run_regression_test_debug_opt(example_name, false);
+    run_regression_test_common(example_name, false, |opts, settings| {
+        handle_example_run_command(example_name, opts, settings)
+    });
 }
 
 /// Run a regression test for an example model
 #[allow(dead_code)]
 pub fn run_regression_test_with_debug_files(example_name: &str) {
-    run_regression_test_debug_opt(example_name, true);
+    run_regression_test_common(example_name, true, |opts, settings| {
+        handle_example_run_command(example_name, opts, settings)
+    });
 }
 
-fn run_regression_test_debug_opt(example_name: &str, debug_model: bool) {
+/// Run a regression test for an example model with file patches applied
+#[allow(dead_code)]
+pub fn run_regression_test_with_patches(
+    example_name: &str,
+    patches: Vec<FilePatch>,
+    patched_name: &str,
+) {
+    // Patch model to a temporary directory
+    let model_dir = ModelPatch::from_example(example_name)
+        .with_file_patches(patches)
+        .build_to_tempdir()
+        .unwrap();
+
+    run_regression_test_common(patched_name, false, |opts, settings| {
+        handle_run_command(model_dir.path(), opts, settings)
+    });
+}
+
+fn run_regression_test_common<F>(test_name: &str, debug_model: bool, run_fn: F)
+where
+    F: FnOnce(&RunOpts, Option<Settings>) -> Result<()>,
+{
     unsafe { env::set_var("MUSE2_LOG_LEVEL", "off") };
 
     // Allow user to set output dir for regression tests so they can examine results. This is
     // principally intended for use by CI.
     let tmp: TempDir;
     let output_dir = if let Ok(dir) = env::var("MUSE2_TEST_OUTPUT_DIR") {
-        [&dir, example_name].iter().collect()
+        [&dir, test_name].iter().collect()
     } else {
         tmp = tempdir().unwrap();
         tmp.path().to_path_buf()
@@ -45,9 +73,10 @@ fn run_regression_test_debug_opt(example_name: &str, debug_model: bool) {
         overwrite: false,
         debug_model: Some(true), // NB: Always enable this as it helps to have the files for debugging
     };
-    handle_example_run_command(example_name, &opts, Some(Settings::default())).unwrap();
 
-    let test_data_dir = PathBuf::from(format!("tests/data/{example_name}"));
+    run_fn(&opts, Some(Settings::default())).unwrap();
+
+    let test_data_dir = PathBuf::from(format!("tests/data/{test_name}"));
     compare_output_dirs(&output_dir, &test_data_dir, debug_model);
 }
 
