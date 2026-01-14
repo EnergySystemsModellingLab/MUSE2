@@ -20,7 +20,7 @@ coverage *ARGS:
 
 # Regenerate data for regression tests
 regenerate_test_data:
-    @tests/regenerate_all_data.sh
+    @tests/regenerate_test_data.sh
 
 # Run the pre-commit tool
 pre-commit *ARGS:
