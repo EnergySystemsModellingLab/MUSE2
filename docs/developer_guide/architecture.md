@@ -17,7 +17,7 @@ For information on the command-line interface, see [the documentation][cli]. The
 used to provide this interface.
 
 [cli]: ../command_line_help.md
-[`clap`]: <https://docs.rs/clap/latest/clap/>
+[`clap`]: https://docs.rs/clap/latest/clap/
 
 ## Using external crates
 
@@ -170,6 +170,6 @@ checking that there is a producer for every required commodity in the first year
 
 [file-format-docs]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/
 [JSON schemas]: https://json-schema.org/
-[table schemas]: https://specs.frictionlessdata.io//table-schema/
+[table schemas]: https://specs.frictionlessdata.io/table-schema/
 [`serde`]: https://serde.rs/
 [Developing the documentation]: ./docs.md#documenting-file-formats
