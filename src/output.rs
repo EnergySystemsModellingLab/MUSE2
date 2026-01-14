@@ -220,7 +220,7 @@ struct AppraisalResultsRow {
     region_id: RegionID,
     capacity: Capacity,
     capacity_coefficient: MoneyPerCapacity,
-    metric: String,
+    metric: f64,
 }
 
 /// Represents the appraisal results in a row of the appraisal results CSV file
@@ -453,8 +453,7 @@ impl DebugDataWriter {
                 region_id: result.asset.region_id().clone(),
                 capacity: result.capacity,
                 capacity_coefficient: result.coefficients.capacity_coefficient,
-                metric: serde_json::to_string(&result.metric)
-                    .context("Failed to serialise metric")?,
+                metric: result.metric.value(),
             };
             self.appraisal_results_writer.serialize(row)?;
         }
@@ -987,7 +986,7 @@ mod tests {
             region_id: asset.region_id().clone(),
             capacity: Capacity(42.0),
             capacity_coefficient: MoneyPerCapacity(2.14),
-            metric: "{\"cost\":4.14}".to_string(),
+            metric: 4.14,
         };
         let records: Vec<AppraisalResultsRow> =
             csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_FILE_NAME))

@@ -313,7 +313,7 @@ fn validate_secondary_flows(
         for ((commodity_id, region_id), value) in &flows {
             ensure!(
                 number_of_years[&(commodity_id.clone(), region_id.clone())]
-                    == u32::try_from(required_years.len()).unwrap(),
+                    == required_years.len().try_into().unwrap(),
                 "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
                 does not cover all milestone years within the process range of activity."
             );

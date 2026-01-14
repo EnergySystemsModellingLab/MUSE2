@@ -6,7 +6,7 @@ use crate::commodity::Commodity;
 use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Money, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -21,31 +21,7 @@ mod costs;
 mod optimisation;
 use coefficients::ObjectiveCoefficients;
 use float_cmp::approx_eq;
-use float_cmp::{ApproxEq, F64Margin};
 use optimisation::perform_optimisation;
-
-/// Compares two values with approximate equality checking.
-///
-/// Returns `Ordering::Equal` if the values are approximately equal
-/// according to the default floating-point margin, otherwise returns
-/// their relative ordering based on `a.partial_cmp(&b)`.
-///
-/// This is useful when comparing floating-point-based types where exact
-/// equality may not be appropriate due to numerical precision limitations.
-///
-/// # Panics
-///
-/// Panics if `partial_cmp` returns `None` (i.e., if either value is NaN).
-fn compare_approx<T>(a: T, b: T) -> Ordering
-where
-    T: Copy + PartialOrd + ApproxEq<Margin = F64Margin>,
-{
-    if a.approx_eq(b, F64Margin::default()) {
-        Ordering::Equal
-    } else {
-        a.partial_cmp(&b).unwrap()
-    }
-}
 
 /// The output of investment appraisal required to compare potential investment decisions
 pub struct AppraisalOutput {
@@ -138,7 +114,12 @@ impl ComparableMetric for LCOXMetric {
             .downcast_ref::<Self>()
             .expect("Cannot compare metrics of different types");
 
-        compare_approx(self.cost, other.cost)
+        if approx_eq!(MoneyPerActivity, self.cost, other.cost) {
+            Ordering::Equal
+        } else {
+            // Lower cost is better
+            self.cost.partial_cmp(&other.cost).unwrap()
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -161,7 +142,7 @@ impl NPVMetric {
 
     /// Returns true if this metric represents a zero fixed cost case.
     fn is_zero_fixed_cost(&self) -> bool {
-        approx_eq!(Money, self.0.annualised_fixed_cost, Money(0.0))
+        self.0.annualised_fixed_cost == Money(0.0)
     }
 }
 
@@ -190,14 +171,22 @@ impl ComparableMetric for NPVMetric {
                 let self_surplus = self.0.total_annualised_surplus;
                 let other_surplus = other.0.total_annualised_surplus;
 
-                compare_approx(other_surplus, self_surplus)
+                if approx_eq!(Money, self_surplus, other_surplus) {
+                    Ordering::Equal
+                } else {
+                    other_surplus.partial_cmp(&self_surplus).unwrap()
+                }
             }
             // Both have non-zero fixed cost: compare profitability index (higher is better)
             (false, false) => {
                 let self_pi = self.0.value();
                 let other_pi = other.0.value();
 
-                compare_approx(other_pi, self_pi)
+                if approx_eq!(Dimensionless, self_pi, other_pi) {
+                    Ordering::Equal
+                } else {
+                    other_pi.partial_cmp(&self_pi).unwrap()
+                }
             }
             // Zero fixed cost is always better than non-zero fixed cost
             (true, false) => Ordering::Less,
