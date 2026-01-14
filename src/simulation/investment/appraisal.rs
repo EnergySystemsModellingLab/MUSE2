@@ -324,3 +324,111 @@ pub fn appraise_investment(
     };
     appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::finance::ProfitabilityIndex;
+    use crate::units::{Money, MoneyPerActivity};
+
+    #[test]
+    fn lcox_compare_equal() {
+        let metric1 = LCOXMetric::new(MoneyPerActivity(10.0));
+        let metric2 = LCOXMetric::new(MoneyPerActivity(10.0));
+
+        assert_eq!(metric1.compare(&metric2), Ordering::Equal);
+    }
+
+    #[test]
+    fn lcox_compare_less_is_better() {
+        let metric1 = LCOXMetric::new(MoneyPerActivity(5.0));
+        let metric2 = LCOXMetric::new(MoneyPerActivity(10.0));
+
+        // metric1 has lower cost, so it's better (Less)
+        assert_eq!(metric1.compare(&metric2), Ordering::Less);
+    }
+
+    #[test]
+    fn lcox_compare_greater_is_worse() {
+        let metric1 = LCOXMetric::new(MoneyPerActivity(15.0));
+        let metric2 = LCOXMetric::new(MoneyPerActivity(10.0));
+
+        // metric1 has higher cost, so it's worse (Greater)
+        assert_eq!(metric1.compare(&metric2), Ordering::Greater);
+    }
+
+    #[test]
+    fn npv_compare_both_zero_fixed_cost() {
+        let metric1 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(100.0),
+            annualised_fixed_cost: Money(0.0),
+        });
+        let metric2 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(50.0),
+            annualised_fixed_cost: Money(0.0),
+        });
+
+        // Compare by surplus: metric1 (100) is better than metric2 (50)
+        assert_eq!(metric1.compare(&metric2), Ordering::Less);
+    }
+
+    #[test]
+    fn npv_compare_both_zero_fixed_cost_equal() {
+        let metric1 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(100.0),
+            annualised_fixed_cost: Money(0.0),
+        });
+        let metric2 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(100.0),
+            annualised_fixed_cost: Money(0.0),
+        });
+
+        assert_eq!(metric1.compare(&metric2), Ordering::Equal);
+    }
+
+    #[test]
+    fn npv_compare_zero_vs_nonzero_fixed_cost() {
+        let metric_zero = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(10.0),
+            annualised_fixed_cost: Money(0.0),
+        });
+        let metric_nonzero = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(1000.0),
+            annualised_fixed_cost: Money(100.0),
+        });
+
+        // Zero fixed cost is always better
+        assert_eq!(metric_zero.compare(&metric_nonzero), Ordering::Less);
+        assert_eq!(metric_nonzero.compare(&metric_zero), Ordering::Greater);
+    }
+
+    #[test]
+    fn npv_compare_both_nonzero_fixed_cost() {
+        let metric1 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(200.0),
+            annualised_fixed_cost: Money(100.0),
+        });
+        let metric2 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(150.0),
+            annualised_fixed_cost: Money(100.0),
+        });
+
+        // Compare by profitability index: 200/100 = 2.0 vs 150/100 = 1.5
+        // metric1 is better (higher PI)
+        assert_eq!(metric1.compare(&metric2), Ordering::Less);
+    }
+
+    #[test]
+    fn npv_compare_both_nonzero_fixed_cost_equal() {
+        let metric1 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(200.0),
+            annualised_fixed_cost: Money(100.0),
+        });
+        let metric2 = NPVMetric::new(ProfitabilityIndex {
+            total_annualised_surplus: Money(200.0),
+            annualised_fixed_cost: Money(100.0),
+        });
+
+        assert_eq!(metric1.compare(&metric2), Ordering::Equal);
+    }
+}
