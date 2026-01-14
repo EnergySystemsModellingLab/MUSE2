@@ -158,7 +158,7 @@ For more information, consult [the documentation for the `units` module][units-m
 Input and output files for MUSE2 are either in [CSV] or [TOML] format. Users provide model
 definitions via a number of input files and the simulation results are written to files in an output
 folder. The code responsible for reading and validating input files and writing output files is in
-the [`input`][input-module] and [`output`][output-module], respectively.
+the [`input`][input-module] and [`output`][output-module] modules, respectively.
 
 The file formats for MUSE2 input and output files are described [in the
 documentation][file-format-docs]. This documentation is generated from schema files ([JSON schemas]
