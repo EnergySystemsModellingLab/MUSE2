@@ -15,5 +15,6 @@
         "editor.formatOnSave": false
     },
     "editor.formatOnSave": true,
-    "editor.rulers": [100] // default max_width for rustfmt
+    "editor.rulers": [100], // default max_width for rustfmt
+    "chat.useAgentsMdFile": true
 }
