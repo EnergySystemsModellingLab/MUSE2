@@ -831,6 +831,11 @@ impl Asset {
         *mothballed_year
     }
 
+    /// Get the unit size for this asset's process (if any)
+    pub fn unit_size(&self) -> Option<Capacity> {
+        self.process.unit_size
+    }
+
     /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
     pub fn is_divisible(&self) -> bool {
         self.process.unit_size.is_some()

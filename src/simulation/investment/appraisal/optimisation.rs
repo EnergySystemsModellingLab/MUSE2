@@ -38,10 +38,23 @@ impl VariableMap {
     ///
     /// # Returns
     /// A new `VariableMap` containing all created decision variables
-    fn add_to_problem(problem: &mut Problem, cost_coefficients: &ObjectiveCoefficients) -> Self {
+    fn add_to_problem(
+        problem: &mut Problem,
+        cost_coefficients: &ObjectiveCoefficients,
+        capacity_unit_size: Option<Capacity>,
+    ) -> Self {
         // Create capacity variable with its associated cost
-        let capacity_var =
-            problem.add_column(cost_coefficients.capacity_coefficient.value(), 0.0..);
+        let capacity_coefficient = cost_coefficients.capacity_coefficient.value();
+        let capacity_var = match capacity_unit_size {
+            Some(unit_size) => {
+                // Divisible asset: capacity variable represents number of units
+                problem.add_column(capacity_coefficient * unit_size.value(), 0.0..)
+            }
+            None => {
+                // Indivisible asset: capacity variable represents total capacity
+                problem.add_column(capacity_coefficient, 0.0..)
+            }
+        };
 
         // Create activity variables for each time slice
         let mut activity_vars = IndexMap::new();
@@ -118,7 +131,7 @@ pub fn perform_optimisation(
 ) -> Result<ResultsMap> {
     // Create problem and add variables
     let mut problem = Problem::default();
-    let variables = VariableMap::add_to_problem(&mut problem, coefficients);
+    let variables = VariableMap::add_to_problem(&mut problem, coefficients, asset.unit_size());
 
     // Add constraints
     add_constraints(
