@@ -155,7 +155,12 @@ For more information, consult [the documentation for the `units` module][units-m
 
 ## Input and output files
 
-File formats for MUSE2 input and output files are described [in the
+Input and output files for MUSE2 are either in [CSV] or [TOML] format. Users provide model
+definitions via a number of input files and the simulation results are written to files in an output
+folder. The code responsible for reading and validating input files and writing output files is in
+the [`input`][input-module] and [`output`][output-module], respectively.
+
+The file formats for MUSE2 input and output files are described [in the
 documentation][file-format-docs]. This documentation is generated from schema files ([JSON schemas]
 for TOML files and [table schemas] for CSV files); these schemas **MUST** be updated when the file
 format changes (i.e. when a field is added/removed/changed). (For details of how to generate this
@@ -168,6 +173,10 @@ A certain amount of type safety is given by the [`serde`] crate (e.g. checking t
 should be integers are really integers), but we also carry out many other validation checks (e.g.
 checking that there is a producer for every required commodity in the first year).
 
+[CSV]: https://en.wikipedia.org/wiki/Comma-separated_values
+[TOML]: https://toml.io/en/
+[input-module]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/input/index.html
+[output-module]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/output/index.html
 [file-format-docs]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/
 [JSON schemas]: https://json-schema.org/
 [table schemas]: https://specs.frictionlessdata.io/table-schema/
