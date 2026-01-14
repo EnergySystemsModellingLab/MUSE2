@@ -27,7 +27,8 @@ pub fn add_capacity_constraint(
     if let Some(unit_size) = asset.unit_size() {
         capacity_limit /= unit_size.value();
 
-        // Sanity check: capacity_limit should approx be multiple of unit_size
+        // Sanity check: capacity_limit should be a whole number of units (i.e pre-adjusted
+        // capacity limit was a multiple of unit size)
         assert!(approx_eq!(f64, capacity_limit, capacity_limit.round()));
     }
 
@@ -115,10 +116,10 @@ fn add_activity_constraints_for_candidate(
         let mut lower_limit = limits.start().value();
 
         // If the asset is divisible, the capacity variable represents number of units,
-        // so we need to multiply the per-capacity limits by the unit capacity.
-        if let Some(unit_capacity) = asset.unit_size() {
-            upper_limit *= unit_capacity.value();
-            lower_limit *= unit_capacity.value();
+        // so we need to multiply the per-capacity limits by the unit size.
+        if let Some(unit_size) = asset.unit_size() {
+            upper_limit *= unit_size.value();
+            lower_limit *= unit_size.value();
         }
 
         // Collect capacity and activity terms

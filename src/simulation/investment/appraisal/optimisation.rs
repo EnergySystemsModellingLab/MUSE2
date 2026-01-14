@@ -21,7 +21,8 @@ pub type Variable = highs::Col;
 
 /// Map storing variables for the optimisation problem
 struct VariableMap {
-    /// Capacity variable
+    /// Capacity variable (represents absolute capacity for indivisible assets, number of units for
+    /// divisible assets)
     capacity_var: Variable,
     /// Activity variables in each time slice
     activity_vars: IndexMap<TimeSliceID, Variable>,
@@ -48,7 +49,7 @@ impl VariableMap {
         let capacity_var = match capacity_unit_size {
             Some(unit_size) => {
                 // Divisible asset: capacity variable represents number of units
-                problem.add_column(capacity_coefficient * unit_size.value(), 0.0..)
+                problem.add_integer_column(capacity_coefficient * unit_size.value(), 0.0..)
             }
             None => {
                 // Indivisible asset: capacity variable represents total capacity
