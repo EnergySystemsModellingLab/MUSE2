@@ -860,7 +860,8 @@ impl Asset {
         );
 
         // Calculate the number of units corresponding to the asset's capacity
-        // Safe because capacity and unit_size are both positive finite numbers
+        // Safe because capacity and unit_size are both positive finite numbers, so their ratio
+        // must also be positive and finite.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n_units = (self.capacity / unit_size).value().ceil() as usize;
 

@@ -39,7 +39,7 @@ pub fn run_regression_test_with_debug_files(example_name: &str) {
 pub fn run_regression_test_with_patches(
     example_name: &str,
     patches: Vec<FilePatch>,
-    patched_name: &str,
+    test_case_name: &str,
 ) {
     // Patch model to a temporary directory
     let model_dir = ModelPatch::from_example(example_name)
@@ -47,7 +47,7 @@ pub fn run_regression_test_with_patches(
         .build_to_tempdir()
         .unwrap();
 
-    run_regression_test_common(patched_name, false, |opts, settings| {
+    run_regression_test_common(test_case_name, false, |opts, settings| {
         handle_run_command(model_dir.path(), opts, settings)
     });
 }
