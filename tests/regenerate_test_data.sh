@@ -5,7 +5,13 @@ mydir=$(dirname "$0")
 cd "$mydir"
 
 echo Building MUSE2
-examples=$(cargo run example list 2> /dev/null)
+cargo build 2> /dev/null
+
+if [[ $# -gt 0 ]]; then
+    examples=$@
+else
+    examples=$(cargo run example list 2> /dev/null)
+fi
 
 for example in $examples; do
     # Skip the circularity example
