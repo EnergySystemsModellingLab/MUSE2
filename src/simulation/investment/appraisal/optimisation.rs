@@ -148,7 +148,12 @@ pub fn perform_optimisation(
     let solution = solve_optimal(problem.optimise(sense))?.get_solution();
     let solution_values = solution.columns();
     Ok(ResultsMap {
-        capacity: Capacity::new(solution_values[0]),
+        // If the asset is divisible, the capacity variable represents number of units, so convert
+        // to total capacity
+        capacity: match asset.unit_size() {
+            Some(unit_size) => Capacity::new(solution_values[0] * unit_size.value()),
+            None => Capacity::new(solution_values[0]),
+        },
         // The mapping below assumes the column ordering documented on `VariableMap::add_to_problem`:
         // index 0 = capacity, next `n` entries = activities (in the same key order as
         // `cost_coefficients.activity_coefficients`), remaining entries = unmet demand.

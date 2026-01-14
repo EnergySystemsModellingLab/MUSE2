@@ -577,6 +577,41 @@ fn get_demand_limiting_capacity(
     capacity
 }
 
+/// Get the maximum required number of units across time slices (for a divisible asset)
+fn get_demand_limiting_units(
+    time_slice_info: &TimeSliceInfo,
+    asset: &Asset,
+    commodity: &Commodity,
+    demand: &DemandMap,
+) -> u32 {
+    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+    let mut n_units = 0;
+    let unit_size = asset.unit_size().unwrap();
+
+    for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
+    {
+        let demand_for_selection: Flow = time_slice_selection
+            .iter(time_slice_info)
+            .map(|(time_slice, _)| demand[time_slice])
+            .sum();
+
+        // Calculate max number of units required for this time slice selection
+        // For commodities with a coarse time slice level, we have to allow the possibility that all
+        // of the demand gets served by production in a single time slice
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
+            let max_flow_per_cap =
+                *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
+            if max_flow_per_cap != FlowPerCapacity(0.0) {
+                let capacity = demand_for_selection / max_flow_per_cap;
+                n_units = n_units.max((capacity / unit_size).value().ceil() as u32);
+            }
+        }
+    }
+
+    n_units
+}
+
 /// Get options from existing and potential assets for the given parameters
 fn get_asset_options<'a>(
     time_slice_info: &'a TimeSliceInfo,
@@ -617,12 +652,18 @@ fn get_candidate_assets<'a>(
             let mut asset =
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
-            asset.set_capacity(get_demand_limiting_capacity(
-                time_slice_info,
-                &asset,
-                commodity,
-                demand,
-            ));
+
+            // Set capacity based on demand
+            // This will serve as the upper limit when appraising the asset
+            let capacity = match asset.unit_size() {
+                Some(unit_size) => {
+                    let n_units =
+                        get_demand_limiting_units(time_slice_info, &asset, commodity, demand);
+                    Capacity(unit_size.value() * n_units as f64)
+                }
+                None => get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand),
+            };
+            asset.set_capacity(capacity);
 
             asset.into()
         })
@@ -709,6 +750,15 @@ fn select_best_assets(
         for asset in &opt_assets {
             let max_capacity = (!asset.is_commissioned()).then(|| {
                 let max_capacity = model.parameters.capacity_limit_factor * asset.capacity();
+                // For divisible assets, this needs to be rounded up to the nearest multiple of
+                // the process unit size
+                if let Some(unit_size) = asset.unit_size() {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    {
+                        let n_units = (max_capacity / unit_size).value().ceil() as u32;
+                        return Capacity(unit_size.value() * n_units as f64);
+                    }
+                }
                 let remaining_capacity = remaining_candidate_capacity[asset];
                 max_capacity.min(remaining_capacity)
             });
