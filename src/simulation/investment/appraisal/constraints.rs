@@ -5,6 +5,7 @@ use crate::asset::{AssetRef, AssetState};
 use crate::commodity::Commodity;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Flow};
+use float_cmp::approx_eq;
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
@@ -19,15 +20,26 @@ pub fn add_capacity_constraint(
     max_capacity: Option<Capacity>,
     capacity_var: Variable,
 ) {
-    let capacity = max_capacity.unwrap_or(asset.capacity());
+    let mut capacity_limit = max_capacity.unwrap_or(asset.capacity()).value();
+
+    // If asset is divisible, capacity_var represents number of units, so we must divide the
+    // capacity bounds by the unit size.
+    if let Some(unit_size) = asset.unit_size() {
+        capacity_limit /= unit_size.value();
+
+        // Sanity check: capacity_limit should be a whole number of units (i.e pre-adjusted
+        // capacity limit was a multiple of unit size)
+        assert!(approx_eq!(f64, capacity_limit, capacity_limit.round()));
+    }
+
     let bounds = match asset.state() {
         AssetState::Commissioned { .. } => {
             // Fixed capacity for commissioned assets
-            capacity.value()..=capacity.value()
+            capacity_limit..=capacity_limit
         }
         AssetState::Candidate => {
             // Variable capacity between 0 and max for candidate assets
-            0.0..=capacity.value()
+            0.0..=capacity_limit
         }
         _ => panic!(
             "add_capacity_constraint should only be called with Commissioned or Candidate assets"
@@ -100,8 +112,15 @@ fn add_activity_constraints_for_candidate(
     time_slice_info: &TimeSliceInfo,
 ) {
     for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
-        let upper_limit = limits.end().value();
-        let lower_limit = limits.start().value();
+        let mut upper_limit = limits.end().value();
+        let mut lower_limit = limits.start().value();
+
+        // If the asset is divisible, the capacity variable represents number of units,
+        // so we need to multiply the per-capacity limits by the unit size.
+        if let Some(unit_size) = asset.unit_size() {
+            upper_limit *= unit_size.value();
+            lower_limit *= unit_size.value();
+        }
 
         // Collect capacity and activity terms
         // We have a single capacity term, and activity terms for all time slices in the selection

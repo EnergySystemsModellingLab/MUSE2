@@ -831,9 +831,40 @@ impl Asset {
         *mothballed_year
     }
 
+    /// Get the unit size for this asset's process (if any)
+    pub fn unit_size(&self) -> Option<Capacity> {
+        self.process.unit_size
+    }
+
     /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
     pub fn is_divisible(&self) -> bool {
         self.process.unit_size.is_some()
+    }
+
+    /// Convert a capacity to number of units for a divisible asset.
+    ///
+    /// Divides the given capacity by the process unit size and rounds up. In other words, this is
+    /// the minimum number of units required to achieve at least the given capacity.
+    ///
+    /// Panics if the asset is not divisible.
+    pub fn capacity_to_units(&self, capacity: Capacity) -> u32 {
+        let unit_size = self.unit_size().expect("Asset must be divisible");
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        {
+            (capacity / unit_size).value().ceil() as u32
+        }
+    }
+
+    /// Round a capacity up to the nearest multiple of the unit size.
+    ///
+    /// For a divisible asset, returns the minimum capacity (as a multiple of `unit_size`)
+    /// that is at least as large as the given capacity.
+    ///
+    /// Panics if the asset is not divisible.
+    pub fn round_capacity_to_unit_size(&self, capacity: Capacity) -> Capacity {
+        let unit_size = self.unit_size().expect("Asset must be divisible");
+        let n_units = self.capacity_to_units(capacity);
+        Capacity(unit_size.value() * n_units as f64)
     }
 
     /// Divides an asset if it is divisible and returns a vector of children
@@ -860,10 +891,7 @@ impl Asset {
         );
 
         // Calculate the number of units corresponding to the asset's capacity
-        // Safe because capacity and unit_size are both positive finite numbers, so their ratio
-        // must also be positive and finite.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let n_units = (self.capacity / unit_size).value().ceil() as usize;
+        let n_units = self.capacity_to_units(self.capacity) as usize;
 
         // Divide the asset into `n_units` children of size `unit_size`
         let child_asset = Self {

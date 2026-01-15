@@ -617,12 +617,16 @@ fn get_candidate_assets<'a>(
             let mut asset =
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
-            asset.set_capacity(get_demand_limiting_capacity(
-                time_slice_info,
-                &asset,
-                commodity,
-                demand,
-            ));
+
+            // Set capacity based on demand
+            // This will serve as the upper limit when appraising the asset
+            // If the asset is divisible, round capacity to the nearest multiple of the unit size
+            let mut capacity =
+                get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
+            if asset.is_divisible() {
+                capacity = asset.round_capacity_to_unit_size(capacity);
+            }
+            asset.set_capacity(capacity);
 
             asset.into()
         })
@@ -708,7 +712,13 @@ fn select_best_assets(
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
             let max_capacity = (!asset.is_commissioned()).then(|| {
-                let max_capacity = model.parameters.capacity_limit_factor * asset.capacity();
+                let mut max_capacity = model.parameters.capacity_limit_factor * asset.capacity();
+
+                // For divisible assets, round up to the nearest multiple of the process unit size
+                if asset.is_divisible() {
+                    max_capacity = asset.round_capacity_to_unit_size(max_capacity);
+                }
+
                 let remaining_capacity = remaining_candidate_capacity[asset];
                 max_capacity.min(remaining_capacity)
             });
