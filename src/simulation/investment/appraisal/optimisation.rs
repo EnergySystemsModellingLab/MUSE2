@@ -21,8 +21,10 @@ pub type Variable = highs::Col;
 
 /// Map storing variables for the optimisation problem
 struct VariableMap {
-    /// Capacity variable (represents absolute capacity for indivisible assets, number of units for
-    /// divisible assets)
+    /// Capacity variable.
+    ///
+    /// This represents absolute capacity for indivisible assets and number of units for
+    /// divisible assets.
     capacity_var: Variable,
     /// Activity variables in each time slice
     activity_vars: IndexMap<TimeSliceID, Variable>,
