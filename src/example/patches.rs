@@ -25,6 +25,11 @@ fn get_all_patches() -> PatchMap {
     .collect()
 }
 
+/// Get the names for all the patches
+pub fn get_patch_names() -> impl Iterator<Item = &'static str> {
+    PATCHES.keys().copied()
+}
+
 /// Get patches for the named patched example
 pub fn get_patches(name: &str) -> Result<&[FilePatch]> {
     Ok(PATCHES

@@ -23,7 +23,7 @@ const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 #[allow(dead_code)]
 pub fn run_regression_test(example_name: &str) {
     run_regression_test_common(example_name, false, |opts, settings| {
-        handle_example_run_command(example_name, opts, settings)
+        handle_example_run_command(example_name, false, opts, settings)
     });
 }
 
@@ -31,7 +31,7 @@ pub fn run_regression_test(example_name: &str) {
 #[allow(dead_code)]
 pub fn run_regression_test_with_debug_files(example_name: &str) {
     run_regression_test_common(example_name, true, |opts, settings| {
-        handle_example_run_command(example_name, opts, settings)
+        handle_example_run_command(example_name, false, opts, settings)
     });
 }
 
