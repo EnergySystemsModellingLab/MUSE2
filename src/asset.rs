@@ -103,7 +103,7 @@ pub enum AssetState {
 }
 
 /// Capacity of an asset, which may be continuous or a discrete number of indivisible units
-#[derive(Clone, PartialEq, Copy)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub enum AssetCapacity {
     /// Continuous capacity
     Continuous(Capacity),
@@ -115,6 +115,7 @@ pub enum AssetCapacity {
 impl Add for AssetCapacity {
     type Output = Self;
 
+    // Add two AssetCapacity values together
     fn add(self, rhs: AssetCapacity) -> Self {
         match (self, rhs) {
             (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
@@ -124,7 +125,7 @@ impl Add for AssetCapacity {
                 Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(units1 + units2, size1)
             }
-            _ => panic!("Cannot add different types of AssetCapacity"),
+            _ => panic!("Cannot add different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 }
@@ -132,16 +133,17 @@ impl Add for AssetCapacity {
 impl Sub for AssetCapacity {
     type Output = Self;
 
+    // Subtract rhs from self, ensuring that the result is non-negative
     fn sub(self, rhs: AssetCapacity) -> Self {
         match (self, rhs) {
             (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous(cap1 - cap2)
+                AssetCapacity::Continuous((cap1 - cap2).max(Capacity(0.0)))
             }
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
                 Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(units1 - units2, size1)
+                AssetCapacity::Discrete(units1 - units2.min(units1), size1)
             }
-            _ => panic!("Cannot subtract different types of AssetCapacity"),
+            _ => panic!("Cannot subtract different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 }
@@ -221,7 +223,7 @@ impl AssetCapacity {
                 Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(min(units1, units2), size1)
             }
-            _ => panic!("Cannot compare different types of AssetCapacity"),
+            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 
@@ -235,7 +237,7 @@ impl AssetCapacity {
                 Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(max(units1, units2), size1)
             }
-            _ => panic!("Cannot compare different types of AssetCapacity"),
+            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 }
@@ -888,7 +890,7 @@ impl Asset {
             "increase_capacity can only be called on Candidate assets"
         );
         assert!(
-            capacity.total_capacity() > Capacity::EPSILON,
+            capacity.total_capacity() > Capacity(0.0),
             "Capacity increase must be positive"
         );
         self.capacity = self.capacity + capacity;
