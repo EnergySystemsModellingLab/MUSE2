@@ -42,7 +42,9 @@ impl Example {
             .context("File not UTF-8 encoded")
     }
 
-    /// Extract this example to a specified destination
+    /// Extract this example to a specified destination.
+    ///
+    /// Returns an error if the destination directory already exists or copying the files fails.
     pub fn extract(&self, new_path: &Path) -> Result<()> {
         // Copy the contents of the subdirectory to the destination
         fs::create_dir(new_path)?;
