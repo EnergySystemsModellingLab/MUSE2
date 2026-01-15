@@ -981,9 +981,12 @@ impl Asset {
         *mothballed_year
     }
 
-    /// Get the unit size for this asset's process (if any)
+    /// Get the unit size for this asset's capacity (if any)
     pub fn unit_size(&self) -> Option<Capacity> {
-        self.process.unit_size
+        match self.capacity {
+            AssetCapacity::Discrete(_, size) => Some(size),
+            AssetCapacity::Continuous(_) => None,
+        }
     }
 
     /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
@@ -993,11 +996,9 @@ impl Asset {
 
     /// Divides an asset if it is divisible and returns a vector of children
     ///
-    /// The child assets are identical to the parent (including state) but with a capacity
-    /// defined by the `unit_size`. From a parent asset of capacity `C` and unit size `U`,
-    /// `n = ceil(C / U)` child assets are created, each with capacity `U`. In other words, the
-    /// total combined capacity of the children may be larger than that of the parent,
-    /// if `C` is not an exact multiple of `U`.
+    /// Assets with capacity of type `AssetCapacity::Discrete` are divided into multiple assets each
+    /// made up of a single unit of the original asset's unit size. Will panic if the asset does not
+    /// have a discrete capacity.
     ///
     /// Only `Future` and `Selected` assets can be divided.
     ///
@@ -1012,15 +1013,14 @@ impl Asset {
             self.state
         );
 
-        // Calculate the number of units corresponding to the asset's capacity
-        let n_units =
-            AssetCapacity::from_capacity(self.capacity.total_capacity(), self.unit_size())
-                .n_units()
-                .expect("Asset must be divisible to calculate number of units");
+        // Ensure the asset is discrete
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity else {
+            panic!("Only discrete assets can be divided")
+        };
 
         // Divide the asset into `n_units` children of size `unit_size`
         let child_asset = Self {
-            capacity: AssetCapacity::Discrete(1, self.unit_size().unwrap()),
+            capacity: AssetCapacity::Discrete(1, unit_size),
             ..self.clone()
         };
         let child_asset = AssetRef::from(Rc::new(child_asset));
