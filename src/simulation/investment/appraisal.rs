@@ -43,7 +43,7 @@ where
     if a.approx_eq(b, F64Margin::default()) {
         Ordering::Equal
     } else {
-        a.partial_cmp(&b).unwrap()
+        a.partial_cmp(&b).expect("Cannot compare NaN values")
     }
 }
 
@@ -330,105 +330,139 @@ mod tests {
     use super::*;
     use crate::finance::ProfitabilityIndex;
     use crate::units::{Money, MoneyPerActivity};
+    use rstest::rstest;
 
-    #[test]
-    fn lcox_compare_equal() {
-        let metric1 = LCOXMetric::new(MoneyPerActivity(10.0));
-        let metric2 = LCOXMetric::new(MoneyPerActivity(10.0));
+    /// Parametrised tests for LCOX metric comparison.
+    #[rstest]
+    #[case(10.0, 10.0, Ordering::Equal, "equal_costs")]
+    #[case(5.0, 10.0, Ordering::Less, "first_lower_cost_is_better")]
+    #[case(10.0, 5.0, Ordering::Greater, "second_lower_cost_is_better")]
+    fn lcox_metric_comparison(
+        #[case] cost1: f64,
+        #[case] cost2: f64,
+        #[case] expected: Ordering,
+        #[case] description: &str,
+    ) {
+        let metric1 = LCOXMetric::new(MoneyPerActivity(cost1));
+        let metric2 = LCOXMetric::new(MoneyPerActivity(cost2));
 
-        assert_eq!(metric1.compare(&metric2), Ordering::Equal);
+        assert_eq!(
+            metric1.compare(&metric2),
+            expected,
+            "Failed comparison for case: {description}"
+        );
     }
 
-    #[test]
-    fn lcox_compare_less_is_better() {
-        let metric1 = LCOXMetric::new(MoneyPerActivity(5.0));
-        let metric2 = LCOXMetric::new(MoneyPerActivity(10.0));
-
-        // metric1 has lower cost, so it's better (Less)
-        assert_eq!(metric1.compare(&metric2), Ordering::Less);
-    }
-
-    #[test]
-    fn lcox_compare_greater_is_worse() {
-        let metric1 = LCOXMetric::new(MoneyPerActivity(15.0));
-        let metric2 = LCOXMetric::new(MoneyPerActivity(10.0));
-
-        // metric1 has higher cost, so it's worse (Greater)
-        assert_eq!(metric1.compare(&metric2), Ordering::Greater);
-    }
-
-    #[test]
-    fn npv_compare_both_zero_fixed_cost() {
+    /// Parametrised tests for NPV metric comparison.
+    #[rstest]
+    // Both zero AFC: compare by total surplus (higher is better)
+    #[case(100.0, 0.0, 50.0, 0.0, Ordering::Less, "both_zero_afc_first_better")]
+    #[case(
+        50.0,
+        0.0,
+        100.0,
+        0.0,
+        Ordering::Greater,
+        "both_zero_afc_second_better"
+    )]
+    #[case(100.0, 0.0, 100.0, 0.0, Ordering::Equal, "both_zero_afc_equal")]
+    // Both approximately zero AFC (same as both zero): compare by total surplus (higher is better)
+    #[case(
+        100.0,
+        1e-10,
+        50.0,
+        1e-10,
+        Ordering::Less,
+        "both_approx_zero_afc_first_better"
+    )]
+    #[case(
+        100.0,
+        1e-10,
+        200.0,
+        50.0,
+        Ordering::Less,
+        "approx_zero_afc_beats_nonzero"
+    )]
+    #[case(
+        200.0,
+        50.0,
+        100.0,
+        1e-10,
+        Ordering::Greater,
+        "nonzero_afc_loses_to_approx_zero"
+    )]
+    // Both non-zero AFC: compare by profitability index (higher is better)
+    #[case(
+        200.0,
+        100.0,
+        150.0,
+        100.0,
+        Ordering::Less,
+        "both_nonzero_afc_first_better"
+    )]
+    #[case(
+        150.0,
+        100.0,
+        200.0,
+        100.0,
+        Ordering::Greater,
+        "both_nonzero_afc_second_better"
+    )]
+    #[case(200.0, 100.0, 200.0, 100.0, Ordering::Equal, "both_nonzero_afc_equal")]
+    // Zero vs non-zero AFC: zero or approximately zero is always better
+    #[case(
+        10.0,
+        0.0,
+        1000.0,
+        100.0,
+        Ordering::Less,
+        "first_zero_afc_beats_second_nonzero_afc"
+    )]
+    #[case(
+        10.0,
+        1e-10,
+        1000.0,
+        100.0,
+        Ordering::Less,
+        "first_approx_zero_afc_beats_second_nonzero_afc"
+    )]
+    #[case(
+        1000.0,
+        100.0,
+        10.0,
+        0.0,
+        Ordering::Greater,
+        "second_zero_afc_beats_first_nonzero_afc"
+    )]
+    #[case(
+        1000.0,
+        100.0,
+        10.0,
+        1e-10,
+        Ordering::Greater,
+        "second_nonzero_afc_beats_first_approx_zero_afc"
+    )]
+    fn npv_metric_comparison(
+        #[case] surplus1: f64,
+        #[case] fixed_cost1: f64,
+        #[case] surplus2: f64,
+        #[case] fixed_cost2: f64,
+        #[case] expected: Ordering,
+        #[case] description: &str,
+    ) {
         let metric1 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(100.0),
-            annualised_fixed_cost: Money(0.0),
+            total_annualised_surplus: Money(surplus1),
+            annualised_fixed_cost: Money(fixed_cost1),
         });
         let metric2 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(50.0),
-            annualised_fixed_cost: Money(0.0),
+            total_annualised_surplus: Money(surplus2),
+            annualised_fixed_cost: Money(fixed_cost2),
         });
 
-        // Compare by surplus: metric1 (100) is better than metric2 (50)
-        assert_eq!(metric1.compare(&metric2), Ordering::Less);
-    }
-
-    #[test]
-    fn npv_compare_both_zero_fixed_cost_equal() {
-        let metric1 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(100.0),
-            annualised_fixed_cost: Money(0.0),
-        });
-        let metric2 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(100.0),
-            annualised_fixed_cost: Money(0.0),
-        });
-
-        assert_eq!(metric1.compare(&metric2), Ordering::Equal);
-    }
-
-    #[test]
-    fn npv_compare_zero_vs_nonzero_fixed_cost() {
-        let metric_zero = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(10.0),
-            annualised_fixed_cost: Money(0.0),
-        });
-        let metric_nonzero = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(1000.0),
-            annualised_fixed_cost: Money(100.0),
-        });
-
-        // Zero fixed cost is always better
-        assert_eq!(metric_zero.compare(&metric_nonzero), Ordering::Less);
-        assert_eq!(metric_nonzero.compare(&metric_zero), Ordering::Greater);
-    }
-
-    #[test]
-    fn npv_compare_both_nonzero_fixed_cost() {
-        let metric1 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(200.0),
-            annualised_fixed_cost: Money(100.0),
-        });
-        let metric2 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(150.0),
-            annualised_fixed_cost: Money(100.0),
-        });
-
-        // Compare by profitability index: 200/100 = 2.0 vs 150/100 = 1.5
-        // metric1 is better (higher PI)
-        assert_eq!(metric1.compare(&metric2), Ordering::Less);
-    }
-
-    #[test]
-    fn npv_compare_both_nonzero_fixed_cost_equal() {
-        let metric1 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(200.0),
-            annualised_fixed_cost: Money(100.0),
-        });
-        let metric2 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(200.0),
-            annualised_fixed_cost: Money(100.0),
-        });
-
-        assert_eq!(metric1.compare(&metric2), Ordering::Equal);
+        assert_eq!(
+            metric1.compare(&metric2),
+            expected,
+            "Failed comparison for case: {description}"
+        );
     }
 }
