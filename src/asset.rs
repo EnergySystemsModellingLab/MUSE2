@@ -1510,6 +1510,41 @@ mod tests {
     }
 
     #[rstest]
+    #[case::exact_multiple(Capacity(12.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
+    #[case::rounded_up(Capacity(11.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
+    #[case::unit_size_greater_than_capacity(
+        Capacity(3.0),
+        Some(Capacity(4.0)),
+        Some(1),
+        Capacity(4.0)
+    )]
+    #[case::continuous(Capacity(5.5), None, None, Capacity(5.5))]
+    fn from_capacity(
+        #[case] capacity: Capacity,
+        #[case] unit_size: Option<Capacity>,
+        #[case] expected_n: Option<u32>,
+        #[case] expected_total: Capacity,
+    ) {
+        let got = AssetCapacity::from_capacity(capacity, unit_size);
+        assert_eq!(got.n_units(), expected_n);
+        assert_eq!(got.total_capacity(), expected_total);
+    }
+
+    #[rstest]
+    #[case::round_up(3u32, Capacity(4.0), Dimensionless(0.5), 2u32)]
+    #[case::exact(3u32, Capacity(4.0), Dimensionless(0.33), 1u32)]
+    fn apply_limit_factor(
+        #[case] start_units: u32,
+        #[case] unit_size: Capacity,
+        #[case] factor: Dimensionless,
+        #[case] expected_units: u32,
+    ) {
+        let orig = AssetCapacity::Discrete(start_units, unit_size);
+        let got = orig.apply_limit_factor(factor);
+        assert_eq!(got, AssetCapacity::Discrete(expected_units, unit_size));
+    }
+
+    #[rstest]
     fn get_input_cost_from_prices_works(
         region_id: RegionID,
         svd_commodity: Commodity,
