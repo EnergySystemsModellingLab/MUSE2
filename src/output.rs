@@ -453,7 +453,7 @@ impl DebugDataWriter {
                 region_id: result.asset.region_id().clone(),
                 capacity: result.capacity,
                 capacity_coefficient: result.coefficients.capacity_coefficient,
-                metric: result.metric,
+                metric: result.metric.value(),
             };
             self.appraisal_results_writer.serialize(row)?;
         }
