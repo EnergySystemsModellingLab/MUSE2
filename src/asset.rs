@@ -121,10 +121,7 @@ impl Add for AssetCapacity {
                 AssetCapacity::Continuous(cap1 + cap2)
             }
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                assert_eq!(
-                    size1, size2,
-                    "Cannot add discrete capacities with different unit sizes"
-                );
+                Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(units1 + units2, size1)
             }
             _ => panic!("Cannot add different types of AssetCapacity"),
@@ -141,10 +138,7 @@ impl Sub for AssetCapacity {
                 AssetCapacity::Continuous(cap1 - cap2)
             }
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                assert_eq!(
-                    size1, size2,
-                    "Cannot subtract discrete capacities with different unit sizes"
-                );
+                Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(units1 - units2, size1)
             }
             _ => panic!("Cannot subtract different types of AssetCapacity"),
@@ -153,6 +147,14 @@ impl Sub for AssetCapacity {
 }
 
 impl AssetCapacity {
+    /// Validates that two discrete capacities have the same unit size.
+    fn check_same_unit_size(size1: Capacity, size2: Capacity) {
+        assert_eq!(
+            size1, size2,
+            "Can't perform operation on capacities with different unit sizes ({size1} and {size2})",
+        );
+    }
+
     /// Create an `AssetCapacity` from a total capacity and optional unit size
     ///
     /// If a unit size is provided, the capacity is represented as a discrete number of units,
@@ -207,10 +209,7 @@ impl AssetCapacity {
                 AssetCapacity::Continuous(cap1.min(cap2))
             }
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                assert_eq!(
-                    size1, size2,
-                    "Cannot compare discrete capacities with different unit sizes"
-                );
+                Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(min(units1, units2), size1)
             }
             _ => panic!("Cannot compare different types of AssetCapacity"),
@@ -224,10 +223,7 @@ impl AssetCapacity {
                 AssetCapacity::Continuous(cap1.max(cap2))
             }
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                assert_eq!(
-                    size1, size2,
-                    "Cannot compare discrete capacities with different unit sizes"
-                );
+                Self::check_same_unit_size(size1, size2);
                 AssetCapacity::Discrete(max(units1, units2), size1)
             }
             _ => panic!("Cannot compare different types of AssetCapacity"),
