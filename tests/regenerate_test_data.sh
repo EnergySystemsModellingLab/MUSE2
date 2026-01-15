@@ -5,12 +5,12 @@ mydir=$(dirname "$0")
 cd "$mydir"
 
 echo Building MUSE2
-cargo build 2> /dev/null
+cargo -q build
 
 if [[ $# -gt 0 ]]; then
     examples=$@
 else
-    examples=$(cargo run example list 2> /dev/null)
+    examples=$(cargo -q run example list)
 fi
 
 for example in $examples; do
@@ -29,5 +29,5 @@ for example in $examples; do
         extra_args="$extra_args --debug-model=false"
     fi
 
-    env MUSE2_LOG_LEVEL=off cargo run example run $extra_args -o "data/$example" "$example" 2> /dev/null
+    env MUSE2_LOG_LEVEL=error cargo -q run example run $extra_args -o "data/$example" "$example"
 done
