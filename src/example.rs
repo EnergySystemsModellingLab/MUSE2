@@ -5,6 +5,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use include_dir::{Dir, DirEntry, include_dir};
 
+pub mod patches;
+
 /// The directory containing the example models.
 const EXAMPLES_DIR: Dir = include_dir!("examples");
 
