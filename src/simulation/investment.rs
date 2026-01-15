@@ -836,7 +836,7 @@ fn update_assets(
         AssetState::Candidate => {
             // Remove this capacity from the available remaining capacity for this asset
             let remaining_capacity = remaining_candidate_capacity.get_mut(&best_asset).unwrap();
-            let remaining_capacity = *remaining_capacity - capacity;
+            *remaining_capacity = *remaining_capacity - capacity;
 
             // If there's no capacity remaining, remove the asset from the options
             if remaining_capacity.absolute() <= Capacity(0.0) {

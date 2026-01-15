@@ -261,8 +261,10 @@ impl Solution<'_> {
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
             .map(|(asset, capacity)| {
-                let capacity = AssetCapacity::from_capacity(Capacity(*capacity), asset.unit_size());
-                (asset, capacity)
+                (
+                    asset,
+                    AssetCapacity::from_capacity(Capacity(*capacity), asset.unit_size()),
+                )
             })
     }
 
