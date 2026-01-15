@@ -187,6 +187,15 @@ impl AssetCapacity {
         }
     }
 
+    /// Asserts that both capacities are the same type (both continuous or both discrete).
+    pub fn assert_same_type(&self, other: &AssetCapacity) {
+        assert!(
+            matches!(self, AssetCapacity::Continuous(_))
+                == matches!(other, AssetCapacity::Continuous(_)),
+            "Cannot change capacity type"
+        );
+    }
+
     /// Applies a limit factor to the capacity, scaling it accordingly.
     ///
     /// For discrete capacities, the number of units is scaled by the limit factor and rounded up to
@@ -428,6 +437,8 @@ impl Asset {
             "Max decommission year must be after/same as commission year"
         );
 
+        // Set up capacity as continuous or discrete depending on whether the process has a defined
+        // `unit_size`
         let capacity = AssetCapacity::from_capacity(capacity, process.unit_size);
 
         Ok(Self {
@@ -842,6 +853,7 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
+        self.capacity.assert_same_type(&capacity);
         self.capacity = capacity;
     }
 

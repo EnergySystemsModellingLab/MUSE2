@@ -215,6 +215,7 @@ fn candidate_assets_for_next_year(
     {
         for region_id in &process.regions {
             candidates.push(
+                // TODO: for divisible assets this will be one whole unit; how to handle this?
                 Asset::new_candidate(
                     Rc::clone(process),
                     region_id.clone(),

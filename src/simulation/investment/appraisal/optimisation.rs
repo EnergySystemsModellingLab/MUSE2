@@ -151,7 +151,15 @@ pub fn perform_optimisation(
     let solution = solve_optimal(problem.optimise(sense))?.get_solution();
     let solution_values = solution.columns();
     Ok(ResultsMap {
-        capacity: AssetCapacity::from_capacity(Capacity(solution_values[0]), asset.unit_size()),
+        // If the asset has a defined unit size, the capacity variable represents number of units,
+        // otherwise it represents absolute capacity
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        capacity: match asset.unit_size() {
+            Some(unit_size) => {
+                AssetCapacity::Discrete(solution_values[0].round() as u32, unit_size)
+            }
+            None => AssetCapacity::Continuous(Capacity::new(solution_values[0])),
+        },
         // The mapping below assumes the column ordering documented on `VariableMap::add_to_problem`:
         // index 0 = capacity, next `n` entries = activities (in the same key order as
         // `cost_coefficients.activity_coefficients`), remaining entries = unmet demand.

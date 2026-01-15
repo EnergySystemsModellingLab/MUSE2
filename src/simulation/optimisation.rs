@@ -263,11 +263,16 @@ impl Solution<'_> {
             .capacity_vars
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
-            .map(|(asset, capacity)| {
-                (
-                    asset,
-                    AssetCapacity::from_capacity(Capacity(*capacity), asset.unit_size()),
-                )
+            .map(|(asset, capacity_var)| {
+                // If the asset has a defined unit size, the capacity variable represents number of
+                // units, otherwise it represents absolute capacity
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let asset_capacity = if let Some(unit_size) = asset.unit_size() {
+                    AssetCapacity::Discrete(capacity_var.round() as u32, unit_size)
+                } else {
+                    AssetCapacity::Continuous(Capacity(*capacity_var))
+                };
+                (asset, asset_capacity)
             })
     }
 
