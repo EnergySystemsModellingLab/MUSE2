@@ -108,6 +108,22 @@ just regenerate_test_data
 If you do so, please verify that the changes to the output files are at least roughly what was
 expected, before you commit these updated test files.
 
+Note that if you only need to regenerate the data for some of the models, you can specify this with
+additional arguments, e.g.:
+
+```sh
+just regenerate_test_data simple muse1_default
+```
+
+This avoids regenerating data for other models unnecessarily, which can result in negligible
+differences in floating-point values in the output files.
+
+If the model is a [patched example], then you need to pass the `--patch` flag, e.g.:
+
+```sh
+just regenerate_test_data --patch simple_divisible
+```
+
 [`log`]: https://docs.rs/log
 [`fern`]: https://docs.rs/fern
 [logging-docs]: ../user_guide.md#setting-the-log-level
@@ -117,6 +133,7 @@ expected, before you commit these updated test files.
 [test fixtures]: https://en.wikipedia.org/wiki/Test_fixture
 [`rstest`]: https://docs.rs/rstest
 [`fixture.rs`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/src/fixture.rs
+[patched example]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/patch/index.html
 
 ## Example models
 
