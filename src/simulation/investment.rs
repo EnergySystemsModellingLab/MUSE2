@@ -416,8 +416,8 @@ fn select_assets_for_cycle(
                 debug!(
                     "Capacity of asset '{}' modified during cycle balancing ({} to {})",
                     asset.process_id(),
-                    asset.capacity().absolute(),
-                    new_capacity.absolute()
+                    asset.capacity().total_capacity(),
+                    new_capacity.total_capacity()
                 );
                 asset.make_mut().set_capacity(*new_capacity);
             }
@@ -738,7 +738,7 @@ fn select_best_assets(
         // Sort assets by appraisal metric
         let assets_sorted_by_metric = outputs_for_opts
             .into_iter()
-            .filter(|output| output.capacity.absolute() > Capacity(0.0))
+            .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
             .sorted_by(|output1, output2| match output1.compare_metric(output2) {
                 // If equal, we fall back on comparing asset properties
                 Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
@@ -775,7 +775,7 @@ fn select_best_assets(
             "Selected {} asset '{}' (capacity: {})",
             &best_output.asset.state(),
             &best_output.asset.process_id(),
-            best_output.capacity.absolute()
+            best_output.capacity.total_capacity()
         );
 
         // Update the assets
@@ -839,7 +839,7 @@ fn update_assets(
             *remaining_capacity = *remaining_capacity - capacity;
 
             // If there's no capacity remaining, remove the asset from the options
-            if remaining_capacity.absolute() <= Capacity(0.0) {
+            if remaining_capacity.total_capacity() <= Capacity(0.0) {
                 let old_idx = opt_assets
                     .iter()
                     .position(|asset| *asset == best_asset)

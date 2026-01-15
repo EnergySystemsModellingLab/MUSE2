@@ -171,8 +171,8 @@ impl AssetCapacity {
         }
     }
 
-    /// Returns the absolute capacity represented by this `AssetCapacity`.
-    pub fn absolute(&self) -> Capacity {
+    /// Returns the total capacity represented by this `AssetCapacity`.
+    pub fn total_capacity(&self) -> Capacity {
         match self {
             AssetCapacity::Continuous(cap) => *cap,
             AssetCapacity::Discrete(units, size) => *size * Dimensionless(*units as f64),
@@ -475,8 +475,8 @@ impl Asset {
     ) -> RangeInclusive<Activity> {
         let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
         let cap2act = self.process.capacity_to_activity;
-        let lb = self.capacity.absolute() * cap2act * *activity_per_capacity_limits.start();
-        let ub = self.capacity.absolute() * cap2act * *activity_per_capacity_limits.end();
+        let lb = self.capacity.total_capacity() * cap2act * *activity_per_capacity_limits.start();
+        let ub = self.capacity.total_capacity() * cap2act * *activity_per_capacity_limits.end();
         lb..=ub
     }
 
@@ -705,7 +705,8 @@ impl Asset {
         annual_activity: Activity,
     ) -> MoneyPerActivity {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
-        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity.absolute();
+        let total_annual_capital_cost =
+            annual_capital_cost_per_capacity * self.capacity.total_capacity();
         assert!(
             annual_activity > Activity::EPSILON,
             "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
@@ -727,7 +728,7 @@ impl Asset {
 
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
-        self.capacity.absolute() * self.process.capacity_to_activity
+        self.capacity.total_capacity() * self.process.capacity_to_activity
     }
 
     /// Get a specific process flow
@@ -838,7 +839,7 @@ impl Asset {
             "set_capacity can only be called on Candidate or Selected assets"
         );
         assert!(
-            capacity.absolute() >= Capacity(0.0),
+            capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
         self.capacity = capacity;
@@ -851,7 +852,7 @@ impl Asset {
             "increase_capacity can only be called on Candidate assets"
         );
         assert!(
-            capacity.absolute() > Capacity::EPSILON,
+            capacity.total_capacity() > Capacity::EPSILON,
             "Capacity increase must be positive"
         );
         self.capacity = self.capacity + capacity;
@@ -897,7 +898,7 @@ impl Asset {
             "Commissioning '{}' asset (ID: {}, capacity: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            self.capacity.absolute(),
+            self.capacity.total_capacity(),
             agent_id,
             reason
         );
@@ -915,7 +916,7 @@ impl Asset {
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.capacity.absolute()).unwrap();
+        check_capacity_valid_for_asset(self.capacity.total_capacity()).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
 
@@ -1000,9 +1001,10 @@ impl Asset {
         );
 
         // Calculate the number of units corresponding to the asset's capacity
-        let n_units = AssetCapacity::from_capacity(self.capacity.absolute(), self.unit_size())
-            .n_units()
-            .expect("Asset must be divisible to calculate number of units");
+        let n_units =
+            AssetCapacity::from_capacity(self.capacity.total_capacity(), self.unit_size())
+                .n_units()
+                .expect("Asset must be divisible to calculate number of units");
 
         // Divide the asset into `n_units` children of size `unit_size`
         let child_asset = Self {
@@ -1021,7 +1023,7 @@ impl std::fmt::Debug for Asset {
             .field("state", &self.state)
             .field("process_id", &self.process_id())
             .field("region_id", &self.region_id)
-            .field("capacity", &self.capacity.absolute())
+            .field("capacity", &self.capacity.total_capacity())
             .field("commission_year", &self.commission_year)
             .finish()
     }
@@ -1464,7 +1466,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.capacity.absolute() / asset.process.unit_size.expect("Asset is not divisible"))
+        (asset.capacity.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
             .value()
             .ceil() as usize
     }
@@ -1668,17 +1670,19 @@ mod tests {
         // Check all children have capacity equal to unit_size
         for child in children.clone() {
             assert_eq!(
-                child.capacity.absolute(),
+                child.capacity.total_capacity(),
                 unit_size,
                 "Child capacity should equal unit_size"
             );
         }
 
         // Check total capacity is >= parent capacity
-        let total_child_capacity: Capacity =
-            children.iter().map(|child| child.capacity.absolute()).sum();
+        let total_child_capacity: Capacity = children
+            .iter()
+            .map(|child| child.capacity.total_capacity())
+            .sum();
         assert!(
-            total_child_capacity >= asset.capacity.absolute(),
+            total_child_capacity >= asset.capacity.total_capacity(),
             "Total capacity should be >= parent capacity"
         );
     }

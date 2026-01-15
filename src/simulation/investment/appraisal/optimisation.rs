@@ -121,6 +121,8 @@ fn add_constraints(
 /// Performs optimisation for an asset, given the coefficients and demand.
 ///
 /// Will either maximise or minimise the objective function, depending on the `sense` parameter.
+/// The optimisation will use continuous or integer capacity variables depending on whether the
+/// asset has a defined unit size.
 pub fn perform_optimisation(
     asset: &AssetRef,
     max_capacity: Option<AssetCapacity>,

@@ -93,7 +93,7 @@ fn calculate_lcox(
     let annual_fixed_cost = coefficients.capacity_coefficient;
     let activity_costs = &coefficients.activity_coefficients;
     let cost_index = lcox(
-        results.capacity.absolute(),
+        results.capacity.total_capacity(),
         annual_fixed_cost,
         &results.activity,
         activity_costs,
@@ -141,7 +141,7 @@ fn calculate_npv(
     let annual_fixed_cost = annual_fixed_cost(asset);
     let activity_surpluses = &coefficients.activity_coefficients;
     let profitability_index = profitability_index(
-        results.capacity.absolute(),
+        results.capacity.total_capacity(),
         annual_fixed_cost,
         &results.activity,
         activity_surpluses,

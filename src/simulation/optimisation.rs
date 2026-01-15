@@ -255,6 +255,9 @@ impl Solution<'_> {
     }
 
     /// Iterate over capacity values
+    ///
+    /// Will return `AssetCapacity::Continuous` or `AssetCapacity::Discrete` depending on whether
+    /// the asset has a defined unit size.
     pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, AssetCapacity)> {
         self.variables
             .capacity_vars
