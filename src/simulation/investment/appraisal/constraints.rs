@@ -1,11 +1,10 @@
 //! Constraints for the optimisation problem.
 use super::DemandMap;
 use super::optimisation::Variable;
-use crate::asset::{AssetRef, AssetState};
+use crate::asset::{AssetCapacity, AssetRef, AssetState};
 use crate::commodity::Commodity;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Capacity, Flow};
-use float_cmp::approx_eq;
+use crate::units::Flow;
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
@@ -17,20 +16,14 @@ use indexmap::IndexMap;
 pub fn add_capacity_constraint(
     problem: &mut Problem,
     asset: &AssetRef,
-    max_capacity: Option<Capacity>,
+    max_capacity: Option<AssetCapacity>,
     capacity_var: Variable,
 ) {
-    let mut capacity_limit = max_capacity.unwrap_or(asset.capacity()).value();
-
-    // If asset is divisible, capacity_var represents number of units, so we must divide the
-    // capacity bounds by the unit size.
-    if let Some(unit_size) = asset.unit_size() {
-        capacity_limit /= unit_size.value();
-
-        // Sanity check: capacity_limit should be a whole number of units (i.e pre-adjusted
-        // capacity limit was a multiple of unit size)
-        assert!(approx_eq!(f64, capacity_limit, capacity_limit.round()));
-    }
+    let capacity_limit = max_capacity.unwrap_or(*asset.capacity());
+    let capacity_limit = match capacity_limit {
+        AssetCapacity::Continuous(cap) => cap.value(),
+        AssetCapacity::Discrete(units, _) => units as f64,
+    };
 
     let bounds = match asset.state() {
         AssetState::Commissioned { .. } => {

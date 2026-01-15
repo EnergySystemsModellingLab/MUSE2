@@ -141,7 +141,7 @@ impl AssetRow {
             group_id: asset.group_id(),
             commission_year: asset.commission_year(),
             decommission_year: asset.decommission_year(),
-            capacity: asset.capacity(),
+            capacity: asset.capacity().absolute(),
         }
     }
 }
@@ -451,7 +451,7 @@ impl DebugDataWriter {
                 asset_id: result.asset.id(),
                 process_id: result.asset.process_id().clone(),
                 region_id: result.asset.region_id().clone(),
-                capacity: result.capacity,
+                capacity: result.capacity.absolute(),
                 capacity_coefficient: result.coefficients.capacity_coefficient,
                 metric: result.metric,
             };

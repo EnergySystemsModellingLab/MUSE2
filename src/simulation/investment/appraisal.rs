@@ -1,12 +1,12 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
 use crate::agent::ObjectiveType;
-use crate::asset::AssetRef;
+use crate::asset::{AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity};
+use crate::units::Activity;
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use indexmap::IndexMap;
@@ -25,7 +25,7 @@ pub struct AppraisalOutput {
     /// The asset being appraised
     pub asset: AssetRef,
     /// The hypothetical capacity to install
-    pub capacity: Capacity,
+    pub capacity: AssetCapacity,
     /// Time slice level activity of the asset
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// The hypothetical unmet demand following investment in this asset
@@ -73,7 +73,7 @@ impl AppraisalOutput {
 fn calculate_lcox(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<Capacity>,
+    max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
@@ -93,7 +93,7 @@ fn calculate_lcox(
     let annual_fixed_cost = coefficients.capacity_coefficient;
     let activity_costs = &coefficients.activity_coefficients;
     let cost_index = lcox(
-        results.capacity,
+        results.capacity.absolute(),
         annual_fixed_cost,
         &results.activity,
         activity_costs,
@@ -121,7 +121,7 @@ fn calculate_lcox(
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<Capacity>,
+    max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
@@ -141,7 +141,7 @@ fn calculate_npv(
     let annual_fixed_cost = annual_fixed_cost(asset);
     let activity_surpluses = &coefficients.activity_coefficients;
     let profitability_index = profitability_index(
-        results.capacity,
+        results.capacity.absolute(),
         annual_fixed_cost,
         &results.activity,
         activity_surpluses,
@@ -169,7 +169,7 @@ fn calculate_npv(
 pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<Capacity>,
+    max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
     coefficients: &ObjectiveCoefficients,

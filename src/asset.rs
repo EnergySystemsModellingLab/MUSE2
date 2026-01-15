@@ -9,17 +9,17 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerFlow,
+    Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
+    MoneyPerCapacity, MoneyPerFlow,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::hash::{Hash, Hasher};
-use std::ops::{Deref, RangeInclusive};
+use std::ops::{Add, Deref, RangeInclusive, Sub};
 use std::rc::Rc;
 use std::slice;
 
@@ -102,6 +102,139 @@ pub enum AssetState {
     Candidate,
 }
 
+/// Capacity of an asset, which may be continuous or a discrete number of indivisible units
+#[derive(Clone, PartialEq, Copy)]
+pub enum AssetCapacity {
+    /// Continuous capacity
+    Continuous(Capacity),
+    /// Discrete capacity represented by a number of indivisible units
+    /// Stores: (number of units, unit size)
+    Discrete(u32, Capacity),
+}
+
+impl Add for AssetCapacity {
+    type Output = Self;
+
+    fn add(self, rhs: AssetCapacity) -> Self {
+        match (self, rhs) {
+            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
+                AssetCapacity::Continuous(cap1 + cap2)
+            }
+            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
+                assert_eq!(
+                    size1, size2,
+                    "Cannot add discrete capacities with different unit sizes"
+                );
+                AssetCapacity::Discrete(units1 + units2, size1)
+            }
+            _ => panic!("Cannot add different types of AssetCapacity"),
+        }
+    }
+}
+
+impl Sub for AssetCapacity {
+    type Output = Self;
+
+    fn sub(self, rhs: AssetCapacity) -> Self {
+        match (self, rhs) {
+            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
+                AssetCapacity::Continuous(cap1 - cap2)
+            }
+            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
+                assert_eq!(
+                    size1, size2,
+                    "Cannot subtract discrete capacities with different unit sizes"
+                );
+                AssetCapacity::Discrete(units1 - units2, size1)
+            }
+            _ => panic!("Cannot subtract different types of AssetCapacity"),
+        }
+    }
+}
+
+impl AssetCapacity {
+    /// Create an `AssetCapacity` from a total capacity and optional unit size
+    ///
+    /// If a unit size is provided, the capacity is represented as a discrete number of units,
+    /// calculated as the ceiling of (capacity / `unit_size`). If no unit size is provided, the
+    /// capacity is represented as continuous.
+    pub fn from_capacity(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        match unit_size {
+            Some(size) => {
+                let num_units = (capacity / size).value().ceil() as u32;
+                AssetCapacity::Discrete(num_units, size)
+            }
+            None => AssetCapacity::Continuous(capacity),
+        }
+    }
+
+    /// Returns the absolute capacity represented by this `AssetCapacity`.
+    pub fn absolute(&self) -> Capacity {
+        match self {
+            AssetCapacity::Continuous(cap) => *cap,
+            AssetCapacity::Discrete(units, size) => *size * Dimensionless(*units as f64),
+        }
+    }
+
+    /// Returns the number of units if this is a discrete capacity, or `None` if continuous.
+    pub fn n_units(&self) -> Option<u32> {
+        match self {
+            AssetCapacity::Continuous(_) => None,
+            AssetCapacity::Discrete(units, _) => Some(*units),
+        }
+    }
+
+    /// Applies a limit factor to the capacity, scaling it accordingly.
+    ///
+    /// For discrete capacities, the number of units is scaled by the limit factor and rounded up to
+    /// the nearest integer.
+    pub fn apply_limit_factor(self, limit_factor: Dimensionless) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        match self {
+            AssetCapacity::Continuous(cap) => AssetCapacity::Continuous(cap * limit_factor),
+            AssetCapacity::Discrete(units, size) => {
+                let new_units = (units as f64 * limit_factor.value()).ceil() as u32;
+                AssetCapacity::Discrete(new_units, size)
+            }
+        }
+    }
+
+    /// Returns the minimum of two `AssetCapacity` values.
+    pub fn min(self, rhs: AssetCapacity) -> Self {
+        match (self, rhs) {
+            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
+                AssetCapacity::Continuous(cap1.min(cap2))
+            }
+            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
+                assert_eq!(
+                    size1, size2,
+                    "Cannot compare discrete capacities with different unit sizes"
+                );
+                AssetCapacity::Discrete(min(units1, units2), size1)
+            }
+            _ => panic!("Cannot compare different types of AssetCapacity"),
+        }
+    }
+
+    /// Returns the maximum of two `AssetCapacity` values.
+    pub fn max(self, rhs: AssetCapacity) -> Self {
+        match (self, rhs) {
+            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
+                AssetCapacity::Continuous(cap1.max(cap2))
+            }
+            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
+                assert_eq!(
+                    size1, size2,
+                    "Cannot compare discrete capacities with different unit sizes"
+                );
+                AssetCapacity::Discrete(max(units1, units2), size1)
+            }
+            _ => panic!("Cannot compare different types of AssetCapacity"),
+        }
+    }
+}
+
 /// An asset controlled by an agent.
 #[derive(Clone, PartialEq)]
 pub struct Asset {
@@ -118,7 +251,7 @@ pub struct Asset {
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
-    capacity: Capacity,
+    capacity: AssetCapacity,
     /// The year the asset was/will be commissioned
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
@@ -299,6 +432,8 @@ impl Asset {
             "Max decommission year must be after/same as commission year"
         );
 
+        let capacity = AssetCapacity::from_capacity(capacity, process.unit_size);
+
         Ok(Self {
             state,
             process,
@@ -344,8 +479,8 @@ impl Asset {
     ) -> RangeInclusive<Activity> {
         let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
         let cap2act = self.process.capacity_to_activity;
-        let lb = self.capacity * cap2act * *activity_per_capacity_limits.start();
-        let ub = self.capacity * cap2act * *activity_per_capacity_limits.end();
+        let lb = self.capacity.absolute() * cap2act * *activity_per_capacity_limits.start();
+        let ub = self.capacity.absolute() * cap2act * *activity_per_capacity_limits.end();
         lb..=ub
     }
 
@@ -574,7 +709,7 @@ impl Asset {
         annual_activity: Activity,
     ) -> MoneyPerActivity {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
-        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity();
+        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.capacity.absolute();
         assert!(
             annual_activity > Activity::EPSILON,
             "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
@@ -596,7 +731,7 @@ impl Asset {
 
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
-        self.capacity * self.process.capacity_to_activity
+        self.capacity.absolute() * self.process.capacity_to_activity
     }
 
     /// Get a specific process flow
@@ -693,12 +828,12 @@ impl Asset {
     }
 
     /// Get the capacity for this asset
-    pub fn capacity(&self) -> Capacity {
-        self.capacity
+    pub fn capacity(&self) -> &AssetCapacity {
+        &self.capacity
     }
 
     /// Set the capacity for this asset (only for Candidate or Selected assets)
-    pub fn set_capacity(&mut self, capacity: Capacity) {
+    pub fn set_capacity(&mut self, capacity: AssetCapacity) {
         assert!(
             matches!(
                 self.state,
@@ -706,18 +841,24 @@ impl Asset {
             ),
             "set_capacity can only be called on Candidate or Selected assets"
         );
-        assert!(capacity >= Capacity(0.0), "Capacity must be >= 0");
+        assert!(
+            capacity.absolute() >= Capacity(0.0),
+            "Capacity must be >= 0"
+        );
         self.capacity = capacity;
     }
 
     /// Increase the capacity for this asset (only for Candidate assets)
-    pub fn increase_capacity(&mut self, capacity: Capacity) {
+    pub fn increase_capacity(&mut self, capacity: AssetCapacity) {
         assert!(
             self.state == AssetState::Candidate,
             "increase_capacity can only be called on Candidate assets"
         );
-        assert!(capacity >= Capacity(0.0), "Added capacity must be >= 0");
-        self.capacity += capacity;
+        assert!(
+            capacity.absolute() > Capacity::EPSILON,
+            "Capacity increase must be positive"
+        );
+        self.capacity = self.capacity + capacity;
     }
 
     /// Decommission this asset
@@ -760,7 +901,7 @@ impl Asset {
             "Commissioning '{}' asset (ID: {}, capacity: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            self.capacity(),
+            self.capacity.absolute(),
             agent_id,
             reason
         );
@@ -778,7 +919,7 @@ impl Asset {
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.capacity).unwrap();
+        check_capacity_valid_for_asset(self.capacity.absolute()).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
 
@@ -841,32 +982,6 @@ impl Asset {
         self.process.unit_size.is_some()
     }
 
-    /// Convert a capacity to number of units for a divisible asset.
-    ///
-    /// Divides the given capacity by the process unit size and rounds up. In other words, this is
-    /// the minimum number of units required to achieve at least the given capacity.
-    ///
-    /// Panics if the asset is not divisible.
-    pub fn capacity_to_units(&self, capacity: Capacity) -> u32 {
-        let unit_size = self.unit_size().expect("Asset must be divisible");
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        {
-            (capacity / unit_size).value().ceil() as u32
-        }
-    }
-
-    /// Round a capacity up to the nearest multiple of the unit size.
-    ///
-    /// For a divisible asset, returns the minimum capacity (as a multiple of `unit_size`)
-    /// that is at least as large as the given capacity.
-    ///
-    /// Panics if the asset is not divisible.
-    pub fn round_capacity_to_unit_size(&self, capacity: Capacity) -> Capacity {
-        let unit_size = self.unit_size().expect("Asset must be divisible");
-        let n_units = self.capacity_to_units(capacity);
-        Capacity(unit_size.value() * n_units as f64)
-    }
-
     /// Divides an asset if it is divisible and returns a vector of children
     ///
     /// The child assets are identical to the parent (including state) but with a capacity
@@ -876,6 +991,8 @@ impl Asset {
     /// if `C` is not an exact multiple of `U`.
     ///
     /// Only `Future` and `Selected` assets can be divided.
+    ///
+    /// TODO: To be deleted
     pub fn divide_asset(&self) -> Vec<AssetRef> {
         assert!(
             matches!(
@@ -886,20 +1003,23 @@ impl Asset {
             self.state
         );
 
-        let unit_size = self.process.unit_size.expect(
-            "Only assets corresponding to processes with a unit size defined can be divided",
-        );
+        // Can only divide assets with continuous capacity
+        let AssetCapacity::Continuous(_) = self.capacity else {
+            panic!("Only assets with continuous capacity can be divided");
+        };
 
         // Calculate the number of units corresponding to the asset's capacity
-        let n_units = self.capacity_to_units(self.capacity) as usize;
+        let n_units = AssetCapacity::from_capacity(self.capacity.absolute(), self.unit_size())
+            .n_units()
+            .unwrap();
 
         // Divide the asset into `n_units` children of size `unit_size`
         let child_asset = Self {
-            capacity: unit_size,
+            capacity: AssetCapacity::Continuous(self.unit_size().unwrap()),
             ..self.clone()
         };
         let child_asset = AssetRef::from(Rc::new(child_asset));
-        std::iter::repeat_n(child_asset, n_units).collect()
+        std::iter::repeat_n(child_asset, n_units as usize).collect()
     }
 }
 
@@ -910,7 +1030,7 @@ impl std::fmt::Debug for Asset {
             .field("state", &self.state)
             .field("process_id", &self.process_id())
             .field("region_id", &self.region_id)
-            .field("capacity", &self.capacity)
+            .field("capacity", &self.capacity.absolute())
             .field("commission_year", &self.commission_year)
             .finish()
     }
