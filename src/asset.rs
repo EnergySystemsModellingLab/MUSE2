@@ -271,11 +271,33 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
+        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            capacity,
+            AssetCapacity::from_capacity(capacity, unit_size),
+            commission_year,
+            None,
+        )
+    }
+
+    /// Create a new candidate for use in dispatch runs
+    ///
+    /// These candidates will have a single continuous capacity specified by the model parameter
+    /// `candidate_asset_capacity`, regardless of whether the underlying process is divisible or
+    /// not.
+    pub fn new_candidate_for_dispatch(
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+    ) -> Result<Self> {
+        Self::new_with_state(
+            AssetState::Candidate,
+            process,
+            region_id,
+            AssetCapacity::Continuous(capacity),
             commission_year,
             None,
         )
@@ -301,11 +323,12 @@ impl Asset {
         max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
+        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Future { agent_id },
             process,
             region_id,
-            capacity,
+            AssetCapacity::from_capacity(capacity, unit_size),
             commission_year,
             max_decommission_year,
         )
@@ -341,11 +364,12 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
+        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Selected { agent_id },
             process,
             region_id,
-            capacity,
+            AssetCapacity::from_capacity(capacity, unit_size),
             commission_year,
             None,
         )
@@ -363,6 +387,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
+        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Commissioned {
                 id: AssetID(0),
@@ -372,7 +397,7 @@ impl Asset {
             },
             process,
             region_id,
-            capacity,
+            AssetCapacity::from_capacity(capacity, unit_size),
             commission_year,
             None,
         )
@@ -383,12 +408,15 @@ impl Asset {
         state: AssetState,
         process: Rc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
         max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_region_year_valid_for_process(&process, &region_id, commission_year)?;
-        ensure!(capacity >= Capacity(0.0), "Capacity must be non-negative");
+        ensure!(
+            capacity.total_capacity() >= Capacity(0.0),
+            "Capacity must be non-negative"
+        );
 
         // There should be activity limits, commodity flows and process parameters for all
         // **milestone** years, but it is possible to have assets that are commissioned before the
@@ -436,10 +464,6 @@ impl Asset {
             max_decommission_year >= commission_year,
             "Max decommission year must be after/same as commission year"
         );
-
-        // Set up capacity as continuous or discrete depending on whether the process has a defined
-        // `unit_size`
-        let capacity = AssetCapacity::from_capacity(capacity, process.unit_size);
 
         Ok(Self {
             state,
