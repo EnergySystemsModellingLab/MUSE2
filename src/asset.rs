@@ -1003,19 +1003,14 @@ impl Asset {
             self.state
         );
 
-        // Can only divide assets with continuous capacity
-        let AssetCapacity::Continuous(_) = self.capacity else {
-            panic!("Only assets with continuous capacity can be divided");
-        };
-
         // Calculate the number of units corresponding to the asset's capacity
         let n_units = AssetCapacity::from_capacity(self.capacity.absolute(), self.unit_size())
             .n_units()
-            .unwrap();
+            .expect("Asset must be divisible to calculate number of units");
 
         // Divide the asset into `n_units` children of size `unit_size`
         let child_asset = Self {
-            capacity: AssetCapacity::Continuous(self.unit_size().unwrap()),
+            capacity: AssetCapacity::Discrete(1, self.unit_size().unwrap()),
             ..self.clone()
         };
         let child_asset = AssetRef::from(Rc::new(child_asset));
@@ -1473,7 +1468,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.capacity / asset.process.unit_size.expect("Asset is not divisible"))
+        (asset.capacity.absolute() / asset.process.unit_size.expect("Asset is not divisible"))
             .value()
             .ceil() as usize
     }
@@ -1677,15 +1672,17 @@ mod tests {
         // Check all children have capacity equal to unit_size
         for child in children.clone() {
             assert_eq!(
-                child.capacity, unit_size,
+                child.capacity.absolute(),
+                unit_size,
                 "Child capacity should equal unit_size"
             );
         }
 
         // Check total capacity is >= parent capacity
-        let total_child_capacity: Capacity = children.iter().map(|child| child.capacity).sum();
+        let total_child_capacity: Capacity =
+            children.iter().map(|child| child.capacity.absolute()).sum();
         assert!(
-            total_child_capacity >= asset.capacity,
+            total_child_capacity >= asset.capacity.absolute(),
             "Total capacity should be >= parent capacity"
         );
     }
