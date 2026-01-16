@@ -19,14 +19,13 @@ fi
 
 run_example() {
     example=$1
-    debug=$2
-    shift 2  # allow for passing extra args
+    shift 1  # allow for passing extra args
 
     echo Generating data for example: $example
 
-    env MUSE2_LOG_LEVEL=error \
+    env MUSE2_LOG_LEVEL=error MUSE2_USE_DEFAULT_SETTINGS=1 \
         cargo -q run example run -o "data/$example" "$example" \
-            --overwrite --debug-model=$debug $@
+            --overwrite $@
 }
 
 for example in $examples; do
@@ -36,14 +35,14 @@ for example in $examples; do
     fi
 
     # We only need debug files for the simple model
-    debug=false
+    unset extra_args
     if [ "$example" = simple ]; then
-        debug=true
+        extra_args=--debug-model
     fi
 
-    run_example "$example" $debug
+    run_example "$example" $extra_args
 done
 
 for example in $patch_examples; do
-    run_example "$example" false --patch
+    run_example "$example" --patch
 done
