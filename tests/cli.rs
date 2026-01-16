@@ -1,4 +1,4 @@
-//! Integration tests for the `run` command.
+//! Integration tests for CLI commands.
 use rstest::rstest;
 
 use itertools::Itertools;
