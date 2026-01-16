@@ -14,6 +14,7 @@ static PATCHES: LazyLock<PatchMap> = LazyLock::new(get_all_patches);
 /// Get all patches
 fn get_all_patches() -> PatchMap {
     [(
+        // The simple example with gas boiler process made divisible
         "simple_divisible",
         vec![
             FilePatch::new("processes.csv")
