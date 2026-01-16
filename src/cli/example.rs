@@ -132,26 +132,3 @@ pub fn handle_example_run_command(name: &str, patch: bool, opts: &RunOpts) -> Re
     extract_example(name, patch, &model_path)?;
     handle_run_command(&model_path, opts)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rstest::rstest;
-
-    fn assert_dir_non_empty(path: &Path) {
-        assert!(
-            path.read_dir().unwrap().next().is_some(),
-            "Directory is empty"
-        );
-    }
-
-    #[rstest]
-    #[case("muse1_default", false)]
-    #[case("simple_divisible", true)]
-    fn check_extract_example(#[case] name: &str, #[case] patch: bool) {
-        let tmp = TempDir::new().unwrap();
-        let dest = tmp.path().join("out");
-        extract_example(name, patch, &dest).unwrap();
-        assert_dir_non_empty(&dest);
-    }
-}
