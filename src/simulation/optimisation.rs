@@ -483,17 +483,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 // Re-run including unmet demand variables so we can record detailed unmet-demand
                 // debug output before returning an error to the caller.
-                let solution = self
-                    .run_internal(
-                        markets_to_balance,
-                        /*allow_unmet_demand=*/ true,
-                        input_prices,
-                    )
-                    .map_err(|e| {
-                        anyhow::anyhow!(format!(
-                            "Failed to run dispatch to calculate unmet demand: {e}"
-                        ))
-                    })?;
+                let solution = self.run_internal(
+                    markets_to_balance,
+                    /*allow_unmet_demand=*/ true,
+                    input_prices,
+                )?;
 
                 // Write debug CSVs to help diagnosis
                 writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
