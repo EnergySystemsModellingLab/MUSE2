@@ -94,12 +94,10 @@ impl Commands {
     /// Execute the supplied CLI command
     fn execute(self) -> Result<()> {
         match self {
-            Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts, None),
+            Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts),
             Self::Example { subcommand } => subcommand.execute(),
-            Self::Validate { model_dir } => handle_validate_command(&model_dir, None),
-            Self::SaveGraphs { model_dir, opts } => {
-                handle_save_graphs_command(&model_dir, &opts, None)
-            }
+            Self::Validate { model_dir } => handle_validate_command(&model_dir),
+            Self::SaveGraphs { model_dir, opts } => handle_save_graphs_command(&model_dir, &opts),
             Self::Settings { subcommand } => subcommand.execute(),
         }
     }
@@ -126,17 +124,8 @@ pub fn run_cli() -> Result<()> {
 }
 
 /// Handle the `run` command.
-pub fn handle_run_command(
-    model_path: &Path,
-    opts: &RunOpts,
-    settings: Option<Settings>,
-) -> Result<()> {
-    // Load program settings, if not provided
-    let mut settings = if let Some(settings) = settings {
-        settings
-    } else {
-        Settings::load_or_default().context("Failed to load settings.")?
-    };
+pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
+    let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     // These settings can be overridden by command-line arguments
     if opts.debug_model {
@@ -186,13 +175,8 @@ pub fn handle_run_command(
 }
 
 /// Handle the `validate` command.
-pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) -> Result<()> {
-    // Load program settings, if not provided
-    let settings = if let Some(settings) = settings {
-        settings
-    } else {
-        Settings::load_or_default().context("Failed to load settings.")?
-    };
+pub fn handle_validate_command(model_path: &Path) -> Result<()> {
+    let settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     // Initialise program logger (we won't save log files when running the validate command)
     log::init(&settings.log_level, None).context("Failed to initialise logging.")?;
@@ -205,17 +189,8 @@ pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) ->
 }
 
 /// Handle the `save-graphs` command.
-pub fn handle_save_graphs_command(
-    model_path: &Path,
-    opts: &GraphOpts,
-    settings: Option<Settings>,
-) -> Result<()> {
-    // Load program settings, if not provided
-    let mut settings = if let Some(settings) = settings {
-        settings
-    } else {
-        Settings::load_or_default().context("Failed to load settings.")?
-    };
+pub fn handle_save_graphs_command(model_path: &Path, opts: &GraphOpts) -> Result<()> {
+    let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     if opts.overwrite {
         settings.overwrite = true;
