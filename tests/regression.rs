@@ -70,7 +70,7 @@ where
     let opts = RunOpts {
         output_dir: Some(output_dir.clone()),
         overwrite: false,
-        debug_model: Some(true), // NB: Always enable this as it helps to have the files for debugging
+        debug_model: true, // NB: Always enable this as it helps to have the files for debugging
     };
 
     run_fn(&opts, Some(Settings::default())).unwrap();

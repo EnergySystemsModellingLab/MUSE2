@@ -37,8 +37,8 @@ pub struct RunOpts {
     #[arg(long)]
     pub overwrite: bool,
     /// Whether to write additional information to CSV files
-    #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
-    pub debug_model: Option<bool>,
+    #[arg(long)]
+    pub debug_model: bool,
 }
 
 /// Options for the `graph` command
@@ -139,8 +139,8 @@ pub fn handle_run_command(
     };
 
     // These settings can be overridden by command-line arguments
-    if let Some(opt) = opts.debug_model {
-        settings.debug_model = opt;
+    if opts.debug_model {
+        settings.debug_model = true;
     }
     if opts.overwrite {
         settings.overwrite = true;

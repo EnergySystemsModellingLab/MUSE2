@@ -25,7 +25,7 @@ fn handle_run_command_works() {
     let opts = RunOpts {
         output_dir: Some(output_dir),
         overwrite: false,
-        debug_model: None,
+        debug_model: false,
     };
     handle_run_command(&get_model_dir(), &opts, Some(Settings::default())).unwrap();
 
