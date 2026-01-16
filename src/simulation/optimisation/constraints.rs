@@ -1,6 +1,6 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
-use crate::asset::{AssetIterator, AssetRef};
+use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
@@ -233,9 +233,9 @@ where
                 let mut upper_limit = limits.end().value();
                 let mut lower_limit = limits.start().value();
 
-                // If the asset is divisible, the capacity variable represents number of units,
-                // so we need to multiply the per-capacity limits by the unit size.
-                if let Some(unit_size) = asset.unit_size() {
+                // If the asset capacity is discrete, the capacity variable represents number of
+                // units, so we need to multiply the per-capacity limits by the unit size.
+                if let AssetCapacity::Discrete(_, unit_size) = asset.capacity() {
                     upper_limit *= unit_size.value();
                     lower_limit *= unit_size.value();
                 }

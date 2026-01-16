@@ -1,7 +1,7 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::{Agent, AgentID};
-use crate::asset::{Asset, AssetIterator, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::ALLOW_BROKEN_OPTION_NAME;
 use crate::model::Model;
@@ -416,8 +416,8 @@ fn select_assets_for_cycle(
                 debug!(
                     "Capacity of asset '{}' modified during cycle balancing ({} to {})",
                     asset.process_id(),
-                    asset.capacity(),
-                    new_capacity
+                    asset.capacity().total_capacity(),
+                    new_capacity.total_capacity()
                 );
                 asset.make_mut().set_capacity(*new_capacity);
             }
@@ -620,13 +620,9 @@ fn get_candidate_assets<'a>(
 
             // Set capacity based on demand
             // This will serve as the upper limit when appraising the asset
-            // If the asset is divisible, round capacity to the nearest multiple of the unit size
-            let mut capacity =
-                get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
-            if asset.is_divisible() {
-                capacity = asset.round_capacity_to_unit_size(capacity);
-            }
-            asset.set_capacity(capacity);
+            let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
+            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size());
+            asset.set_capacity(asset_capacity);
 
             asset.into()
         })
@@ -712,12 +708,9 @@ fn select_best_assets(
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
             let max_capacity = (!asset.is_commissioned()).then(|| {
-                let mut max_capacity = model.parameters.capacity_limit_factor * asset.capacity();
-
-                // For divisible assets, round up to the nearest multiple of the process unit size
-                if asset.is_divisible() {
-                    max_capacity = asset.round_capacity_to_unit_size(max_capacity);
-                }
+                let max_capacity = asset
+                    .capacity()
+                    .apply_limit_factor(model.parameters.capacity_limit_factor);
 
                 let remaining_capacity = remaining_candidate_capacity[asset];
                 max_capacity.min(remaining_capacity)
@@ -745,7 +738,7 @@ fn select_best_assets(
         // Sort assets by appraisal metric
         let assets_sorted_by_metric = outputs_for_opts
             .into_iter()
-            .filter(|output| output.capacity > Capacity(0.0))
+            .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
             .sorted_by(|output1, output2| match output1.compare_metric(output2) {
                 // If equal, we fall back on comparing asset properties
                 Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
@@ -782,7 +775,7 @@ fn select_best_assets(
             "Selected {} asset '{}' (capacity: {})",
             &best_output.asset.state(),
             &best_output.asset.process_id(),
-            best_output.capacity
+            best_output.capacity.total_capacity()
         );
 
         // Update the assets
@@ -829,9 +822,9 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
     mut best_asset: AssetRef,
-    capacity: Capacity,
+    capacity: AssetCapacity,
     opt_assets: &mut Vec<AssetRef>,
-    remaining_candidate_capacity: &mut HashMap<AssetRef, Capacity>,
+    remaining_candidate_capacity: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
 ) {
     match best_asset.state() {
@@ -843,10 +836,10 @@ fn update_assets(
         AssetState::Candidate => {
             // Remove this capacity from the available remaining capacity for this asset
             let remaining_capacity = remaining_candidate_capacity.get_mut(&best_asset).unwrap();
-            *remaining_capacity -= capacity;
+            *remaining_capacity = *remaining_capacity - capacity;
 
             // If there's no capacity remaining, remove the asset from the options
-            if *remaining_capacity <= Capacity(0.0) {
+            if remaining_capacity.total_capacity() <= Capacity(0.0) {
                 let old_idx = opt_assets
                     .iter()
                     .position(|asset| *asset == best_asset)

@@ -4,7 +4,7 @@ use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
     DecisionRule,
 };
-use crate::asset::{Asset, AssetPool, AssetRef};
+use crate::asset::{Asset, AssetCapacity, AssetPool, AssetRef};
 use crate::commodity::{
     Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
 };
@@ -382,7 +382,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
     AppraisalOutput {
         asset: AssetRef::from(asset),
-        capacity: Capacity(42.0),
+        capacity: AssetCapacity::Continuous(Capacity(42.0)),
         coefficients: ObjectiveCoefficients {
             capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
