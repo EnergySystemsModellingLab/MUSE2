@@ -17,7 +17,7 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
+use std::cmp::{Ordering, min};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Deref, RangeInclusive, Sub};
 use std::rc::Rc;
@@ -148,6 +148,27 @@ impl Sub for AssetCapacity {
     }
 }
 
+impl Eq for AssetCapacity {}
+
+impl PartialOrd for AssetCapacity {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AssetCapacity {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.total_cmp(b),
+            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
+                Self::check_same_unit_size(*size1, *size2);
+                units1.cmp(units2)
+            }
+            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {other:?})"),
+        }
+    }
+}
+
 impl AssetCapacity {
     /// Validates that two discrete capacities have the same unit size.
     fn check_same_unit_size(size1: Capacity, size2: Capacity) {
@@ -210,34 +231,6 @@ impl AssetCapacity {
                 let new_units = (units as f64 * limit_factor.value()).ceil() as u32;
                 AssetCapacity::Discrete(new_units, size)
             }
-        }
-    }
-
-    /// Returns the minimum of two `AssetCapacity` values.
-    pub fn min(self, rhs: AssetCapacity) -> Self {
-        match (self, rhs) {
-            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous(cap1.min(cap2))
-            }
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(min(units1, units2), size1)
-            }
-            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {rhs:?})"),
-        }
-    }
-
-    /// Returns the maximum of two `AssetCapacity` values.
-    pub fn max(self, rhs: AssetCapacity) -> Self {
-        match (self, rhs) {
-            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous(cap1.max(cap2))
-            }
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(max(units1, units2), size1)
-            }
-            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 }
@@ -1183,13 +1176,13 @@ impl Hash for AssetRef {
 }
 
 impl PartialOrd for AssetRef {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for AssetRef {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.id().unwrap().cmp(&other.id().unwrap())
     }
 }
