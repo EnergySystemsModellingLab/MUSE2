@@ -230,8 +230,15 @@ where
         if let Some(&capacity_var) = capacity_vars.get(asset) {
             // Asset with flexible capacity
             for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
-                let upper_limit = limits.end().value();
-                let lower_limit = limits.start().value();
+                let mut upper_limit = limits.end().value();
+                let mut lower_limit = limits.start().value();
+
+                // If the asset is divisible, the capacity variable represents number of units,
+                // so we need to multiply the per-capacity limits by the unit size.
+                if let Some(unit_size) = asset.unit_size() {
+                    upper_limit *= unit_size.value();
+                    lower_limit *= unit_size.value();
+                }
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection
