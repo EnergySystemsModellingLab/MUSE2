@@ -135,7 +135,7 @@ pub fn handle_run_command(
     let mut settings = if let Some(settings) = settings {
         settings
     } else {
-        Settings::load().context("Failed to load settings.")?
+        Settings::load_or_default().context("Failed to load settings.")?
     };
 
     // These settings can be overridden by command-line arguments
@@ -191,7 +191,7 @@ pub fn handle_validate_command(model_path: &Path, settings: Option<Settings>) ->
     let settings = if let Some(settings) = settings {
         settings
     } else {
-        Settings::load().context("Failed to load settings.")?
+        Settings::load_or_default().context("Failed to load settings.")?
     };
 
     // Initialise program logger (we won't save log files when running the validate command)
@@ -214,7 +214,7 @@ pub fn handle_save_graphs_command(
     let mut settings = if let Some(settings) = settings {
         settings
     } else {
-        Settings::load().context("Failed to load settings.")?
+        Settings::load_or_default().context("Failed to load settings.")?
     };
 
     if opts.overwrite {
