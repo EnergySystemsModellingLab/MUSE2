@@ -1,21 +1,24 @@
 //! Code related to the example models and the CLI commands for interacting with them.
 use super::{RunOpts, handle_run_command};
+use crate::example::patches::{get_patch_names, get_patches};
+use crate::example::{Example, get_example_names};
+use crate::patch::ModelPatch;
 use crate::settings::Settings;
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use clap::Subcommand;
-use include_dir::{Dir, DirEntry, include_dir};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
-
-/// The directory containing the example models.
-const EXAMPLES_DIR: Dir = include_dir!("examples");
 
 /// The available subcommands for managing example models.
 #[derive(Subcommand)]
 pub enum ExampleSubcommands {
     /// List available examples.
-    List,
+    List {
+        /// Whether to list patched models.
+        #[arg(long, hide = true)]
+        patch: bool,
+    },
     /// Provide information about the specified example.
     Info {
         /// The name of the example.
@@ -27,11 +30,17 @@ pub enum ExampleSubcommands {
         name: String,
         /// The destination folder for the example.
         new_path: Option<PathBuf>,
+        /// Whether the model to extract is a patched model.
+        #[arg(long, hide = true)]
+        patch: bool,
     },
     /// Run an example.
     Run {
         /// The name of the example to run.
         name: String,
+        /// Whether the model to run is a patched model.
+        #[arg(long, hide = true)]
+        patch: bool,
         /// Other run options
         #[command(flatten)]
         opts: RunOpts,
@@ -42,13 +51,16 @@ impl ExampleSubcommands {
     /// Execute the supplied example subcommand
     pub fn execute(self) -> Result<()> {
         match self {
-            Self::List => handle_example_list_command(),
+            Self::List { patch } => handle_example_list_command(patch),
             Self::Info { name } => handle_example_info_command(&name)?,
             Self::Extract {
                 name,
-                new_path: dest,
-            } => handle_example_extract_command(&name, dest.as_deref())?,
-            Self::Run { name, opts } => handle_example_run_command(&name, &opts, None)?,
+                patch,
+                new_path,
+            } => handle_example_extract_command(&name, new_path.as_deref(), patch)?,
+            Self::Run { name, patch, opts } => {
+                handle_example_run_command(&name, patch, &opts, None)?;
+            }
         }
 
         Ok(())
@@ -56,67 +68,96 @@ impl ExampleSubcommands {
 }
 
 /// Handle the `example list` command.
-fn handle_example_list_command() {
-    for entry in EXAMPLES_DIR.dirs() {
-        println!("{}", entry.path().display());
+fn handle_example_list_command(patch: bool) {
+    if patch {
+        for name in get_patch_names() {
+            println!("{name}");
+        }
+    } else {
+        for name in get_example_names() {
+            println!("{name}");
+        }
     }
 }
 
 /// Handle the `example info` command.
 fn handle_example_info_command(name: &str) -> Result<()> {
-    let path: PathBuf = [name, "README.txt"].iter().collect();
-    let readme = EXAMPLES_DIR
-        .get_file(path)
-        .context("Example not found.")?
-        .contents_utf8()
-        .expect("README.txt is not UTF-8 encoded");
-
-    print!("{readme}");
+    // If we can't load it, it's a bug, hence why we panic
+    let info = Example::from_name(name)?
+        .get_readme()
+        .unwrap_or_else(|_| panic!("Could not load README.txt for '{name}' example"));
+    print!("{info}");
 
     Ok(())
 }
 
 /// Handle the `example extract` command
-fn handle_example_extract_command(name: &str, dest: Option<&Path>) -> Result<()> {
-    let dest = dest.unwrap_or(Path::new(name));
-    extract_example(name, dest)
+fn handle_example_extract_command(name: &str, dest: Option<&Path>, patch: bool) -> Result<()> {
+    extract_example(name, patch, dest.unwrap_or(Path::new(name)))
 }
 
-/// Extract the specified example to a new directory
-fn extract_example(name: &str, new_path: &Path) -> Result<()> {
-    // Find the subdirectory in EXAMPLES_DIR whose name matches `name`.
-    let sub_dir = EXAMPLES_DIR.get_dir(name).context("Example not found.")?;
+/// Extract the specified example to a new directory.
+///
+/// If `patch` is `true`, then the corresponding patched example will be extracted.
+fn extract_example(name: &str, patch: bool, dest: &Path) -> Result<()> {
+    if patch {
+        let patches = get_patches(name)?;
 
-    ensure!(
-        !new_path.exists(),
-        "Destination directory {} already exists",
-        new_path.display()
-    );
+        // NB: All patched models are based on `simple`, for now
+        let example = Example::from_name("simple").unwrap();
 
-    // Copy the contents of the subdirectory to the destination
-    fs::create_dir(new_path)?;
-    for entry in sub_dir.entries() {
-        match entry {
-            DirEntry::Dir(_) => panic!("Subdirectories in examples not supported"),
-            DirEntry::File(f) => {
-                let file_name = f.path().file_name().unwrap();
-                let file_path = new_path.join(file_name);
-                fs::write(&file_path, f.contents())?;
-            }
-        }
+        // First extract the example to a temp dir
+        let example_tmp = TempDir::new().context("Failed to create temporary directory")?;
+        let example_path = example_tmp.path().join(name);
+        example
+            .extract(&example_path)
+            .context("Could not extract example")?;
+
+        // Patch example and put contents in dest
+        fs::create_dir(dest).context("Could not create output directory")?;
+        ModelPatch::new(example_path)
+            .with_file_patches(patches.to_owned())
+            .build(dest)
+            .context("Failed to patch example")
+    } else {
+        // Otherwise it's just a regular example
+        let example = Example::from_name(name)?;
+        example.extract(dest)
     }
-
-    Ok(())
 }
 
 /// Handle the `example run` command.
 pub fn handle_example_run_command(
     name: &str,
+    patch: bool,
     opts: &RunOpts,
     settings: Option<Settings>,
 ) -> Result<()> {
-    let temp_dir = TempDir::new().context("Failed to create temporary directory.")?;
+    let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
     let model_path = temp_dir.path().join(name);
-    extract_example(name, &model_path)?;
+    extract_example(name, patch, &model_path)?;
     handle_run_command(&model_path, opts, settings)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    fn assert_dir_non_empty(path: &Path) {
+        assert!(
+            path.read_dir().unwrap().next().is_some(),
+            "Directory is empty"
+        );
+    }
+
+    #[rstest]
+    #[case("muse1_default", false)]
+    #[case("simple_divisible", true)]
+    fn check_extract_example(#[case] name: &str, #[case] patch: bool) {
+        let tmp = TempDir::new().unwrap();
+        let dest = tmp.path().join("out");
+        extract_example(name, patch, &dest).unwrap();
+        assert_dir_non_empty(&dest);
+    }
 }
