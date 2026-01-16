@@ -190,7 +190,7 @@ impl AssetCapacity {
     }
 
     /// Asserts that both capacities are the same type (both continuous or both discrete).
-    pub fn assert_same_type(&self, other: &AssetCapacity) {
+    pub fn assert_same_type(&self, other: AssetCapacity) {
         assert!(
             matches!(self, AssetCapacity::Continuous(_))
                 == matches!(other, AssetCapacity::Continuous(_)),
@@ -512,8 +512,9 @@ impl Asset {
     ) -> RangeInclusive<Activity> {
         let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
         let cap2act = self.process.capacity_to_activity;
-        let lb = self.capacity.total_capacity() * cap2act * *activity_per_capacity_limits.start();
-        let ub = self.capacity.total_capacity() * cap2act * *activity_per_capacity_limits.end();
+        let max_activity = self.capacity.total_capacity() * cap2act;
+        let lb = max_activity * *activity_per_capacity_limits.start();
+        let ub = max_activity * *activity_per_capacity_limits.end();
         lb..=ub
     }
 
@@ -862,8 +863,8 @@ impl Asset {
     }
 
     /// Get the capacity for this asset
-    pub fn capacity(&self) -> &AssetCapacity {
-        &self.capacity
+    pub fn capacity(&self) -> AssetCapacity {
+        self.capacity
     }
 
     /// Set the capacity for this asset (only for Candidate or Selected assets)
@@ -879,7 +880,7 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
-        self.capacity.assert_same_type(&capacity);
+        self.capacity.assert_same_type(capacity);
         self.capacity = capacity;
     }
 

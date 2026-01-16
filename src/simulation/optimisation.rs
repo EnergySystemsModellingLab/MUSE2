@@ -679,9 +679,9 @@ fn add_capacity_variables(
             }
             AssetCapacity::Discrete(units, unit_size) => {
                 // Discrete capacity: capacity variable represents number of units
-                let lower = ((1.0 - capacity_margin) * *units as f64).max(0.0);
-                let upper = (1.0 + capacity_margin) * *units as f64;
-                problem.add_integer_column((coeff * *unit_size).value(), lower..=upper)
+                let lower = ((1.0 - capacity_margin) * units as f64).max(0.0);
+                let upper = (1.0 + capacity_margin) * units as f64;
+                problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
             }
         };
 

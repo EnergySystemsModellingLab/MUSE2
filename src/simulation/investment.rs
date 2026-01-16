@@ -692,7 +692,7 @@ fn select_best_assets(
         opt_assets
             .iter()
             .filter(|asset| !asset.is_commissioned())
-            .map(|asset| (asset.clone(), *asset.capacity())),
+            .map(|asset| (asset.clone(), asset.capacity())),
     );
 
     let mut round = 0;

@@ -19,7 +19,7 @@ pub fn add_capacity_constraint(
     max_capacity: Option<AssetCapacity>,
     capacity_var: Variable,
 ) {
-    let capacity_limit = max_capacity.unwrap_or(*asset.capacity());
+    let capacity_limit = max_capacity.unwrap_or(asset.capacity());
     let capacity_limit = match capacity_limit {
         AssetCapacity::Continuous(cap) => cap.value(),
         AssetCapacity::Discrete(units, _) => units as f64,
