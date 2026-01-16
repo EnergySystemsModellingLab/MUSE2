@@ -144,12 +144,11 @@ bundled with the MUSE2 executable ([see user guide for more detail][user-guide-e
 As these are intended as both a kind of documentation and templates, they should ideally be kept as
 simple as possible.
 
-If you add a new example model, please also add a regression test ([see here for an
-example][regression-test-example]).
+If you add a new example model, please also add a regression test to [`tests/regression.rs`].
 
 [`examples`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/examples/
 [user-guide-example-models]: https://energysystemsmodellinglab.github.io/MUSE2/user_guide.html#example-models
-[regression-test-example]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/tests/regression_muse1_default.rs
+[`tests/regression.rs`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/tests/regression.rs
 
 ## Unit types
 
