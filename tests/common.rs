@@ -1,11 +1,26 @@
 use assert_cmd::cargo_bin_cmd;
 
+macro_rules! muse2_cmd {
+    ($args:expr) => {
+        cargo_bin_cmd!("muse2")
+            .env("MUSE2_USE_DEFAULT_SETTINGS", "1")
+            .args($args)
+    };
+}
+
 pub fn assert_muse2_runs(args: &[&str]) {
-    cargo_bin_cmd!("muse2")
-        .env("MUSE2_USE_DEFAULT_SETTINGS", "1")
-        .args(args)
-        .assert()
-        .success();
+    muse2_cmd!(args).assert().success();
+}
+
+#[allow(dead_code)]
+#[must_use]
+pub fn get_muse2_stdout(args: &[&str]) -> String {
+    let output = muse2_cmd!(args).output().expect("Failed to run muse2");
+    assert!(output.status.success());
+
+    str::from_utf8(&output.stdout)
+        .expect("Non-unicode chars in stdout")
+        .into()
 }
 
 /// Define a regression test with extra command-line arguments
