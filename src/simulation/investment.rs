@@ -105,8 +105,8 @@ impl InvestmentSet {
                     format!(
                         "Investments failed for market set {self} with cyclical dependencies. \
                          Please note that the investment algorithm is currently experimental for \
-                         models with circular commodity dependencies and may not work in all \
-                         scenarios."
+                         models with circular commodity dependencies and may not be able to find \
+                         a solution in all cases."
                     )
                 })
             }
