@@ -67,7 +67,7 @@ impl Default for Settings {
 }
 
 impl Settings {
-    /// Read the contents of a settings file from the model directory.
+    /// Read the contents of a settings file from the global MUSE2 configuration directory.
     ///
     /// If the file is not present or the user has set the `MUSE2_USE_DEFAULT_SETTINGS` environment
     /// variable to 1, then the default settings will be used.

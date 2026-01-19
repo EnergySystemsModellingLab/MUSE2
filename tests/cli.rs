@@ -25,7 +25,7 @@ fn check_run_command() {
     ]);
 }
 
-/// Test the `graph` command
+/// Test the `save-graphs` command
 #[test]
 fn check_save_graphs_command() {
     // Save results to non-existent directory to check that directory creation works
