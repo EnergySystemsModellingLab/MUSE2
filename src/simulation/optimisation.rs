@@ -260,7 +260,16 @@ impl Solution<'_> {
             .capacity_vars
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
-            .map(|(asset, capacity)| (asset, Capacity(*capacity)))
+            .map(|(asset, capacity)| {
+                // If the asset is divisible, the capacity variable represents number of units,
+                // so convert to total capacity
+                let capacity_value = if let Some(unit_size) = asset.unit_size() {
+                    capacity * unit_size.value()
+                } else {
+                    *capacity
+                };
+                (asset, Capacity(capacity_value))
+            })
     }
 
     /// Keys and dual values for commodity balance constraints.
@@ -647,10 +656,22 @@ fn add_capacity_variables(
         );
 
         let current_capacity = asset.capacity().value();
-        let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
-        let upper = (1.0 + capacity_margin) * current_capacity;
         let coeff = calculate_capacity_coefficient(asset);
-        let var = problem.add_column(coeff.value(), lower..=upper);
+
+        let var = if let Some(unit_size) = asset.unit_size() {
+            // Divisible asset: capacity variable represents number of units
+            let unit_size_value = unit_size.value();
+            let current_units = current_capacity / unit_size_value;
+            let lower = ((1.0 - capacity_margin) * current_units).max(0.0);
+            let upper = (1.0 + capacity_margin) * current_units;
+            problem.add_integer_column(coeff.value() * unit_size_value, lower..=upper)
+        } else {
+            // Indivisible asset: capacity variable represents total capacity
+            let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
+            let upper = (1.0 + capacity_margin) * current_capacity;
+            problem.add_column(coeff.value(), lower..=upper)
+        };
+
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");
     }
