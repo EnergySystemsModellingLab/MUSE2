@@ -4,7 +4,7 @@ use super::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_capacity_constraint, add_demand_constraints,
 };
-use crate::asset::AssetRef;
+use crate::asset::{AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
@@ -84,7 +84,7 @@ impl VariableMap {
 /// Map containing optimisation results and coefficients
 pub struct ResultsMap {
     /// Capacity variable
-    pub capacity: Capacity,
+    pub capacity: AssetCapacity,
     /// Activity variables in each time slice
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// Unmet demand variables
@@ -95,7 +95,7 @@ pub struct ResultsMap {
 fn add_constraints(
     problem: &mut Problem,
     asset: &AssetRef,
-    max_capacity: Option<Capacity>,
+    max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     variables: &VariableMap,
     demand: &DemandMap,
@@ -123,9 +123,11 @@ fn add_constraints(
 /// Performs optimisation for an asset, given the coefficients and demand.
 ///
 /// Will either maximise or minimise the objective function, depending on the `sense` parameter.
+/// The optimisation will use continuous or integer capacity variables depending on whether the
+/// asset has a defined unit size.
 pub fn perform_optimisation(
     asset: &AssetRef,
-    max_capacity: Option<Capacity>,
+    max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
@@ -151,11 +153,14 @@ pub fn perform_optimisation(
     let solution = solve_optimal(problem.optimise(sense))?.get_solution();
     let solution_values = solution.columns();
     Ok(ResultsMap {
-        // If the asset is divisible, the capacity variable represents number of units, so convert
-        // to total capacity
+        // If the asset has a defined unit size, the capacity variable represents number of units,
+        // otherwise it represents absolute capacity
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         capacity: match asset.unit_size() {
-            Some(unit_size) => Capacity::new(solution_values[0] * unit_size.value()),
-            None => Capacity::new(solution_values[0]),
+            Some(unit_size) => {
+                AssetCapacity::Discrete(solution_values[0].round() as u32, unit_size)
+            }
+            None => AssetCapacity::Continuous(Capacity::new(solution_values[0])),
         },
         // The mapping below assumes the column ordering documented on `VariableMap::add_to_problem`:
         // index 0 = capacity, next `n` entries = activities (in the same key order as

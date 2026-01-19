@@ -1,7 +1,7 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
-use crate::asset::{Asset, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
 use crate::commodity::CommodityID;
 use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
@@ -255,12 +255,25 @@ impl Solution<'_> {
     }
 
     /// Iterate over capacity values
-    pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, Capacity)> {
+    ///
+    /// Will return `AssetCapacity::Continuous` or `AssetCapacity::Discrete` depending on whether
+    /// the asset has a defined unit size.
+    pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, AssetCapacity)> {
         self.variables
             .capacity_vars
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
-            .map(|(asset, capacity)| (asset, Capacity(*capacity)))
+            .map(|(asset, capacity_var)| {
+                // If the asset has a defined unit size, the capacity variable represents number of
+                // units, otherwise it represents absolute capacity
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let asset_capacity = if let Some(unit_size) = asset.unit_size() {
+                    AssetCapacity::Discrete(capacity_var.round() as u32, unit_size)
+                } else {
+                    AssetCapacity::Continuous(Capacity(*capacity_var))
+                };
+                (asset, asset_capacity)
+            })
     }
 
     /// Keys and dual values for commodity balance constraints.
@@ -455,16 +468,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// A solution containing new commodity flows for assets and prices for (some) commodities or an
     /// error.
-    pub fn run(self, run_description: &str, writer: &mut DataWriter) -> Result<Solution<'model>> {
-        let solution = self.run_no_save()?;
-        writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
-        Ok(solution)
-    }
-
-    /// Run dispatch without saving the results.
-    ///
-    /// This is an internal function as callers always want to save results.
-    fn run_no_save(&self) -> Result<Solution<'model>> {
+    pub fn run(&self, run_description: &str, writer: &mut DataWriter) -> Result<Solution<'model>> {
         // If the user provided no markets to balance, we use all of them
         let all_markets: Vec<_>;
         let markets_to_balance = if self.markets_to_balance.is_empty() {
@@ -484,11 +488,33 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // is due to unmet demand, in this case, we rerun dispatch including extra variables to
         // track the unmet demand so we can report the offending markets to users
         match self.run_without_unmet_demand_variables(markets_to_balance, input_prices) {
-            Ok(solution) => Ok(solution),
+            Ok(solution) => {
+                // Normal successful run: write debug info and return
+                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+                Ok(solution)
+            }
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
-                let markets = self
-                    .get_markets_with_unmet_demand(markets_to_balance, input_prices)
+                // Re-run including unmet demand variables so we can record detailed unmet-demand
+                // debug output before returning an error to the caller.
+                let solution = self
+                    .run_internal(
+                        markets_to_balance,
+                        /*allow_unmet_demand=*/ true,
+                        input_prices,
+                    )
                     .expect("Failed to run dispatch to calculate unmet demand");
+
+                // Write debug CSVs to help diagnosis
+                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+
+                // Collect markets with unmet demand from the solution
+                let markets: IndexSet<_> = solution
+                    .iter_unmet_demand()
+                    .filter(|(_, _, _, flow)| *flow > Flow(0.0))
+                    .map(|(commodity_id, region_id, _, _)| {
+                        (commodity_id.clone(), region_id.clone())
+                    })
+                    .collect();
 
                 ensure!(
                     !markets.is_empty(),
@@ -517,27 +543,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             /*allow_unmet_demand=*/ false,
             input_prices,
         )
-    }
-
-    /// Run dispatch to diagnose which markets have unmet demand
-    fn get_markets_with_unmet_demand(
-        &self,
-        markets_to_balance: &[(CommodityID, RegionID)],
-        input_prices: Option<&CommodityPrices>,
-    ) -> Result<IndexSet<(CommodityID, RegionID)>> {
-        // Run dispatch including unmet demand variables for all markets being balanced
-        let solution = self.run_internal(
-            markets_to_balance,
-            /*allow_unmet_demand=*/ true,
-            input_prices,
-        )?;
-
-        // Collect markets with unmet demand
-        Ok(solution
-            .iter_unmet_demand()
-            .filter(|(_, _, _, flow)| *flow > Flow(0.0))
-            .map(|(commodity_id, region_id, _, _)| (commodity_id.clone(), region_id.clone()))
-            .collect())
     }
 
     /// Run dispatch to balance the specified markets, optionally including unmet demand variables
@@ -654,11 +659,24 @@ fn add_capacity_variables(
             "Flexible capacity can only be assigned to `Selected` type assets. Offending asset: {asset:?}"
         );
 
-        let current_capacity = asset.capacity().value();
-        let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
-        let upper = (1.0 + capacity_margin) * current_capacity;
+        let current_capacity = asset.capacity();
         let coeff = calculate_capacity_coefficient(asset);
-        let var = problem.add_column(coeff.value(), lower..=upper);
+
+        let var = match current_capacity {
+            AssetCapacity::Continuous(cap) => {
+                // Continuous capacity: capacity variable represents total capacity
+                let lower = ((1.0 - capacity_margin) * cap.value()).max(0.0);
+                let upper = (1.0 + capacity_margin) * cap.value();
+                problem.add_column(coeff.value(), lower..=upper)
+            }
+            AssetCapacity::Discrete(units, unit_size) => {
+                // Discrete capacity: capacity variable represents number of units
+                let lower = ((1.0 - capacity_margin) * units as f64).max(0.0);
+                let upper = (1.0 + capacity_margin) * units as f64;
+                problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
+            }
+        };
+
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");
     }

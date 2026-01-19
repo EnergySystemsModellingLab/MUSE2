@@ -1,6 +1,6 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
-use crate::asset::{AssetIterator, AssetRef};
+use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
@@ -230,8 +230,15 @@ where
         if let Some(&capacity_var) = capacity_vars.get(asset) {
             // Asset with flexible capacity
             for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
-                let upper_limit = limits.end().value();
-                let lower_limit = limits.start().value();
+                let mut upper_limit = limits.end().value();
+                let mut lower_limit = limits.start().value();
+
+                // If the asset capacity is discrete, the capacity variable represents number of
+                // units, so we need to multiply the per-capacity limits by the unit size.
+                if let AssetCapacity::Discrete(_, unit_size) = asset.capacity() {
+                    upper_limit *= unit_size.value();
+                    lower_limit *= unit_size.value();
+                }
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection

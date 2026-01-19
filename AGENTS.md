@@ -11,3 +11,4 @@
 For Rust code:
 
 - Prefer `use` imports to fully qualified paths
+- Prefer named format arguments (e.g. `"{x}"`) over positional formatting (e.g. `"{}", x`)
