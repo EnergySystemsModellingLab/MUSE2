@@ -2,6 +2,7 @@
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use indexmap::IndexMap;
+use serde::Serialize;
 
 /// Calculates the capital recovery factor (CRF) for a given lifetime and discount rate.
 ///
@@ -28,13 +29,34 @@ pub fn annual_capital_cost(
     capital_cost * crf
 }
 
+/// Represents the profitability index of an investment
+/// in terms of its annualised components.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct ProfitabilityIndex {
+    /// The total annualised surplus of an asset
+    pub total_annualised_surplus: Money,
+    /// The total annualised fixed cost of an asset
+    pub annualised_fixed_cost: Money,
+}
+
+impl ProfitabilityIndex {
+    /// Calculates the value of the profitability index.
+    pub fn value(&self) -> Dimensionless {
+        assert!(
+            self.annualised_fixed_cost != Money(0.0),
+            "Annualised fixed cost cannot be zero when calculating profitability index."
+        );
+        self.total_annualised_surplus / self.annualised_fixed_cost
+    }
+}
+
 /// Calculates an annual profitability index based on capacity and activity.
 pub fn profitability_index(
     capacity: Capacity,
     annual_fixed_cost: MoneyPerCapacity,
     activity: &IndexMap<TimeSliceID, Activity>,
     activity_surpluses: &IndexMap<TimeSliceID, MoneyPerActivity>,
-) -> Dimensionless {
+) -> ProfitabilityIndex {
     // Calculate the annualised fixed costs
     let annualised_fixed_cost = annual_fixed_cost * capacity;
 
@@ -45,7 +67,10 @@ pub fn profitability_index(
         total_annualised_surplus += activity_surplus * *activity;
     }
 
-    total_annualised_surplus / annualised_fixed_cost
+    ProfitabilityIndex {
+        total_annualised_surplus,
+        annualised_fixed_cost,
+    }
 }
 
 /// Calculates annual LCOX based on capacity and activity.
@@ -126,12 +151,6 @@ mod tests {
         vec![("q1", "peak", 40.0)],
         0.04 // Expected PI: (5*40) / (50*100) = 200/5000 = 0.04
     )]
-    #[case(
-        0.0, 100.0,
-        vec![("winter", "day", 10.0)],
-        vec![("winter", "day", 50.0)],
-        f64::INFINITY // Zero capacity case
-    )]
     fn profitability_index_works(
         #[case] capacity: f64,
         #[case] annual_fixed_cost: f64,
@@ -172,7 +191,7 @@ mod tests {
             &activity_surpluses,
         );
 
-        assert_approx_eq!(Dimensionless, result, Dimensionless(expected));
+        assert_approx_eq!(Dimensionless, result.value(), Dimensionless(expected));
     }
 
     #[test]
@@ -184,7 +203,19 @@ mod tests {
 
         let result =
             profitability_index(capacity, annual_fixed_cost, &activity, &activity_surpluses);
-        assert_eq!(result, Dimensionless(0.0));
+        assert_eq!(result.value(), Dimensionless(0.0));
+    }
+
+    #[test]
+    #[should_panic(expected = "Annualised fixed cost cannot be zero")]
+    fn profitability_index_panics_on_zero_cost() {
+        let result = profitability_index(
+            Capacity(0.0),
+            MoneyPerCapacity(100.0),
+            &indexmap! {},
+            &indexmap! {},
+        );
+        result.value();
     }
 
     #[rstest]

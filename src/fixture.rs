@@ -14,6 +14,7 @@ use crate::process::{
     ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
+use crate::simulation::investment::appraisal::LCOXMetric;
 use crate::simulation::investment::appraisal::{
     AppraisalOutput, coefficients::ObjectiveCoefficients,
 };
@@ -391,7 +392,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         activity,
         demand,
         unmet_demand,
-        metric: 4.14,
+        metric: Box::new(LCOXMetric::new(MoneyPerActivity(4.14))),
     }
 }
 

@@ -5,7 +5,8 @@ use itertools::Itertools;
 use muse2::cli::RunOpts;
 use muse2::cli::example::handle_example_run_command;
 use muse2::cli::handle_run_command;
-use muse2::patch::{FilePatch, ModelPatch};
+use muse2::example::patches::get_patches;
+use muse2::patch::ModelPatch;
 use muse2::settings::Settings;
 use std::env;
 use std::fs::{File, read_dir};
@@ -22,7 +23,7 @@ const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 #[allow(dead_code)]
 pub fn run_regression_test(example_name: &str) {
     run_regression_test_common(example_name, false, |opts, settings| {
-        handle_example_run_command(example_name, opts, settings)
+        handle_example_run_command(example_name, false, opts, settings)
     });
 }
 
@@ -30,20 +31,18 @@ pub fn run_regression_test(example_name: &str) {
 #[allow(dead_code)]
 pub fn run_regression_test_with_debug_files(example_name: &str) {
     run_regression_test_common(example_name, true, |opts, settings| {
-        handle_example_run_command(example_name, opts, settings)
+        handle_example_run_command(example_name, false, opts, settings)
     });
 }
 
 /// Run a regression test for an example model with file patches applied
 #[allow(dead_code)]
-pub fn run_regression_test_with_patches(
-    example_name: &str,
-    patches: Vec<FilePatch>,
-    test_case_name: &str,
-) {
+pub fn run_regression_test_with_patches(example_name: &str, test_case_name: &str) {
+    let patches = get_patches(test_case_name).unwrap();
+
     // Patch model to a temporary directory
     let model_dir = ModelPatch::from_example(example_name)
-        .with_file_patches(patches)
+        .with_file_patches(patches.to_owned())
         .build_to_tempdir()
         .unwrap();
 

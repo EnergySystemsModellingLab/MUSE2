@@ -19,8 +19,8 @@ coverage *ARGS:
     @cargo llvm-cov --html {{ARGS}}
 
 # Regenerate data for regression tests
-regenerate_test_data:
-    @tests/regenerate_all_data.sh
+regenerate_test_data *ARGS:
+    @tests/regenerate_test_data.sh {{ARGS}}
 
 # Run the pre-commit tool
 pre-commit *ARGS:

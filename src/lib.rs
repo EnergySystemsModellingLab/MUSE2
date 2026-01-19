@@ -11,6 +11,7 @@ pub mod agent;
 pub mod asset;
 pub mod cli;
 pub mod commodity;
+pub mod example;
 pub mod finance;
 pub mod graph;
 pub mod id;
