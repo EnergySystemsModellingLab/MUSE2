@@ -29,11 +29,6 @@ run_example() {
 }
 
 for example in $examples; do
-    # Skip the circularity example
-    if [ "$example" = circularity ]; then
-        continue
-    fi
-
     # We only need debug files for the simple model
     unset extra_args
     if [ "$example" = simple ]; then

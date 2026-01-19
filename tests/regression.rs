@@ -21,6 +21,7 @@ define_regression_test!(missing_commodity);
 define_regression_test!(muse1_default);
 define_regression_test!(two_outputs);
 define_regression_test!(two_regions);
+define_regression_test!(circularity);
 
 // Patched examples
 define_regression_test_with_patches!(simple_divisible);

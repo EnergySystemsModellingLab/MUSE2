@@ -3,14 +3,13 @@ use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::{Agent, AgentID};
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
-use crate::model::ALLOW_BROKEN_OPTION_NAME;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
@@ -102,6 +101,14 @@ impl InvestmentSet {
                     previously_selected_assets,
                     writer,
                 )
+                .with_context(|| {
+                    format!(
+                        "Investments failed for market set {self} with cyclical dependencies. \
+                         Please note that the investment algorithm is currently experimental for \
+                         models with circular commodity dependencies and may not be able to find \
+                         a solution in all cases."
+                    )
+                })
             }
             InvestmentSet::Layer(investment_sets) => {
                 debug!("Starting asset selection for layer '{self}'");
@@ -332,17 +339,9 @@ fn select_assets_for_cycle(
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
 
-    if !model.parameters.allow_broken_options {
-        bail!(
-            "Detected cycle for markets ({markets_str}). \
-            Cyclic investment sets are currently experimental. \
-            To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
-        );
-    }
-
     // Iterate over the markets to select assets
     let mut current_demand = demand.clone();
-    let mut assets_for_cycle = HashMap::new();
+    let mut assets_for_cycle = IndexMap::new();
     let mut last_solution = None;
     for (idx, (commodity_id, region_id)) in markets.iter().enumerate() {
         // Select assets for this market
