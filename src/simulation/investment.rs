@@ -341,7 +341,7 @@ fn select_assets_for_cycle(
 
     // Iterate over the markets to select assets
     let mut current_demand = demand.clone();
-    let mut assets_for_cycle = HashMap::new();
+    let mut assets_for_cycle = IndexMap::new();
     let mut last_solution = None;
     for (idx, (commodity_id, region_id)) in markets.iter().enumerate() {
         // Select assets for this market
