@@ -58,7 +58,7 @@ fn check_example_list_command(#[case] patch: bool) {
         args.push("--patch");
     }
 
-    let stdout = get_muse2_stdout(&["example", "list"]);
+    let stdout = get_muse2_stdout(&args);
     let lines = stdout.split('\n').collect_vec();
     assert!(lines.first().is_some_and(|s| !s.is_empty()));
     assert!(lines.last().is_some_and(|s| s.is_empty()));
