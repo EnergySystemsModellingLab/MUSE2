@@ -2,81 +2,59 @@
 use anyhow::Result;
 use float_cmp::approx_eq;
 use itertools::Itertools;
-use muse2::cli::RunOpts;
-use muse2::cli::example::handle_example_run_command;
-use muse2::cli::handle_run_command;
-use muse2::example::patches::get_patches;
-use muse2::patch::ModelPatch;
-use muse2::settings::Settings;
 use std::env;
 use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
 
+mod common;
+use common::*;
+
+// ------ BEGIN: regression tests ------
+
+// We only check the debug files for the `simple` example at present
+define_regression_test_with_debug_files!(simple);
+
+// Other example models
+define_regression_test!(missing_commodity);
+define_regression_test!(muse1_default);
+define_regression_test!(two_outputs);
+define_regression_test!(two_regions);
+
+// Patched examples
+define_regression_test_with_patches!(simple_divisible);
+
+// ------  END: regression tests  ------
+
+/// The tolerance when comparing floating-point values in CSV files
 const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 
-// The two functions below give spurious warnings about being unused because of the multiple `mod
-// regression` declarations in different test files, so we suppress the warnings manually
-
-/// Run a regression test for an example model
-#[allow(dead_code)]
-pub fn run_regression_test(example_name: &str) {
-    run_regression_test_common(example_name, false, |opts, settings| {
-        handle_example_run_command(example_name, false, opts, settings)
-    });
-}
-
-/// Run a regression test for an example model
-#[allow(dead_code)]
-pub fn run_regression_test_with_debug_files(example_name: &str) {
-    run_regression_test_common(example_name, true, |opts, settings| {
-        handle_example_run_command(example_name, false, opts, settings)
-    });
-}
-
-/// Run a regression test for an example model with file patches applied
-#[allow(dead_code)]
-pub fn run_regression_test_with_patches(example_name: &str, test_case_name: &str) {
-    let patches = get_patches(test_case_name).unwrap();
-
-    // Patch model to a temporary directory
-    let model_dir = ModelPatch::from_example(example_name)
-        .with_file_patches(patches.to_owned())
-        .build_to_tempdir()
-        .unwrap();
-
-    run_regression_test_common(test_case_name, false, |opts, settings| {
-        handle_run_command(model_dir.path(), opts, settings)
-    });
-}
-
-fn run_regression_test_common<F>(test_name: &str, debug_model: bool, run_fn: F)
-where
-    F: FnOnce(&RunOpts, Option<Settings>) -> Result<()>,
-{
-    unsafe { env::set_var("MUSE2_LOG_LEVEL", "off") };
-
+/// Run a regression test for the given example with optional extra arguments to `muse2 run`.
+fn run_regression_test(example: &str, extra_args: &[&str]) {
     // Allow user to set output dir for regression tests so they can examine results. This is
     // principally intended for use by CI.
     let tmp: TempDir;
     let output_dir = if let Ok(dir) = env::var("MUSE2_TEST_OUTPUT_DIR") {
-        [&dir, test_name].iter().collect()
+        [&dir, example].iter().collect()
     } else {
         tmp = tempdir().unwrap();
         tmp.path().to_path_buf()
     };
 
-    let opts = RunOpts {
-        output_dir: Some(output_dir.clone()),
-        overwrite: false,
-        debug_model: Some(true), // NB: Always enable this as it helps to have the files for debugging
-    };
+    // Invoke muse2
+    let output_dir_str = output_dir.to_string_lossy();
+    let mut args = vec!["example", "run", example, "--output-dir", &output_dir_str];
+    args.extend(extra_args);
+    assert_muse2_runs(&args);
 
-    run_fn(&opts, Some(Settings::default())).unwrap();
-
-    let test_data_dir = PathBuf::from(format!("tests/data/{test_name}"));
-    compare_output_dirs(&output_dir, &test_data_dir, debug_model);
+    // Check that the output files match (approximately)
+    let test_data_dir = PathBuf::from(format!("tests/data/{example}"));
+    compare_output_dirs(
+        &output_dir,
+        &test_data_dir,
+        extra_args.contains(&"--debug-model"),
+    );
 }
 
 fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model: bool) {

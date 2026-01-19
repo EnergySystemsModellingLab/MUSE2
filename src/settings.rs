@@ -5,6 +5,7 @@ use crate::log::DEFAULT_LOG_LEVEL;
 use anyhow::Result;
 use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
@@ -66,19 +67,25 @@ impl Default for Settings {
 }
 
 impl Settings {
-    /// Read the contents of a settings file from the model directory.
+    /// Read the contents of a settings file from the global MUSE2 configuration directory.
     ///
-    /// If the file is not present, default settings will be used.
+    /// If the file is not present or the user has set the `MUSE2_USE_DEFAULT_SETTINGS` environment
+    /// variable to 1, then the default settings will be used.
     ///
     /// # Returns
     ///
     /// The program settings as a `Settings` struct or an error if loading fails.
-    pub fn load() -> Result<Settings> {
-        Self::load_from_path(&get_settings_file_path())
+    pub fn load_or_default() -> Result<Settings> {
+        if env::var("MUSE2_USE_DEFAULT_SETTINGS").is_ok_and(|v| v == "1") {
+            Ok(Settings::default())
+        } else {
+            Self::from_path_or_default(&get_settings_file_path())
+        }
     }
 
-    /// Read from the specified path, returning
-    fn load_from_path(file_path: &Path) -> Result<Settings> {
+    /// Try to read settings from the specified path, returning `Settings::default()` if it doesn't
+    /// exist
+    fn from_path_or_default(file_path: &Path) -> Result<Settings> {
         if !file_path.is_file() {
             return Ok(Settings::default());
         }
@@ -124,17 +131,17 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn settings_load_from_path_no_file() {
+    fn settings_from_path_or_default_no_file() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(SETTINGS_FILE_NAME); // NB: doesn't exist
         assert_eq!(
-            Settings::load_from_path(&file_path).unwrap(),
+            Settings::from_path_or_default(&file_path).unwrap(),
             Settings::default()
         );
     }
 
     #[test]
-    fn settings_load_from_path() {
+    fn settings_from_path_or_default() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(SETTINGS_FILE_NAME);
 
@@ -144,7 +151,7 @@ mod tests {
         }
 
         assert_eq!(
-            Settings::load_from_path(&file_path).unwrap(),
+            Settings::from_path_or_default(&file_path).unwrap(),
             Settings {
                 log_level: "warn".to_string(),
                 ..Settings::default()
