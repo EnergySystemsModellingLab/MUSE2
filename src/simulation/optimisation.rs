@@ -1,7 +1,7 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
-use crate::asset::{Asset, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
 use crate::commodity::CommodityID;
 use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
@@ -255,20 +255,24 @@ impl Solution<'_> {
     }
 
     /// Iterate over capacity values
-    pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, Capacity)> {
+    ///
+    /// Will return `AssetCapacity::Continuous` or `AssetCapacity::Discrete` depending on whether
+    /// the asset has a defined unit size.
+    pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, AssetCapacity)> {
         self.variables
             .capacity_vars
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
-            .map(|(asset, capacity)| {
-                // If the asset is divisible, the capacity variable represents number of units,
-                // so convert to total capacity
-                let capacity_value = if let Some(unit_size) = asset.unit_size() {
-                    capacity * unit_size.value()
+            .map(|(asset, capacity_var)| {
+                // If the asset has a defined unit size, the capacity variable represents number of
+                // units, otherwise it represents absolute capacity
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let asset_capacity = if let Some(unit_size) = asset.unit_size() {
+                    AssetCapacity::Discrete(capacity_var.round() as u32, unit_size)
                 } else {
-                    *capacity
+                    AssetCapacity::Continuous(Capacity(*capacity_var))
                 };
-                (asset, Capacity(capacity_value))
+                (asset, asset_capacity)
             })
     }
 
@@ -655,21 +659,22 @@ fn add_capacity_variables(
             "Flexible capacity can only be assigned to `Selected` type assets. Offending asset: {asset:?}"
         );
 
-        let current_capacity = asset.capacity().value();
+        let current_capacity = asset.capacity();
         let coeff = calculate_capacity_coefficient(asset);
 
-        let var = if let Some(unit_size) = asset.unit_size() {
-            // Divisible asset: capacity variable represents number of units
-            let unit_size_value = unit_size.value();
-            let current_units = current_capacity / unit_size_value;
-            let lower = ((1.0 - capacity_margin) * current_units).max(0.0);
-            let upper = (1.0 + capacity_margin) * current_units;
-            problem.add_integer_column(coeff.value() * unit_size_value, lower..=upper)
-        } else {
-            // Indivisible asset: capacity variable represents total capacity
-            let lower = ((1.0 - capacity_margin) * current_capacity).max(0.0);
-            let upper = (1.0 + capacity_margin) * current_capacity;
-            problem.add_column(coeff.value(), lower..=upper)
+        let var = match current_capacity {
+            AssetCapacity::Continuous(cap) => {
+                // Continuous capacity: capacity variable represents total capacity
+                let lower = ((1.0 - capacity_margin) * cap.value()).max(0.0);
+                let upper = (1.0 + capacity_margin) * cap.value();
+                problem.add_column(coeff.value(), lower..=upper)
+            }
+            AssetCapacity::Discrete(units, unit_size) => {
+                // Discrete capacity: capacity variable represents number of units
+                let lower = ((1.0 - capacity_margin) * units as f64).max(0.0);
+                let upper = (1.0 + capacity_margin) * units as f64;
+                problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
+            }
         };
 
         let existing = variables.insert(asset.clone(), var).is_some();
