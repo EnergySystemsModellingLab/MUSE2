@@ -735,15 +735,8 @@ fn select_best_assets(
         )?;
 
         // Sort assets by appraisal metric
-        let assets_sorted_by_metric = outputs_for_opts
-            .into_iter()
-            .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
-            .sorted_by(|output1, output2| match output1.compare_metric(output2) {
-                // If equal, we fall back on comparing asset properties
-                Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
-                cmp => cmp,
-            })
-            .collect_vec();
+        let assets_sorted_by_metric =
+            sort_appraisal_outputs_by_investment_priority(outputs_for_opts);
 
         // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
         // out.
@@ -818,6 +811,26 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
         .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
+/// Sort appraisal outputs by their investment priority.
+/// Primarily this will be decided by their appraisal metric. There
+/// is a tie-breaker fallback to handle the most common cases of equal metrics. But
+/// the function does not guarantee all ties will be resolved.
+/// Assets with zero capacity are filtered out (their metric would be NaN and cause the program to panic)
+///
+pub fn sort_appraisal_outputs_by_investment_priority(
+    outputs_for_opts: Vec<AppraisalOutput>,
+) -> Vec<AppraisalOutput> {
+    outputs_for_opts
+        .into_iter()
+        .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
+        .sorted_by(|output1, output2| match output1.compare_metric(output2) {
+            // If equal, we fall back on comparing asset properties
+            Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
+            cmp => cmp,
+        })
+        .collect_vec()
+}
+
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
     mut best_asset: AssetRef,
@@ -863,10 +876,12 @@ fn update_assets(
 
 #[cfg(test)]
 mod tests {
+    use super::appraisal::{LCOXMetric, MetricTrait};
     use super::*;
     use crate::agent::AgentID;
     use crate::asset::Asset;
     use crate::commodity::Commodity;
+    use crate::fixture::appraisal_outputs;
     use crate::fixture::{
         agent_id, asset, process, process_activity_limits_map, process_flows_map, region_id,
         svd_commodity, time_slice, time_slice_info, time_slice_info2,
@@ -874,7 +889,9 @@ mod tests {
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::units::MoneyPerActivity;
     use crate::units::{Capacity, Flow, FlowPerActivity, MoneyPerFlow};
+    use float_cmp::assert_approx_eq;
     use indexmap::indexmap;
     use rstest::rstest;
     use std::rc::Rc;
@@ -987,5 +1004,21 @@ mod tests {
         assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
         assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
+    }
+
+    #[rstest]
+    fn sort_by_lcox_metric(process: Process, region_id: RegionID) {
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(7.0))),
+        ];
+
+        let outputs = appraisal_outputs(vec![], metrics, process, region_id);
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        assert_approx_eq!(f64, sorted[0].metric.value(), 3.0); // Best (lowest)
+        assert_approx_eq!(f64, sorted[1].metric.value(), 5.0);
+        assert_approx_eq!(f64, sorted[2].metric.value(), 7.0); // Worst (highest)
     }
 }
