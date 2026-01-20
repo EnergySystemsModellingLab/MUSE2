@@ -14,7 +14,7 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 pub mod appraisal;
@@ -703,6 +703,10 @@ fn select_best_assets(
             &commodity.id
         );
 
+        // Since all assets with the same `group_id` are identical, we only need to appraise one
+        // from each group.
+        let mut seen_groups = HashSet::new();
+
         // Appraise all options
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
@@ -714,6 +718,14 @@ fn select_best_assets(
                 let remaining_capacity = remaining_candidate_capacity[asset];
                 max_capacity.min(remaining_capacity)
             });
+
+            // Skip any assets from groups we've already seen
+            if let Some(group_id) = asset.group_id() {
+                if seen_groups.contains(&group_id) {
+                    continue;
+                }
+                seen_groups.insert(group_id);
+            }
 
             let output = appraise_investment(
                 model,
