@@ -508,45 +508,6 @@ mod tests {
         );
     }
 
-    /// Creates appraisal outputs from assets with corresponding metrics. If no assets provided,
-    /// creates default candidate assets based on the number of metrics.
-    ///
-    /// # Panics
-    /// Panics if `assets` and `metrics` have different lengths
-    #[fixture]
-    pub fn appraisal_outputs(
-        #[default(vec![])] assets: Vec<Asset>,
-        #[default(vec![])] metrics: Vec<Box<dyn MetricTrait>>,
-        asset: Asset,
-    ) -> Vec<AppraisalOutput> {
-        // If no assets provided, create default candidate assets based on number of metrics
-        let assets = if assets.is_empty() {
-            vec![asset.clone(); metrics.len()]
-        } else {
-            assets
-        };
-
-        assert_eq!(
-            assets.len(),
-            metrics.len(),
-            "assets and metrics must have the same length"
-        );
-
-        assets
-            .into_iter()
-            .zip(metrics)
-            .map(|(asset, metric)| AppraisalOutput {
-                asset: AssetRef::from(asset),
-                capacity: AssetCapacity::Continuous(Capacity(10.0)),
-                coefficients: ObjectiveCoefficients::default(),
-                activity: IndexMap::new(),
-                demand: IndexMap::new(),
-                unmet_demand: IndexMap::new(),
-                metric,
-            })
-            .collect()
-    }
-
     #[rstest]
     fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
         let process = Rc::new(process);
@@ -573,6 +534,45 @@ mod tests {
         assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
         assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
+    }
+
+    /// Creates appraisal outputs from assets with corresponding metrics. If no assets provided,
+    /// Uses a default asset for each metric.
+    ///
+    /// # Panics
+    /// Panics if `assets` and `metrics` have different lengths
+    #[fixture]
+    fn appraisal_outputs(
+        #[default(vec![])] assets: Vec<Asset>,
+        #[default(vec![])] metrics: Vec<Box<dyn MetricTrait>>,
+        asset: Asset,
+    ) -> Vec<AppraisalOutput> {
+        // If no assets provided, repeat the default asset for each metric.
+        let assets = if assets.is_empty() {
+            vec![asset.clone(); metrics.len()]
+        } else {
+            assets
+        };
+
+        assert_eq!(
+            assets.len(),
+            metrics.len(),
+            "assets and metrics must have the same length"
+        );
+
+        assets
+            .into_iter()
+            .zip(metrics)
+            .map(|(asset, metric)| AppraisalOutput {
+                asset: AssetRef::from(asset),
+                capacity: AssetCapacity::Continuous(Capacity(10.0)),
+                coefficients: ObjectiveCoefficients::default(),
+                activity: IndexMap::new(),
+                demand: IndexMap::new(),
+                unmet_demand: IndexMap::new(),
+                metric,
+            })
+            .collect()
     }
 
     /// Test sorting by LCOX metric when invariant to asset properties
