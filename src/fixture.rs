@@ -16,7 +16,7 @@ use crate::process::{
 use crate::region::RegionID;
 use crate::simulation::investment::appraisal::LCOXMetric;
 use crate::simulation::investment::appraisal::{
-    AppraisalOutput, MetricTrait, coefficients::ObjectiveCoefficients,
+    AppraisalOutput, coefficients::ObjectiveCoefficients,
 };
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
@@ -394,62 +394,6 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         unmet_demand,
         metric: Box::new(LCOXMetric::new(MoneyPerActivity(4.14))),
     }
-}
-
-/// Creates appraisal outputs from assets with corresponding metrics. If no assets provided,
-/// creates default candidate assets based on the number of metrics.
-///
-/// # Panics
-/// Panics if `assets` and `metrics` have different lengths
-#[fixture]
-pub fn appraisal_outputs(
-    #[default(vec![])] assets: Vec<Asset>,
-    #[default(vec![])] metrics: Vec<Box<dyn MetricTrait>>,
-    process: Process,
-    region_id: RegionID,
-) -> Vec<AppraisalOutput> {
-    // If no assets provided, create default candidate assets based on number of metrics
-    let assets = if assets.is_empty() {
-        let process_rc = Rc::new(process);
-        (0..metrics.len())
-            .map(|i| {
-                Asset::new_candidate(
-                    // Use the same process with different reference count
-                    Rc::clone(&process_rc),
-                    region_id.clone(),
-                    Capacity(10.0),
-                    u32::try_from(2010 + i).unwrap(), // Different commission years
-                )
-                .unwrap()
-            })
-            .collect()
-    } else {
-        assets
-    };
-
-    assert_eq!(
-        assets.len(),
-        metrics.len(),
-        "assets and metrics must have the same length"
-    );
-
-    assets
-        .into_iter()
-        .zip(metrics)
-        .map(|(asset, metric)| AppraisalOutput {
-            asset: AssetRef::from(asset),
-            capacity: AssetCapacity::Continuous(Capacity(10.0)),
-            coefficients: ObjectiveCoefficients {
-                capacity_coefficient: MoneyPerCapacity(0.0),
-                activity_coefficients: IndexMap::new(),
-                unmet_demand_coefficient: MoneyPerFlow(0.0),
-            },
-            activity: IndexMap::new(),
-            demand: IndexMap::new(),
-            unmet_demand: IndexMap::new(),
-            metric,
-        })
-        .collect()
 }
 
 #[cfg(test)]

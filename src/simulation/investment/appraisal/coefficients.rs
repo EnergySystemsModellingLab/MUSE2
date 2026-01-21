@@ -14,7 +14,7 @@ use std::collections::HashMap;
 /// These coefficients are calculated according to the agent's `ObjectiveType` and are used by
 /// the investment appraisal routines. The map contains the per-capacity and per-activity cost
 /// coefficients used in the appraisal optimisation, together with the unmet-demand penalty.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ObjectiveCoefficients {
     /// Cost per unit of capacity
     pub capacity_coefficient: MoneyPerCapacity,

@@ -1,12 +1,12 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
 use crate::agent::ObjectiveType;
-use crate::asset::{AssetCapacity, AssetRef};
+use crate::asset::{Asset, AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Money, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity, Money, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -22,6 +22,7 @@ mod optimisation;
 use coefficients::ObjectiveCoefficients;
 use float_cmp::approx_eq;
 use float_cmp::{ApproxEq, F64Margin};
+use itertools::Itertools;
 use optimisation::perform_optimisation;
 
 /// Compares two values with approximate equality checking.
@@ -325,12 +326,48 @@ pub fn appraise_investment(
     appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
 }
 
+/// Compare assets as a fallback if metrics are equal.
+///
+/// Commissioned assets are ordered before uncommissioned and newer before older.
+///
+/// Used as a fallback to sort assets when they have equal appraisal tool outputs.
+fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
+    (asset2.is_commissioned(), asset2.commission_year())
+        .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
+}
+
+/// Sort appraisal outputs by their investment priority.
+/// Primarily this will be decided by their appraisal metric. There
+/// is a tie-breaker fallback to handle the most common cases of equal metrics. But
+/// the function does not guarantee all ties will be resolved.
+/// Assets with zero capacity are filtered out (their metric would be NaN and cause the program to panic)
+///
+pub fn sort_appraisal_outputs_by_investment_priority(
+    outputs_for_opts: Vec<AppraisalOutput>,
+) -> Vec<AppraisalOutput> {
+    outputs_for_opts
+        .into_iter()
+        .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
+        .sorted_by(|output1, output2| match output1.compare_metric(output2) {
+            // If equal, we fall back on comparing asset properties
+            Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
+            cmp => cmp,
+        })
+        .collect_vec()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::AgentID;
     use crate::finance::ProfitabilityIndex;
+    use crate::fixture::{agent_id, asset, process, region_id};
+    use crate::process::Process;
+    use crate::region::RegionID;
     use crate::units::{Money, MoneyPerActivity};
-    use rstest::rstest;
+    use float_cmp::assert_approx_eq;
+    use rstest::{fixture, rstest};
+    use std::rc::Rc;
 
     /// Parametrised tests for LCOX metric comparison.
     #[rstest]
@@ -464,5 +501,88 @@ mod tests {
             expected,
             "Failed comparison for case: {description}"
         );
+    }
+
+    /// Creates appraisal outputs from assets with corresponding metrics. If no assets provided,
+    /// creates default candidate assets based on the number of metrics.
+    ///
+    /// # Panics
+    /// Panics if `assets` and `metrics` have different lengths
+    #[fixture]
+    pub fn appraisal_outputs(
+        #[default(vec![])] assets: Vec<Asset>,
+        #[default(vec![])] metrics: Vec<Box<dyn MetricTrait>>,
+        asset: Asset,
+    ) -> Vec<AppraisalOutput> {
+        // If no assets provided, create default candidate assets based on number of metrics
+        let assets = if assets.is_empty() {
+            vec![asset.clone(); metrics.len()]
+        } else {
+            assets
+        };
+
+        assert_eq!(
+            assets.len(),
+            metrics.len(),
+            "assets and metrics must have the same length"
+        );
+
+        assets
+            .into_iter()
+            .zip(metrics)
+            .map(|(asset, metric)| AppraisalOutput {
+                asset: AssetRef::from(asset),
+                capacity: AssetCapacity::Continuous(Capacity(10.0)),
+                coefficients: ObjectiveCoefficients::default(),
+                activity: IndexMap::new(),
+                demand: IndexMap::new(),
+                unmet_demand: IndexMap::new(),
+                metric,
+            })
+            .collect()
+    }
+
+    #[rstest]
+    fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
+        let process = Rc::new(process);
+        let capacity = Capacity(2.0);
+        let asset1 = Asset::new_commissioned(
+            agent_id.clone(),
+            process.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+        let asset2 =
+            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
+        let asset3 =
+            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
+
+        assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
+        assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
+        assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
+        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
+        assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
+    }
+
+    #[rstest]
+    fn sort_by_lcox_metric(asset: Asset) {
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(7.0))),
+        ];
+
+        let outputs = appraisal_outputs(vec![], metrics, asset);
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        assert_approx_eq!(f64, sorted[0].metric.value(), 3.0); // Best (lowest)
+        assert_approx_eq!(f64, sorted[1].metric.value(), 5.0);
+        assert_approx_eq!(f64, sorted[2].metric.value(), 7.0); // Worst (highest)
     }
 }
