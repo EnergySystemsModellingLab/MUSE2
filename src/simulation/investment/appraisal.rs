@@ -337,10 +337,15 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 }
 
 /// Sort appraisal outputs by their investment priority.
-/// Primarily this will be decided by their appraisal metric. There
-/// is a tie-breaker fallback to handle the most common cases of equal metrics. But
-/// the function does not guarantee all ties will be resolved.
-/// Assets with zero capacity are filtered out (their metric would be NaN and cause the program to panic)
+///
+/// Primarily this is decided by their appraisal metric.
+/// When appraisal metrics are equal, a tie-breaker fallback is used. Commissioned assets
+/// are preferred over uncommissioned assets, and newer assets are preferred over older
+/// ones. The function does not guarantee that all ties will be resolved.
+///
+/// Assets with zero capacity are filtered out before sorting,
+/// as their metric would be `NaN` and could cause the program to panic. So the length
+/// of the returned vector may be less than the input.
 ///
 pub fn sort_appraisal_outputs_by_investment_priority(
     outputs_for_opts: Vec<AppraisalOutput>,
@@ -746,5 +751,34 @@ mod tests {
                 Some(&AgentID(expected_id.into()))
             );
         }
+    }
+
+    /// Test that appraisal outputs with zero capacity are filtered out during sorting.
+    #[rstest]
+    fn appraisal_sort_filters_zero_capacity_outputs(asset: Asset) {
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(f64::NAN))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(f64::NAN))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(f64::NAN))),
+        ];
+
+        // Create outputs with zero capacity
+        let outputs: Vec<AppraisalOutput> = metrics
+            .into_iter()
+            .map(|metric| AppraisalOutput {
+                asset: AssetRef::from(asset.clone()),
+                capacity: AssetCapacity::Continuous(Capacity(0.0)),
+                coefficients: ObjectiveCoefficients::default(),
+                activity: IndexMap::new(),
+                demand: IndexMap::new(),
+                unmet_demand: IndexMap::new(),
+                metric,
+            })
+            .collect();
+
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        // All zero capacity outputs should be filtered out
+        assert_eq!(sorted.len(), 0);
     }
 }
