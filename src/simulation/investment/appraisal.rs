@@ -570,8 +570,9 @@ mod tests {
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 
+    /// Test sorting by LCOX metric when invariant to asset properties
     #[rstest]
-    fn sort_by_lcox_metric(asset: Asset) {
+    fn appraisal_sort_by_lcox_metric(asset: Asset) {
         let metrics: Vec<Box<dyn MetricTrait>> = vec![
             Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
             Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
@@ -584,5 +585,166 @@ mod tests {
         assert_approx_eq!(f64, sorted[0].metric.value(), 3.0); // Best (lowest)
         assert_approx_eq!(f64, sorted[1].metric.value(), 5.0);
         assert_approx_eq!(f64, sorted[2].metric.value(), 7.0); // Worst (highest)
+    }
+
+    /// Test sorting by NPV profitability index when invariant to asset properties
+    #[rstest]
+    fn appraisal_sort_by_npv_metric(asset: Asset) {
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(200.0),
+                annualised_fixed_cost: Money(100.0),
+            })),
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(300.0),
+                annualised_fixed_cost: Money(100.0),
+            })),
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(150.0),
+                annualised_fixed_cost: Money(100.0),
+            })),
+        ];
+
+        let outputs = appraisal_outputs(vec![], metrics, asset);
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        // Higher profitability index is better, so should be sorted: 3.0, 2.0, 1.5
+        assert_approx_eq!(f64, sorted[0].metric.value(), 3.0); // Best (highest PI)
+        assert_approx_eq!(f64, sorted[1].metric.value(), 2.0);
+        assert_approx_eq!(f64, sorted[2].metric.value(), 1.5); // Worst (lowest PI)
+    }
+
+    /// Test that NPV metrics with zero annual fixed cost are prioritised above all others
+    /// when invariant to asset properties
+    #[rstest]
+    fn appraisal_sort_by_npv_metric_zero_afc_prioritised(asset: Asset) {
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            // Very high profitability index but non-zero AFC
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(1000.0),
+                annualised_fixed_cost: Money(100.0),
+            })),
+            // Zero AFC with modest surplus - should be prioritised first
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(50.0),
+                annualised_fixed_cost: Money(0.0),
+            })),
+            // Another high profitability index but non-zero AFC
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(500.0),
+                annualised_fixed_cost: Money(50.0),
+            })),
+        ];
+
+        let outputs = appraisal_outputs(vec![], metrics, asset);
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        // Zero AFC should be first despite lower absolute surplus value
+        assert_approx_eq!(f64, sorted[0].metric.value(), 50.0); // Zero AFC (uses surplus)
+        assert_approx_eq!(f64, sorted[1].metric.value(), 10.0); // PI = 1000/100
+        assert_approx_eq!(f64, sorted[2].metric.value(), 10.0); // PI = 500/50
+    }
+
+    /// Test that mixing LCOX and NPV metrics causes a runtime panic during comparison
+    #[rstest]
+    #[should_panic(expected = "Cannot compare metrics of different types")]
+    fn appraisal_sort_by_mixed_metrics_panics(asset: Asset) {
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(NPVMetric::new(ProfitabilityIndex {
+                total_annualised_surplus: Money(200.0),
+                annualised_fixed_cost: Money(100.0),
+            })),
+            Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
+        ];
+
+        let outputs = appraisal_outputs(vec![], metrics, asset);
+        // This should panic when trying to compare different metric types
+        sort_appraisal_outputs_by_investment_priority(outputs);
+    }
+
+    /// Test that when metrics are equal, commissioned assets are sorted by commission year (newer first)
+    #[rstest]
+    fn appraisal_sort_by_commission_year_when_metrics_equal(
+        process: Process,
+        region_id: RegionID,
+        agent_id: AgentID,
+    ) {
+        let process_rc = Rc::new(process);
+        let capacity = Capacity(10.0);
+        let commission_years = [2015, 2020, 2010];
+
+        let assets: Vec<_> = commission_years
+            .iter()
+            .map(|&year| {
+                Asset::new_commissioned(
+                    agent_id.clone(),
+                    process_rc.clone(),
+                    region_id.clone(),
+                    capacity,
+                    year,
+                )
+                .unwrap()
+            })
+            .collect();
+
+        // All metrics have the same value
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+        ];
+
+        let outputs = appraisal_outputs(
+            assets,
+            metrics,
+            Asset::new_commissioned(agent_id, process_rc, region_id, capacity, 2015).unwrap(),
+        );
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        // Should be sorted by commission year, newest first: 2020, 2015, 2010
+        assert_eq!(sorted[0].asset.commission_year(), 2020);
+        assert_eq!(sorted[1].asset.commission_year(), 2015);
+        assert_eq!(sorted[2].asset.commission_year(), 2010);
+    }
+
+    /// Test that when metrics and commission years are equal, the original order is preserved
+    #[rstest]
+    fn appraisal_sort_maintains_order_when_all_equal(process: Process, region_id: RegionID) {
+        let process_rc = Rc::new(process);
+        let capacity = Capacity(10.0);
+        let commission_year = 2015;
+        let agent_ids = ["agent1", "agent2", "agent3"];
+
+        let assets: Vec<_> = agent_ids
+            .iter()
+            .map(|&id| {
+                Asset::new_commissioned(
+                    AgentID(id.into()),
+                    process_rc.clone(),
+                    region_id.clone(),
+                    capacity,
+                    commission_year,
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+        ];
+
+        let outputs = appraisal_outputs(assets.clone(), metrics, assets[0].clone());
+        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+
+        // Verify order is preserved - should match the original agent_ids array
+        for (i, &expected_id) in agent_ids.iter().enumerate() {
+            assert_eq!(
+                sorted[i].asset.agent_id(),
+                Some(&AgentID(expected_id.into()))
+            );
+        }
     }
 }
