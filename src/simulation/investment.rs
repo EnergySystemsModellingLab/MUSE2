@@ -735,8 +735,7 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Sort assets by appraisal metric
-        let assets_sorted_by_metric =
+        let assets_sorted_by_investment_priority =
             sort_appraisal_outputs_by_investment_priority(outputs_for_opts);
 
         // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
@@ -748,20 +747,23 @@ fn select_best_assets(
         // - known issue with the NPV objective
         // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
         ensure!(
-            !assets_sorted_by_metric.is_empty(),
+            !assets_sorted_by_investment_priority.is_empty(),
             "No feasible investment options for commodity '{}' after appraisal",
             &commodity.id
         );
 
         // Warn if there are multiple equally good assets
         warn_on_equal_appraisal_outputs(
-            &assets_sorted_by_metric,
+            &assets_sorted_by_investment_priority,
             &agent.id,
             &commodity.id,
             region_id,
         );
 
-        let best_output = assets_sorted_by_metric.into_iter().next().unwrap();
+        let best_output = assets_sorted_by_investment_priority
+            .into_iter()
+            .next()
+            .unwrap();
 
         // Log the selected asset
         debug!(
