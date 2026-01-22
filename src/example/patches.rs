@@ -13,15 +13,22 @@ static PATCHES: LazyLock<PatchMap> = LazyLock::new(get_all_patches);
 
 /// Get all patches
 fn get_all_patches() -> PatchMap {
-    [(
-        // The simple example with gas boiler process made divisible
-        "simple_divisible",
-        vec![
-            FilePatch::new("processes.csv")
-                .with_deletion("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,")
-                .with_addition("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,1000"),
-        ],
-    )]
+    [
+        (
+            // The simple example with gas boiler process made divisible
+            "simple_divisible",
+            vec![
+                FilePatch::new("processes.csv")
+                    .with_deletion("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,")
+                    .with_addition("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,1000"),
+            ],
+        ),
+        // The simple example with the objective type set to NPV
+        (
+            "simple_npv",
+            vec![FilePatch::new("agent_objectives.csv").with_replace_value("lcox", "npv")],
+        ),
+    ]
     .into_iter()
     .collect()
 }
