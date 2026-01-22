@@ -2,6 +2,8 @@
 use anyhow::{Context, Result, ensure};
 use csv::{ReaderBuilder, Trim, Writer};
 use indexmap::{IndexSet, indexset};
+use map_macro::hash_map;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -114,45 +116,66 @@ impl ModelPatch {
 type CSVTable = IndexSet<Vec<String>>;
 
 /// The replacements to carry out for a file patch.
-#[derive(Clone)]
+#[derive(Clone, strum::Display)]
 enum Replacements {
     /// Delete or add matching rows
     Rows {
         to_delete: CSVTable,
         to_add: CSVTable,
     },
+    /// Find and replace single values
+    Values { to_replace: HashMap<String, String> },
+}
+
+fn replace_rows(rows: &mut CSVTable, to_add: &CSVTable, to_delete: &CSVTable) -> Result<()> {
+    // Check that there's no overlap between additions and deletions
+    for del_row in to_delete {
+        ensure!(
+            !to_add.contains(del_row),
+            "Row appears in both deletions and additions: {del_row:?}",
+        );
+    }
+
+    // Ensure every row requested for deletion actually exists in the base file.
+    for del_row in to_delete {
+        ensure!(
+            rows.contains(del_row),
+            "Row to delete not present in base file: {del_row:?}"
+        );
+    }
+
+    // Apply deletions
+    rows.retain(|row| !to_delete.contains(row));
+
+    // Apply additions (append to end, checking for duplicates)
+    for add_row in to_add {
+        ensure!(
+            rows.insert(add_row.clone()),
+            "Addition already present in base file: {add_row:?}"
+        );
+    }
+
+    Ok(())
 }
 
 impl Replacements {
     fn apply(&self, rows: &mut CSVTable) -> Result<()> {
         match self {
-            Self::Rows { to_delete, to_add } => {
-                // Check that there's no overlap between additions and deletions
-                for del_row in to_delete {
-                    ensure!(
-                        !to_add.contains(del_row),
-                        "Row appears in both deletions and additions: {del_row:?}",
-                    );
+            Self::Rows { to_delete, to_add } => replace_rows(rows, to_add, to_delete)?,
+            Self::Values { to_replace } => {
+                let mut to_add = CSVTable::new();
+                let mut to_delete = CSVTable::new();
+                for row in rows.iter() {
+                    if row.iter().any(|value| to_replace.contains_key(value)) {
+                        to_delete.insert(row.clone());
+                        let new_row = row
+                            .iter()
+                            .map(|old_value| to_replace.get(old_value).unwrap_or(old_value).clone())
+                            .collect();
+                        to_add.insert(new_row);
+                    }
                 }
-
-                // Ensure every row requested for deletion actually exists in the base file.
-                for del_row in to_delete {
-                    ensure!(
-                        rows.contains(del_row),
-                        "Row to delete not present in base file: {del_row:?}"
-                    );
-                }
-
-                // Apply deletions
-                rows.retain(|row| !to_delete.contains(row));
-
-                // Apply additions (append to end, checking for duplicates)
-                for add_row in to_add {
-                    ensure!(
-                        rows.insert(add_row.clone()),
-                        "Addition already present in base file: {add_row:?}"
-                    );
-                }
+                replace_rows(rows, &to_add, &to_delete)?;
             }
         }
 
@@ -199,16 +222,17 @@ impl FilePatch {
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
 
         match self.replacements {
-            Some(Replacements::Rows {
-                to_delete: _,
-                ref mut to_add,
-            }) => assert!(to_add.insert(v), "Attempted to add duplicate row: {s:?}"),
             None => {
                 self.replacements = Some(Replacements::Rows {
                     to_delete: indexset![],
                     to_add: indexset![v],
                 });
             }
+            Some(Replacements::Rows {
+                to_delete: _,
+                ref mut to_add,
+            }) => assert!(to_add.insert(v), "Attempted to add duplicate row: {s:?}"),
+            Some(r) => panic!("Cannot add rows when replacement type is already set to: {r}"),
         }
 
         self
@@ -220,6 +244,12 @@ impl FilePatch {
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
 
         match self.replacements {
+            None => {
+                self.replacements = Some(Replacements::Rows {
+                    to_delete: indexset![v],
+                    to_add: indexset![],
+                });
+            }
             Some(Replacements::Rows {
                 ref mut to_delete,
                 to_add: _,
@@ -227,12 +257,31 @@ impl FilePatch {
                 to_delete.insert(v),
                 "Attempted to delete duplicate row: {s:?}"
             ),
+            Some(r) => panic!("Cannot delete rows when replacement type is already set to: {r}"),
+        }
+
+        self
+    }
+
+    /// Replace a value if found in any field
+    pub fn with_replace_value(
+        mut self,
+        old_value: impl Into<String>,
+        new_value: impl Into<String>,
+    ) -> Self {
+        let old_value = old_value.into();
+        let new_value = new_value.into();
+        match self.replacements {
             None => {
-                self.replacements = Some(Replacements::Rows {
-                    to_delete: indexset![v],
-                    to_add: indexset![],
+                self.replacements = Some(Replacements::Values {
+                    to_replace: hash_map! { old_value => new_value },
                 });
             }
+            Some(Replacements::Values { ref mut to_replace }) => assert!(
+                to_replace.insert(old_value, new_value).is_none(),
+                "Attempted to replace same value multiple times"
+            ),
+            Some(r) => panic!("Cannot replace values when replacement type is already set to: {r}"),
         }
 
         self
@@ -410,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn file_patch() {
+    fn file_patch_row() {
         // Patch with a small change to an asset capacity
         let assets_patch = FilePatch::new("assets.csv")
             .with_deletion("GASDRV,GBR,A0_GEX,4002.26,2020")
@@ -427,6 +476,23 @@ mod tests {
         let assets_content = std::fs::read_to_string(assets_path).unwrap();
         assert!(!assets_content.contains("GASDRV,GBR,A0_GEX,4002.26,2020"));
         assert!(assets_content.contains("GASDRV,GBR,A0_GEX,4003.26,2020"));
+    }
+
+    #[test]
+    fn file_patch_value() {
+        // Replace decision rule with a different (made-up) one
+        let agents_patch = FilePatch::new("agents.csv").with_replace_value("single", "madeup");
+
+        // Build patched model into a temporary directory
+        let model_dir = ModelPatch::from_example("simple")
+            .with_file_patch(agents_patch)
+            .build_to_tempdir()
+            .unwrap();
+
+        let agents_path = model_dir.path().join("agents.csv");
+        let agents_content = std::fs::read_to_string(agents_path).unwrap();
+        assert!(!agents_content.contains("single"));
+        assert!(agents_content.contains("madeup"));
     }
 
     #[test]
