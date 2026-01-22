@@ -720,11 +720,10 @@ fn select_best_assets(
             });
 
             // Skip any assets from groups we've already seen
-            if let Some(group_id) = asset.group_id() {
-                if seen_groups.contains(&group_id) {
-                    continue;
-                }
-                seen_groups.insert(group_id);
+            if let Some(group_id) = asset.group_id()
+                && !seen_groups.insert(group_id)
+            {
+                continue;
             }
 
             let output = appraise_investment(
