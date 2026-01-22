@@ -108,6 +108,11 @@ impl ModelPatch {
     }
 }
 
+/// Represents all rows and columns of a CSV file.
+///
+/// Assumes that each row is unique (as it should be for all MUSE2 input files).
+type CSVTable = IndexSet<Vec<String>>;
+
 /// Structure to hold patches for a model csv file.
 #[derive(Clone)]
 pub struct FilePatch {
@@ -116,9 +121,9 @@ pub struct FilePatch {
     /// The header row (optional). If `None`, the header is not checked against base files.
     header_row: Option<Vec<String>>,
     /// Rows to delete (each row is a vector of fields)
-    to_delete: IndexSet<Vec<String>>,
+    to_delete: CSVTable,
     /// Rows to add (each row is a vector of fields)
-    to_add: IndexSet<Vec<String>>,
+    to_add: CSVTable,
 }
 
 impl FilePatch {
@@ -229,7 +234,7 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
     }
 
     // Read all rows from the base, preserving order and checking for duplicates
-    let mut base_rows: IndexSet<Vec<String>> = IndexSet::new();
+    let mut base_rows: CSVTable = CSVTable::new();
     for result in reader.records() {
         let record = result?;
 
