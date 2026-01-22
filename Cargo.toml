@@ -38,10 +38,10 @@ documented = "0.9.2"
 dirs = "6.0.0"
 edit = "0.1.5"
 erased-serde = "0.4.9"
+map-macro = "0.3.0"
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
-map-macro = "0.3.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
 yaml-rust2 = {version = "0.11.0", default-features = false}
 
