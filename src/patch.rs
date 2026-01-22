@@ -1,7 +1,7 @@
 //! Code for applying patches to model input files.
 use anyhow::{Context, Result, ensure};
 use csv::{ReaderBuilder, Trim, Writer};
-use indexmap::IndexSet;
+use indexmap::{IndexSet, indexset};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -113,6 +113,53 @@ impl ModelPatch {
 /// Assumes that each row is unique (as it should be for all MUSE2 input files).
 type CSVTable = IndexSet<Vec<String>>;
 
+/// The replacements to carry out for a file patch.
+#[derive(Clone)]
+enum Replacements {
+    /// Delete or add matching rows
+    Rows {
+        to_delete: CSVTable,
+        to_add: CSVTable,
+    },
+}
+
+impl Replacements {
+    fn apply(&self, rows: &mut CSVTable) -> Result<()> {
+        match self {
+            Self::Rows { to_delete, to_add } => {
+                // Check that there's no overlap between additions and deletions
+                for del_row in to_delete {
+                    ensure!(
+                        !to_add.contains(del_row),
+                        "Row appears in both deletions and additions: {del_row:?}",
+                    );
+                }
+
+                // Ensure every row requested for deletion actually exists in the base file.
+                for del_row in to_delete {
+                    ensure!(
+                        rows.contains(del_row),
+                        "Row to delete not present in base file: {del_row:?}"
+                    );
+                }
+
+                // Apply deletions
+                rows.retain(|row| !to_delete.contains(row));
+
+                // Apply additions (append to end, checking for duplicates)
+                for add_row in to_add {
+                    ensure!(
+                        rows.insert(add_row.clone()),
+                        "Addition already present in base file: {add_row:?}"
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Structure to hold patches for a model csv file.
 #[derive(Clone)]
 pub struct FilePatch {
@@ -120,10 +167,8 @@ pub struct FilePatch {
     filename: String,
     /// The header row (optional). If `None`, the header is not checked against base files.
     header_row: Option<Vec<String>>,
-    /// Rows to delete (each row is a vector of fields)
-    to_delete: CSVTable,
-    /// Rows to add (each row is a vector of fields)
-    to_add: CSVTable,
+    /// The replacement(s) to carry out
+    replacements: Option<Replacements>,
 }
 
 impl FilePatch {
@@ -132,8 +177,7 @@ impl FilePatch {
         FilePatch {
             filename: filename.into(),
             header_row: None,
-            to_delete: IndexSet::new(),
-            to_add: IndexSet::new(),
+            replacements: None,
         }
     }
 
@@ -153,7 +197,20 @@ impl FilePatch {
     pub fn with_addition(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
-        self.to_add.insert(v);
+
+        match self.replacements {
+            Some(Replacements::Rows {
+                to_delete: _,
+                ref mut to_add,
+            }) => assert!(to_add.insert(v), "Attempted to add duplicate row: {s:?}"),
+            None => {
+                self.replacements = Some(Replacements::Rows {
+                    to_delete: indexset![],
+                    to_add: indexset![v],
+                });
+            }
+        }
+
         self
     }
 
@@ -161,7 +218,23 @@ impl FilePatch {
     pub fn with_deletion(mut self, row: impl Into<String>) -> Self {
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
-        self.to_delete.insert(v);
+
+        match self.replacements {
+            Some(Replacements::Rows {
+                ref mut to_delete,
+                to_add: _,
+            }) => assert!(
+                to_delete.insert(v),
+                "Attempted to delete duplicate row: {s:?}"
+            ),
+            None => {
+                self.replacements = Some(Replacements::Rows {
+                    to_delete: indexset![v],
+                    to_add: indexset![],
+                });
+            }
+        }
+
         self
     }
 
@@ -251,31 +324,8 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         );
     }
 
-    // Check that there's no overlap between additions and deletions
-    for del_row in &patch.to_delete {
-        ensure!(
-            !patch.to_add.contains(del_row),
-            "Row appears in both deletions and additions: {del_row:?}",
-        );
-    }
-
-    // Ensure every row requested for deletion actually exists in the base file.
-    for del_row in &patch.to_delete {
-        ensure!(
-            base_rows.contains(del_row),
-            "Row to delete not present in base file: {del_row:?}"
-        );
-    }
-
-    // Apply deletions
-    base_rows.retain(|row| !patch.to_delete.contains(row));
-
-    // Apply additions (append to end, checking for duplicates)
-    for add_row in &patch.to_add {
-        ensure!(
-            base_rows.insert(add_row.clone()),
-            "Addition already present in base file: {add_row:?}"
-        );
+    if let Some(replacements) = &patch.replacements {
+        replacements.apply(&mut base_rows)?;
     }
 
     // Serialize CSV output using csv::Writer
