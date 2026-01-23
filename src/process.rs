@@ -514,11 +514,6 @@ impl ProcessInvestmentConstraint {
     pub fn get_addition_limit(&self) -> Option<Capacity> {
         self.addition_limit
     }
-
-    /// Get the addition limit for an agent based on their portion of the primary commodity demand
-    pub fn get_addition_limit_for_agent(&self, agent_portion: Dimensionless) -> Option<Capacity> {
-        self.get_addition_limit().map(|limit| limit * agent_portion)
-    }
 }
 
 #[cfg(test)]

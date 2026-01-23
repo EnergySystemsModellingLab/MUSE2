@@ -668,21 +668,35 @@ fn warn_on_equal_appraisal_outputs(
     }
 }
 
-/// Get investment limits for candidate assets for a given agent in a given market and year
+/// Calculate investment limits for candidate assets for a given agent in a given market and year
 ///
 /// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
 /// meet demand), and any addition limits specified by the process (scaled according to the agent's
 /// portion of the commodity demand).
-fn get_investment_limits_for_candidates(
+fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
     year: u32,
+    milestone_years: &[u32],
 ) -> HashMap<AssetRef, AssetCapacity> {
+    // Check that the year is a milestone year and not the first milestone year (since we must
+    // calculate the number of years since the previous milestone year below)
+    assert!(milestone_years.contains(&year) && year != milestone_years[0],);
+
+    // Calculate number of years elapsed since previous milestone year
+    let previous_milestone_year = *milestone_years
+        .iter()
+        .rev()
+        .skip_while(|&&y| y != year)
+        .nth(1)
+        .unwrap();
+    let years_elapsed = Dimensionless((year - previous_milestone_year) as f64);
+
+    // Calculate limits for each candidate asset
     let agent_portion = agent.commodity_portions[&(commodity.id.clone(), year)];
     let key = (region_id.clone(), year);
-
     opt_assets
         .iter()
         .filter(|asset| !asset.is_commissioned())
@@ -691,11 +705,16 @@ fn get_investment_limits_for_candidates(
             let mut cap = asset.capacity();
 
             // Further capped by addition limits of the process, if specified
+            // These are scaled according to the agent's portion of the commodity demand and the
+            // number of years elapsed since the previous milestone year.
             if let Some(limit) = asset
                 .process()
                 .investment_constraints
                 .get(&key)
-                .and_then(|c| c.get_addition_limit_for_agent(agent_portion))
+                .and_then(|c| {
+                    c.get_addition_limit()
+                        .map(|l| l * years_elapsed * agent_portion)
+                })
             {
                 let limit_capacity = AssetCapacity::from_capacity(limit, asset.unit_size());
                 cap = cap.min(limit_capacity);
@@ -726,8 +745,14 @@ fn select_best_assets(
         calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
 
     // Calculate investment limits for candidate assets
-    let mut remaining_candidate_capacity =
-        get_investment_limits_for_candidates(&opt_assets, commodity, agent, region_id, year);
+    let mut remaining_candidate_capacity = calculate_investment_limits_for_candidates(
+        &opt_assets,
+        commodity,
+        agent,
+        region_id,
+        year,
+        &model.parameters.milestone_years,
+    );
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
