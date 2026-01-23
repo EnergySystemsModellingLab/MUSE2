@@ -491,7 +491,7 @@ mod tests {
 
         let agents_path = model_dir.path().join("agents.csv");
         let agents_content = std::fs::read_to_string(agents_path).unwrap();
-        assert!(!agents_content.contains("simple"));
+        assert!(!agents_content.contains("single"));
         assert!(agents_content.contains("madeup"));
     }
 
