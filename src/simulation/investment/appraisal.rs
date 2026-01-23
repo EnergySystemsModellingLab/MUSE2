@@ -740,12 +740,126 @@ mod tests {
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Verify order is preserved - should match the original agent_ids array
-        for (i, &expected_id) in agent_ids.iter().enumerate() {
-            assert_eq!(
-                outputs[i].asset.agent_id(),
-                Some(&AgentID(expected_id.into()))
-            );
+        for (&expected_id, output) in agent_ids.iter().zip(outputs) {
+            assert_eq!(output.asset.agent_id(), Some(&AgentID(expected_id.into())));
         }
+    }
+
+    /// Test that commissioned assets are prioritised over non-commissioned assets when metrics are equal
+    #[rstest]
+    fn appraisal_sort_commissioned_before_uncommissioned_when_metrics_equal(
+        process: Process,
+        region_id: RegionID,
+        agent_id: AgentID,
+    ) {
+        let process_rc = Rc::new(process);
+        let capacity = Capacity(10.0);
+
+        // Create a mix of commissioned and candidate (non-commissioned) assets
+        let commissioned_asset_newer = Asset::new_commissioned(
+            agent_id.clone(),
+            process_rc.clone(),
+            region_id.clone(),
+            capacity,
+            2020,
+        )
+        .unwrap();
+
+        let commissioned_asset_older = Asset::new_commissioned(
+            agent_id.clone(),
+            process_rc.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+
+        let candidate_asset =
+            Asset::new_candidate(process_rc.clone(), region_id.clone(), capacity, 2020).unwrap();
+
+        let assets = vec![
+            candidate_asset.clone(),
+            commissioned_asset_older.clone(),
+            candidate_asset.clone(),
+            commissioned_asset_newer.clone(),
+        ];
+
+        // All metrics have identical values to test fallback ordering
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
+        ];
+
+        let mut outputs = appraisal_outputs(assets, metrics);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+
+        // Commissioned assets should be prioritised first
+        assert!(outputs[0].asset.is_commissioned());
+        assert!(outputs[0].asset.commission_year() == 2020);
+        assert!(outputs[1].asset.is_commissioned());
+        assert!(outputs[1].asset.commission_year() == 2015);
+
+        // Non-commissioned assets should come after
+        assert!(!outputs[2].asset.is_commissioned());
+        assert!(!outputs[3].asset.is_commissioned());
+    }
+
+    /// Test that appraisal metric is prioritised over asset properties when sorting
+    #[rstest]
+    fn appraisal_metric_is_priorited_over_asset_properties(
+        process: Process,
+        region_id: RegionID,
+        agent_id: AgentID,
+    ) {
+        let process_rc = Rc::new(process);
+        let capacity = Capacity(10.0);
+
+        // Create a mix of commissioned and candidate (non-commissioned) assets
+        let commissioned_asset_newer = Asset::new_commissioned(
+            agent_id.clone(),
+            process_rc.clone(),
+            region_id.clone(),
+            capacity,
+            2020,
+        )
+        .unwrap();
+
+        let commissioned_asset_older = Asset::new_commissioned(
+            agent_id.clone(),
+            process_rc.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+
+        let candidate_asset =
+            Asset::new_candidate(process_rc.clone(), region_id.clone(), capacity, 2020).unwrap();
+
+        let assets = vec![
+            candidate_asset.clone(),
+            commissioned_asset_older.clone(),
+            candidate_asset.clone(),
+            commissioned_asset_newer.clone(),
+        ];
+
+        // Make one metric slightly better than all others
+        let baseline_metric_value = 5.0;
+        let best_metric_value = baseline_metric_value - 1e-5;
+        let metrics: Vec<Box<dyn MetricTrait>> = vec![
+            Box::new(LCOXMetric::new(MoneyPerActivity(best_metric_value))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(baseline_metric_value))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(baseline_metric_value))),
+            Box::new(LCOXMetric::new(MoneyPerActivity(baseline_metric_value))),
+        ];
+
+        let mut outputs = appraisal_outputs(assets, metrics);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+
+        // non-commissioned asset prioritised because it has a slightly better metric
+        assert_approx_eq!(f64, outputs[0].metric.value(), best_metric_value);
     }
 
     /// Test that appraisal outputs with zero capacity are filtered out during sorting.
