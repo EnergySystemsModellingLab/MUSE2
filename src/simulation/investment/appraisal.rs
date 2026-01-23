@@ -22,7 +22,6 @@ mod optimisation;
 use coefficients::ObjectiveCoefficients;
 use float_cmp::approx_eq;
 use float_cmp::{ApproxEq, F64Margin};
-use itertools::Itertools;
 use optimisation::perform_optimisation;
 
 /// Compares two values with approximate equality checking.
@@ -347,18 +346,13 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// as their metric would be `NaN` and could cause the program to panic. So the length
 /// of the returned vector may be less than the input.
 ///
-pub fn sort_appraisal_outputs_by_investment_priority(
-    outputs_for_opts: Vec<AppraisalOutput>,
-) -> Vec<AppraisalOutput> {
-    outputs_for_opts
-        .into_iter()
-        .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
-        .sorted_by(|output1, output2| match output1.compare_metric(output2) {
-            // If equal, we fall back on comparing asset properties
-            Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
-            cmp => cmp,
-        })
-        .collect_vec()
+pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<AppraisalOutput>) {
+    outputs_for_opts.retain(|output| output.capacity.total_capacity() > Capacity(0.0));
+    outputs_for_opts.sort_by(|output1, output2| match output1.compare_metric(output2) {
+        // If equal, we fall back on comparing asset properties
+        Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
+        cmp => cmp,
+    });
 }
 
 #[cfg(test)]
@@ -584,12 +578,12 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(7.0))),
         ];
 
-        let outputs = appraisal_outputs(vec![], metrics, asset);
-        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
-        assert_approx_eq!(f64, sorted[0].metric.value(), 3.0); // Best (lowest)
-        assert_approx_eq!(f64, sorted[1].metric.value(), 5.0);
-        assert_approx_eq!(f64, sorted[2].metric.value(), 7.0); // Worst (highest)
+        assert_approx_eq!(f64, outputs[0].metric.value(), 3.0); // Best (lowest)
+        assert_approx_eq!(f64, outputs[1].metric.value(), 5.0);
+        assert_approx_eq!(f64, outputs[2].metric.value(), 7.0); // Worst (highest)
     }
 
     /// Test sorting by NPV profitability index when invariant to asset properties
@@ -610,13 +604,13 @@ mod tests {
             })),
         ];
 
-        let outputs = appraisal_outputs(vec![], metrics, asset);
-        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Higher profitability index is better, so should be sorted: 3.0, 2.0, 1.5
-        assert_approx_eq!(f64, sorted[0].metric.value(), 3.0); // Best (highest PI)
-        assert_approx_eq!(f64, sorted[1].metric.value(), 2.0);
-        assert_approx_eq!(f64, sorted[2].metric.value(), 1.5); // Worst (lowest PI)
+        assert_approx_eq!(f64, outputs[0].metric.value(), 3.0); // Best (highest PI)
+        assert_approx_eq!(f64, outputs[1].metric.value(), 2.0);
+        assert_approx_eq!(f64, outputs[2].metric.value(), 1.5); // Worst (lowest PI)
     }
 
     /// Test that NPV metrics with zero annual fixed cost are prioritised above all others
@@ -641,13 +635,13 @@ mod tests {
             })),
         ];
 
-        let outputs = appraisal_outputs(vec![], metrics, asset);
-        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Zero AFC should be first despite lower absolute surplus value
-        assert_approx_eq!(f64, sorted[0].metric.value(), 50.0); // Zero AFC (uses surplus)
-        assert_approx_eq!(f64, sorted[1].metric.value(), 10.0); // PI = 1000/100
-        assert_approx_eq!(f64, sorted[2].metric.value(), 10.0); // PI = 500/50
+        assert_approx_eq!(f64, outputs[0].metric.value(), 50.0); // Zero AFC (uses surplus)
+        assert_approx_eq!(f64, outputs[1].metric.value(), 10.0); // PI = 1000/100
+        assert_approx_eq!(f64, outputs[2].metric.value(), 10.0); // PI = 500/50
     }
 
     /// Test that mixing LCOX and NPV metrics causes a runtime panic during comparison
@@ -663,9 +657,9 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
         ];
 
-        let outputs = appraisal_outputs(vec![], metrics, asset);
+        let mut outputs = appraisal_outputs(vec![], metrics, asset);
         // This should panic when trying to compare different metric types
-        sort_appraisal_outputs_by_investment_priority(outputs);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
     }
 
     /// Test that when metrics are equal, commissioned assets are sorted by commission year (newer first)
@@ -700,17 +694,17 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
         ];
 
-        let outputs = appraisal_outputs(
+        let mut outputs = appraisal_outputs(
             assets,
             metrics,
             Asset::new_commissioned(agent_id, process_rc, region_id, capacity, 2015).unwrap(),
         );
-        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Should be sorted by commission year, newest first: 2020, 2015, 2010
-        assert_eq!(sorted[0].asset.commission_year(), 2020);
-        assert_eq!(sorted[1].asset.commission_year(), 2015);
-        assert_eq!(sorted[2].asset.commission_year(), 2010);
+        assert_eq!(outputs[0].asset.commission_year(), 2020);
+        assert_eq!(outputs[1].asset.commission_year(), 2015);
+        assert_eq!(outputs[2].asset.commission_year(), 2010);
     }
 
     /// Test that when metrics and commission years are equal, the original order is preserved
@@ -741,13 +735,13 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
         ];
 
-        let outputs = appraisal_outputs(assets.clone(), metrics, assets[0].clone());
-        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+        let mut outputs = appraisal_outputs(assets.clone(), metrics, assets[0].clone());
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Verify order is preserved - should match the original agent_ids array
         for (i, &expected_id) in agent_ids.iter().enumerate() {
             assert_eq!(
-                sorted[i].asset.agent_id(),
+                outputs[i].asset.agent_id(),
                 Some(&AgentID(expected_id.into()))
             );
         }
@@ -763,7 +757,7 @@ mod tests {
         ];
 
         // Create outputs with zero capacity
-        let outputs: Vec<AppraisalOutput> = metrics
+        let mut outputs: Vec<AppraisalOutput> = metrics
             .into_iter()
             .map(|metric| AppraisalOutput {
                 asset: AssetRef::from(asset.clone()),
@@ -776,9 +770,9 @@ mod tests {
             })
             .collect();
 
-        let sorted = sort_appraisal_outputs_by_investment_priority(outputs);
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // All zero capacity outputs should be filtered out
-        assert_eq!(sorted.len(), 0);
+        assert_eq!(outputs.len(), 0);
     }
 }
