@@ -807,7 +807,7 @@ mod tests {
 
     /// Test that appraisal metric is prioritised over asset properties when sorting
     #[rstest]
-    fn appraisal_metric_is_priorited_over_asset_properties(
+    fn appraisal_metric_is_prioritised_over_asset_properties(
         process: Process,
         region_id: RegionID,
         agent_id: AgentID,
