@@ -675,9 +675,7 @@ fn warn_on_equal_appraisal_outputs(
 /// portion of the commodity demand).
 fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
-    commodity: &Commodity,
-    agent: &Agent,
-    region_id: &RegionID,
+    agent_portion: Dimensionless,
     year: u32,
     milestone_years: &[u32],
 ) -> HashMap<AssetRef, AssetCapacity> {
@@ -695,12 +693,14 @@ fn calculate_investment_limits_for_candidates(
     let years_elapsed = Dimensionless((year - previous_milestone_year) as f64);
 
     // Calculate limits for each candidate asset
-    let agent_portion = agent.commodity_portions[&(commodity.id.clone(), year)];
-    let key = (region_id.clone(), year);
     opt_assets
         .iter()
         .filter(|asset| !asset.is_commissioned())
         .map(|asset| {
+            // Sanity check: if the year does not match the asset's commission year, then
+            // something is wrong
+            assert_eq!(asset.commission_year(), year);
+
             // Demand-limiting capacity (pre-calculated when creating candidate)
             let mut cap = asset.capacity();
 
@@ -710,7 +710,7 @@ fn calculate_investment_limits_for_candidates(
             if let Some(limit) = asset
                 .process()
                 .investment_constraints
-                .get(&key)
+                .get(&(asset.region_id().clone(), year))
                 .and_then(|c| {
                     c.get_addition_limit()
                         .map(|l| l * years_elapsed * agent_portion)
@@ -745,11 +745,10 @@ fn select_best_assets(
         calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
 
     // Calculate investment limits for candidate assets
+    let agent_portion = agent.commodity_portions[&(commodity.id.clone(), year)];
     let mut remaining_candidate_capacity = calculate_investment_limits_for_candidates(
         &opt_assets,
-        commodity,
-        agent,
-        region_id,
+        agent_portion,
         year,
         &model.parameters.milestone_years,
     );
@@ -774,12 +773,11 @@ fn select_best_assets(
             // For candidates, determine the maximum capacity that can be invested in this round,
             // according to the tranche size and remaining capacity limits.
             let max_capacity = (!asset.is_commissioned()).then(|| {
-                let max_capacity = asset
+                let tranche_capacity = asset
                     .capacity()
                     .apply_limit_factor(model.parameters.capacity_limit_factor);
-
                 let remaining_capacity = remaining_candidate_capacity[asset];
-                max_capacity.min(remaining_capacity)
+                tranche_capacity.min(remaining_capacity)
             });
 
             // Skip any assets from groups we've already seen
