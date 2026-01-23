@@ -668,6 +668,44 @@ fn warn_on_equal_appraisal_outputs(
     }
 }
 
+/// Get investment limits for candidate assets for a given agent in a given market and year
+///
+/// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
+/// meet demand), and any addition limits specified by the process (scaled according to the agent's
+/// portion of the commodity demand).
+fn get_investment_limits_for_candidates(
+    opt_assets: &[AssetRef],
+    commodity: &Commodity,
+    agent: &Agent,
+    region_id: &RegionID,
+    year: u32,
+) -> HashMap<AssetRef, AssetCapacity> {
+    let agent_portion = agent.commodity_portions[&(commodity.id.clone(), year)];
+    let key = (region_id.clone(), year);
+
+    opt_assets
+        .iter()
+        .filter(|asset| !asset.is_commissioned())
+        .map(|asset| {
+            // Demand-limiting capacity (pre-calculated when creating candidate)
+            let mut cap = asset.capacity();
+
+            // Further capped by addition limits of the process, if specified
+            if let Some(limit) = asset
+                .process()
+                .investment_constraints
+                .get(&key)
+                .and_then(|c| c.get_addition_limit_for_agent(agent_portion))
+            {
+                let limit_capacity = AssetCapacity::from_capacity(limit, asset.unit_size());
+                cap = cap.min(limit_capacity);
+            }
+
+            (asset.clone(), cap)
+        })
+        .collect()
+}
+
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
 fn select_best_assets(
@@ -687,13 +725,11 @@ fn select_best_assets(
     let coefficients =
         calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
 
-    let mut remaining_candidate_capacity = HashMap::from_iter(
-        opt_assets
-            .iter()
-            .filter(|asset| !asset.is_commissioned())
-            .map(|asset| (asset.clone(), asset.capacity())),
-    );
+    // Calculate investment limits for candidate assets
+    let mut remaining_candidate_capacity =
+        get_investment_limits_for_candidates(&opt_assets, commodity, agent, region_id, year);
 
+    // Iteratively select the best asset until demand is met
     let mut round = 0;
     let mut best_assets: Vec<AssetRef> = Vec::new();
     while is_any_remaining_demand(&demand) {
@@ -710,6 +746,8 @@ fn select_best_assets(
         // Appraise all options
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
+            // For candidates, determine the maximum capacity that can be invested in this round,
+            // according to the tranche size and remaining capacity limits.
             let max_capacity = (!asset.is_commissioned()).then(|| {
                 let max_capacity = asset
                     .capacity()
@@ -788,7 +826,7 @@ fn select_best_assets(
             best_output.capacity.total_capacity()
         );
 
-        // Update the assets
+        // Update the assets and remaining candidate capacity
         update_assets(
             best_output.asset,
             best_output.capacity,

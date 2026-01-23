@@ -502,7 +502,23 @@ pub struct ProcessInvestmentConstraint {
     /// Addition constraint: Yearly limit an agent can invest
     /// in the process, shared according to the agent's
     /// proportion of the processes primary commodity demand
-    pub addition_limit: Option<f64>,
+    pub addition_limit: Option<Capacity>,
+}
+
+impl ProcessInvestmentConstraint {
+    /// Get the addition limit, if any
+    ///
+    /// For now, this just returns `addition_limit`, but in the future when we add growth limits
+    /// and total capacity limits, this will have more complex logic which will depend on the
+    /// current total capacity.
+    pub fn get_addition_limit(&self) -> Option<Capacity> {
+        self.addition_limit
+    }
+
+    /// Get the addition limit for an agent based on their portion of the primary commodity demand
+    pub fn get_addition_limit_for_agent(&self, agent_portion: Dimensionless) -> Option<Capacity> {
+        self.get_addition_limit().map(|limit| limit * agent_portion)
+    }
 }
 
 #[cfg(test)]
