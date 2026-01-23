@@ -565,7 +565,6 @@ mod tests {
         metrics: Vec<Box<dyn MetricTrait>>,
         asset: &Asset,
     ) -> Vec<AppraisalOutput> {
-        // If no assets provided, repeat the default asset for each metric.
         let assets = vec![asset.clone(); metrics.len()];
         appraisal_outputs(assets, metrics)
     }
