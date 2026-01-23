@@ -365,7 +365,7 @@ mod tests {
     use crate::region::RegionID;
     use crate::units::{Money, MoneyPerActivity};
     use float_cmp::assert_approx_eq;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
     use std::rc::Rc;
 
     /// Parametrised tests for LCOX metric comparison.
@@ -530,24 +530,14 @@ mod tests {
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 
-    /// Creates appraisal outputs from assets with corresponding metrics. If no assets provided,
-    /// Uses a default asset for each metric.
+    /// Creates appraisal from corresponding assets and metrics
     ///
     /// # Panics
     /// Panics if `assets` and `metrics` have different lengths
-    #[fixture]
     fn appraisal_outputs(
-        #[default(vec![])] assets: Vec<Asset>,
-        #[default(vec![])] metrics: Vec<Box<dyn MetricTrait>>,
-        asset: Asset,
+        assets: Vec<Asset>,
+        metrics: Vec<Box<dyn MetricTrait>>,
     ) -> Vec<AppraisalOutput> {
-        // If no assets provided, repeat the default asset for each metric.
-        let assets = if assets.is_empty() {
-            vec![asset.clone(); metrics.len()]
-        } else {
-            assets
-        };
-
         assert_eq!(
             assets.len(),
             metrics.len(),
@@ -569,6 +559,17 @@ mod tests {
             .collect()
     }
 
+    /// Creates appraisal outputs with given metrics.
+    /// Copies the provided default asset for each metric.
+    fn appraisal_outputs_with_investment_priority_invariant_to_assets(
+        metrics: Vec<Box<dyn MetricTrait>>,
+        asset: &Asset,
+    ) -> Vec<AppraisalOutput> {
+        // If no assets provided, repeat the default asset for each metric.
+        let assets = vec![asset.clone(); metrics.len()];
+        appraisal_outputs(assets, metrics)
+    }
+
     /// Test sorting by LCOX metric when invariant to asset properties
     #[rstest]
     fn appraisal_sort_by_lcox_metric(asset: Asset) {
@@ -578,7 +579,8 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(7.0))),
         ];
 
-        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        let mut outputs =
+            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         assert_approx_eq!(f64, outputs[0].metric.value(), 3.0); // Best (lowest)
@@ -604,7 +606,8 @@ mod tests {
             })),
         ];
 
-        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        let mut outputs =
+            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Higher profitability index is better, so should be sorted: 3.0, 2.0, 1.5
@@ -635,7 +638,8 @@ mod tests {
             })),
         ];
 
-        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        let mut outputs =
+            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Zero AFC should be first despite lower absolute surplus value
@@ -657,7 +661,8 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
         ];
 
-        let mut outputs = appraisal_outputs(vec![], metrics, asset);
+        let mut outputs =
+            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         // This should panic when trying to compare different metric types
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
     }
@@ -694,11 +699,7 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
         ];
 
-        let mut outputs = appraisal_outputs(
-            assets,
-            metrics,
-            Asset::new_commissioned(agent_id, process_rc, region_id, capacity, 2015).unwrap(),
-        );
+        let mut outputs = appraisal_outputs(assets, metrics);
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Should be sorted by commission year, newest first: 2020, 2015, 2010
@@ -735,7 +736,7 @@ mod tests {
             Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
         ];
 
-        let mut outputs = appraisal_outputs(assets.clone(), metrics, assets[0].clone());
+        let mut outputs = appraisal_outputs(assets.clone(), metrics);
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // Verify order is preserved - should match the original agent_ids array
