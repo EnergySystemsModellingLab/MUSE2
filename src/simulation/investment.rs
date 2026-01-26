@@ -936,14 +936,17 @@ mod tests {
     use super::*;
     use crate::agent::AgentID;
     use crate::asset::Asset;
+    use crate::asset::AssetRef;
     use crate::commodity::Commodity;
     use crate::fixture::{
         agent_id, asset, process, process_activity_limits_map, process_flows_map, region_id,
         svd_commodity, time_slice, time_slice_info, time_slice_info2,
     };
+    use crate::process::ProcessInvestmentConstraint;
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::units::Dimensionless;
     use crate::units::{Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
@@ -1057,5 +1060,59 @@ mod tests {
         assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
         assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
+    }
+
+    #[rstest]
+    #[case(Some(Capacity(3.0)), Capacity(10.0), Dimensionless(0.5), Capacity(7.5))] // Expected limit: min(10, 3 * 5 * 0.5) = 7.5
+    #[case(
+        Some(Capacity(3.0)),
+        Capacity(10.0),
+        Dimensionless(1.0),
+        Capacity(10.0)
+    )] // Expected limit: min(10, 3 * 5 * 1.0) = 10
+    #[case(None, Capacity(10.0), Dimensionless(0.5), Capacity(10.0))] // Expected limit: 10 (no addition limit)
+    fn calculate_investment_limits_for_candidates_parametrized(
+        mut process: Process,
+        region_id: RegionID,
+        #[case] process_addition_limit: Option<Capacity>,
+        #[case] demand_limiting_capacity: Capacity,
+        #[case] agent_share: Dimensionless,
+        #[case] expected_capacity: Capacity,
+    ) {
+        // Setup: year with previous milestone 5 years earlier
+        let year = 2020u32;
+        let milestone_years = vec![2015u32, 2020u32];
+
+        // Optionally add an annual addition limit for this process/region/year
+        if let Some(limit) = process_addition_limit {
+            process.investment_constraints.insert(
+                (region_id.clone(), year),
+                Rc::new(ProcessInvestmentConstraint {
+                    addition_limit: Some(limit),
+                }),
+            );
+        }
+
+        let process_rc = Rc::new(process);
+
+        // Candidate with specified demand-limiting capacity
+        let asset = Asset::new_candidate(
+            process_rc.clone(),
+            region_id.clone(),
+            demand_limiting_capacity,
+            year,
+        )
+        .unwrap();
+        let asset_ref = AssetRef::from(asset);
+        let opt_assets = vec![asset_ref.clone()];
+
+        let limits = calculate_investment_limits_for_candidates(
+            &opt_assets,
+            agent_share,
+            year,
+            &milestone_years,
+        );
+        let cap = limits[&asset_ref].total_capacity();
+        assert_eq!(cap, expected_capacity);
     }
 }
