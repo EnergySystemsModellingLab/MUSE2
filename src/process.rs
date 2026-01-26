@@ -506,12 +506,12 @@ pub struct ProcessInvestmentConstraint {
 }
 
 impl ProcessInvestmentConstraint {
-    /// Get the addition limit, if any
+    /// Calculate the overall annual addition limit, if any
     ///
     /// For now, this just returns `addition_limit`, but in the future when we add growth limits
     /// and total capacity limits, this will have more complex logic which will depend on the
     /// current total capacity.
-    pub fn get_addition_limit(&self) -> Option<Capacity> {
+    pub fn get_annual_addition_limit(&self) -> Option<Capacity> {
         self.addition_limit
     }
 }

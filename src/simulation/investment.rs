@@ -668,7 +668,7 @@ fn warn_on_equal_appraisal_outputs(
     }
 }
 
-/// Calculate investment limits for candidate assets for a given agent in a given market and year
+/// Calculate investment limits for an agent's candidate assets in a given year
 ///
 /// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
 /// meet demand), and any addition limits specified by the process (scaled according to the agent's
@@ -679,17 +679,15 @@ fn calculate_investment_limits_for_candidates(
     year: u32,
     milestone_years: &[u32],
 ) -> HashMap<AssetRef, AssetCapacity> {
-    // Check that the year is a milestone year and not the first milestone year (since we must
-    // calculate the number of years since the previous milestone year below)
-    assert!(milestone_years.contains(&year) && year != milestone_years[0],);
+    // Ensure `year` is a milestone year and not the first milestone (we need the previous one)
+    let pos = milestone_years
+        .iter()
+        .position(|&y| y == year)
+        .expect("`year` must be a milestone year");
+    assert!(pos > 0);
 
     // Calculate number of years elapsed since previous milestone year
-    let previous_milestone_year = *milestone_years
-        .iter()
-        .rev()
-        .skip_while(|&&y| y != year)
-        .nth(1)
-        .unwrap();
+    let previous_milestone_year = milestone_years[pos - 1];
     let years_elapsed = Dimensionless((year - previous_milestone_year) as f64);
 
     // Calculate limits for each candidate asset
@@ -712,7 +710,7 @@ fn calculate_investment_limits_for_candidates(
                 .investment_constraints
                 .get(&(asset.region_id().clone(), year))
                 .and_then(|c| {
-                    c.get_addition_limit()
+                    c.get_annual_addition_limit()
                         .map(|l| l * years_elapsed * agent_portion)
                 })
             {
