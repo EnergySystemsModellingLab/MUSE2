@@ -194,6 +194,22 @@ impl AssetCapacity {
         }
     }
 
+    /// Create an `AssetCapacity` from a total capacity and optional unit size
+    ///
+    /// If a unit size is provided, the capacity is represented as a discrete number of units,
+    /// calculated as the floor of (capacity / `unit_size`). If no unit size is provided, the
+    /// capacity is represented as continuous.
+    pub fn from_capacity_floor(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        match unit_size {
+            Some(size) => {
+                let num_units = (capacity / size).value().floor() as u32;
+                AssetCapacity::Discrete(num_units, size)
+            }
+            None => AssetCapacity::Continuous(capacity),
+        }
+    }
+
     /// Returns the total capacity represented by this `AssetCapacity`.
     pub fn total_capacity(&self) -> Capacity {
         match self {
@@ -1045,6 +1061,35 @@ impl Asset {
         };
         let child_asset = AssetRef::from(Rc::new(child_asset));
         std::iter::repeat_n(child_asset, n_units as usize).collect()
+    }
+
+    /// For uncommissioned assets, get the maximum capacity permitted to be installed based on the
+    /// investment constraints for the asset's process.
+    ///
+    /// The limit is taken from the process's investment constraints for the asset's region and
+    /// commission year, scaled by the number of years elapsed since the previous milestone year
+    /// and the portion of the commodity demand being considered.
+    ///
+    /// For divisible assets, the returned capacity will be rounded down to the nearest multiple of
+    /// the asset's unit size.
+    pub fn max_installable_capacity(
+        &self,
+        years_elapsed: Dimensionless,
+        commodity_portion: Dimensionless,
+    ) -> Option<AssetCapacity> {
+        assert!(
+            !self.is_commissioned(),
+            "max_installable_capacity can only be called on uncommissioned assets"
+        );
+
+        self.process
+            .investment_constraints
+            .get(&(self.region_id.clone(), self.commission_year))
+            .and_then(|c| {
+                c.get_annual_addition_limit()
+                    .map(|l| l * years_elapsed * commodity_portion)
+            })
+            .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
     }
 }
 
@@ -2302,5 +2347,27 @@ mod tests {
             patches,
             "Agent A0_GEX has asset with commission year 2060, not within process GASDRV commission years: 2020..=2050"
         );
+    }
+
+    #[rstest]
+    fn max_installable_capacit(mut process: Process, region_id: RegionID) {
+        // Set an addition limit of 3 for (region, year 2015)
+        process.investment_constraints.insert(
+            (region_id.clone(), 2015),
+            Rc::new(crate::process::ProcessInvestmentConstraint {
+                addition_limit: Some(Capacity(3.0)),
+            }),
+        );
+
+        let process_rc = Rc::new(process);
+
+        // Create a candidate asset with commission year 2015
+        let asset =
+            Asset::new_candidate(process_rc.clone(), region_id.clone(), Capacity(1.0), 2015)
+                .unwrap();
+
+        // years_elapsed = 5, commodity_portion = 0.5 -> limit = 3 * 5 * 0.5 = 7.5
+        let result = asset.max_installable_capacity(Dimensionless(5.0), Dimensionless(0.5));
+        assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(7.5))));
     }
 }

@@ -680,8 +680,9 @@ fn warn_on_equal_appraisal_outputs(
 /// Calculate investment limits for an agent's candidate assets in a given year
 ///
 /// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
-/// meet demand), and any addition limits specified by the process (scaled according to the agent's
-/// portion of the commodity demand).
+/// meet demand), and any annual addition limits specified by the process (scaled according to the
+/// agent's portion of the commodity demand and the number of years elapsed since the previous
+/// milestone year).
 fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
@@ -708,22 +709,13 @@ fn calculate_investment_limits_for_candidates(
             // something is wrong
             assert_eq!(asset.commission_year(), year);
 
-            // Demand-limiting capacity (pre-calculated when creating candidate)
+            // Start off with the demand-limiting capacity (pre-calculated when creating candidate)
             let mut cap = asset.capacity();
 
-            // Further capped by addition limits of the process, if specified
-            // These are scaled according to the agent's portion of the commodity demand and the
-            // number of years elapsed since the previous milestone year.
-            if let Some(limit) = asset
-                .process()
-                .investment_constraints
-                .get(&(asset.region_id().clone(), year))
-                .and_then(|c| {
-                    c.get_annual_addition_limit()
-                        .map(|l| l * years_elapsed * commodity_portion)
-                })
+            // Cap by the addition limits of the process, if specified
+            if let Some(limit_capacity) =
+                asset.max_installable_capacity(years_elapsed, commodity_portion)
             {
-                let limit_capacity = AssetCapacity::from_capacity(limit, asset.unit_size());
                 cap = cap.min(limit_capacity);
             }
 
