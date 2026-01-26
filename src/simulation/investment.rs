@@ -293,12 +293,8 @@ fn select_assets_for_single_market(
         .collect::<Vec<_>>();
 
         // Calculate investment limits for candidate assets
-        let investment_limits = calculate_investment_limits_for_candidates(
-            &opt_assets,
-            commodity_portion,
-            year,
-            &model.parameters.milestone_years,
-        );
+        let investment_limits =
+            calculate_investment_limits_for_candidates(&opt_assets, commodity_portion, year);
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
@@ -687,19 +683,7 @@ fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
     year: u32,
-    milestone_years: &[u32],
 ) -> HashMap<AssetRef, AssetCapacity> {
-    // Ensure `year` is a milestone year and not the first milestone (we need the previous one)
-    let pos = milestone_years
-        .iter()
-        .position(|&y| y == year)
-        .expect("`year` must be a milestone year");
-    assert!(pos > 0);
-
-    // Calculate number of years elapsed since previous milestone year
-    let previous_milestone_year = milestone_years[pos - 1];
-    let years_elapsed = year - previous_milestone_year;
-
     // Calculate limits for each candidate asset
     opt_assets
         .iter()
@@ -713,9 +697,7 @@ fn calculate_investment_limits_for_candidates(
             let mut cap = asset.capacity();
 
             // Cap by the addition limits of the process, if specified
-            if let Some(limit_capacity) =
-                asset.max_installable_capacity(years_elapsed, commodity_portion)
-            {
+            if let Some(limit_capacity) = asset.max_installable_capacity(commodity_portion) {
                 cap = cap.min(limit_capacity);
             }
 
@@ -932,13 +914,11 @@ mod tests {
     use super::*;
     use crate::agent::AgentID;
     use crate::asset::Asset;
-    use crate::asset::AssetRef;
     use crate::commodity::Commodity;
     use crate::fixture::{
         agent_id, asset, process, process_activity_limits_map, process_flows_map, region_id,
         svd_commodity, time_slice, time_slice_info, time_slice_info2,
     };
-    use crate::process::ProcessInvestmentConstraint;
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
@@ -1056,59 +1036,5 @@ mod tests {
         assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
         assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
-    }
-
-    #[rstest]
-    #[case(Some(Capacity(3.0)), Capacity(10.0), Dimensionless(0.5), Capacity(7.5))] // Expected limit: min(10, 3 * 5 * 0.5) = 7.5
-    #[case(
-        Some(Capacity(3.0)),
-        Capacity(10.0),
-        Dimensionless(1.0),
-        Capacity(10.0)
-    )] // Expected limit: min(10, 3 * 5 * 1.0) = 10
-    #[case(None, Capacity(10.0), Dimensionless(0.5), Capacity(10.0))] // Expected limit: 10 (no addition limit)
-    fn calculate_investment_limits_for_candidates_parametrized(
-        mut process: Process,
-        region_id: RegionID,
-        #[case] process_addition_limit: Option<Capacity>,
-        #[case] demand_limiting_capacity: Capacity,
-        #[case] agent_share: Dimensionless,
-        #[case] expected_capacity: Capacity,
-    ) {
-        // Setup: year with previous milestone 5 years earlier
-        let year = 2020u32;
-        let milestone_years = vec![2015u32, 2020u32];
-
-        // Optionally add an annual addition limit for this process/region/year
-        if let Some(limit) = process_addition_limit {
-            process.investment_constraints.insert(
-                (region_id.clone(), year),
-                Rc::new(ProcessInvestmentConstraint {
-                    addition_limit: Some(limit),
-                }),
-            );
-        }
-
-        let process_rc = Rc::new(process);
-
-        // Candidate with specified demand-limiting capacity
-        let asset = Asset::new_candidate(
-            process_rc.clone(),
-            region_id.clone(),
-            demand_limiting_capacity,
-            year,
-        )
-        .unwrap();
-        let asset_ref = AssetRef::from(asset);
-        let opt_assets = vec![asset_ref.clone()];
-
-        let limits = calculate_investment_limits_for_candidates(
-            &opt_assets,
-            agent_share,
-            year,
-            &milestone_years,
-        );
-        let cap = limits[&asset_ref].total_capacity();
-        assert_eq!(cap, expected_capacity);
     }
 }

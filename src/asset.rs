@@ -1067,14 +1067,12 @@ impl Asset {
     /// investment constraints for the asset's process.
     ///
     /// The limit is taken from the process's investment constraints for the asset's region and
-    /// commission year, scaled by the number of years elapsed since the previous milestone year
-    /// and the portion of the commodity demand being considered.
+    /// commission year, and the portion of the commodity demand being considered.
     ///
     /// For divisible assets, the returned capacity will be rounded down to the nearest multiple of
     /// the asset's unit size.
     pub fn max_installable_capacity(
         &self,
-        years_elapsed: u32,
         commodity_portion: Dimensionless,
     ) -> Option<AssetCapacity> {
         assert!(
@@ -1085,10 +1083,7 @@ impl Asset {
         self.process
             .investment_constraints
             .get(&(self.region_id.clone(), self.commission_year))
-            .and_then(|c| {
-                c.get_annual_addition_limit()
-                    .map(|l| l * Dimensionless(years_elapsed as f64) * commodity_portion)
-            })
+            .and_then(|c| c.get_addition_limit().map(|l| l * commodity_portion))
             .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
     }
 }
@@ -2358,7 +2353,6 @@ mod tests {
                 addition_limit: Some(Capacity(3.0)),
             }),
         );
-
         let process_rc = Rc::new(process);
 
         // Create a candidate asset with commission year 2015
@@ -2366,8 +2360,8 @@ mod tests {
             Asset::new_candidate(process_rc.clone(), region_id.clone(), Capacity(1.0), 2015)
                 .unwrap();
 
-        // years_elapsed = 5, commodity_portion = 0.5 -> limit = 3 * 5 * 0.5 = 7.5
-        let result = asset.max_installable_capacity(5, Dimensionless(0.5));
-        assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(7.5))));
+        // commodity_portion = 0.5 -> limit = 3 * 0.5 = 1.5
+        let result = asset.max_installable_capacity(Dimensionless(0.5));
+        assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(1.5))));
     }
 }

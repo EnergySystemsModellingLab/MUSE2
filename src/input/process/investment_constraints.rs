@@ -5,7 +5,7 @@ use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
-use crate::units::Capacity;
+use crate::units::{Capacity, Dimensionless};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
@@ -119,11 +119,27 @@ where
             })?;
 
         // Create constraints for each region and year combination
-        let constraint = Rc::new(ProcessInvestmentConstraint {
-            addition_limit: Some(record.addition_limit),
-        });
+        // For a given milestone year, the addition limit should be multiplied
+        // by the number of years since the previous milestone year. Any
+        // addition limits specified for the first milestone year are ignored.
         let process_map = map.entry(process_id.clone()).or_default();
         for (region, &year) in iproduct!(&record_regions, &constraint_years) {
+            // Calculate years since previous milestone year
+            // We can ignore constraints in the first milestone year as no investments are performed then
+            let idx = milestone_years.iter().position(|y| *y == year).unwrap();
+            if idx == 0 {
+                continue;
+            }
+            let prev_year = milestone_years[idx - 1];
+            let years_since_prev = year - prev_year;
+
+            // Multiply the addition limit by the number of years since previous milestone.
+            let scaled_limit = record.addition_limit * Dimensionless(years_since_prev as f64);
+
+            let constraint = Rc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(scaled_limit),
+            });
+
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }
     }
@@ -235,32 +251,32 @@ mod tests {
         let gbr_region: RegionID = "GBR".into();
         let usa_region: RegionID = "USA".into();
 
-        // Check GBR 2010 constraint
-        let gbr_2010 = process_constraints
-            .get(&(gbr_region.clone(), 2010))
-            .expect("GBR 2010 constraint should exist");
-        assert_eq!(gbr_2010.addition_limit, Some(Capacity(100.0)));
+        // GBR 2010 constraint is for the first milestone year and should be ignored
+        assert!(
+            !process_constraints.contains_key(&(gbr_region.clone(), 2010)),
+            "GBR 2010 constraint should not exist"
+        );
 
-        // Check GBR 2015 constraint (from ALL regions)
+        // Check GBR 2015 constraint (from ALL regions), scaled by years since previous milestone (5 years)
         let gbr_2015 = process_constraints
             .get(&(gbr_region, 2015))
             .expect("GBR 2015 constraint should exist");
-        assert_eq!(gbr_2015.addition_limit, Some(Capacity(200.0)));
+        assert_eq!(gbr_2015.addition_limit, Some(Capacity(200.0 * 5.0)));
 
-        // Check USA 2015 constraint (from ALL regions)
+        // Check USA 2015 constraint (from ALL regions), scaled by 5 years
         let usa_2015 = process_constraints
             .get(&(usa_region.clone(), 2015))
             .expect("USA 2015 constraint should exist");
-        assert_eq!(usa_2015.addition_limit, Some(Capacity(200.0)));
+        assert_eq!(usa_2015.addition_limit, Some(Capacity(200.0 * 5.0)));
 
-        // Check USA 2020 constraint
+        // Check USA 2020 constraint, scaled by years since previous milestone (5 years)
         let usa_2020 = process_constraints
             .get(&(usa_region, 2020))
             .expect("USA 2020 constraint should exist");
-        assert_eq!(usa_2020.addition_limit, Some(Capacity(50.0)));
+        assert_eq!(usa_2020.addition_limit, Some(Capacity(50.0 * 5.0)));
 
-        // Verify total number of constraints (2 GBR + 2 USA = 4)
-        assert_eq!(process_constraints.len(), 4);
+        // Verify total number of constraints (GBR 2015, USA 2015, USA 2020 = 3)
+        assert_eq!(process_constraints.len(), 3);
     }
 
     #[rstest]
@@ -293,21 +309,22 @@ mod tests {
         let gbr_region: RegionID = "GBR".into();
         let usa_region: RegionID = "USA".into();
 
-        // Verify constraint exists for all region-year combinations
-        for &year in &milestone_years {
+        // Verify constraint exists for all region-year combinations except the first milestone year
+        for &year in &milestone_years[1..] {
             let gbr_constraint = process_constraints
                 .get(&(gbr_region.clone(), year))
                 .unwrap_or_else(|| panic!("GBR {year} constraint should exist"));
-            assert_eq!(gbr_constraint.addition_limit, Some(Capacity(75.0)));
+            // scaled by years since previous milestone (5 years)
+            assert_eq!(gbr_constraint.addition_limit, Some(Capacity(75.0 * 5.0)));
 
             let usa_constraint = process_constraints
                 .get(&(usa_region.clone(), year))
                 .unwrap_or_else(|| panic!("USA {year} constraint should exist"));
-            assert_eq!(usa_constraint.addition_limit, Some(Capacity(75.0)));
+            assert_eq!(usa_constraint.addition_limit, Some(Capacity(75.0 * 5.0)));
         }
 
-        // Verify total number of constraints (2 regions × 3 years = 6)
-        assert_eq!(process_constraints.len(), 6);
+        // Verify total number of constraints (2 regions × 2 years = 4)
+        assert_eq!(process_constraints.len(), 4);
     }
 
     #[rstest]
