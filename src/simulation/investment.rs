@@ -290,12 +290,21 @@ fn select_assets_for_single_market(
             region_id,
             year,
         )
-        .collect();
+        .collect::<Vec<_>>();
+
+        // Calculate investment limits for candidate assets
+        let investment_limits = calculate_investment_limits_for_candidates(
+            &opt_assets,
+            commodity_portion,
+            year,
+            &model.parameters.milestone_years,
+        );
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
             opt_assets,
+            investment_limits,
             commodity,
             agent,
             region_id,
@@ -675,7 +684,7 @@ fn warn_on_equal_appraisal_outputs(
 /// portion of the commodity demand).
 fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
-    agent_portion: Dimensionless,
+    commodity_portion: Dimensionless,
     year: u32,
     milestone_years: &[u32],
 ) -> HashMap<AssetRef, AssetCapacity> {
@@ -711,7 +720,7 @@ fn calculate_investment_limits_for_candidates(
                 .get(&(asset.region_id().clone(), year))
                 .and_then(|c| {
                     c.get_annual_addition_limit()
-                        .map(|l| l * years_elapsed * agent_portion)
+                        .map(|l| l * years_elapsed * commodity_portion)
                 })
             {
                 let limit_capacity = AssetCapacity::from_capacity(limit, asset.unit_size());
@@ -728,6 +737,7 @@ fn calculate_investment_limits_for_candidates(
 fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
+    investment_limits: HashMap<AssetRef, AssetCapacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -737,19 +747,11 @@ fn select_best_assets(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
+    let mut remaining_candidate_capacity = investment_limits;
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
         calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
-
-    // Calculate investment limits for candidate assets
-    let agent_portion = agent.commodity_portions[&(commodity.id.clone(), year)];
-    let mut remaining_candidate_capacity = calculate_investment_limits_for_candidates(
-        &opt_assets,
-        agent_portion,
-        year,
-        &model.parameters.milestone_years,
-    );
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
@@ -757,8 +759,10 @@ fn select_best_assets(
     while is_any_remaining_demand(&demand) {
         ensure!(
             !opt_assets.is_empty(),
-            "Failed to meet demand for commodity '{}' with provided assets",
-            &commodity.id
+            "Failed to meet demand for commodity '{}' in region '{}' with provided investment \
+            options. This may be due to overly restrictive process investment constraints.",
+            &commodity.id,
+            region_id
         );
 
         // Since all assets with the same `group_id` are identical, we only need to appraise one
