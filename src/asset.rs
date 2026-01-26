@@ -1074,7 +1074,7 @@ impl Asset {
     /// the asset's unit size.
     pub fn max_installable_capacity(
         &self,
-        years_elapsed: Dimensionless,
+        years_elapsed: u32,
         commodity_portion: Dimensionless,
     ) -> Option<AssetCapacity> {
         assert!(
@@ -1087,7 +1087,7 @@ impl Asset {
             .get(&(self.region_id.clone(), self.commission_year))
             .and_then(|c| {
                 c.get_annual_addition_limit()
-                    .map(|l| l * years_elapsed * commodity_portion)
+                    .map(|l| l * Dimensionless(years_elapsed as f64) * commodity_portion)
             })
             .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
     }
@@ -2367,7 +2367,7 @@ mod tests {
                 .unwrap();
 
         // years_elapsed = 5, commodity_portion = 0.5 -> limit = 3 * 5 * 0.5 = 7.5
-        let result = asset.max_installable_capacity(Dimensionless(5.0), Dimensionless(0.5));
+        let result = asset.max_installable_capacity(5, Dimensionless(0.5));
         assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(7.5))));
     }
 }

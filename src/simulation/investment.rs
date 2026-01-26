@@ -698,7 +698,7 @@ fn calculate_investment_limits_for_candidates(
 
     // Calculate number of years elapsed since previous milestone year
     let previous_milestone_year = milestone_years[pos - 1];
-    let years_elapsed = Dimensionless((year - previous_milestone_year) as f64);
+    let years_elapsed = year - previous_milestone_year;
 
     // Calculate limits for each candidate asset
     opt_assets
