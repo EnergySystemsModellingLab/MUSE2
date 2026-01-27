@@ -294,7 +294,7 @@ fn select_assets_for_single_market(
 
         // Calculate investment limits for candidate assets
         let investment_limits =
-            calculate_investment_limits_for_candidates(&opt_assets, commodity_portion, year);
+            calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
@@ -682,17 +682,12 @@ fn warn_on_equal_appraisal_outputs(
 fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
-    year: u32,
 ) -> HashMap<AssetRef, AssetCapacity> {
     // Calculate limits for each candidate asset
     opt_assets
         .iter()
         .filter(|asset| !asset.is_commissioned())
         .map(|asset| {
-            // Sanity check: if the year does not match the asset's commission year, then
-            // something is wrong
-            assert_eq!(asset.commission_year(), year);
-
             // Start off with the demand-limiting capacity (pre-calculated when creating candidate)
             let mut cap = asset.capacity();
 
