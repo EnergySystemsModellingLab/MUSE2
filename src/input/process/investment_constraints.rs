@@ -126,7 +126,9 @@ where
         for (region, &year) in iproduct!(&record_regions, &constraint_years) {
             // Calculate years since previous milestone year
             // We can ignore constraints in the first milestone year as no investments are performed then
-            let idx = milestone_years.iter().position(|y| *y == year).unwrap();
+            let idx = milestone_years.iter().position(|y| *y == year).expect(
+                "Year should be in milestone_years since it was validated by parse_year_str",
+            );
             if idx == 0 {
                 continue;
             }

@@ -1565,6 +1565,27 @@ mod tests {
     }
 
     #[rstest]
+    #[case::exact_multiple(Capacity(12.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
+    #[case::rounded_down(Capacity(11.0), Some(Capacity(4.0)), Some(2), Capacity(8.0))]
+    #[case::unit_size_greater_than_capacity(
+        Capacity(3.0),
+        Some(Capacity(4.0)),
+        Some(0),
+        Capacity(0.0)
+    )]
+    #[case::continuous(Capacity(5.5), None, None, Capacity(5.5))]
+    fn from_capacity_floor(
+        #[case] capacity: Capacity,
+        #[case] unit_size: Option<Capacity>,
+        #[case] expected_n: Option<u32>,
+        #[case] expected_total: Capacity,
+    ) {
+        let got = AssetCapacity::from_capacity_floor(capacity, unit_size);
+        assert_eq!(got.n_units(), expected_n);
+        assert_eq!(got.total_capacity(), expected_total);
+    }
+
+    #[rstest]
     #[case::round_up(3u32, Capacity(4.0), Dimensionless(0.5), 2u32)]
     #[case::exact(3u32, Capacity(4.0), Dimensionless(0.33), 1u32)]
     fn apply_limit_factor(
@@ -2345,7 +2366,7 @@ mod tests {
     }
 
     #[rstest]
-    fn max_installable_capacit(mut process: Process, region_id: RegionID) {
+    fn max_installable_capacity(mut process: Process, region_id: RegionID) {
         // Set an addition limit of 3 for (region, year 2015)
         process.investment_constraints.insert(
             (region_id.clone(), 2015),

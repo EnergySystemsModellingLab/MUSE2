@@ -503,7 +503,7 @@ pub struct ProcessParameter {
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProcessInvestmentConstraint {
     /// Addition constraint: Limit an agent can invest in the process, shared according to the
-    /// agent's proportion of the processes primary commodity demand
+    /// agent's proportion of the process's primary commodity demand
     pub addition_limit: Option<Capacity>,
 }
 
