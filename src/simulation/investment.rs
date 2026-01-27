@@ -291,12 +291,17 @@ fn select_assets_for_single_market(
             region_id,
             year,
         )
-        .collect();
+        .collect::<Vec<_>>();
+
+        // Calculate investment limits for candidate assets
+        let investment_limits =
+            calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
             opt_assets,
+            investment_limits,
             commodity,
             agent,
             region_id,
@@ -377,11 +382,28 @@ fn select_assets_for_cycle(
             .cloned()
             .collect();
 
+        // Retrieve installable capacity limits for flexible capacity assets.
+        let key = (commodity_id.clone(), year);
+        let mut agent_share_cache = HashMap::new();
+        let capacity_limits = flexible_capacity_assets
+            .iter()
+            .filter_map(|asset| {
+                let agent_id = asset.agent_id().unwrap().clone();
+                let agent_share = *agent_share_cache
+                    .entry(agent_id.clone())
+                    .or_insert_with(|| model.agents[&agent_id].commodity_portions[&key]);
+                asset
+                    .max_installable_capacity(agent_share)
+                    .map(|max_capacity| (asset.clone(), max_capacity))
+            })
+            .collect::<HashMap<_, _>>();
+
         // Run dispatch
         let solution = DispatchRun::new(model, &all_assets, year)
             .with_market_balance_subset(&markets_to_balance)
             .with_flexible_capacity_assets(
                 &flexible_capacity_assets,
+                Some(&capacity_limits),
                 // Gives newly selected cycle assets limited capacity wiggle-room; existing assets stay fixed.
                 model.parameters.capacity_margin,
             )
@@ -669,11 +691,40 @@ fn warn_on_equal_appraisal_outputs(
     }
 }
 
+/// Calculate investment limits for an agent's candidate assets in a given year
+///
+/// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
+/// meet demand), and any annual addition limits specified by the process (scaled according to the
+/// agent's portion of the commodity demand and the number of years elapsed since the previous
+/// milestone year).
+fn calculate_investment_limits_for_candidates(
+    opt_assets: &[AssetRef],
+    commodity_portion: Dimensionless,
+) -> HashMap<AssetRef, AssetCapacity> {
+    // Calculate limits for each candidate asset
+    opt_assets
+        .iter()
+        .filter(|asset| !asset.is_commissioned())
+        .map(|asset| {
+            // Start off with the demand-limiting capacity (pre-calculated when creating candidate)
+            let mut cap = asset.capacity();
+
+            // Cap by the addition limits of the process, if specified
+            if let Some(limit_capacity) = asset.max_installable_capacity(commodity_portion) {
+                cap = cap.min(limit_capacity);
+            }
+
+            (asset.clone(), cap)
+        })
+        .collect()
+}
+
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
 fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
+    investment_limits: HashMap<AssetRef, AssetCapacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -683,25 +734,22 @@ fn select_best_assets(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
+    let mut remaining_candidate_capacity = investment_limits;
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
         calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
 
-    let mut remaining_candidate_capacity = HashMap::from_iter(
-        opt_assets
-            .iter()
-            .filter(|asset| !asset.is_commissioned())
-            .map(|asset| (asset.clone(), asset.capacity())),
-    );
-
+    // Iteratively select the best asset until demand is met
     let mut round = 0;
     let mut best_assets: Vec<AssetRef> = Vec::new();
     while is_any_remaining_demand(&demand) {
         ensure!(
             !opt_assets.is_empty(),
-            "Failed to meet demand for commodity '{}' with provided assets",
-            &commodity.id
+            "Failed to meet demand for commodity '{}' in region '{}' with provided investment \
+            options. This may be due to overly restrictive process investment constraints.",
+            &commodity.id,
+            region_id
         );
 
         // Since all assets with the same `group_id` are identical, we only need to appraise one
@@ -711,13 +759,14 @@ fn select_best_assets(
         // Appraise all options
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
+            // For candidates, determine the maximum capacity that can be invested in this round,
+            // according to the tranche size and remaining capacity limits.
             let max_capacity = (!asset.is_commissioned()).then(|| {
-                let max_capacity = asset
+                let tranche_capacity = asset
                     .capacity()
                     .apply_limit_factor(model.parameters.capacity_limit_factor);
-
                 let remaining_capacity = remaining_candidate_capacity[asset];
-                max_capacity.min(remaining_capacity)
+                tranche_capacity.min(remaining_capacity)
             });
 
             // Skip any assets from groups we've already seen
@@ -775,7 +824,7 @@ fn select_best_assets(
             best_output.capacity.total_capacity()
         );
 
-        // Update the assets
+        // Update the assets and remaining candidate capacity
         update_assets(
             best_output.asset,
             best_output.capacity,
@@ -859,6 +908,7 @@ mod tests {
     };
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::units::Dimensionless;
     use crate::units::{Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
