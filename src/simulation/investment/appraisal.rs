@@ -533,6 +533,7 @@ mod tests {
     /// Creates appraisal from corresponding assets and metrics
     ///
     /// # Panics
+    ///
     /// Panics if `assets` and `metrics` have different lengths
     fn appraisal_outputs(
         assets: Vec<Asset>,
