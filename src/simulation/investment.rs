@@ -13,13 +13,14 @@ use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{AppraisalOutput, appraise_investment};
+use appraisal::{
+    AppraisalOutput, appraise_investment, sort_appraisal_outputs_by_investment_priority,
+};
 
 /// A map of demand across time slices for a specific market
 type DemandMap = IndexMap<TimeSliceID, Flow>;
@@ -745,16 +746,7 @@ fn select_best_assets(
             &outputs_for_opts,
         )?;
 
-        // Sort assets by appraisal metric
-        let assets_sorted_by_metric = outputs_for_opts
-            .into_iter()
-            .filter(|output| output.capacity.total_capacity() > Capacity(0.0))
-            .sorted_by(|output1, output2| match output1.compare_metric(output2) {
-                // If equal, we fall back on comparing asset properties
-                Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
-                cmp => cmp,
-            })
-            .collect_vec();
+        sort_appraisal_outputs_by_investment_priority(&mut outputs_for_opts);
 
         // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
         // out.
@@ -765,20 +757,15 @@ fn select_best_assets(
         // - known issue with the NPV objective
         // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
         ensure!(
-            !assets_sorted_by_metric.is_empty(),
+            !outputs_for_opts.is_empty(),
             "No feasible investment options for commodity '{}' after appraisal",
             &commodity.id
         );
 
         // Warn if there are multiple equally good assets
-        warn_on_equal_appraisal_outputs(
-            &assets_sorted_by_metric,
-            &agent.id,
-            &commodity.id,
-            region_id,
-        );
+        warn_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
 
-        let best_output = assets_sorted_by_metric.into_iter().next().unwrap();
+        let best_output = outputs_for_opts.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(
@@ -817,16 +804,6 @@ fn select_best_assets(
 /// Check whether there is any remaining demand that is unmet in any time slice
 fn is_any_remaining_demand(demand: &DemandMap) -> bool {
     demand.values().any(|flow| *flow > Flow(0.0))
-}
-
-/// Compare assets as a fallback if metrics are equal.
-///
-/// Commissioned assets are ordered before uncommissioned and newer before older.
-///
-/// Used as a fallback to sort assets when they have equal appraisal tool outputs.
-fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
-    (asset2.is_commissioned(), asset2.commission_year())
-        .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
@@ -875,15 +852,12 @@ fn update_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::AgentID;
-    use crate::asset::Asset;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        agent_id, asset, process, process_activity_limits_map, process_flows_map, region_id,
-        svd_commodity, time_slice, time_slice_info, time_slice_info2,
+        asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
+        time_slice_info, time_slice_info2,
     };
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
-    use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo};
     use crate::units::{Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
@@ -970,33 +944,5 @@ mod tests {
         // Time slice 2: skipped due to zero activity limit
         // Maximum = 20.0
         assert_eq!(result, Capacity(20.0));
-    }
-
-    #[rstest]
-    fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
-        let process = Rc::new(process);
-        let capacity = Capacity(2.0);
-        let asset1 = Asset::new_commissioned(
-            agent_id.clone(),
-            process.clone(),
-            region_id.clone(),
-            capacity,
-            2015,
-        )
-        .unwrap();
-        let asset2 =
-            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
-        let asset3 =
-            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
-
-        assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
-        assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
-        assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
-        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
-        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
-        assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
-        assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
-        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
-        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 }

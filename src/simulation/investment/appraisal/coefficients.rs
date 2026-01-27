@@ -15,6 +15,7 @@ use std::collections::HashMap;
 /// the investment appraisal routines. The map contains the per-capacity and per-activity cost
 /// coefficients used in the appraisal optimisation, together with the unmet-demand penalty.
 #[derive(Clone)]
+#[cfg_attr(test, derive(Default))]
 pub struct ObjectiveCoefficients {
     /// Cost per unit of capacity
     pub capacity_coefficient: MoneyPerCapacity,
