@@ -105,7 +105,7 @@ fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) 
                 .collect();
 
             ensure!(
-                sed_svd_output_units.len() == 1,
+                sed_svd_output_units.len() <= 1,
                 "Process '{process_id}' has SED/SVD outputs with different units \
                  (region: {region_id}, year: {year}): {sed_svd_output_units:?}"
             );
