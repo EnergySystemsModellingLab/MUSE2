@@ -202,7 +202,7 @@ mod tests {
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
-            units: "kWh".into(),
+            units: "PJ".into(),
         }
     }
 

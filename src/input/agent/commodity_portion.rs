@@ -226,7 +226,7 @@ mod tests {
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
-                units: "kWh".into(),
+                units: "PJ".into(),
             }),
         )]);
 
@@ -270,7 +270,7 @@ mod tests {
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
-                units: "kWh".into(),
+                units: "PJ".into(),
             }),
         );
         assert!(

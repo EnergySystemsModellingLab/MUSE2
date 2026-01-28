@@ -150,7 +150,7 @@ pub fn svd_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
-        units: "kWh".into(),
+        units: "PJ".into(),
     }
 }
 
@@ -165,7 +165,7 @@ pub fn sed_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
-        units: "kWh".into(),
+        units: "PJ".into(),
     }
 }
 
@@ -180,7 +180,37 @@ pub fn other_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
-        units: "kWh".into(),
+        units: "PJ".into(),
+    }
+}
+
+#[fixture]
+pub fn sed_commodity_pj() -> Commodity {
+    Commodity {
+        id: "sed_pj".into(),
+        description: "Test SED commodity (PJ)".into(),
+        kind: CommodityType::SupplyEqualsDemand,
+        time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
+        demand: DemandMap::new(),
+        units: "PJ".into(),
+    }
+}
+
+#[fixture]
+pub fn sed_commodity_tonnes() -> Commodity {
+    Commodity {
+        id: "sed_tonnes".into(),
+        description: "Test SED commodity (tonnes)".into(),
+        kind: CommodityType::SupplyEqualsDemand,
+        time_slice_level: TimeSliceLevel::DayNight,
+        pricing_strategy: PricingStrategy::Shadow,
+        levies_prod: CommodityLevyMap::new(),
+        levies_cons: CommodityLevyMap::new(),
+        demand: DemandMap::new(),
+        units: "tonnes".into(),
     }
 }
 
