@@ -25,6 +25,7 @@ define_regression_test!(circularity);
 
 // Patched examples
 define_regression_test_with_patches!(simple_divisible);
+define_regression_test_with_patches!(simple_npv);
 
 // ------  END: regression tests  ------
 
