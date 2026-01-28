@@ -576,6 +576,7 @@ mod tests {
             levies_prod,
             levies_cons,
             demand: DemandMap::new(),
+            units: "kWh".into(),
         })
     }
 
@@ -596,6 +597,7 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: levies,
             demand: DemandMap::new(),
+            units: "kWh".into(),
         })
     }
 
@@ -616,6 +618,7 @@ mod tests {
             levies_prod: levies,
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
+            units: "kWh".into(),
         })
     }
 
@@ -638,6 +641,7 @@ mod tests {
             levies_prod,
             levies_cons,
             demand: DemandMap::new(),
+            units: "kWh".into(),
         })
     }
 
@@ -652,6 +656,7 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
+            units: "kWh".into(),
         })
     }
 
@@ -667,6 +672,7 @@ mod tests {
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
+                units: "kWh".into(),
             }),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
@@ -689,6 +695,7 @@ mod tests {
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
+                units: "kWh".into(),
             }),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
@@ -711,6 +718,7 @@ mod tests {
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
+                units: "kWh".into(),
             }),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
@@ -978,6 +986,7 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
+            units: "kWh".into(),
         });
 
         let flow_in = ProcessFlow {

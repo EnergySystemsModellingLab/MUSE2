@@ -30,6 +30,7 @@ struct CommodityRaw {
     pub kind: CommodityType,
     pub time_slice_level: TimeSliceLevel,
     pub pricing_strategy: Option<PricingStrategy>,
+    pub units: String,
 }
 
 /// Read commodity data from the specified model directory.
@@ -119,6 +120,7 @@ where
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
+            units: commodity_raw.units,
         };
 
         validate_commodity(&commodity)?;
@@ -200,6 +202,7 @@ mod tests {
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
+            units: "kWh".into(),
         }
     }
 

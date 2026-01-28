@@ -1,6 +1,6 @@
 //! Code for reading process flows from a CSV file.
 use super::super::{input_err_msg, read_csv};
-use crate::commodity::{CommodityID, CommodityMap};
+use crate::commodity::{CommodityID, CommodityMap, CommodityType};
 use crate::process::{
     FlowDirection, FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap,
 };
@@ -11,7 +11,7 @@ use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::iproduct;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -79,6 +79,40 @@ pub fn read_process_flows(
     let process_flow_csv = read_csv(&file_path)?;
     read_process_flows_from_iter(process_flow_csv, processes, commodities, milestone_years)
         .with_context(|| input_err_msg(&file_path))
+}
+
+/// Validates that all SED/SVD outputs from each process have consistent units.
+///
+/// For processes with multiple SED/SVD outputs, the annual fixed costs are distributed
+/// proportionally based on flow coefficients. This only makes sense if all outputs share
+/// the same units.
+fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) -> Result<()> {
+    // for each map of process flows corresponding to a process
+    for (process_id, process_flows) in flows_map {
+        // for each region/year of the process flows
+        for ((region_id, year), flows) in process_flows {
+            let sed_svd_output_units: HashSet<&str> = flows
+                .values()
+                .filter_map(|flow| {
+                    let commodity = &flow.commodity;
+                    (flow.coeff.value() > 0.0
+                        && matches!(
+                            commodity.kind,
+                            CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
+                        ))
+                    .then_some(commodity.units.as_str())
+                })
+                .collect();
+
+            ensure!(
+                sed_svd_output_units.len() == 1,
+                "Process '{process_id}' has SED/SVD outputs with different units \
+                 (region: {region_id}, year: {year}): {sed_svd_output_units:?}"
+            );
+        }
+    }
+
+    Ok(())
 }
 
 /// Read `ProcessFlowRaw` records from an iterator and convert them into `ProcessFlow` records.
@@ -160,6 +194,7 @@ where
 
     validate_flows_and_update_primary_output(processes, &flows_map, milestone_years)?;
     validate_secondary_flows(processes, &flows_map, milestone_years)?;
+    validate_output_flows_units(&flows_map)?;
 
     Ok(flows_map)
 }
