@@ -54,7 +54,7 @@ pub struct Commodity {
     /// `time_slice_level` field. E.g. if the `time_slice_level` is seasonal, then there will be
     /// keys representing each season (and not e.g. individual time slices).
     pub demand: DemandMap,
-    /// Units for this commodity represented as a string e.g Petajoules, tonnes
+    /// Units for this commodity represented as a string e.g Petajoules, Tonnes
     /// This is only used for validation purposes.
     pub units: String,
 }
