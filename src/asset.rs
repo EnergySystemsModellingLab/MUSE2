@@ -19,6 +19,7 @@ use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering, min};
 use std::hash::{Hash, Hasher};
+use std::iter;
 use std::ops::{Add, Deref, RangeInclusive, Sub};
 use std::rc::Rc;
 use std::slice;
@@ -1009,42 +1010,10 @@ impl Asset {
         }
     }
 
-    /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
+    /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore
+    /// divisible.
     pub fn is_divisible(&self) -> bool {
         self.process.unit_size.is_some()
-    }
-
-    /// Divides an asset if it is divisible and returns a vector of children
-    ///
-    /// Assets with capacity of type `AssetCapacity::Discrete` are divided into multiple assets each
-    /// made up of a single unit of the original asset's unit size. Will panic if the asset does not
-    /// have a discrete capacity.
-    ///
-    /// Only `Future` and `Selected` assets can be divided.
-    ///
-    /// TODO: To be deleted
-    pub fn divide_asset(&self) -> Vec<AssetRef> {
-        assert!(
-            matches!(
-                self.state,
-                AssetState::Future { .. } | AssetState::Selected { .. }
-            ),
-            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
-            self.state
-        );
-
-        // Ensure the asset is discrete
-        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity else {
-            panic!("Only discrete assets can be divided")
-        };
-
-        // Divide the asset into `n_units` children of size `unit_size`
-        let child_asset = Self {
-            capacity: AssetCapacity::Discrete(1, unit_size),
-            ..self.clone()
-        };
-        let child_asset = AssetRef::from(Rc::new(child_asset));
-        std::iter::repeat_n(child_asset, n_units as usize).collect()
     }
 }
 
@@ -1104,6 +1073,41 @@ impl AssetRef {
     /// Make a mutable reference to the underlying [`Asset`]
     pub fn make_mut(&mut self) -> &mut Asset {
         Rc::make_mut(&mut self.0)
+    }
+
+    /// Commission this asset or, if divisible, its children, returning the commissioned assets.
+    ///
+    /// The original [`AssetRef`] is consumed.
+    ///
+    /// Panics if the asset's state is not [`AssetState::Commissioned`] or  [`AssetState::Future`].
+    fn into_commissioned(
+        mut self,
+        next_id: &mut u32,
+        next_group_id: &mut u32,
+        reason: &str,
+    ) -> Vec<AssetRef> {
+        // Ensure the asset is discrete
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity else {
+            self.make_mut().commission(AssetID(*next_id), None, reason);
+            *next_id += 1;
+            return vec![self];
+        };
+
+        // Divide the asset into `n_units` of children of size `unit_size`
+        let child = Asset {
+            capacity: AssetCapacity::Discrete(1, unit_size),
+            ..Asset::clone(&self)
+        };
+        let group_id = AssetGroupID(*next_group_id);
+        *next_group_id += 1;
+        iter::repeat_n(child, n_units as usize)
+            .map(move |mut child| {
+                child.commission(AssetID(*next_id), Some(group_id), reason);
+                *next_id += 1;
+
+                child.into()
+            })
+            .collect()
     }
 }
 
@@ -1238,7 +1242,7 @@ impl AssetPool {
             .count();
 
         // Move assets from future to active
-        for mut asset in self.future.drain(0..count) {
+        for asset in self.future.drain(0..count) {
             // Ignore assets that have already been decommissioned
             if asset.max_decommission_year() <= year {
                 warn!(
@@ -1251,25 +1255,13 @@ impl AssetPool {
                 continue;
             }
 
-            // If it is divisible, we divide and commission all the children
-            if asset.is_divisible() {
-                for mut child in asset.divide_asset() {
-                    child.make_mut().commission(
-                        AssetID(self.next_id),
-                        Some(AssetGroupID(self.next_group_id)),
-                        "user input",
-                    );
-                    self.next_id += 1;
-                    self.active.push(child);
-                }
-                self.next_group_id += 1;
-            }
-            // If not, we just commission it as a single asset
-            else {
-                asset.commission(AssetID(self.next_id), None, "user input");
-                self.next_id += 1;
-                self.active.push(asset.into());
-            }
+            // If it is divisible, we divide and commission all the children, else just the single
+            // asset
+            self.active.extend(AssetRef::from(asset).into_commissioned(
+                &mut self.next_id,
+                &mut self.next_group_id,
+                "user input",
+            ));
         }
     }
 
@@ -1394,27 +1386,13 @@ impl AssetPool {
                     self.active.push(asset);
                 }
                 AssetState::Selected { .. } => {
-                    // If it is divisible, we divide and commission all the children
-                    if asset.is_divisible() {
-                        for mut child in asset.divide_asset() {
-                            child.make_mut().commission(
-                                AssetID(self.next_id),
-                                Some(AssetGroupID(self.next_group_id)),
-                                "selected",
-                            );
-                            self.next_id += 1;
-                            self.active.push(child);
-                        }
-                        self.next_group_id += 1;
-                    }
-                    // If not, we just commission it as a single asset
-                    else {
-                        asset
-                            .make_mut()
-                            .commission(AssetID(self.next_id), None, "selected");
-                        self.next_id += 1;
-                        self.active.push(asset);
-                    }
+                    // If it is divisible, we divide and commission all the children, else just the
+                    // single asset
+                    self.active.extend(asset.into_commissioned(
+                        &mut self.next_id,
+                        &mut self.next_group_id,
+                        "selected",
+                    ));
                 }
                 _ => panic!(
                     "Cannot extend asset pool with asset in state {}. Only assets in \
@@ -1701,56 +1679,6 @@ mod tests {
         assert_eq!(
             asset_with_activity_limits.get_activity_per_capacity_limits(&time_slice),
             ActivityPerCapacity(0.2)..=ActivityPerCapacity(1.0)
-        );
-    }
-
-    #[rstest]
-    #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
-    #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
-    #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
-    #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
-    fn divide_asset(
-        mut process: Process,
-        #[case] capacity: Capacity,
-        #[case] unit_size: Capacity,
-        #[case] n_expected_children: usize,
-    ) {
-        process.unit_size = Some(unit_size);
-        let asset = Asset::new_future(
-            "agent1".into(),
-            Rc::new(process),
-            "GBR".into(),
-            capacity,
-            2010,
-        )
-        .unwrap();
-
-        assert!(asset.is_divisible(), "Asset should be divisible!");
-
-        let children = asset.divide_asset();
-        assert_eq!(
-            children.len(),
-            n_expected_children,
-            "Unexpected number of children"
-        );
-
-        // Check all children have capacity equal to unit_size
-        for child in children.clone() {
-            assert_eq!(
-                child.capacity.total_capacity(),
-                unit_size,
-                "Child capacity should equal unit_size"
-            );
-        }
-
-        // Check total capacity is >= parent capacity
-        let total_child_capacity: Capacity = children
-            .iter()
-            .map(|child| child.capacity.total_capacity())
-            .sum();
-        assert!(
-            total_child_capacity >= asset.capacity.total_capacity(),
-            "Total capacity should be >= parent capacity"
         );
     }
 
