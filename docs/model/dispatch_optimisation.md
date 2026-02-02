@@ -324,7 +324,7 @@ commodities:
 
 \\[
   \begin{aligned}
-    \text{Minimise: } &(\text{Core Asset Operational Costs from A.3 and E.4}) \\\\
+    \text{Minimise: } &(\text{Core Asset Operational Costs from A.3 and B.4}) \\\\
     &+ \sum_{c \in \mathbf{C}^{VoLL},r,t} UnmetD[c,r,t] \cdot VoLL[c,r]
     \quad \text{(Penalty for Unserved Demand)}
   \end{aligned}
@@ -338,9 +338,12 @@ optimisation and are currently only used to diagnose the source of errors when r
 The complete set of constraints that the optimisation must satisfy includes:
 
 - Capacity & Availability constraints for all assets \\( a \in \mathbf{A} \\)
-  (as per A.4 and E.5).
+  (as per [A.4] and [B.5])
 
-- Flexible Asset operational constraints (E.5).
+- [Flexible Asset operational constraints][B.5]
+
+[A.4]: #a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
+[B.5]: #b5-constraints-for--a-in-mathbfaflex-r-in-mathbfr-t-in-mathbft-
 
 ### C.2. Demand Satisfaction for \\( c\in \mathbf{C}^{\mathrm{SVD}} \\)
 
