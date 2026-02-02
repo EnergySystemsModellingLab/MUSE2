@@ -1172,9 +1172,9 @@ impl Hash for AssetRef {
                 self.0.commission_year.hash(state);
                 self.0.agent_id().hash(state);
             }
-            AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
-                // We shouldn't currently need to hash Future or Decommissioned assets
-                panic!("Cannot hash Future or Decommissioned assets");
+            state => {
+                // We don't need to hash other types of asset
+                panic!("Cannot hash {state} assets");
             }
         }
     }
