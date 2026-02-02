@@ -1733,6 +1733,77 @@ mod tests {
     }
 
     #[rstest]
+    #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
+    #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
+    #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
+    #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
+    fn assetref_into_commissioned_divisible(
+        mut process: Process,
+        #[case] capacity: Capacity,
+        #[case] unit_size: Capacity,
+        #[case] n_expected_children: usize,
+    ) {
+        process.unit_size = Some(unit_size);
+        let asset = AssetRef::from(
+            Asset::new_future(
+                "agent1".into(),
+                Rc::new(process),
+                "GBR".into(),
+                capacity,
+                2010,
+            )
+            .unwrap(),
+        );
+
+        assert!(asset.is_divisible(), "Asset should be divisible!");
+
+        let mut next_id = 0;
+        let mut next_group_id = 0;
+        let children = asset.into_commissioned(&mut next_id, &mut next_group_id, "");
+        assert_eq!(
+            children.len(),
+            n_expected_children,
+            "Unexpected number of children"
+        );
+
+        // Check all children have capacity equal to unit_size
+        for child in children.clone() {
+            assert_eq!(
+                child.capacity.total_capacity(),
+                unit_size,
+                "Child capacity should equal unit_size"
+            );
+        }
+
+        // Check total capacity is approx equal to parent capacity
+        let parent = children[0].borrow_parent().expect("No parent asset");
+        let total_child_capacity: Capacity = children
+            .iter()
+            .map(|child| child.capacity.total_capacity())
+            .sum();
+        assert_approx_eq!(
+            Capacity,
+            total_child_capacity,
+            parent.capacity.total_capacity()
+        );
+    }
+
+    #[rstest]
+    fn assetref_into_commissioned_nondivisible(asset: Asset) {
+        assert!(!asset.is_divisible(), "Asset should be non-divisible!");
+
+        let mut next_id = 0;
+        let mut next_group_id = 0;
+        let asset = AssetRef::from(asset);
+        let children = asset
+            .clone()
+            .into_commissioned(&mut next_id, &mut next_group_id, "");
+        assert_eq!(children.len(), 1, "Unexpected number of children");
+        let child = children.into_iter().next().unwrap();
+        assert!(child.is_commissioned());
+    }
+
+    #[rstest]
     fn asset_pool_new(asset_pool: AssetPool) {
         // Should be in order of commission year
         assert!(asset_pool.active.is_empty());
