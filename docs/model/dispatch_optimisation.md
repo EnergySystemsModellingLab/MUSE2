@@ -149,7 +149,166 @@ time-varying availability limits. For all \\( a \in \mathbf{A}^{std}, r, t \\):
 
   \\[ act[a,r,t] = capacity[a,r]\\,cap2act[a]\\,avail_{EQ}[a,t]\\,duration[t] \\]
 
-## B. Full Model Construction
+## B. Flexible Assets (\\( a \in \mathbf{A}^{flex} \\))
+
+**Purpose:** This section defines the operational characteristics of flexible assets, which can
+adjust their input consumption mix and/or output product shares, governed by an overall process
+efficiency. The generic activity variable \\( act[a,r,t] \\) (linked to the asset's physical \\(
+capacity[a,r] \\)) is connected to the scale of this flexible conversion process via a reference
+output parameter. It is assumed that SVD commodities cannot be efficiency-constrained or auxiliary
+inputs to these assets.
+
+### B.1. Asset-Specific Sets (Defined for each flexible asset \\( a \in \mathbf{A}^{flex} \\))
+
+These sets categorize the commodities involved in the flexible asset's operation.
+
+- \\( \mathbf{C}^{eff\\_ in}_a \subseteq (\mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{OTH}})
+  \\): Set of input commodities for asset \\( a \\) whose combined energy or mass content is subject
+  to the main process efficiency \\( \eta[a] \\).
+
+- \\( \mathbf{C}^{eff\\_ out}_a \subseteq \mathbf{C} \\): Set of main output commodities from asset
+  \\( a \\) whose combined energy or mass content is determined by \\( \eta[a] \\) and the processed
+  inputs.
+
+- \\( \mathbf{C}^{aux\\_ in}_a \subseteq (\mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{OTH}})
+  \\): Set of auxiliary input commodities for asset \\( a \\) (e.g., water, catalysts) whose
+  consumption is typically proportional to the main activity \\( act[a,r,t] \\) but which are not
+  part of the primary energy/mass balance for the efficiency calculation.
+
+- \\( \mathbf{C}^{aux\\_ out}_a \subseteq \mathbf{C} \\): Set of auxiliary output commodities for
+  asset \\( a \\) (e.g., specific emissions, waste streams) whose production is typically
+  proportional to \\( act[a,r,t] \\) but which are not counted in the efficiency calculation for the
+  primary products.
+
+### B.2. Parameters (for \\( a \in \mathbf{A}^{flex} \\))
+
+These parameters define the technical and economic behavior of flexible assets.
+
+- \\( \eta[a] \\): The overall process efficiency (\\( \in (0,1] \\)) of flexible asset \\( a \\),
+  relating total common units of outputs in \\( \mathbf{C}^{eff\_out}_a \\) to inputs in \\(
+  \mathbf{C}^{eff\_in}_a \\).
+
+- \\( factor_{CU}[c] \\): A commodity-specific factor to convert its native physical units (e.g.,
+  tonnes, m³) to a common unit (e.g., MWh of energy content, or tonnes of mass if it's a mass
+  balance) used for consistent efficiency and input/output share calculations.
+
+- \\( RefEffOutPerAct[a] \\): Reference Total Efficiency-constrained Output per unit of Activity.
+  This crucial parameter defines the total quantity of efficiency-constrained outputs (summed in
+  common units using \\( factor_{CU}[c] \\)) that are produced when asset \\( a \\) operates at one
+  unit of its generic activity level \\( act[a,r,t] \\).
+
+- \\( minInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Minimum fractional share of
+  input commodity \\( c \\) (in common units) relative to the total efficiency-constrained input (in
+  common units).
+
+- \\( maxInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Maximum fractional share
+  for input \\( c \\).
+
+- \\( minOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Minimum fractional share
+  of output commodity \\( c \\) (in common units) relative to the total efficiency-constrained
+  output.
+
+- \\( maxOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Maximum fractional share
+  for output \\( c \\).
+
+- \\( coeff_{aux\\_ in}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ in}_a \\)): Quantity of auxiliary
+  input \\( c \\) consumed per unit of \\( act[a,r,t] \\).
+
+- \\( coeff_{aux\\_ out}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ out}_a \\)): Quantity of auxiliary
+  output \\( c \\) produced per unit of \\( act[a,r,t] \\).
+
+### B.3. Decision Variables (for \\( a \in \mathbf{A}^{flex} \\))
+
+These variables represent the operational choices for flexible assets.
+
+- \\( act[a,r,t]\ge0 \\): Generic activity level of flexible asset \\( a \\) (linked to its \\(
+  capacity[a,r] \\)).
+
+- \\( InputSpec[a,c,r,t]\ge0 \quad \forall c \in \mathbf{C}^{eff\\_ in}\_a \\): Actual amount of
+  efficiency-constrained input commodity \\( c \\) consumed by asset \\( a \\) in region \\( r \\),
+  time \\( t \\) (in its native physical units).
+
+- \\( OutputSpec[a,c,r,t]\ge0 \quad \forall c \in \mathbf{C}^{eff\\_ out}\_a \\): Actual amount of
+  efficiency-constrained output commodity \\( c \\) produced by asset \\( a \\) in region \\( r \\),
+  time \\( t \\) (in its native physical units).
+
+### B.4. Objective Contribution (for \\( a \in \mathbf{A}^{flex} \\))
+
+The cost contribution from flexible assets includes costs related to
+their generic activity, specific costs for efficiency-constrained inputs
+and outputs (if defined separately from system commodity values), and
+costs/revenues for auxiliary inputs and outputs.
+\\[
+  \begin{aligned}
+    &act[a,r,t] \cdot cost\_{var}[a,r,t] \\\\
+    &+ \sum\_{c \in \mathbf{C}^{eff\\_ in}\_a} InputSpec[a,c,r,t] \cdot cost\_{input}[a,c] \\\\
+    &+ \sum\_{c \in \mathbf{C}^{eff\\_ out}\_a} OutputSpec[a,c,r,t] \cdot cost\_{output}[a,c] \\\\
+    &+ \sum\_{c \in \mathbf{C}^{aux\\_ in}\_a} (act[a,r,t] \cdot coeff\_{aux\\_ in}[a,c])
+      \cdot cost\_{input}[a,c] \\\\
+    &+ \sum\_{c \in \mathbf{C}^{aux\\_ out}\_a} (act[a,r,t] \cdot coeff\_{aux\\_ out}[a,c])
+  \end{aligned}
+\\]
+
+### B.5. Constraints (for \\( a \in \mathbf{A}^{flex}, r \in \mathbf{R}, t \in \mathbf{T} \\))
+
+These rules govern the internal operation and conversion process of
+flexible assets. Let
+\\( ActualTotalEffOutputCU[a,r,t] = RefEffOutPerAct[a] \cdot act[a,r,t] \\)
+(This is the total efficiency-constrained output in common units). Let
+\\( ActualTotalEffInputCU[a,r,t] = (RefEffOutPerAct[a] / \eta[a]) \cdot act[a,r,t] \\)
+(This is the total efficiency-constrained input in common units, derived
+from the output and efficiency).
+
+- **Capacity & Availability:** Standard capacity and availability constraints (as in A.4) apply to
+  the generic activity variable \\( act[a,r,t] \\) of the flexible asset.
+
+- **Total Efficiency-Constrained Input Definition:** The sum of all specific efficiency-constrained
+  inputs, when converted to common units by \\( factor_{CU}[c] \\), must equal the total
+  efficiency-constrained input derived from \\( act[a,r,t] \\) and the asset's efficiency:
+
+  \\[
+    \sum\_{c \in \mathbf{C}^{eff\\_ in}\_a} InputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+      = ActualTotalEffInputCU[a,r,t]
+  \\]
+
+- **Total Efficiency-Constrained Output Definition:** Similarly, the sum of all specific main
+  outputs (in common units) must equal the total defined by \\( act[a,r,t] \\) and the reference
+  output parameter:
+
+  \\[
+    \sum_{c \in \mathbf{C}^{eff\_out}\_a} OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+      = ActualTotalEffOutputCU[a,r,t]
+  \\]
+
+- **Input Share Constraints** (for each \\( c \in \mathbf{C}^{eff\_in}_a \\)): Ensure that each
+  individual efficiency-constrained input (in common units) stays within its defined minimum (\\(
+  minInputShare[a,c] \\)) and maximum (\\( maxInputShare[a,c] \\)) fractional share of the \\(
+  ActualTotalEffInputCU[a,r,t] \\).
+
+  \\[
+    \begin{aligned}
+      InputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+        &\ge minInputShare[a,c] \cdot ActualTotalEffInputCU[a,r,t] \\\\
+      InputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+        &\le maxInputShare[a,c] \cdot ActualTotalEffInputCU[a,r,t]
+    \end{aligned}
+  \\]
+
+- **Output Share Constraints** (for each \\( c \in \mathbf{C}^{eff\_out}_a \\)): Ensure that each
+  individual efficiency-constrained output (in common units) stays within its defined minimum (\\(
+  minOutputShare[a,c] \\)) and maximum (\\( maxOutputShare[a,c] \\)) fractional share of the \\(
+  ActualTotalEffOutputCU[a,r,t] \\).
+
+  \\[
+    \begin{aligned}
+      OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+        &\ge minOutputShare[a,c] \cdot ActualTotalEffOutputCU[a,r,t] \\\\
+      OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+        &\le maxOutputShare[a,c] \cdot ActualTotalEffOutputCU[a,r,t]
+    \end{aligned}
+  \\]
+
+## C. Full Model Construction
 
 > Note: This section includes references to many features that are not described elsewhere in this
 > document or implemented yet (e.g. region-to-region trade), but these are included for
@@ -176,7 +335,7 @@ commodities:
 Note that the unmet demand variables (\\( UnmetD[c,r,t] \\)) are normally not included in the
 optimisation and are currently only used to diagnose the source of errors when running the model.
 
-### Constraints
+### C.1. Constraints
 
 The complete set of constraints that the optimisation must satisfy includes:
 
@@ -191,7 +350,7 @@ The complete set of constraints that the optimisation must satisfy includes:
 
 - Flexible Asset operational constraints (E.5).
 
-### Demand Satisfaction for \\( c\in \mathbf{C}^{\mathrm{SVD}} \\)
+### C.2. Demand Satisfaction for \\( c\in \mathbf{C}^{\mathrm{SVD}} \\)
 
 These constraints ensure that exogenously defined final demands for SVDs are met in each region \\(
 r \\) and time slice \\( t \\), or any shortfall is explicitly accounted for.
@@ -218,7 +377,7 @@ Else (if SVD \\( c \\) must be strictly met and is not included in \\( \mathbf{C
     \ge demand[r,c] \times timeslice\\_ share[c,t]
 \\]
 
-### Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
+### C.4. Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
 
 These constraints ensure that for all intermediate SED commodities, total supply equals total demand
 within each region \\( r \\) and for each balancing period defined by \\( balance\\_ level[c,r] \\)
