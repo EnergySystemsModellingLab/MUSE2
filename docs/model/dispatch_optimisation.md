@@ -325,8 +325,6 @@ commodities:
 \\[
   \begin{aligned}
     \text{Minimise: } &(\text{Core Asset Operational Costs from A.3 and E.4}) \\\\
-    &+ (\text{Scope Policy Costs/Credits from B.4}) \\\\
-    &+ (\text{Region-to-Region Trade Costs from C.4}) + (\text{Pool-Based Trade Costs from D.4}) \\\\
     &+ \sum_{c \in \mathbf{C}^{VoLL},r,t} UnmetD[c,r,t] \cdot VoLL[c,r]
     \quad \text{(Penalty for Unserved Demand)}
   \end{aligned}
@@ -341,12 +339,6 @@ The complete set of constraints that the optimisation must satisfy includes:
 
 - Capacity & Availability constraints for all assets \\( a \in \mathbf{A} \\)
   (as per A.4 and E.5).
-
-- Scope policy constraints (B.5).
-
-- Region-to-Region Trade Limits (C.5.A).
-
-- Pool-Based Trade Limits (D.5.A).
 
 - Flexible Asset operational constraints (E.5).
 
