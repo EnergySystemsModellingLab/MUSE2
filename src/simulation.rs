@@ -1,4 +1,5 @@
 //! Functionality for running the MUSE2 simulation across milestone years.
+#![allow(clippy::mutable_key_type)] // needed as `AssetRef`s can have a mutable parent
 use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;

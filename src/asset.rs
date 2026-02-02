@@ -17,6 +17,7 @@ use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::cell::{self, RefCell};
 use std::cmp::{Ordering, min};
 use std::hash::{Hash, Hasher};
 use std::iter;
@@ -77,8 +78,10 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
-        /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
-        group_id: Option<AssetGroupID>,
+        /// Parent asset, if any.
+        ///
+        /// All divided assets have a parent
+        parent: Option<Rc<RefCell<Asset>>>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -98,6 +101,13 @@ pub enum AssetState {
     Selected {
         /// The ID of the agent that would own the asset
         agent_id: AgentID,
+    },
+    /// The asset is a parent of other assets
+    Parent {
+        /// The ID of the agent which owns this asset's children
+        agent_id: AgentID,
+        /// ID of the asset group
+        group_id: AssetGroupID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -389,7 +399,7 @@ impl Asset {
                 id: AssetID(0),
                 agent_id,
                 mothballed_year: None,
-                group_id: None,
+                parent: None,
             },
             process,
             region_id,
@@ -837,10 +847,33 @@ impl Asset {
         }
     }
 
+    /// Borrow the parent asset of this asset, if any
+    pub fn borrow_parent(&self) -> Option<cell::Ref<'_, Asset>> {
+        match &self.state {
+            AssetState::Commissioned { parent, .. } => parent.as_ref().map(|p| p.borrow()),
+            _ => None,
+        }
+    }
+
+    /// Borrow the parent asset of this asset mutably, if any
+    fn borrow_parent_mut(&self) -> Option<cell::RefMut<'_, Asset>> {
+        match &self.state {
+            AssetState::Commissioned { parent, .. } => parent.as_ref().map(|p| p.borrow_mut()),
+            _ => None,
+        }
+    }
+
     /// Get the group ID for this asset
     pub fn group_id(&self) -> Option<AssetGroupID> {
         match &self.state {
-            AssetState::Commissioned { group_id, .. } => *group_id,
+            AssetState::Commissioned { parent, .. } => {
+                // Get group ID from parent
+                parent
+                    .as_ref()
+                    // Safe because parents always have state `Parent`
+                    .map(|parent| parent.borrow().group_id().unwrap())
+            }
+            AssetState::Parent { group_id, .. } => Some(*group_id),
             _ => None,
         }
     }
@@ -851,7 +884,8 @@ impl Asset {
             AssetState::Commissioned { agent_id, .. }
             | AssetState::Decommissioned { agent_id, .. }
             | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id } => Some(agent_id),
+            | AssetState::Selected { agent_id }
+            | AssetState::Parent { agent_id, .. } => Some(agent_id),
             AssetState::Candidate => None,
         }
     }
@@ -905,6 +939,11 @@ impl Asset {
             reason
         );
 
+        // If this is a child asset, we need to decrease the parent's capacity appropriately
+        if let Some(mut parent) = self.borrow_parent_mut() {
+            parent.capacity = parent.capacity - self.capacity;
+        }
+
         self.state = AssetState::Decommissioned {
             id,
             agent_id,
@@ -921,8 +960,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    /// * `group_id` - The ID of the group of this asset, if any.
-    fn commission(&mut self, id: AssetID, group_id: Option<AssetGroupID>, reason: &str) {
+    /// * `parent` - The parent asset, if this is a child asset
+    fn commission(&mut self, id: AssetID, parent: Option<Rc<RefCell<Asset>>>, reason: &str) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -939,7 +978,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
-            group_id,
+            parent,
         };
     }
 
@@ -955,39 +994,39 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id, group_id) = match &self.state {
+        let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                group_id,
+                parent,
                 ..
-            } => (*id, agent_id.clone(), *group_id),
+            } => (*id, agent_id.clone(), parent.clone()),
             _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
-            agent_id: agent_id.clone(),
+            agent_id,
             mothballed_year: Some(year),
-            group_id,
+            parent,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id, group_id) = match &self.state {
+        let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                group_id,
+                parent,
                 ..
-            } => (*id, agent_id.clone(), *group_id),
+            } => (*id, agent_id.clone(), parent.clone()),
             _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
-            agent_id: agent_id.clone(),
+            agent_id,
             mothballed_year: None,
-            group_id,
+            parent,
         };
     }
 
@@ -1098,11 +1137,22 @@ impl AssetRef {
             capacity: AssetCapacity::Discrete(1, unit_size),
             ..Asset::clone(&self)
         };
-        let group_id = AssetGroupID(*next_group_id);
+
+        // Turn this asset into a parent
+        let agent_id = self
+            .agent_id()
+            .expect("Parent asset cannot be commissioned")
+            .clone();
+        self.make_mut().state = AssetState::Parent {
+            agent_id,
+            group_id: AssetGroupID(*next_group_id),
+        };
         *next_group_id += 1;
+        let parent = Rc::new(RefCell::new(Rc::unwrap_or_clone(self.0)));
+
         iter::repeat_n(child, n_units as usize)
             .map(move |mut child| {
-                child.commission(AssetID(*next_id), Some(group_id), reason);
+                child.commission(AssetID(*next_id), Some(parent.clone()), reason);
                 *next_id += 1;
 
                 child.into()
@@ -2133,6 +2183,32 @@ mod tests {
         asset.decommission(requested_decommission_year, "");
         assert!(!asset.is_commissioned());
         assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
+    }
+
+    #[rstest]
+    fn asset_decommission_child(asset_divisible: Asset) {
+        let unit_size = asset_divisible.unit_size().unwrap();
+        let original_capacity = asset_divisible.capacity;
+        let asset = AssetRef::from(asset_divisible);
+
+        // Divide asset into children
+        let mut next_id = 0u32;
+        let mut next_group_id = 0u32;
+        let mut children = asset.into_commissioned(&mut next_id, &mut next_group_id, "");
+        assert!(children.len() >= 2);
+        assert_eq!(children.len(), 3);
+        assert_eq!(
+            children[0].borrow_parent().unwrap().capacity,
+            original_capacity
+        );
+
+        // Decommission one asset and check that the parent's capacity is reduced by one unit
+        let mut to_decommission = children.pop().unwrap();
+        to_decommission.make_mut().decommission(2015, "");
+        assert_eq!(
+            children[0].borrow_parent().unwrap().capacity,
+            original_capacity - AssetCapacity::Discrete(1, unit_size)
+        );
     }
 
     #[rstest]
