@@ -1,5 +1,5 @@
 //! Common routines for handling input data.
-use crate::asset::AssetPool;
+use crate::asset::Asset;
 use crate::graph::investment::solve_investment_order_for_model;
 use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
@@ -227,8 +227,8 @@ where
 ///
 /// # Returns
 ///
-/// The static model data ([`Model`]) and an [`AssetPool`] struct or an error.
-pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
+/// The static model data ([`Model`]) and user-defined assets or an error.
+pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, Vec<Asset>)> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
@@ -252,7 +252,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         years,
     )?;
     let agent_ids = agents.keys().cloned().collect();
-    let assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
+    let user_assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 
     // Build and validate commodity graphs for all regions and years
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
@@ -280,7 +280,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, AssetPool)> {
         regions,
         investment_order,
     };
-    Ok((model, AssetPool::new(assets)))
+    Ok((model, user_assets))
 }
 
 /// Load commodity flow graphs for a model.

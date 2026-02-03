@@ -22,16 +22,17 @@ pub use prices::CommodityPrices;
 /// # Arguments:
 ///
 /// * `model` - The model to run
-/// * `assets` - The asset pool
+/// * `user_assets` - Assets supplied by user
 /// * `output_path` - The folder to which output files will be written
 /// * `debug_model` - Whether to write additional information (e.g. duals) to output files
 pub fn run(
     model: &Model,
-    mut assets: AssetPool,
+    mut user_assets: Vec<Asset>,
     output_path: &Path,
     debug_model: bool,
 ) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
+    let mut assets = AssetPool::new();
 
     // Iterate over milestone years
     let mut year_iter = model.iter_years().peekable();
@@ -43,7 +44,7 @@ pub fn run(
     assets.decommission_old(year);
 
     // Commission assets for base year
-    assets.commission_new(year);
+    assets.commission_new(year, &mut user_assets);
 
     // Write assets to file
     writer.write_assets(assets.iter_all())?;
@@ -68,13 +69,11 @@ pub fn run(
     while let Some(year) = year_iter.next() {
         info!("Milestone year: {year}");
 
-        // Decommission assets whose lifetime has passed. We do this *before* agent investment, to
-        // prevent agents from selecting assets that are being decommissioned in this milestone
-        // year.
+        // Decommission assets whose lifetime has passed
         assets.decommission_old(year);
 
-        // Commission pre-defined assets for this year
-        assets.commission_new(year);
+        // Commission user-defined assets for this year
+        assets.commission_new(year, &mut user_assets);
 
         // Take all the active assets as a list of existing assets
         let existing_assets = assets.take();

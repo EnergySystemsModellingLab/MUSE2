@@ -203,8 +203,8 @@ pub fn asset(process: Process) -> Asset {
 #[fixture]
 pub fn assets(asset: Asset) -> AssetPool {
     let year = asset.commission_year();
-    let mut assets = AssetPool::new(iter::once(asset).collect());
-    assets.commission_new(year);
+    let mut assets = AssetPool::new();
+    assets.commission_new(year, &mut vec![asset]);
     assets
 }
 
