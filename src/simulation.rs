@@ -27,7 +27,8 @@ pub use prices::CommodityPrices;
 pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
     let mut user_assets = model.user_assets.clone();
-    let mut assets = AssetPool::new();
+    let mut assets = AssetPool::new(); // active assets
+    let mut decommissioned = Vec::new();
 
     // Iterate over milestone years
     let mut year_iter = model.iter_years().peekable();
@@ -35,14 +36,11 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
     info!("Milestone year: {year}");
 
-    // There shouldn't be assets already commissioned, but let's do this just in case
-    assets.decommission_old(year);
-
     // Commission assets for base year
     assets.commission_new(year, &mut user_assets);
 
     // Write assets to file
-    writer.write_assets(assets.iter_all())?;
+    writer.write_assets(assets.iter_active())?;
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
@@ -65,7 +63,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         info!("Milestone year: {year}");
 
         // Decommission assets whose lifetime has passed
-        assets.decommission_old(year);
+        decommissioned.extend(assets.decommission_old(year));
 
         // Commission user-defined assets for this year
         assets.commission_new(year, &mut user_assets);
@@ -125,10 +123,11 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Decommission unused assets
         assets.mothball_unretained(existing_assets, year);
-        assets.decommission_mothballed(year, model.parameters.mothball_years);
+        decommissioned
+            .extend(assets.decommission_mothballed(year, model.parameters.mothball_years));
 
         // Write assets
-        writer.write_assets(assets.iter_all())?;
+        writer.write_assets(decommissioned.iter().chain(assets.iter_active()))?;
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();
