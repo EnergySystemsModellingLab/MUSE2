@@ -226,7 +226,7 @@ where
 ///
 /// # Returns
 ///
-/// The static model data ([`Model`]) and user-defined assets or an error.
+/// The static model data ([`Model`]) or an error.
 pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
