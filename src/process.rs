@@ -497,12 +497,25 @@ pub struct ProcessParameter {
 }
 
 /// A constraint imposed on investments in the process
+///
+/// Constraints apply to a specific milestone year, and have been pre-scaled from annual limits
+/// defined in the input data to account for the number of years since the previous milestone year.
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProcessInvestmentConstraint {
-    /// Addition constraint: Yearly limit an agent can invest
-    /// in the process, shared according to the agent's
-    /// proportion of the processes primary commodity demand
-    pub addition_limit: Option<f64>,
+    /// Addition constraint: Limit an agent can invest in the process, shared according to the
+    /// agent's proportion of the process's primary commodity demand
+    pub addition_limit: Option<Capacity>,
+}
+
+impl ProcessInvestmentConstraint {
+    /// Calculate the effective addition limit
+    ///
+    /// For now, this just returns `addition_limit`, but in the future when we add growth
+    /// limits and total capacity limits, this will have more complex logic which will depend on the
+    /// current total capacity.
+    pub fn get_addition_limit(&self) -> Option<Capacity> {
+        self.addition_limit
+    }
 }
 
 #[cfg(test)]

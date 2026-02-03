@@ -17,6 +17,7 @@ use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -393,6 +394,7 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     flexible_capacity_assets: &'run [AssetRef],
+    capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run CommodityPrices>,
@@ -407,6 +409,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             model,
             existing_assets: assets,
             flexible_capacity_assets: &[],
+            capacity_limits: None,
             candidate_assets: &[],
             markets_to_balance: &[],
             input_prices: None,
@@ -419,10 +422,12 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn with_flexible_capacity_assets(
         self,
         flexible_capacity_assets: &'run [AssetRef],
+        capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
         capacity_margin: f64,
     ) -> Self {
         Self {
             flexible_capacity_assets,
+            capacity_limits,
             capacity_margin,
             ..self
         }
@@ -583,6 +588,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 &mut problem,
                 &mut variables.capacity_vars,
                 self.flexible_capacity_assets,
+                self.capacity_limits,
                 self.capacity_margin,
             );
         }
@@ -647,6 +653,7 @@ fn add_capacity_variables(
     problem: &mut Problem,
     variables: &mut CapacityVariableMap,
     assets: &[AssetRef],
+    capacity_limits: Option<&HashMap<AssetRef, AssetCapacity>>,
     capacity_margin: f64,
 ) -> Range<usize> {
     // This line **must** come before we add more variables
@@ -662,17 +669,41 @@ fn add_capacity_variables(
         let current_capacity = asset.capacity();
         let coeff = calculate_capacity_coefficient(asset);
 
+        // Retrieve capacity limit if provided
+        let capacity_limit = capacity_limits.and_then(|limits| limits.get(asset));
+
+        // Sanity check: make sure capacity_limit is compatible with current_capacity
+        if let Some(limit) = capacity_limit {
+            assert!(
+                matches!(
+                    (current_capacity, limit),
+                    (AssetCapacity::Continuous(_), AssetCapacity::Continuous(_))
+                        | (AssetCapacity::Discrete(_, _), AssetCapacity::Discrete(_, _))
+                ),
+                "Incompatible capacity types for asset capacity limit"
+            );
+        }
+
+        // Add a capacity variable for each asset
+        // Bounds are calculated based on current capacity with wiggle-room defined by
+        // `capacity_margin`, and limited by `capacity_limit` if provided.
         let var = match current_capacity {
             AssetCapacity::Continuous(cap) => {
                 // Continuous capacity: capacity variable represents total capacity
                 let lower = ((1.0 - capacity_margin) * cap.value()).max(0.0);
-                let upper = (1.0 + capacity_margin) * cap.value();
+                let mut upper = (1.0 + capacity_margin) * cap.value();
+                if let Some(limit) = capacity_limit {
+                    upper = upper.min(limit.total_capacity().value());
+                }
                 problem.add_column(coeff.value(), lower..=upper)
             }
             AssetCapacity::Discrete(units, unit_size) => {
                 // Discrete capacity: capacity variable represents number of units
                 let lower = ((1.0 - capacity_margin) * units as f64).max(0.0);
-                let upper = (1.0 + capacity_margin) * units as f64;
+                let mut upper = (1.0 + capacity_margin) * units as f64;
+                if let Some(limit) = capacity_limit {
+                    upper = upper.min(limit.n_units().unwrap() as f64);
+                }
                 problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
             }
         };
