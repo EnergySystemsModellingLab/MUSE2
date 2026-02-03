@@ -27,7 +27,7 @@ pub use prices::CommodityPrices;
 /// * `debug_model` - Whether to write additional information (e.g. duals) to output files
 pub fn run(
     model: &Model,
-    mut user_assets: Vec<Asset>,
+    mut user_assets: Vec<AssetRef>,
     output_path: &Path,
     debug_model: bool,
 ) -> Result<()> {

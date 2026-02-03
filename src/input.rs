@@ -1,5 +1,5 @@
 //! Common routines for handling input data.
-use crate::asset::Asset;
+use crate::asset::AssetRef;
 use crate::graph::investment::solve_investment_order_for_model;
 use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
@@ -228,7 +228,7 @@ where
 /// # Returns
 ///
 /// The static model data ([`Model`]) and user-defined assets or an error.
-pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, Vec<Asset>)> {
+pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, Vec<AssetRef>)> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;

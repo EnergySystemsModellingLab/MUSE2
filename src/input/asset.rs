@@ -1,7 +1,7 @@
 //! Code for reading [`Asset`]s from a CSV file.
 use super::{input_err_msg, read_csv_optional};
 use crate::agent::AgentID;
-use crate::asset::Asset;
+use crate::asset::{Asset, AssetRef};
 use crate::id::IDCollection;
 use crate::process::ProcessMap;
 use crate::region::RegionID;
@@ -45,7 +45,7 @@ pub fn read_assets(
     agent_ids: &IndexSet<AgentID>,
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
-) -> Result<Vec<Asset>> {
+) -> Result<Vec<AssetRef>> {
     let file_path = model_dir.join(ASSETS_FILE_NAME);
     let assets_csv = read_csv_optional(&file_path)?;
     read_assets_from_iter(assets_csv, agent_ids, processes, region_ids)
@@ -69,7 +69,7 @@ fn read_assets_from_iter<I>(
     agent_ids: &IndexSet<AgentID>,
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
-) -> Result<Vec<Asset>>
+) -> Result<Vec<AssetRef>>
 where
     I: Iterator<Item = AssetRaw>,
 {
@@ -123,14 +123,15 @@ where
             }
         }
 
-        Asset::new_future_with_max_decommission(
+        let asset = Asset::new_future_with_max_decommission(
             agent_id.clone(),
             Rc::clone(process),
             region_id.clone(),
             asset.capacity,
             asset.commission_year,
             asset.max_decommission_year,
-        )
+        )?;
+        Ok(asset.into())
     })
     .try_collect()
 }
@@ -174,7 +175,8 @@ mod tests {
             2010,
             max_decommission_year,
         )
-        .unwrap();
+        .unwrap()
+        .into();
         assert_equal(
             read_assets_from_iter(iter::once(asset_in), &agent_ids, &processes, &region_ids)
                 .unwrap(),

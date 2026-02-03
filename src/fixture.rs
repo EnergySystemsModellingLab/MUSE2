@@ -204,7 +204,7 @@ pub fn asset(process: Process) -> Asset {
 pub fn assets(asset: Asset) -> AssetPool {
     let year = asset.commission_year();
     let mut assets = AssetPool::new();
-    assets.commission_new(year, &mut vec![asset]);
+    assets.commission_new(year, &mut vec![asset.into()]);
     assets
 }
 
