@@ -1266,17 +1266,18 @@ impl AssetPool {
             })
     }
 
-    /// Decomission mothballed assets if mothballed long enough
+    /// Decommission mothballed assets if mothballed long enough
     pub fn decommission_mothballed(
         &mut self,
         year: u32,
         mothball_years: u32,
     ) -> impl Iterator<Item = AssetRef> {
         self.assets.extract_if(.., move |asset| {
-            asset.get_mothballed_year().is_some_and(|myear|{
-                myear <= year - min(mothball_years, year)})
+            asset.get_mothballed_year().is_some_and(|myear| {
+                myear <= year - min(mothball_years, year)
+            })
         })
-        .map(move |mut asset|{
+        .map(move |mut asset| {
             let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
             asset.make_mut().decommission(
                 decommissioned,
