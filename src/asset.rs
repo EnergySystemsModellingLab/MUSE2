@@ -1214,7 +1214,7 @@ impl AssetPool {
         let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
 
         // Move assets from future to active
-        for mut asset in to_commission {
+        for asset in to_commission {
             // Ignore assets that have already been decommissioned
             if asset.max_decommission_year() <= year {
                 warn!(
@@ -1227,27 +1227,32 @@ impl AssetPool {
                 continue;
             }
 
-            // If it is divisible, we divide and commission all the children
-            if asset.is_divisible() {
-                for mut child in asset.divide_asset() {
-                    child.make_mut().commission(
-                        AssetID(self.next_id),
-                        Some(AssetGroupID(self.next_group_id)),
-                        "user input",
-                    );
-                    self.next_id += 1;
-                    self.assets.push(child);
-                }
-                self.next_group_id += 1;
-            }
-            // If not, we just commission it as a single asset
-            else {
-                asset
-                    .make_mut()
-                    .commission(AssetID(self.next_id), None, "user input");
+            self.commission(asset, "user input");
+        }
+    }
+
+    /// Commission the specified asset or, if divisible, its children
+    fn commission(&mut self, mut asset: AssetRef, reason: &str) {
+        // If it is divisible, we divide and commission all the children
+        if asset.is_divisible() {
+            for mut child in asset.divide_asset() {
+                child.make_mut().commission(
+                    AssetID(self.next_id),
+                    Some(AssetGroupID(self.next_group_id)),
+                    reason,
+                );
                 self.next_id += 1;
-                self.assets.push(asset);
+                self.assets.push(child);
             }
+            self.next_group_id += 1;
+        }
+        // If not, we just commission it as a single asset
+        else {
+            asset
+                .make_mut()
+                .commission(AssetID(self.next_id), None, reason);
+            self.next_id += 1;
+            self.assets.push(asset);
         }
     }
 
@@ -1358,27 +1363,7 @@ impl AssetPool {
                     self.assets.push(asset);
                 }
                 AssetState::Selected { .. } => {
-                    // If it is divisible, we divide and commission all the children
-                    if asset.is_divisible() {
-                        for mut child in asset.divide_asset() {
-                            child.make_mut().commission(
-                                AssetID(self.next_id),
-                                Some(AssetGroupID(self.next_group_id)),
-                                "selected",
-                            );
-                            self.next_id += 1;
-                            self.assets.push(child);
-                        }
-                        self.next_group_id += 1;
-                    }
-                    // If not, we just commission it as a single asset
-                    else {
-                        asset
-                            .make_mut()
-                            .commission(AssetID(self.next_id), None, "selected");
-                        self.next_id += 1;
-                        self.assets.push(asset);
-                    }
+                    self.commission(asset, "selected");
                 }
                 _ => panic!(
                     "Cannot extend asset pool with asset in state {}. Only assets in \
