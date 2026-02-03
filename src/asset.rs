@@ -1213,7 +1213,6 @@ impl AssetPool {
     pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) {
         let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
 
-        // Move assets from future to active
         for asset in to_commission {
             // Ignore assets that have already been decommissioned
             if asset.max_decommission_year() <= year {
@@ -1327,7 +1326,7 @@ impl AssetPool {
     /// An [`AssetRef`] if found, else `None`. The asset may not be found if it has already been
     /// decommissioned.
     pub fn get(&self, id: AssetID) -> Option<&AssetRef> {
-        // The assets in `active` are in order of ID
+        // Assets are sorted by ID
         let idx = self
             .assets
             .binary_search_by(|asset| match &asset.state {
@@ -1374,7 +1373,7 @@ impl AssetPool {
             }
         }
 
-        // New assets may not have been sorted, but active needs to be sorted by ID
+        // New assets may not have been sorted, but we need them sorted by ID
         self.assets.sort();
 
         // Sanity check: all assets should be unique
