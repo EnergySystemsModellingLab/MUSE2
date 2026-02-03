@@ -40,7 +40,7 @@ struct AssetRaw {
 /// # Returns
 ///
 /// A `Vec` of [`Asset`]s or an error.
-pub fn read_assets(
+pub fn read_user_assets(
     model_dir: &Path,
     agent_ids: &IndexSet<AgentID>,
     processes: &ProcessMap,

@@ -95,11 +95,11 @@ macro_rules! patch_and_run_simple {
     ($file_patches:expr) => {{
         (|| -> Result<()> {
             let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
-            let (model, assets) = crate::input::load_model(tmp.path())?;
+            let model = crate::input::load_model(tmp.path())?;
             let output_path = tmp.path().join("output");
             std::fs::create_dir_all(&output_path)?;
 
-            crate::simulation::run(&model, assets, &output_path, false)?;
+            crate::simulation::run(&model, &output_path, false)?;
             Ok(())
         })()
     }};

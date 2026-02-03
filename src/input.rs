@@ -1,5 +1,4 @@
 //! Common routines for handling input data.
-use crate::asset::AssetRef;
 use crate::graph::investment::solve_investment_order_for_model;
 use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
@@ -21,7 +20,7 @@ use std::path::Path;
 mod agent;
 use agent::read_agents;
 mod asset;
-use asset::read_assets;
+use asset::read_user_assets;
 mod commodity;
 use commodity::read_commodities;
 mod process;
@@ -228,7 +227,7 @@ where
 /// # Returns
 ///
 /// The static model data ([`Model`]) and user-defined assets or an error.
-pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, Vec<AssetRef>)> {
+pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
@@ -252,7 +251,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, Vec<AssetRef>)
         years,
     )?;
     let agent_ids = agents.keys().cloned().collect();
-    let user_assets = read_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
+    let user_assets = read_user_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 
     // Build and validate commodity graphs for all regions and years
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
@@ -278,9 +277,10 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<(Model, Vec<AssetRef>)
         processes,
         time_slice_info,
         regions,
+        user_assets,
         investment_order,
     };
-    Ok((model, user_assets))
+    Ok(model)
 }
 
 /// Load commodity flow graphs for a model.

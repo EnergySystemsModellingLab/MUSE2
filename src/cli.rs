@@ -158,7 +158,7 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
 
     // Load the model to run
-    let (model, user_assets) = load_model(model_path).context("Failed to load model.")?;
+    let model = load_model(model_path).context("Failed to load model.")?;
     info!("Loaded model from {}", model_path.display());
     info!("Output folder: {}", output_path.display());
 
@@ -168,7 +168,7 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     }
 
     // Run the simulation
-    crate::simulation::run(&model, user_assets, output_path, settings.debug_model)?;
+    crate::simulation::run(&model, output_path, settings.debug_model)?;
     info!("Simulation complete!");
 
     Ok(())

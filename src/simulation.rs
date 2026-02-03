@@ -22,16 +22,11 @@ pub use prices::CommodityPrices;
 /// # Arguments:
 ///
 /// * `model` - The model to run
-/// * `user_assets` - Assets supplied by user
 /// * `output_path` - The folder to which output files will be written
 /// * `debug_model` - Whether to write additional information (e.g. duals) to output files
-pub fn run(
-    model: &Model,
-    mut user_assets: Vec<AssetRef>,
-    output_path: &Path,
-    debug_model: bool,
-) -> Result<()> {
+pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
+    let mut user_assets = model.user_assets.clone();
     let mut assets = AssetPool::new();
 
     // Iterate over milestone years
