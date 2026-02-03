@@ -1221,15 +1221,8 @@ impl AssetPool {
         &self.active
     }
 
-    /// Decommission assets whose lifetime has passed,
-    /// and commission new assets
-    pub fn update_for_year(&mut self, year: u32) {
-        self.decommission_old(year);
-        self.commission_new(year);
-    }
-
     /// Commission new assets for the specified milestone year from the input data
-    fn commission_new(&mut self, year: u32) {
+    pub fn commission_new(&mut self, year: u32) {
         // Count the number of assets to move
         let count = self
             .future
@@ -1274,7 +1267,7 @@ impl AssetPool {
     }
 
     /// Decommission old assets for the specified milestone year
-    fn decommission_old(&mut self, year: u32) {
+    pub fn decommission_old(&mut self, year: u32) {
         // Remove assets which are due for decommissioning
         let to_decommission = self
             .active
@@ -1802,7 +1795,8 @@ mod tests {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new(vec![asset]);
         assert!(asset_pool.active.is_empty());
-        asset_pool.update_for_year(year);
+        asset_pool.decommission_old(year);
+        asset_pool.commission_new(year);
         assert!(asset_pool.active.is_empty());
     }
 
