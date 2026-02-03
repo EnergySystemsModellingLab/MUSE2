@@ -1187,11 +1187,11 @@ impl Ord for AssetRef {
     }
 }
 
-/// A pool of [`Asset`]s
+/// The active pool of [`Asset`]s
 #[derive(Default)]
 pub struct AssetPool {
     /// The pool of active assets, sorted by ID
-    active: Vec<AssetRef>,
+    assets: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
     /// Next available group ID number
@@ -1206,7 +1206,7 @@ impl AssetPool {
 
     /// Get the active pool as a slice of [`AssetRef`]s
     pub fn as_slice(&self) -> &[AssetRef] {
-        &self.active
+        &self.assets
     }
 
     /// Commission new assets for the specified milestone year from the input data
@@ -1236,7 +1236,7 @@ impl AssetPool {
                         "user input",
                     );
                     self.next_id += 1;
-                    self.active.push(child);
+                    self.assets.push(child);
                 }
                 self.next_group_id += 1;
             }
@@ -1246,14 +1246,14 @@ impl AssetPool {
                     .make_mut()
                     .commission(AssetID(self.next_id), None, "user input");
                 self.next_id += 1;
-                self.active.push(asset);
+                self.assets.push(asset);
             }
         }
     }
 
     /// Decommission old assets for the specified milestone year
     pub fn decommission_old(&mut self, year: u32) -> impl Iterator<Item = AssetRef> {
-        self.active
+        self.assets
             .extract_if(.., move |asset| asset.max_decommission_year() <= year)
             .map(move |mut asset| {
                 asset.make_mut().decommission(year, "end of life");
@@ -1267,7 +1267,7 @@ impl AssetPool {
         year: u32,
         mothball_years: u32,
     ) -> impl Iterator<Item = AssetRef> {
-        self.active.extract_if(.., move |asset| {
+        self.assets.extract_if(.., move |asset| {
             asset.get_mothballed_year().is_some_and(|myear|{
                 myear <= year - min(mothball_years, year)})
         })
@@ -1297,7 +1297,7 @@ impl AssetPool {
     {
         for mut asset in assets {
             if match asset.state {
-                AssetState::Commissioned { .. } => !self.active.contains(&asset),
+                AssetState::Commissioned { .. } => !self.assets.contains(&asset),
                 _ => panic!("Cannot mothball asset that has not been commissioned"),
             } {
                 // If not already set, we set the current year as the mothball year,
@@ -1308,10 +1308,10 @@ impl AssetPool {
 
                 // And we put it back to the pool, so they can be chosen the next milestone year
                 // if not decommissioned earlier.
-                self.active.push(asset);
+                self.assets.push(asset);
             }
         }
-        self.active.sort();
+        self.assets.sort();
     }
 
     /// Get an asset with the specified ID.
@@ -1323,24 +1323,25 @@ impl AssetPool {
     pub fn get(&self, id: AssetID) -> Option<&AssetRef> {
         // The assets in `active` are in order of ID
         let idx = self
-            .active
+            .assets
             .binary_search_by(|asset| match &asset.state {
                 AssetState::Commissioned { id: asset_id, .. } => asset_id.cmp(&id),
                 _ => panic!("Active pool should only contain commissioned assets"),
             })
             .ok()?;
 
-        Some(&self.active[idx])
+        Some(&self.assets[idx])
     }
 
     /// Iterate over active assets
-    pub fn iter_active(&self) -> slice::Iter<'_, AssetRef> {
-        self.active.iter()
+    #[allow(clippy::iter_without_into_iter)]
+    pub fn iter(&self) -> slice::Iter<'_, AssetRef> {
+        self.assets.iter()
     }
 
     /// Return current active pool and clear
     pub fn take(&mut self) -> Vec<AssetRef> {
-        std::mem::take(&mut self.active)
+        std::mem::take(&mut self.assets)
     }
 
     /// Extend the active pool with Commissioned or Selected assets
@@ -1354,7 +1355,7 @@ impl AssetPool {
             match &asset.state {
                 AssetState::Commissioned { .. } => {
                     asset.make_mut().unmothball();
-                    self.active.push(asset);
+                    self.assets.push(asset);
                 }
                 AssetState::Selected { .. } => {
                     // If it is divisible, we divide and commission all the children
@@ -1366,7 +1367,7 @@ impl AssetPool {
                                 "selected",
                             );
                             self.next_id += 1;
-                            self.active.push(child);
+                            self.assets.push(child);
                         }
                         self.next_group_id += 1;
                     }
@@ -1376,7 +1377,7 @@ impl AssetPool {
                             .make_mut()
                             .commission(AssetID(self.next_id), None, "selected");
                         self.next_id += 1;
-                        self.active.push(asset);
+                        self.assets.push(asset);
                     }
                 }
                 _ => panic!(
@@ -1388,10 +1389,10 @@ impl AssetPool {
         }
 
         // New assets may not have been sorted, but active needs to be sorted by ID
-        self.active.sort();
+        self.assets.sort();
 
         // Sanity check: all assets should be unique
-        debug_assert_eq!(self.active.iter().unique().count(), self.active.len());
+        debug_assert_eq!(self.assets.iter().unique().count(), self.assets.len());
     }
 }
 
@@ -1718,7 +1719,7 @@ mod tests {
 
     #[rstest]
     fn asset_pool_new() {
-        assert!(AssetPool::new().active.is_empty());
+        assert!(AssetPool::new().assets.is_empty());
     }
 
     #[rstest]
@@ -1726,7 +1727,7 @@ mod tests {
         // Asset to be commissioned in this year
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2010, &mut user_assets);
-        assert_equal(asset_pool.iter_active(), iter::once(&asset_pool.active[0]));
+        assert_equal(asset_pool.iter(), iter::once(&asset_pool.assets[0]));
     }
 
     #[rstest]
@@ -1734,7 +1735,7 @@ mod tests {
         // Commission year has passed
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2011, &mut user_assets);
-        assert_equal(asset_pool.iter_active(), iter::once(&asset_pool.active[0]));
+        assert_equal(asset_pool.iter(), iter::once(&asset_pool.assets[0]));
     }
 
     #[rstest]
@@ -1742,7 +1743,7 @@ mod tests {
         // Nothing to commission for this year
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2000, &mut user_assets);
-        assert!(asset_pool.iter_active().next().is_none()); // no active assets
+        assert!(asset_pool.iter().next().is_none()); // no active assets
     }
 
     #[rstest]
@@ -1751,11 +1752,11 @@ mod tests {
         let expected_children = expected_children_for_divisible(&asset_divisible);
         let mut asset_pool = AssetPool::new();
         let mut user_assets = vec![asset_divisible.into()];
-        assert!(asset_pool.active.is_empty());
+        assert!(asset_pool.assets.is_empty());
         asset_pool.commission_new(commision_year, &mut user_assets);
         assert!(user_assets.is_empty());
-        assert!(!asset_pool.active.is_empty());
-        assert_eq!(asset_pool.active.len(), expected_children);
+        assert!(!asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets.len(), expected_children);
         assert_eq!(asset_pool.next_group_id, 1);
     }
 
@@ -1763,9 +1764,9 @@ mod tests {
     fn asset_pool_commission_already_decommissioned(asset: Asset) {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new();
-        assert!(asset_pool.active.is_empty());
+        assert!(asset_pool.assets.is_empty());
         asset_pool.commission_new(year, &mut vec![asset.into()]);
-        assert!(asset_pool.active.is_empty());
+        assert!(asset_pool.assets.is_empty());
     }
 
     #[rstest]
@@ -1773,24 +1774,24 @@ mod tests {
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
         assert!(user_assets.is_empty());
-        assert_eq!(asset_pool.active.len(), 2);
+        assert_eq!(asset_pool.assets.len(), 2);
 
         // should decommission first asset (lifetime == 5)
         let decommissioned = asset_pool.decommission_old(2030).collect_vec();
-        assert_eq!(asset_pool.active.len(), 1);
-        assert_eq!(asset_pool.active[0].commission_year, 2020);
+        assert_eq!(asset_pool.assets.len(), 1);
+        assert_eq!(asset_pool.assets[0].commission_year, 2020);
         assert_eq!(decommissioned.len(), 1);
         assert_eq!(decommissioned[0].commission_year, 2010);
         assert_eq!(decommissioned[0].decommission_year(), Some(2030));
 
         // nothing to decommission
         assert!(asset_pool.decommission_old(2032).next().is_none());
-        assert_eq!(asset_pool.active.len(), 1);
-        assert_eq!(asset_pool.active[0].commission_year, 2020);
+        assert_eq!(asset_pool.assets.len(), 1);
+        assert_eq!(asset_pool.assets[0].commission_year, 2020);
 
         // should decommission second asset
         let decommissioned = asset_pool.decommission_old(2040).collect_vec();
-        assert!(asset_pool.active.is_empty());
+        assert!(asset_pool.assets.is_empty());
         assert_eq!(decommissioned.len(), 1);
         assert_eq!(decommissioned[0].commission_year, 2020);
         assert_eq!(decommissioned[0].decommission_year(), Some(2040));
@@ -1800,8 +1801,8 @@ mod tests {
     fn asset_pool_get(mut user_assets: Vec<AssetRef>) {
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        assert_eq!(asset_pool.get(AssetID(0)), Some(&asset_pool.active[0]));
-        assert_eq!(asset_pool.get(AssetID(1)), Some(&asset_pool.active[1]));
+        assert_eq!(asset_pool.get(AssetID(0)), Some(&asset_pool.assets[0]));
+        assert_eq!(asset_pool.get(AssetID(1)), Some(&asset_pool.assets[1]));
     }
 
     #[rstest]
@@ -1809,12 +1810,12 @@ mod tests {
         // Start with commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        let original_count = asset_pool.active.len();
+        let original_count = asset_pool.assets.len();
 
         // Extend with empty iterator
         asset_pool.extend(Vec::<AssetRef>::new());
 
-        assert_eq!(asset_pool.active.len(), original_count);
+        assert_eq!(asset_pool.assets.len(), original_count);
     }
 
     #[rstest]
@@ -1822,15 +1823,15 @@ mod tests {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        assert_eq!(asset_pool.active.len(), 2);
+        assert_eq!(asset_pool.assets.len(), 2);
         let existing_assets = asset_pool.take();
 
         // Extend with the same assets (should maintain their IDs)
         asset_pool.extend(existing_assets.clone());
 
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.active[0].id(), Some(AssetID(0)));
-        assert_eq!(asset_pool.active[1].id(), Some(AssetID(1)));
+        assert_eq!(asset_pool.assets.len(), 2);
+        assert_eq!(asset_pool.assets[0].id(), Some(AssetID(0)));
+        assert_eq!(asset_pool.assets[1].id(), Some(AssetID(1)));
     }
 
     #[rstest]
@@ -1838,7 +1839,7 @@ mod tests {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        let original_count = asset_pool.active.len();
+        let original_count = asset_pool.assets.len();
 
         // Create new non-commissioned assets
         let process_rc = Rc::new(process);
@@ -1865,16 +1866,16 @@ mod tests {
 
         asset_pool.extend(new_assets);
 
-        assert_eq!(asset_pool.active.len(), original_count + 2);
+        assert_eq!(asset_pool.assets.len(), original_count + 2);
         // New assets should get IDs 2 and 3
-        assert_eq!(asset_pool.active[original_count].id(), Some(AssetID(2)));
-        assert_eq!(asset_pool.active[original_count + 1].id(), Some(AssetID(3)));
+        assert_eq!(asset_pool.assets[original_count].id(), Some(AssetID(2)));
+        assert_eq!(asset_pool.assets[original_count + 1].id(), Some(AssetID(3)));
         assert_eq!(
-            asset_pool.active[original_count].agent_id(),
+            asset_pool.assets[original_count].agent_id(),
             Some(&"agent2".into())
         );
         assert_eq!(
-            asset_pool.active[original_count + 1].agent_id(),
+            asset_pool.assets[original_count + 1].agent_id(),
             Some(&"agent3".into())
         );
     }
@@ -1887,7 +1888,7 @@ mod tests {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        let original_count = asset_pool.active.len();
+        let original_count = asset_pool.assets.len();
 
         // Create new non-commissioned assets
         process.unit_size = Some(Capacity(4.0));
@@ -1905,7 +1906,7 @@ mod tests {
         ];
         let expected_children = expected_children_for_divisible(&new_assets[0]);
         asset_pool.extend(new_assets);
-        assert_eq!(asset_pool.active.len(), original_count + expected_children);
+        assert_eq!(asset_pool.assets.len(), original_count + expected_children);
     }
 
     #[rstest]
@@ -1928,15 +1929,15 @@ mod tests {
         // Extend with just the new asset (not mixing with existing to avoid duplicates)
         asset_pool.extend(vec![new_asset]);
 
-        assert_eq!(asset_pool.active.len(), 3);
+        assert_eq!(asset_pool.assets.len(), 3);
         // Check that we have the original assets plus the new one
-        assert!(asset_pool.active.iter().any(|a| a.id() == Some(AssetID(0))));
-        assert!(asset_pool.active.iter().any(|a| a.id() == Some(AssetID(1))));
-        assert!(asset_pool.active.iter().any(|a| a.id() == Some(AssetID(2))));
+        assert!(asset_pool.assets.iter().any(|a| a.id() == Some(AssetID(0))));
+        assert!(asset_pool.assets.iter().any(|a| a.id() == Some(AssetID(1))));
+        assert!(asset_pool.assets.iter().any(|a| a.id() == Some(AssetID(2))));
         // Check that the new asset has the correct agent
         assert!(
             asset_pool
-                .active
+                .assets
                 .iter()
                 .any(|a| a.agent_id() == Some(&"agent_new".into()))
         );
@@ -1974,10 +1975,7 @@ mod tests {
         asset_pool.extend(new_assets);
 
         // Check that assets are sorted by ID
-        let ids: Vec<u32> = asset_pool
-            .iter_active()
-            .map(|a| a.id().unwrap().0)
-            .collect();
+        let ids: Vec<u32> = asset_pool.iter().map(|a| a.id().unwrap().0).collect();
         assert_equal(ids, 0..4);
     }
 
@@ -1986,17 +1984,17 @@ mod tests {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        let original_count = asset_pool.active.len();
+        let original_count = asset_pool.assets.len();
 
         // The extend method expects unique assets - adding duplicates would violate
         // the debug assertion, so this test verifies the normal case
         asset_pool.extend(Vec::new());
 
-        assert_eq!(asset_pool.active.len(), original_count);
+        assert_eq!(asset_pool.assets.len(), original_count);
         // Verify all assets are still unique (this is what the debug_assert checks)
         assert_eq!(
-            asset_pool.active.iter().unique().count(),
-            asset_pool.active.len()
+            asset_pool.assets.iter().unique().count(),
+            asset_pool.assets.len()
         );
     }
 
@@ -2034,8 +2032,8 @@ mod tests {
 
         // next_id should have incremented for each new asset
         assert_eq!(asset_pool.next_id, 4);
-        assert_eq!(asset_pool.active[2].id(), Some(AssetID(2)));
-        assert_eq!(asset_pool.active[3].id(), Some(AssetID(3)));
+        assert_eq!(asset_pool.assets[2].id(), Some(AssetID(2)));
+        assert_eq!(asset_pool.assets[3].id(), Some(AssetID(3)));
     }
 
     #[rstest]
@@ -2043,19 +2041,19 @@ mod tests {
         // Commission some assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        assert_eq!(asset_pool.active.len(), 2);
+        assert_eq!(asset_pool.assets.len(), 2);
 
         // Remove one asset from the active pool (simulating it being removed elsewhere)
-        let removed_asset = asset_pool.active.remove(0);
-        assert_eq!(asset_pool.active.len(), 1);
+        let removed_asset = asset_pool.assets.remove(0);
+        assert_eq!(asset_pool.assets.len(), 1);
 
         // Try to mothball both the removed asset (not in active) and an active asset
-        let assets_to_check = vec![removed_asset.clone(), asset_pool.active[0].clone()];
+        let assets_to_check = vec![removed_asset.clone(), asset_pool.assets[0].clone()];
         asset_pool.mothball_unretained(assets_to_check, 2025);
 
         // Only the removed asset should be mothballed (since it's not in active pool)
-        assert_eq!(asset_pool.active.len(), 2); // And should be back into the pool
-        assert_eq!(asset_pool.active[0].get_mothballed_year(), Some(2025));
+        assert_eq!(asset_pool.assets.len(), 2); // And should be back into the pool
+        assert_eq!(asset_pool.assets[0].get_mothballed_year(), Some(2025));
     }
 
     #[rstest]
@@ -2063,16 +2061,16 @@ mod tests {
         // Commission some assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        assert_eq!(asset_pool.active.len(), 2);
+        assert_eq!(asset_pool.assets.len(), 2);
 
         // Make an asset unused for a few years
         let mothball_years: u32 = 10;
-        asset_pool.active[0]
+        asset_pool.assets[0]
             .make_mut()
             .mothball(2025 - mothball_years);
 
         assert_eq!(
-            asset_pool.active[0].get_mothballed_year(),
+            asset_pool.assets[0].get_mothballed_year(),
             Some(2025 - mothball_years)
         );
 
@@ -2082,7 +2080,7 @@ mod tests {
             .collect_vec();
 
         // Only the removed asset should be decommissioned (since it's not in active pool)
-        assert_eq!(asset_pool.active.len(), 1); // Active pool unchanged
+        assert_eq!(asset_pool.assets.len(), 1); // Active pool unchanged
         assert_eq!(decommissioned.len(), 1);
         assert_eq!(decommissioned[0].decommission_year(), Some(2025));
     }
@@ -2092,20 +2090,20 @@ mod tests {
         // Commission some assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        let all_assets = asset_pool.active.clone();
+        let all_assets = asset_pool.assets.clone();
 
         // Clear the active pool (simulating all assets being removed)
-        asset_pool.active.clear();
+        asset_pool.assets.clear();
 
         // Try to mothball the assets that are no longer active
         asset_pool.mothball_unretained(all_assets.clone(), 2025);
 
         // All assets should be mothballed
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.active[0].id(), all_assets[0].id());
-        assert_eq!(asset_pool.active[0].get_mothballed_year(), Some(2025));
-        assert_eq!(asset_pool.active[1].id(), all_assets[1].id());
-        assert_eq!(asset_pool.active[1].get_mothballed_year(), Some(2025));
+        assert_eq!(asset_pool.assets.len(), 2);
+        assert_eq!(asset_pool.assets[0].id(), all_assets[0].id());
+        assert_eq!(asset_pool.assets[0].get_mothballed_year(), Some(2025));
+        assert_eq!(asset_pool.assets[1].id(), all_assets[1].id());
+        assert_eq!(asset_pool.assets[1].get_mothballed_year(), Some(2025));
     }
 
     #[rstest]
