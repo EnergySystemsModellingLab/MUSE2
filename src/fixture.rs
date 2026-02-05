@@ -418,14 +418,14 @@ mod tests {
     #[test]
     fn patch_and_validate_simple_fail() {
         let patch = FilePatch::new("commodities.csv")
-            .with_deletion("RSHEAT,Residential heating,svd,daynight,NOUNIT");
+            .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_validate_simple!(vec![patch]).is_err());
     }
 
     #[test]
     fn patch_and_run_simple_fail() {
         let patch = FilePatch::new("commodities.csv")
-            .with_deletion("RSHEAT,Residential heating,svd,daynight,NOUNIT");
+            .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_run_simple!(vec![patch]).is_err());
     }
 }
