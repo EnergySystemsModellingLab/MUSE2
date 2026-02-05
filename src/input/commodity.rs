@@ -183,6 +183,13 @@ fn validate_commodity(commodity: &Commodity) -> Result<()> {
         );
     }
 
+    // check that units are provided
+    ensure!(
+        !commodity.units.trim().is_empty(),
+        "Commodity {} requires units to be specified.",
+        commodity.id
+    );
+
     Ok(())
 }
 
@@ -228,6 +235,16 @@ mod tests {
         assert_error!(
             validate_commodity(&commodity),
             "Commodity ELC of type SupplyEqualsDemand cannot be unpriced. Update its pricing strategy to a valid option."
+        );
+    }
+
+    #[test]
+    fn validate_commodity_remove_units() {
+        let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::Unpriced);
+        commodity.units = "   ".into();
+        assert_error!(
+            validate_commodity(&commodity),
+            "Commodity ELC requires units to be specified."
         );
     }
 }

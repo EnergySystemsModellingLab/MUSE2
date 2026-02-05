@@ -8,10 +8,10 @@ use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::iproduct;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -87,11 +87,13 @@ pub fn read_process_flows(
 /// proportionally based on flow coefficients. This only makes sense if all outputs share
 /// the same units.
 fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) -> Result<()> {
-    // for each map of process flows corresponding to a process
+    // Collect all validation errors so that the error reported is deterministic,
+    // this is needed because ProcessFlows are stored in a HashMap.
+    let mut errors: Vec<(ProcessID, RegionID, u32, Vec<&str>)> = Vec::new();
+
     for (process_id, process_flows) in flows_map {
-        // for each region/year of the process flows
         for ((region_id, year), flows) in process_flows {
-            let sed_svd_output_units: HashSet<&str> = flows
+            let sed_svd_output_units: IndexSet<&str> = flows
                 .values()
                 .filter_map(|flow| {
                     let commodity = &flow.commodity;
@@ -104,12 +106,31 @@ fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) 
                 })
                 .collect();
 
-            ensure!(
-                sed_svd_output_units.len() <= 1,
-                "Process {process_id} has SED/SVD outputs with different units: {sed_svd_output_units:?} \
-                 in region: {region_id} and year: {year}"
-            );
+            // Record error if validation fails
+            if sed_svd_output_units.len() > 1 {
+                errors.push((
+                    process_id.clone(),
+                    region_id.clone(),
+                    *year,
+                    sed_svd_output_units.into_iter().collect(),
+                ));
+            }
         }
+    }
+
+    // Sort errors for deterministic ordering
+    errors.sort_by_key(|(process_id, region_id, year, _)| {
+        (process_id.clone(), region_id.clone(), *year)
+    });
+
+    // Return first error if any exist
+    if let Some((process_id, region_id, year, units)) = errors.first() {
+        ensure!(
+            false,
+            "Process {process_id} has SED/SVD outputs with different units: [{}] \
+             in region: {region_id} and year: {year}",
+            units.join(", ")
+        );
     }
 
     Ok(())
@@ -495,9 +516,11 @@ mod tests {
 
         // Different units should cause validation to fail
         let result = validate_output_flows_units(&flows_map);
+        // Note that the error contents are sorted so we should deterministically get
+        // this exact error message.
         assert_error!(
             result,
-            "Process process1 has SED/SVD outputs with different units: {\"tonnes\", \"PJ\"}"
+            "Process process1 has SED/SVD outputs with different units: [PJ, tonnes] in region: GBR and year: 2010"
         );
     }
 
