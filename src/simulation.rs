@@ -63,7 +63,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         info!("Milestone year: {year}");
 
         // Decommission assets whose lifetime has passed
-        decommissioned.extend(asset_pool.decommission_old(year));
+        asset_pool.decommission_old(year, &mut decommissioned);
 
         // Commission user-defined assets for this year
         asset_pool.commission_new(year, &mut user_assets);
@@ -123,8 +123,11 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Decommission unused assets
         asset_pool.mothball_unretained(existing_assets, year);
-        decommissioned
-            .extend(asset_pool.decommission_mothballed(year, model.parameters.mothball_years));
+        asset_pool.decommission_mothballed(
+            year,
+            model.parameters.mothball_years,
+            &mut decommissioned,
+        );
 
         // Write assets
         writer.write_assets(decommissioned.iter().chain(asset_pool.iter()))?;
