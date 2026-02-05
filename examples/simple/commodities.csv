@@ -1,6 +1,6 @@
 id,description,type,time_slice_level,units
-GASPRD,Gas produced,sed,season,NOUNIT
-GASNAT,Natural gas,sed,season,NOUNIT
-ELCTRI,Electricity,sed,daynight,NOUNIT
-RSHEAT,Residential heating,svd,daynight,NOUNIT
-CO2EMT,CO2 emitted,oth,annual,NOUNIT
+GASPRD,Gas produced,sed,season,PJ
+GASNAT,Natural gas,sed,season,PJ
+ELCTRI,Electricity,sed,daynight,PJ
+RSHEAT,Residential heating,svd,daynight,PJ
+CO2EMT,CO2 emitted,oth,annual,ktCO2

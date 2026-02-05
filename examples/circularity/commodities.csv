@@ -1,13 +1,13 @@
 id,description,type,time_slice_level,units
-OILCRD,Crude oil,sed,season,NOUNIT
-GASPRD,Gas produced,sed,season,NOUNIT
-GASOLI,Gasoline,sed,season,NOUNIT
-DIESEL,Diesel,sed,season,NOUNIT
-GASNAT,Natural gas,sed,season,NOUNIT
-ELCTRI,Electricity,sed,daynight,NOUNIT
-H2YPRD,Hydrogen,sed,season,NOUNIT
-TPASKM,Passenger kms,svd,daynight,NOUNIT
-RSHEAT,Residential heating,svd,daynight,NOUNIT
-CO2EMT,CO2 emitted,oth,annual,NOUNIT
-BIOPRD,Biomass produced,sed,season,NOUNIT
-BIOPEL,Biomass pellets,sed,season,NOUNIT
+OILCRD,Crude oil,sed,season,PJ
+GASPRD,Gas produced,sed,season,PJ
+GASOLI,Gasoline,sed,season,PJ
+DIESEL,Diesel,sed,season,PJ
+GASNAT,Natural gas,sed,season,PJ
+ELCTRI,Electricity,sed,daynight,PJ
+H2YPRD,Hydrogen,sed,season,PJ
+TPASKM,Passenger kms,svd,daynight,bpkm
+RSHEAT,Residential heating,svd,daynight,PJ
+CO2EMT,CO2 emitted,oth,annual,ktCO2
+BIOPRD,Biomass produced,sed,season,PJ
+BIOPEL,Biomass pellets,sed,season,PJ

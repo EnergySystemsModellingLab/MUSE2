@@ -184,36 +184,6 @@ pub fn other_commodity() -> Commodity {
     }
 }
 
-#[fixture]
-pub fn sed_commodity_pj() -> Commodity {
-    Commodity {
-        id: "sed_pj".into(),
-        description: "Test SED commodity (PJ)".into(),
-        kind: CommodityType::SupplyEqualsDemand,
-        time_slice_level: TimeSliceLevel::DayNight,
-        pricing_strategy: PricingStrategy::Shadow,
-        levies_prod: CommodityLevyMap::new(),
-        levies_cons: CommodityLevyMap::new(),
-        demand: DemandMap::new(),
-        units: "PJ".into(),
-    }
-}
-
-#[fixture]
-pub fn sed_commodity_tonnes() -> Commodity {
-    Commodity {
-        id: "sed_tonnes".into(),
-        description: "Test SED commodity (tonnes)".into(),
-        kind: CommodityType::SupplyEqualsDemand,
-        time_slice_level: TimeSliceLevel::DayNight,
-        pricing_strategy: PricingStrategy::Shadow,
-        levies_prod: CommodityLevyMap::new(),
-        levies_cons: CommodityLevyMap::new(),
-        demand: DemandMap::new(),
-        units: "tonnes".into(),
-    }
-}
-
 pub fn get_svd_map(commodity: &Commodity) -> HashMap<CommodityID, &Commodity> {
     iter::once((commodity.id.clone(), commodity)).collect()
 }

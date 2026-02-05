@@ -3,4 +3,4 @@ electricity,Electricity,sed,daynight,PJ
 gas,Gas,sed,daynight,PJ
 heat,Heat,svd,daynight,PJ
 wind,Wind,oth,daynight,PJ
-CO2f,Carbon dioxide,oth,daynight,kt
+CO2f,Carbon dioxide,oth,daynight,ktCO2

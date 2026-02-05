@@ -49,4 +49,4 @@ fields:
       This field is used for validation only and is not used for internal unit conversions. MUSE
       will validate that all SED/SVD output flows from the same process have the same units,
       as the annual fixed costs are distributed proportionally between outputs based on flow coefficients.
-      E.g. `Petajoules`, `Tonnes`.
+      E.g. "PJ" (Petajoules), "t" (Tonnes).

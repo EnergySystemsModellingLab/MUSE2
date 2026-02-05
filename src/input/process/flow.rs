@@ -106,8 +106,8 @@ fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) 
 
             ensure!(
                 sed_svd_output_units.len() <= 1,
-                "Process '{process_id}' has SED/SVD outputs with different units \
-                 (region: {region_id}, year: {year}): {sed_svd_output_units:?}"
+                "Process {process_id} has SED/SVD outputs with different units: {sed_svd_output_units:?} \
+                 in region: {region_id} and year: {year}"
             );
         }
     }
@@ -373,18 +373,19 @@ fn validate_secondary_flows(
 mod tests {
     use super::*;
     use crate::commodity::Commodity;
+    use crate::commodity::{CommodityLevyMap, DemandMap, PricingStrategy};
     use crate::fixture::{
         assert_error, assert_validate_fails_with_simple, assert_validate_ok_simple,
-        other_commodity, process, sed_commodity, sed_commodity_pj, sed_commodity_tonnes,
-        svd_commodity,
+        other_commodity, process, sed_commodity, svd_commodity,
     };
     use crate::patch::FilePatch;
     use crate::process::{FlowType, Process, ProcessFlow, ProcessMap};
+    use crate::time_slice::TimeSliceLevel;
     use crate::units::{FlowPerActivity, MoneyPerFlow};
     use indexmap::IndexMap;
     use itertools::Itertools;
     use map_macro::hash_map;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use std::iter;
     use std::rc::Rc;
 
@@ -414,6 +415,36 @@ mod tests {
         let processes = iter::once((process.id.clone(), process.into())).collect();
 
         (processes, flows)
+    }
+
+    #[fixture]
+    pub fn sed_commodity_pj() -> Commodity {
+        Commodity {
+            id: "sed_pj".into(),
+            description: "Test SED commodity (PJ)".into(),
+            kind: CommodityType::SupplyEqualsDemand,
+            time_slice_level: TimeSliceLevel::DayNight,
+            pricing_strategy: PricingStrategy::Shadow,
+            levies_prod: CommodityLevyMap::new(),
+            levies_cons: CommodityLevyMap::new(),
+            demand: DemandMap::new(),
+            units: "PJ".into(),
+        }
+    }
+
+    #[fixture]
+    pub fn sed_commodity_tonnes() -> Commodity {
+        Commodity {
+            id: "sed_tonnes".into(),
+            description: "Test SED commodity (tonnes)".into(),
+            kind: CommodityType::SupplyEqualsDemand,
+            time_slice_level: TimeSliceLevel::DayNight,
+            pricing_strategy: PricingStrategy::Shadow,
+            levies_prod: CommodityLevyMap::new(),
+            levies_cons: CommodityLevyMap::new(),
+            demand: DemandMap::new(),
+            units: "tonnes".into(),
+        }
     }
 
     #[rstest]
@@ -464,12 +495,9 @@ mod tests {
 
         // Different units should cause validation to fail
         let result = validate_output_flows_units(&flows_map);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("has SED/SVD outputs with different units")
+        assert_error!(
+            result,
+            "Process process1 has SED/SVD outputs with different units: {\"tonnes\", \"PJ\"}"
         );
     }
 
@@ -511,6 +539,58 @@ mod tests {
         );
 
         // Single output should always pass validation
+        validate_output_flows_units(&flows_map).unwrap();
+    }
+
+    #[rstest]
+    fn no_sed_svd_outputs(other_commodity: Commodity, process: Process) {
+        let oth_commodity_1 = Rc::new(other_commodity.clone());
+        let oth_commodity_2 = Rc::new(other_commodity.clone());
+        let (_, flows_map) = build_maps(
+            process,
+            [
+                (CommodityID("oth1".into()), flow(oth_commodity_1, 1.0)),
+                (CommodityID("oth2".into()), flow(oth_commodity_2, 2.0)),
+            ]
+            .into_iter(),
+            None,
+        );
+
+        // Processes with only OTH outputs should pass validation
+        validate_output_flows_units(&flows_map).unwrap();
+    }
+
+    #[rstest]
+    fn sed_svd_inputs_different_units_ignored(
+        sed_commodity_pj: Commodity,
+        sed_commodity_tonnes: Commodity,
+        svd_commodity: Commodity,
+        process: Process,
+    ) {
+        // Ensure input commodities have different units
+        assert_ne!(sed_commodity_pj.units, sed_commodity_tonnes.units);
+
+        // Output commodity shares units with one input
+        assert_eq!(svd_commodity.units, sed_commodity_pj.units);
+
+        let input1 = Rc::new(sed_commodity_pj);
+        let input2 = Rc::new(sed_commodity_tonnes);
+        let output = Rc::new(svd_commodity);
+
+        let (_, flows_map) = build_maps(
+            process,
+            [
+                // Two inputs with different units (negative coefficients)
+                (input1.id.clone(), flow(input1.clone(), -1.0)),
+                (input2.id.clone(), flow(input2.clone(), -2.0)),
+                // Single output (positive coefficient)
+                (output.id.clone(), flow(output.clone(), 3.0)),
+            ]
+            .into_iter(),
+            None,
+        );
+
+        // Validation should pass because only outputs are checked
         validate_output_flows_units(&flows_map).unwrap();
     }
 
