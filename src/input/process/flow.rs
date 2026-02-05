@@ -7,7 +7,7 @@ use crate::process::{
 use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use crate::year::parse_year_str;
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use indexmap::{IndexMap, IndexSet};
 use itertools::iproduct;
 use serde::Deserialize;
@@ -125,8 +125,7 @@ fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) 
 
     // Return first error if any exist
     if let Some((process_id, region_id, year, units)) = errors.first() {
-        ensure!(
-            false,
+        bail!(
             "Process {process_id} has SED/SVD outputs with different units: [{}] \
              in region: {region_id} and year: {year}",
             units.join(", ")
