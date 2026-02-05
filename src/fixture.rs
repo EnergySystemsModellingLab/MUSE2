@@ -150,6 +150,7 @@ pub fn svd_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
+        units: "PJ".into(),
     }
 }
 
@@ -164,6 +165,7 @@ pub fn sed_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
+        units: "PJ".into(),
     }
 }
 
@@ -178,6 +180,7 @@ pub fn other_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
+        units: "PJ".into(),
     }
 }
 
@@ -415,14 +418,14 @@ mod tests {
     #[test]
     fn patch_and_validate_simple_fail() {
         let patch = FilePatch::new("commodities.csv")
-            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+            .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_validate_simple!(vec![patch]).is_err());
     }
 
     #[test]
     fn patch_and_run_simple_fail() {
         let patch = FilePatch::new("commodities.csv")
-            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+            .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_run_simple!(vec![patch]).is_err());
     }
 }

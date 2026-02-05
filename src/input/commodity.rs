@@ -30,6 +30,7 @@ struct CommodityRaw {
     pub kind: CommodityType,
     pub time_slice_level: TimeSliceLevel,
     pub pricing_strategy: Option<PricingStrategy>,
+    pub units: String,
 }
 
 /// Read commodity data from the specified model directory.
@@ -119,6 +120,7 @@ where
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
+            units: commodity_raw.units,
         };
 
         validate_commodity(&commodity)?;
@@ -181,6 +183,13 @@ fn validate_commodity(commodity: &Commodity) -> Result<()> {
         );
     }
 
+    // check that units are provided
+    ensure!(
+        !commodity.units.trim().is_empty(),
+        "Commodity {} requires units to be specified.",
+        commodity.id
+    );
+
     Ok(())
 }
 
@@ -200,6 +209,7 @@ mod tests {
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
+            units: "PJ".into(),
         }
     }
 
@@ -225,6 +235,16 @@ mod tests {
         assert_error!(
             validate_commodity(&commodity),
             "Commodity ELC of type SupplyEqualsDemand cannot be unpriced. Update its pricing strategy to a valid option."
+        );
+    }
+
+    #[test]
+    fn validate_commodity_remove_units() {
+        let mut commodity = make_commodity(CommodityType::Other, PricingStrategy::Unpriced);
+        commodity.units = "   ".into();
+        assert_error!(
+            validate_commodity(&commodity),
+            "Commodity ELC requires units to be specified."
         );
     }
 }
