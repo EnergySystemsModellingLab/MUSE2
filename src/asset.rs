@@ -1274,23 +1274,24 @@ impl AssetPool {
         mothball_years: u32,
         decommissioned: &mut E,
     ) {
-        let to_decommission =
-            self.assets
-                .extract_if(.., move |asset| {
-                    asset
-                        .get_mothballed_year()
-                        .is_some_and(|myear| myear <= year - min(mothball_years, year))
-                })
-                .map(move |mut asset| {
-                    let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
-                    asset.make_mut().decommission(
+        let to_decommission = self
+            .assets
+            .extract_if(.., move |asset| {
+                asset
+                    .get_mothballed_year()
+                    .is_some_and(|myear| myear <= year - min(mothball_years, year))
+            })
+            .map(move |mut asset| {
+                let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
+                asset.make_mut().decommission(
                     decommissioned,
                     &format!(
                         "The asset has not been used for the set mothball years ({mothball_years} \
-                        years)."),
+                        years)."
+                    ),
                 );
-                    asset
-                });
+                asset
+            });
         decommissioned.extend(to_decommission);
     }
 
