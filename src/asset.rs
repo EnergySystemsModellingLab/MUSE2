@@ -1238,13 +1238,12 @@ impl Hash for AssetRef {
                 // asset
                 id.hash(state);
             }
-            AssetState::Candidate | AssetState::Selected { .. } => {
-                // Hashed based on process_id, region_id, commission_year and (for Selected assets)
-                // agent_id
+            AssetState::Candidate | AssetState::Selected { .. } | AssetState::Parent { .. } => {
                 self.0.process.id.hash(state);
                 self.0.region_id.hash(state);
                 self.0.commission_year.hash(state);
                 self.0.agent_id().hash(state);
+                self.0.group_id().hash(state);
             }
             state => {
                 // We don't need to hash other types of asset
