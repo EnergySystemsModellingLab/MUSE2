@@ -505,7 +505,7 @@ impl Asset {
     ) -> RangeInclusive<Activity> {
         let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
         let cap2act = self.process.capacity_to_activity;
-        let max_activity = self.capacity.total_capacity() * cap2act;
+        let max_activity = self.total_capacity() * cap2act;
         let lb = max_activity * *activity_per_capacity_limits.start();
         let ub = max_activity * *activity_per_capacity_limits.end();
         lb..=ub
@@ -736,8 +736,7 @@ impl Asset {
         annual_activity: Activity,
     ) -> MoneyPerActivity {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
-        let total_annual_capital_cost =
-            annual_capital_cost_per_capacity * self.capacity.total_capacity();
+        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.total_capacity();
         assert!(
             annual_activity > Activity::EPSILON,
             "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
@@ -759,7 +758,7 @@ impl Asset {
 
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
-        self.capacity.total_capacity() * self.process.capacity_to_activity
+        self.total_capacity() * self.process.capacity_to_activity
     }
 
     /// Get a specific process flow
@@ -860,6 +859,11 @@ impl Asset {
         self.capacity
     }
 
+    /// Get the total capacity for this asset
+    pub fn total_capacity(&self) -> Capacity {
+        self.capacity.total_capacity()
+    }
+
     /// Set the capacity for this asset (only for Candidate or Selected assets)
     pub fn set_capacity(&mut self, capacity: AssetCapacity) {
         assert!(
@@ -930,7 +934,7 @@ impl Asset {
             "Commissioning '{}' asset (ID: {}, capacity: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            self.capacity.total_capacity(),
+            self.total_capacity(),
             agent_id,
             reason
         );
@@ -948,7 +952,7 @@ impl Asset {
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.capacity.total_capacity()).unwrap();
+        check_capacity_valid_for_asset(self.total_capacity()).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
 
@@ -1055,7 +1059,7 @@ impl std::fmt::Debug for Asset {
             .field("state", &self.state)
             .field("process_id", &self.process_id())
             .field("region_id", &self.region_id)
-            .field("capacity", &self.capacity.total_capacity())
+            .field("capacity", &self.total_capacity())
             .field("commission_year", &self.commission_year)
             .finish()
     }
@@ -1456,7 +1460,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.capacity.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
+        (asset.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
             .value()
             .ceil() as usize
     }
@@ -1694,19 +1698,17 @@ mod tests {
         // Check all children have capacity equal to unit_size
         for child in children.clone() {
             assert_eq!(
-                child.capacity.total_capacity(),
+                child.total_capacity(),
                 unit_size,
                 "Child capacity should equal unit_size"
             );
         }
 
         // Check total capacity is >= parent capacity
-        let total_child_capacity: Capacity = children
-            .iter()
-            .map(|child| child.capacity.total_capacity())
-            .sum();
+        let total_child_capacity: Capacity =
+            children.iter().map(|child| child.total_capacity()).sum();
         assert!(
-            total_child_capacity >= asset.capacity.total_capacity(),
+            total_child_capacity >= asset.total_capacity(),
             "Total capacity should be >= parent capacity"
         );
     }
