@@ -17,6 +17,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::cmp::{Ordering, min};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Deref, RangeInclusive, Sub};
@@ -251,7 +252,7 @@ pub struct Asset {
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
-    capacity: AssetCapacity,
+    capacity: Cell<AssetCapacity>,
     /// The year the asset was/will be commissioned
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
@@ -467,7 +468,7 @@ impl Asset {
             flows,
             process_parameter,
             region_id,
-            capacity,
+            capacity: Cell::new(capacity),
             commission_year,
             max_decommission_year,
         })
@@ -856,12 +857,12 @@ impl Asset {
 
     /// Get the capacity for this asset
     pub fn capacity(&self) -> AssetCapacity {
-        self.capacity
+        self.capacity.get()
     }
 
     /// Get the total capacity for this asset
     pub fn total_capacity(&self) -> Capacity {
-        self.capacity.total_capacity()
+        self.capacity().total_capacity()
     }
 
     /// Set the capacity for this asset (only for Candidate or Selected assets)
@@ -877,8 +878,8 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
-        self.capacity.assert_same_type(capacity);
-        self.capacity = capacity;
+        self.capacity().assert_same_type(capacity);
+        self.capacity.set(capacity);
     }
 
     /// Increase the capacity for this asset (only for Candidate assets)
@@ -891,7 +892,7 @@ impl Asset {
             capacity.total_capacity() > Capacity(0.0),
             "Capacity increase must be positive"
         );
-        self.capacity = self.capacity + capacity;
+        self.capacity.update(|c| c + capacity);
     }
 
     /// Decommission this asset
@@ -1007,7 +1008,7 @@ impl Asset {
 
     /// Get the unit size for this asset's capacity (if any)
     pub fn unit_size(&self) -> Option<Capacity> {
-        match self.capacity {
+        match self.capacity() {
             AssetCapacity::Discrete(_, size) => Some(size),
             AssetCapacity::Continuous(_) => None,
         }
@@ -1038,13 +1039,13 @@ impl Asset {
         );
 
         // Ensure the asset is discrete
-        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity else {
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
             panic!("Only discrete assets can be divided")
         };
 
         // Divide the asset into `n_units` children of size `unit_size`
         let child_asset = Self {
-            capacity: AssetCapacity::Discrete(1, unit_size),
+            capacity: Cell::new(AssetCapacity::Discrete(1, unit_size)),
             ..self.clone()
         };
         let child_asset = AssetRef::from(Rc::new(child_asset));
