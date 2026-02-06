@@ -11,14 +11,15 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
-    Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow, Year,
+    Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerFlow, Year,
 };
 use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -185,17 +186,24 @@ impl VariableMap {
 /// Note that this only includes commodity flows which relate to existing assets, so not every
 /// commodity in the simulation will necessarily be represented.
 fn create_flow_map<'a>(
+    existing_assets: &[AssetRef],
     activity: impl IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 ) -> FlowMap {
     // The decision variables represent assets' activity levels, not commodity flows. We
     // multiply this value by the flow coeffs to get commodity flows.
     let mut flows = FlowMap::new();
     for (asset, time_slice, activity) in activity {
+        let n_units = Dimensionless(asset.num_children().unwrap_or(1) as f64);
         for flow in asset.iter_flows() {
             let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
-            let flow_value = activity * flow.coeff;
+            let flow_value = activity * flow.coeff / n_units;
             flows.insert(flow_key, flow_value);
         }
+    }
+
+    let mut child_count = HashMap::new();
+    for asset in existing_assets.iter() {
+        if let Some(parent) = asset.parent() {}
     }
 
     flows
