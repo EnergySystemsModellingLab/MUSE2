@@ -416,7 +416,7 @@ fn select_assets_for_cycle(
                 debug!(
                     "Capacity of asset '{}' modified during cycle balancing ({} to {})",
                     asset.process_id(),
-                    asset.capacity().total_capacity(),
+                    asset.total_capacity(),
                     new_capacity.total_capacity()
                 );
                 asset.make_mut().set_capacity(*new_capacity);

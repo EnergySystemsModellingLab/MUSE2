@@ -141,7 +141,7 @@ impl AssetRow {
             group_id: asset.group_id(),
             commission_year: asset.commission_year(),
             decommission_year: asset.decommission_year(),
-            capacity: asset.capacity().total_capacity(),
+            capacity: asset.total_capacity(),
         }
     }
 }
