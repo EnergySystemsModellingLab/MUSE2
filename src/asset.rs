@@ -872,6 +872,16 @@ impl Asset {
         }
     }
 
+    /// Get the number of children this asset has.
+    ///
+    /// If this asset is not a parent, then `None` is returned.
+    pub fn num_children(&self) -> Option<u32> {
+        match &self.state {
+            AssetState::Parent { .. } => Some(self.capacity().n_units().unwrap()),
+            _ => None,
+        }
+    }
+
     /// Get the group ID for this asset, if any
     pub fn group_id(&self) -> Option<AssetGroupID> {
         match &self.state {
