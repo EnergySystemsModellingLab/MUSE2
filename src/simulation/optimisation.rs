@@ -18,6 +18,7 @@ use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -397,6 +398,21 @@ fn filter_input_prices(
         .collect()
 }
 
+/// Get the parent for each asset.
+///
+/// Child assets are converted to their parents and non-divisible assets are returned as is. Each
+/// parent asset is returned only once.
+fn convert_assets_to_parents(assets: &[AssetRef]) -> impl Iterator<Item = AssetRef> {
+    let mut parents = HashSet::new();
+    assets
+        .iter()
+        .filter_map(move |asset| match asset.parent() {
+            Some(parent) => parents.insert(parent.clone()).then_some(parent),
+            None => Some(asset),
+        })
+        .cloned()
+}
+
 /// Provides the interface for running the dispatch optimisation.
 ///
 /// The run will attempt to meet unmet demand: if the solver reports infeasibility
@@ -408,7 +424,7 @@ fn filter_input_prices(
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
-    existing_assets: &'run [AssetRef],
+    existing_assets: Vec<AssetRef>,
     flexible_capacity_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
@@ -420,9 +436,12 @@ pub struct DispatchRun<'model, 'run> {
 impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Create a new [`DispatchRun`] for the specified model and assets for a given year
     pub fn new(model: &'model Model, assets: &'run [AssetRef], year: u32) -> Self {
+        // Convert child assets to their parents
+        let existing_assets = convert_assets_to_parents(assets).collect();
+
         Self {
             model,
-            existing_assets: assets,
+            existing_assets,
             flexible_capacity_assets: &[],
             candidate_assets: &[],
             markets_to_balance: &[],
@@ -575,7 +594,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &mut problem,
             self.model,
             input_prices,
-            self.existing_assets,
+            &self.existing_assets,
             self.candidate_assets,
             self.year,
         );
