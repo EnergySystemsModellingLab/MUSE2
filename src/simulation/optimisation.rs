@@ -633,17 +633,11 @@ fn add_activity_variables(
     let start = problem.num_cols();
 
     for (asset, time_slice) in iproduct!(assets.iter(), time_slice_info.iter_ids()) {
-        // If this is a child asset, we want the parent
-        let asset = asset.parent().unwrap_or(asset);
-
-        // Add a new variable, if one does not already exist. There may be an existing variable if
-        // this is a child asset.
-        variables
-            .entry((asset.clone(), time_slice.clone()))
-            .or_insert_with(|| {
-                let coeff = calculate_activity_coefficient(asset, year, time_slice, input_prices);
-                problem.add_column(coeff.value(), 0.0..)
-            });
+        let coeff = calculate_activity_coefficient(asset, year, time_slice, input_prices);
+        let var = problem.add_column(coeff.value(), 0.0..);
+        let key = (asset.clone(), time_slice.clone());
+        let existing = variables.insert(key, var).is_some();
+        assert!(!existing, "Duplicate entry for var");
     }
 
     start..problem.num_cols()
