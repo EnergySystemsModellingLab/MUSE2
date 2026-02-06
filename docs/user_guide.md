@@ -85,11 +85,11 @@ The first few lines should look something like:
 
 You should see that a new `muse2_results` folder has been created. This folder will contain the
 output for your model in a subfolder called `new_model`. For information about how to interpret
-these files, see [the documentation for output files]. We also have some [example Jupyter
-notebooks].
+these files, see [the documentation for output files]. There is also the [`muse2_data_analysis`
+repository], which contains example Jupyter notebooks for processing output data.
 
 [the documentation for output files]: file_formats/output_files.md
-[example Jupyter notebooks]: https://github.com/EnergySystemsModellingLab/MUSE2/tree/main/docs/notebooks
+[`muse2_data_analysis` repository]: https://github.com/EnergySystemsModellingLab/muse2_data_analysis
 
 ### Next steps
 
