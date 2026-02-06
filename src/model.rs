@@ -1,5 +1,6 @@
 //! The model represents the static input data provided by the user.
 use crate::agent::AgentMap;
+use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::ProcessMap;
 use crate::region::{Region, RegionID, RegionMap};
@@ -27,6 +28,8 @@ pub struct Model {
     pub time_slice_info: TimeSliceInfo,
     /// Regions for the simulation
     pub regions: RegionMap,
+    /// User-defined assets
+    pub user_assets: Vec<AssetRef>,
     /// Commodity ordering for each milestone year
     pub investment_order: HashMap<u32, Vec<InvestmentSet>>,
 }
