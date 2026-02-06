@@ -17,6 +17,7 @@ use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -179,6 +180,27 @@ impl VariableMap {
     }
 }
 
+/// Create a map of commodity flows for each asset's coeffs at every time slice.
+///
+/// Note that this only includes commodity flows which relate to existing assets, so not every
+/// commodity in the simulation will necessarily be represented.
+fn create_flow_map<'a>(
+    activity: impl IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
+) -> FlowMap {
+    // The decision variables represent assets' activity levels, not commodity flows. We
+    // multiply this value by the flow coeffs to get commodity flows.
+    let mut flows = FlowMap::new();
+    for (asset, time_slice, activity) in activity {
+        for flow in asset.iter_flows() {
+            let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
+            let flow_value = activity * flow.coeff;
+            flows.insert(flow_key, flow_value);
+        }
+    }
+
+    flows
+}
+
 /// The solution to the dispatch optimisation problem
 #[allow(clippy::struct_field_names)]
 pub struct Solution<'a> {
@@ -186,6 +208,7 @@ pub struct Solution<'a> {
     variables: VariableMap,
     time_slice_info: &'a TimeSliceInfo,
     constraint_keys: ConstraintKeys,
+    flow_map: Cell<Option<FlowMap>>,
     /// The objective value for the solution
     pub objective_value: Money,
 }
@@ -195,19 +218,13 @@ impl Solution<'_> {
     ///
     /// Note that this only includes commodity flows which relate to existing assets, so not every
     /// commodity in the simulation will necessarily be represented.
+    ///
+    /// Note: The flow map is actually already created and is taken from `self` when this method is
+    /// called (hence it can only be called once). The reason for this is because we need to convert
+    /// back from parent assets to child assets. We can remove this hack once we have updated all
+    /// the users of this interface to be able to handle parent assets correctly.
     pub fn create_flow_map(&self) -> FlowMap {
-        // The decision variables represent assets' activity levels, not commodity flows. We
-        // multiply this value by the flow coeffs to get commodity flows.
-        let mut flows = FlowMap::new();
-        for (asset, time_slice, activity) in self.iter_activity_for_existing() {
-            for flow in asset.iter_flows() {
-                let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
-                let flow_value = activity * flow.coeff;
-                flows.insert(flow_key, flow_value);
-            }
-        }
-
-        flows
+        self.flow_map.take().expect("Flow map already created")
     }
 
     /// Activity for all assets (existing and candidate, if present)
@@ -607,13 +624,18 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // Solve model
         let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
 
-        Ok(Solution {
+        let solution = Solution {
             solution: solution.get_solution(),
             variables,
             time_slice_info: &self.model.time_slice_info,
             constraint_keys,
+            flow_map: Cell::default(),
             objective_value: Money(solution.objective_value()),
-        })
+        };
+        solution
+            .flow_map
+            .set(Some(create_flow_map(solution.iter_activity())));
+        Ok(solution)
     }
 }
 
