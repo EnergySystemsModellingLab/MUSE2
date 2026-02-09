@@ -12,7 +12,7 @@ keywords = ["energy", "modelling"]
 categories = ["science", "simulation", "command-line-utilities"]
 
 [dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 csv = "1.4.0"
 log = "0.4.29"
 float-cmp = "0.10.0"
