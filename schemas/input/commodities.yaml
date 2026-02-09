@@ -42,3 +42,11 @@ fields:
 
       If unspecified, the commodity will use the default pricing strategy according to the commodity
       type: `shadow` for `svd` and `sed` commodities, and `unpriced` for `oth` commodities.
+  - name: units
+    type: string
+    description: The units of measurement for this commodity
+    notes: |
+      This field is used for validation only and is not used for internal unit conversions. MUSE
+      will validate that all SED/SVD output flows from the same process have the same units,
+      as the annual fixed costs are distributed proportionally between outputs based on flow coefficients.
+      E.g. "PJ" (Petajoules), "t" (Tonnes).

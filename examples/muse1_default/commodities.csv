@@ -1,6 +1,6 @@
-id,description,type,time_slice_level
-electricity,Electricity,sed,daynight
-gas,Gas,sed,daynight
-heat,Heat,svd,daynight
-wind,Wind,oth,daynight
-CO2f,Carbon dioxide,oth,daynight
+id,description,type,time_slice_level,units
+electricity,Electricity,sed,daynight,PJ
+gas,Gas,sed,daynight,PJ
+heat,Heat,svd,daynight,PJ
+wind,Wind,oth,daynight,PJ
+CO2f,Carbon dioxide,oth,daynight,ktCO2
