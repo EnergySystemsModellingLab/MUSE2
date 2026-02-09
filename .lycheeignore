@@ -6,6 +6,7 @@
 
 # Often times out
 ^https://iea-etsap.org
+^https://www.contributor-covenant.org
 
 # Server often rejects connection (at least on GitHub runners)
 ^https://allcontributors.org
