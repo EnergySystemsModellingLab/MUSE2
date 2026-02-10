@@ -2290,6 +2290,35 @@ mod tests {
     }
 
     #[rstest]
+    fn asset_decommission_divisible(asset_divisible: Asset) {
+        let asset = AssetRef::from(asset_divisible);
+        let original_capacity = asset.capacity();
+
+        // Commission children
+        let mut children = Vec::new();
+        let mut next_id = 0;
+        asset.into_for_each_child(&mut 0, |parent, mut child| {
+            child
+                .make_mut()
+                .commission(AssetID(next_id), parent.cloned(), "");
+            next_id += 1;
+            children.push(child);
+        });
+
+        let parent = children[0].parent().unwrap().clone();
+        assert_eq!(parent.capacity(), original_capacity);
+        children[0].make_mut().decommission(2020, "");
+
+        let AssetCapacity::Discrete(original_units, original_unit_size) = original_capacity else {
+            panic!("Capacity type should be discrete");
+        };
+        assert_eq!(
+            parent.capacity(),
+            AssetCapacity::Discrete(original_units - 1, original_unit_size)
+        );
+    }
+
+    #[rstest]
     #[should_panic(expected = "Assets with state Candidate cannot be commissioned")]
     fn commission_wrong_states(process: Process) {
         let mut asset =
