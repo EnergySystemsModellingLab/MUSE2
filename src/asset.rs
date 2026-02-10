@@ -1063,7 +1063,7 @@ impl Asset {
         std::iter::repeat_n(child_asset, n_units as usize).collect()
     }
 
-    /// For uncommissioned assets, get the maximum capacity permitted to be installed based on the
+    /// For non-commissioned assets, get the maximum capacity permitted to be installed based on the
     /// investment constraints for the asset's process.
     ///
     /// The limit is taken from the process's investment constraints for the asset's region and
