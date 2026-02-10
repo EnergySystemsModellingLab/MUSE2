@@ -387,10 +387,10 @@ fn select_assets_for_cycle(
         let capacity_limits = flexible_capacity_assets
             .iter()
             .filter_map(|asset| {
-                let agent_id = asset.agent_id().unwrap().clone();
+                let agent_id = asset.agent_id().unwrap();
                 let agent_share = *agent_share_cache
                     .entry(agent_id.clone())
-                    .or_insert_with(|| model.agents[&agent_id].commodity_portions[&key]);
+                    .or_insert_with(|| model.agents[agent_id].commodity_portions[&key]);
                 asset
                     .max_installable_capacity(agent_share)
                     .map(|max_capacity| (asset.clone(), max_capacity))
