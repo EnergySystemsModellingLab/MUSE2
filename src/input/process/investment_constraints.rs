@@ -5,7 +5,7 @@ use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
-use crate::units::{Capacity, Dimensionless};
+use crate::units::{CapacityPerYear, Year};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
@@ -22,7 +22,7 @@ struct ProcessInvestmentConstraintRaw {
     process_id: String,
     regions: String,
     commission_years: String,
-    addition_limit: Capacity,
+    addition_limit: CapacityPerYear,
 }
 
 impl ProcessInvestmentConstraintRaw {
@@ -30,7 +30,7 @@ impl ProcessInvestmentConstraintRaw {
     fn validate(&self) -> Result<()> {
         // Validate that value is finite
         ensure!(
-            self.addition_limit.is_finite() && self.addition_limit >= Capacity(0.0),
+            self.addition_limit.is_finite() && self.addition_limit >= CapacityPerYear(0.0),
             "Invalid value for addition constraint: '{}'; must be non-negative and finite.",
             self.addition_limit
         );
@@ -136,7 +136,7 @@ where
             let years_since_prev = year - prev_year;
 
             // Multiply the addition limit by the number of years since previous milestone.
-            let scaled_limit = record.addition_limit * Dimensionless(years_since_prev as f64);
+            let scaled_limit = record.addition_limit * Year(years_since_prev as f64);
 
             let constraint = Rc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(scaled_limit),
@@ -153,9 +153,10 @@ mod tests {
     use super::*;
     use crate::fixture::{assert_error, processes};
     use crate::region::RegionID;
+    use crate::units::Capacity;
     use rstest::rstest;
 
-    fn validate_raw_constraint(addition_limit: Capacity) -> Result<()> {
+    fn validate_raw_constraint(addition_limit: CapacityPerYear) -> Result<()> {
         let constraint = ProcessInvestmentConstraintRaw {
             process_id: "test_process".into(),
             regions: "ALL".into(),
@@ -174,7 +175,7 @@ mod tests {
             process_id: "process1".into(),
             regions: "GBR".into(),
             commission_years: "ALL".into(), // Should apply to milestone years [2012, 2016]
-            addition_limit: Capacity(100.0),
+            addition_limit: CapacityPerYear(100.0),
         }];
 
         let result = read_process_investment_constraints_from_iter(
@@ -220,19 +221,19 @@ mod tests {
                 process_id: "process1".into(),
                 regions: "GBR".into(),
                 commission_years: "2010".into(),
-                addition_limit: Capacity(100.0),
+                addition_limit: CapacityPerYear(100.0),
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
                 regions: "ALL".into(),
                 commission_years: "2015".into(),
-                addition_limit: Capacity(200.0),
+                addition_limit: CapacityPerYear(200.0),
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
                 regions: "USA".into(),
                 commission_years: "2020".into(),
-                addition_limit: Capacity(50.0),
+                addition_limit: CapacityPerYear(50.0),
             },
         ];
 
@@ -291,7 +292,7 @@ mod tests {
             process_id: "process1".into(),
             regions: "ALL".into(),
             commission_years: "ALL".into(),
-            addition_limit: Capacity(75.0),
+            addition_limit: CapacityPerYear(75.0),
         }];
 
         // Read constraints into the map
@@ -339,7 +340,7 @@ mod tests {
             process_id: "process1".into(),
             regions: "GBR".into(),
             commission_years: "2025".into(), // Outside milestone years (2010-2020)
-            addition_limit: Capacity(100.0),
+            addition_limit: CapacityPerYear(100.0),
         }];
 
         // Should fail with milestone year validation error
@@ -357,15 +358,15 @@ mod tests {
     #[test]
     fn validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
-        let valid = validate_raw_constraint(Capacity(10.0));
+        let valid = validate_raw_constraint(CapacityPerYear(10.0));
         valid.unwrap();
 
         // Valid: addition constraint with zero value
-        let valid = validate_raw_constraint(Capacity(0.0));
+        let valid = validate_raw_constraint(CapacityPerYear(0.0));
         valid.unwrap();
 
         // Not valid: addition constraint with negative value
-        let invalid = validate_raw_constraint(Capacity(-10.0));
+        let invalid = validate_raw_constraint(CapacityPerYear(-10.0));
         assert_error!(
             invalid,
             "Invalid value for addition constraint: '-10'; must be non-negative and finite."
@@ -375,14 +376,14 @@ mod tests {
     #[test]
     fn validate_addition_rejects_infinite() {
         // Invalid: infinite value
-        let invalid = validate_raw_constraint(Capacity(f64::INFINITY));
+        let invalid = validate_raw_constraint(CapacityPerYear(f64::INFINITY));
         assert_error!(
             invalid,
             "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
         );
 
         // Invalid: NaN value
-        let invalid = validate_raw_constraint(Capacity(f64::NAN));
+        let invalid = validate_raw_constraint(CapacityPerYear(f64::NAN));
         assert_error!(
             invalid,
             "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
