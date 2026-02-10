@@ -929,7 +929,7 @@ impl Asset {
         self.capacity.update(|c| c + capacity);
     }
 
-    /// Decrease the unit size of this asset by one.
+    /// Decrease the unit count (number of units) of this asset by one.
     ///
     /// Note that this method uses interior mutability so that we can operate on an immutable ref to
     /// `self`. Accordingly, calling this method will result in a change in the capacity for all
@@ -1142,7 +1142,7 @@ impl AssetRef {
     /// If this asset is non-divisible, then `f` will be called with the first argument set to
     /// `None` and the second will be `self`.
     ///
-    /// Each of the child will be made up of a single unit of the original asset's unit size. Will
+    /// Each of the children will be made up of a single unit of the original asset's unit size. Will
     /// panic if the asset does not have a discrete capacity.
     ///
     /// Will also panic if this asset's state is not `Future` or `Selected`.
