@@ -1139,13 +1139,13 @@ impl AssetRef {
     /// If this asset is divisible, the first argument to `f` will be this asset after it has been
     /// converted to a parent and the second will be each child.
     ///
-    /// If this asset is non-divisible, then `f` will be called with the first argument set to
-    /// `None` and the second will be `self`.
+    /// If this asset is non-divisible (i.e. does not have a discrete capacity), then `f` will be
+    /// called with the first argument set to `None` and the second will be `self`.
     ///
-    /// Each of the children will be made up of a single unit of the original asset's unit size. Will
-    /// panic if the asset does not have a discrete capacity.
+    /// When the asset has a discrete capacity, each of the children will be made up of a single
+    /// unit of the original asset's unit size.
     ///
-    /// Will also panic if this asset's state is not `Future` or `Selected`.
+    /// Panics if this asset's state is not `Future` or `Selected`.
     fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
     where
         F: FnMut(Option<&AssetRef>, AssetRef),
