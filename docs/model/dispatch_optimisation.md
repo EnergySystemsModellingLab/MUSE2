@@ -275,7 +275,7 @@ in common units, derived from the output and efficiency).
   output parameter:
 
   \\[
-    \sum_{c \in \mathbf{C}^{eff\\_out}\_a} OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+    \sum\_{c \in \mathbf{C}^{eff\\_out}\_a} OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
       = ActualTotalEffOutputCU[a,r,t]
   \\]
 
