@@ -197,25 +197,25 @@ These parameters define the technical and economic behavior of flexible assets.
   common units using \\( factor_{CU}[c] \\)) that are produced when asset \\( a \\) operates at one
   unit of its generic activity level \\( act[a,r,t] \\).
 
-- \\( minInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Minimum fractional share of
-  input commodity \\( c \\) (in common units) relative to the total efficiency-constrained input (in
-  common units).
+- \\( minInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Minimum fractional share
+  of input commodity \\( c \\) (in common units) relative to the total efficiency-constrained input
+  (in common units).
 
 - \\( maxInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Maximum fractional share
   for input \\( c \\).
 
-- \\( minOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Minimum fractional share
-  of output commodity \\( c \\) (in common units) relative to the total efficiency-constrained
+- \\( minOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Minimum fractional
+  share of output commodity \\( c \\) (in common units) relative to the total efficiency-constrained
   output.
 
-- \\( maxOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Maximum fractional share
-  for output \\( c \\).
+- \\( maxOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Maximum fractional
+  share for output \\( c \\).
 
 - \\( coeff_{aux\\_ in}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ in}_a \\)): Quantity of auxiliary
   input \\( c \\) consumed per unit of \\( act[a,r,t] \\).
 
-- \\( coeff_{aux\\_ out}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ out}_a \\)): Quantity of auxiliary
-  output \\( c \\) produced per unit of \\( act[a,r,t] \\).
+- \\( coeff_{aux\\_ out}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ out}_a \\)): Quantity of
+  auxiliary output \\( c \\) produced per unit of \\( act[a,r,t] \\).
 
 ### B.3. Decision Variables (for \\( a \in \mathbf{A}^{flex} \\))
 
@@ -234,10 +234,10 @@ These variables represent the operational choices for flexible assets.
 
 ### B.4. Objective Contribution (for \\( a \in \mathbf{A}^{flex} \\))
 
-The cost contribution from flexible assets includes costs related to
-their generic activity, specific costs for efficiency-constrained inputs
-and outputs (if defined separately from system commodity values), and
-costs/revenues for auxiliary inputs and outputs.
+The cost contribution from flexible assets includes costs related to their generic activity,
+specific costs for efficiency-constrained inputs and outputs (if defined separately from system
+commodity values), and costs/revenues for auxiliary inputs and outputs.
+
 \\[
   \begin{aligned}
     &act[a,r,t] \cdot cost\_{var}[a,r,t] \\\\
@@ -251,13 +251,11 @@ costs/revenues for auxiliary inputs and outputs.
 
 ### B.5. Constraints (for \\( a \in \mathbf{A}^{flex}, r \in \mathbf{R}, t \in \mathbf{T} \\))
 
-These rules govern the internal operation and conversion process of
-flexible assets. Let
-\\( ActualTotalEffOutputCU[a,r,t] = RefEffOutPerAct[a] \cdot act[a,r,t] \\)
-(This is the total efficiency-constrained output in common units). Let
-\\( ActualTotalEffInputCU[a,r,t] = (RefEffOutPerAct[a] / \eta[a]) \cdot act[a,r,t] \\)
-(This is the total efficiency-constrained input in common units, derived
-from the output and efficiency).
+These rules govern the internal operation and conversion process of flexible assets. Let \\(
+ActualTotalEffOutputCU[a,r,t] = RefEffOutPerAct[a] \cdot act[a,r,t] \\) (This is the total
+efficiency-constrained output in common units). Let \\( ActualTotalEffInputCU[a,r,t] =
+(RefEffOutPerAct[a] / \eta[a]) \cdot act[a,r,t] \\) (This is the total efficiency-constrained input
+in common units, derived from the output and efficiency).
 
 - **Capacity & Availability:** Standard capacity and availability constraints (as in A.4) apply to
   the generic activity variable \\( act[a,r,t] \\) of the flexible asset.
