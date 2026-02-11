@@ -17,11 +17,12 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::cmp::{Ordering, min};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Deref, RangeInclusive, Sub};
 use std::rc::Rc;
-use std::slice;
+use std::{iter, slice};
 
 /// A unique identifier for an asset
 #[derive(
@@ -76,8 +77,10 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
-        /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
-        group_id: Option<AssetGroupID>,
+        /// Parent asset, if any.
+        ///
+        /// All divided assets have a parent, which tracks the total capacity across the children.
+        parent: Option<AssetRef>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -97,6 +100,16 @@ pub enum AssetState {
     Selected {
         /// The ID of the agent that would own the asset
         agent_id: AgentID,
+    },
+    /// The asset is a parent of other assets.
+    ///
+    /// Parents are used for grouping (commissioned) divided assets, which can be used as an
+    /// optimisation.
+    Parent {
+        /// The ID of the agent which owns this asset's children
+        agent_id: AgentID,
+        /// ID of the asset group
+        group_id: AssetGroupID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -251,7 +264,7 @@ pub struct Asset {
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
-    capacity: AssetCapacity,
+    capacity: Cell<AssetCapacity>,
     /// The year the asset was/will be commissioned
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
@@ -388,7 +401,7 @@ impl Asset {
                 id: AssetID(0),
                 agent_id,
                 mothballed_year: None,
-                group_id: None,
+                parent: None,
             },
             process,
             region_id,
@@ -467,7 +480,7 @@ impl Asset {
             flows,
             process_parameter,
             region_id,
-            capacity,
+            capacity: Cell::new(capacity),
             commission_year,
             max_decommission_year,
         })
@@ -505,7 +518,7 @@ impl Asset {
     ) -> RangeInclusive<Activity> {
         let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
         let cap2act = self.process.capacity_to_activity;
-        let max_activity = self.capacity.total_capacity() * cap2act;
+        let max_activity = self.total_capacity() * cap2act;
         let lb = max_activity * *activity_per_capacity_limits.start();
         let ub = max_activity * *activity_per_capacity_limits.end();
         lb..=ub
@@ -736,8 +749,7 @@ impl Asset {
         annual_activity: Activity,
     ) -> MoneyPerActivity {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
-        let total_annual_capital_cost =
-            annual_capital_cost_per_capacity * self.capacity.total_capacity();
+        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.total_capacity();
         assert!(
             annual_activity > Activity::EPSILON,
             "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
@@ -759,7 +771,7 @@ impl Asset {
 
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
-        self.capacity.total_capacity() * self.process.capacity_to_activity
+        self.total_capacity() * self.process.capacity_to_activity
     }
 
     /// Get a specific process flow
@@ -836,28 +848,49 @@ impl Asset {
         }
     }
 
-    /// Get the group ID for this asset
-    pub fn group_id(&self) -> Option<AssetGroupID> {
+    /// Get the parent asset of this asset, if any
+    pub fn parent(&self) -> Option<&AssetRef> {
         match &self.state {
-            AssetState::Commissioned { group_id, .. } => *group_id,
+            AssetState::Commissioned { parent, .. } => parent.as_ref(),
             _ => None,
         }
     }
 
-    /// Get the agent ID for this asset
+    /// Get the group ID for this asset, if any
+    pub fn group_id(&self) -> Option<AssetGroupID> {
+        match &self.state {
+            AssetState::Commissioned { parent, .. } => {
+                // Get group ID from parent
+                parent
+                    .as_ref()
+                    // Safe because parents always have state `Parent`
+                    .map(|parent| parent.group_id().unwrap())
+            }
+            AssetState::Parent { group_id, .. } => Some(*group_id),
+            _ => None,
+        }
+    }
+
+    /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
             AssetState::Commissioned { agent_id, .. }
             | AssetState::Decommissioned { agent_id, .. }
             | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id } => Some(agent_id),
+            | AssetState::Selected { agent_id }
+            | AssetState::Parent { agent_id, .. } => Some(agent_id),
             AssetState::Candidate => None,
         }
     }
 
     /// Get the capacity for this asset
     pub fn capacity(&self) -> AssetCapacity {
-        self.capacity
+        self.capacity.get()
+    }
+
+    /// Get the total capacity for this asset
+    pub fn total_capacity(&self) -> Capacity {
+        self.capacity().total_capacity()
     }
 
     /// Set the capacity for this asset (only for Candidate or Selected assets)
@@ -873,8 +906,11 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
-        self.capacity.assert_same_type(capacity);
-        self.capacity = capacity;
+        self.capacity().assert_same_type(capacity);
+
+        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
+        // changing the capacity of immutable refs would be potentially dangerous
+        self.capacity.set(capacity);
     }
 
     /// Increase the capacity for this asset (only for Candidate assets)
@@ -887,13 +923,38 @@ impl Asset {
             capacity.total_capacity() > Capacity(0.0),
             "Capacity increase must be positive"
         );
-        self.capacity = self.capacity + capacity;
+
+        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
+        // changing the capacity of immutable refs would be potentially dangerous
+        self.capacity.update(|c| c + capacity);
+    }
+
+    /// Decrease the unit count (number of units) of this asset by one.
+    ///
+    /// Note that this method uses interior mutability so that we can operate on an immutable ref to
+    /// `self`. Accordingly, calling this method will result in a change in the capacity for all
+    /// `Rc` copies of the asset, which is potentially dangerous. This method is therefore private
+    /// and should **only** be used for the case where we want to decrease the unit count for parent
+    /// assets.
+    fn decrement_unit_count(&self) {
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
+            panic!("Cannot decrement unit count of non-divisible asset");
+        };
+        assert!(n_units > 0, "Unit count has dropped below zero");
+
+        self.capacity
+            .set(AssetCapacity::Discrete(n_units - 1, unit_size));
     }
 
     /// Decommission this asset
     fn decommission(&mut self, decommission_year: u32, reason: &str) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
+        let (id, agent_id, parent) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                parent,
+                ..
+            } => (*id, agent_id.clone(), parent),
             _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
         };
         debug!(
@@ -903,6 +964,11 @@ impl Asset {
             agent_id,
             reason
         );
+
+        // If this is a child asset, we need to decrease the parent's capacity appropriately
+        if let Some(parent) = parent {
+            parent.decrement_unit_count();
+        }
 
         self.state = AssetState::Decommissioned {
             id,
@@ -920,8 +986,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    /// * `group_id` - The ID of the group of this asset, if any.
-    fn commission(&mut self, id: AssetID, group_id: Option<AssetGroupID>, reason: &str) {
+    /// * `parent` - The parent asset, if this is a child asset
+    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>, reason: &str) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -930,7 +996,7 @@ impl Asset {
             "Commissioning '{}' asset (ID: {}, capacity: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            self.capacity.total_capacity(),
+            self.total_capacity(),
             agent_id,
             reason
         );
@@ -938,7 +1004,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
-            group_id,
+            parent,
         };
     }
 
@@ -948,45 +1014,45 @@ impl Asset {
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.capacity.total_capacity()).unwrap();
+        check_capacity_valid_for_asset(self.total_capacity()).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id, group_id) = match &self.state {
+        let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                group_id,
+                parent,
                 ..
-            } => (*id, agent_id.clone(), *group_id),
+            } => (*id, agent_id.clone(), parent.clone()),
             _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
-            agent_id: agent_id.clone(),
+            agent_id,
             mothballed_year: Some(year),
-            group_id,
+            parent,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id, group_id) = match &self.state {
+        let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                group_id,
+                parent,
                 ..
-            } => (*id, agent_id.clone(), *group_id),
+            } => (*id, agent_id.clone(), parent.clone()),
             _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
-            agent_id: agent_id.clone(),
+            agent_id,
             mothballed_year: None,
-            group_id,
+            parent,
         };
     }
 
@@ -1003,48 +1069,10 @@ impl Asset {
 
     /// Get the unit size for this asset's capacity (if any)
     pub fn unit_size(&self) -> Option<Capacity> {
-        match self.capacity {
+        match self.capacity() {
             AssetCapacity::Discrete(_, size) => Some(size),
             AssetCapacity::Continuous(_) => None,
         }
-    }
-
-    /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
-    pub fn is_divisible(&self) -> bool {
-        self.process.unit_size.is_some()
-    }
-
-    /// Divides an asset if it is divisible and returns a vector of children
-    ///
-    /// Assets with capacity of type `AssetCapacity::Discrete` are divided into multiple assets each
-    /// made up of a single unit of the original asset's unit size. Will panic if the asset does not
-    /// have a discrete capacity.
-    ///
-    /// Only `Future` and `Selected` assets can be divided.
-    ///
-    /// TODO: To be deleted
-    pub fn divide_asset(&self) -> Vec<AssetRef> {
-        assert!(
-            matches!(
-                self.state,
-                AssetState::Future { .. } | AssetState::Selected { .. }
-            ),
-            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
-            self.state
-        );
-
-        // Ensure the asset is discrete
-        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity else {
-            panic!("Only discrete assets can be divided")
-        };
-
-        // Divide the asset into `n_units` children of size `unit_size`
-        let child_asset = Self {
-            capacity: AssetCapacity::Discrete(1, unit_size),
-            ..self.clone()
-        };
-        let child_asset = AssetRef::from(Rc::new(child_asset));
-        std::iter::repeat_n(child_asset, n_units as usize).collect()
     }
 }
 
@@ -1055,7 +1083,7 @@ impl std::fmt::Debug for Asset {
             .field("state", &self.state)
             .field("process_id", &self.process_id())
             .field("region_id", &self.region_id)
-            .field("capacity", &self.capacity.total_capacity())
+            .field("capacity", &self.total_capacity())
             .field("commission_year", &self.commission_year)
             .finish()
     }
@@ -1105,6 +1133,57 @@ impl AssetRef {
     pub fn make_mut(&mut self) -> &mut Asset {
         Rc::make_mut(&mut self.0)
     }
+
+    /// Apply a function to each of this asset's children, consuming the asset in the process.
+    ///
+    /// If this asset is divisible, the first argument to `f` will be this asset after it has been
+    /// converted to a parent and the second will be each child.
+    ///
+    /// If this asset is non-divisible (i.e. does not have a discrete capacity), then `f` will be
+    /// called with the first argument set to `None` and the second will be `self`.
+    ///
+    /// When the asset has a discrete capacity, each of the children will be made up of a single
+    /// unit of the original asset's unit size.
+    ///
+    /// Panics if this asset's state is not `Future` or `Selected`.
+    fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
+    where
+        F: FnMut(Option<&AssetRef>, AssetRef),
+    {
+        assert!(
+            matches!(
+                self.state,
+                AssetState::Future { .. } | AssetState::Selected { .. }
+            ),
+            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
+            self.state
+        );
+
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
+            // Asset is non-divisible
+            f(None, self);
+            return;
+        };
+
+        // Create a child of size `unit_size`
+        let child = AssetRef::from(Asset {
+            capacity: Cell::new(AssetCapacity::Discrete(1, unit_size)),
+            ..Asset::clone(&self)
+        });
+
+        // Turn this asset into a parent
+        let agent_id = self.agent_id().unwrap().clone();
+        self.make_mut().state = AssetState::Parent {
+            agent_id,
+            group_id: AssetGroupID(*next_group_id),
+        };
+        *next_group_id += 1;
+
+        // Run `f` over each child
+        for child in iter::repeat_n(child, n_units as usize) {
+            f(Some(&self), child);
+        }
+    }
 }
 
 impl From<Rc<Asset>> for AssetRef {
@@ -1149,8 +1228,10 @@ impl Eq for AssetRef {}
 impl Hash for AssetRef {
     /// Hash an asset according to its state:
     /// - Commissioned assets are hashed based on their ID alone
-    /// - Selected assets are hashed based on `process_id`, `region_id`, `commission_year` and `agent_id`
+    /// - Selected assets are hashed based on `process_id`, `region_id`, `commission_year` and
+    ///   `agent_id`
     /// - Candidate assets are hashed based on `process_id`, `region_id` and `commission_year`
+    /// - Parent assets are hashed based on `agent_id` and `group_id`
     /// - Future and Decommissioned assets cannot currently be hashed
     fn hash<H: Hasher>(&self, state: &mut H) {
         match &self.0.state {
@@ -1159,17 +1240,16 @@ impl Hash for AssetRef {
                 // asset
                 id.hash(state);
             }
-            AssetState::Candidate | AssetState::Selected { .. } => {
-                // Hashed based on process_id, region_id, commission_year and (for Selected assets)
-                // agent_id
+            AssetState::Candidate | AssetState::Selected { .. } | AssetState::Parent { .. } => {
                 self.0.process.id.hash(state);
                 self.0.region_id.hash(state);
                 self.0.commission_year.hash(state);
                 self.0.agent_id().hash(state);
+                self.0.group_id().hash(state);
             }
-            AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
-                // We shouldn't currently need to hash Future or Decommissioned assets
-                panic!("Cannot hash Future or Decommissioned assets");
+            state => {
+                // We don't need to hash other types of asset
+                panic!("Cannot hash {state} assets");
             }
         }
     }
@@ -1231,28 +1311,14 @@ impl AssetPool {
     }
 
     /// Commission the specified asset or, if divisible, its children
-    fn commission(&mut self, mut asset: AssetRef, reason: &str) {
-        // If it is divisible, we divide and commission all the children
-        if asset.is_divisible() {
-            for mut child in asset.divide_asset() {
-                child.make_mut().commission(
-                    AssetID(self.next_id),
-                    Some(AssetGroupID(self.next_group_id)),
-                    reason,
-                );
-                self.next_id += 1;
-                self.assets.push(child);
-            }
-            self.next_group_id += 1;
-        }
-        // If not, we just commission it as a single asset
-        else {
-            asset
+    fn commission(&mut self, asset: AssetRef, reason: &str) {
+        asset.into_for_each_child(&mut self.next_group_id, |parent, mut child| {
+            child
                 .make_mut()
-                .commission(AssetID(self.next_id), None, reason);
+                .commission(AssetID(self.next_id), parent.cloned(), reason);
             self.next_id += 1;
-            self.assets.push(asset);
-        }
+            self.assets.push(child);
+        });
     }
 
     /// Decommission old assets for the specified milestone year
@@ -1456,7 +1522,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.capacity.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
+        (asset.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
             .value()
             .ceil() as usize
     }
@@ -1666,49 +1732,63 @@ mod tests {
     #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
     #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
     #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
-    fn divide_asset(
+    fn into_for_each_child_divisible(
         mut process: Process,
         #[case] capacity: Capacity,
         #[case] unit_size: Capacity,
         #[case] n_expected_children: usize,
     ) {
         process.unit_size = Some(unit_size);
-        let asset = Asset::new_future(
-            "agent1".into(),
-            Rc::new(process),
-            "GBR".into(),
-            capacity,
-            2010,
-        )
-        .unwrap();
-
-        assert!(asset.is_divisible(), "Asset should be divisible!");
-
-        let children = asset.divide_asset();
-        assert_eq!(
-            children.len(),
-            n_expected_children,
-            "Unexpected number of children"
+        let asset = AssetRef::from(
+            Asset::new_future(
+                "agent1".into(),
+                Rc::new(process),
+                "GBR".into(),
+                capacity,
+                2010,
+            )
+            .unwrap(),
         );
 
-        // Check all children have capacity equal to unit_size
-        for child in children.clone() {
+        let mut count = 0;
+        let mut total_child_capacity = Capacity(0.0);
+        asset.clone().into_for_each_child(&mut 0, |parent, child| {
+            assert!(parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. })));
+
+            // Check each child has capacity equal to unit_size
             assert_eq!(
-                child.capacity.total_capacity(),
+                child.total_capacity(),
                 unit_size,
                 "Child capacity should equal unit_size"
             );
-        }
+
+            total_child_capacity += child.total_capacity();
+            count += 1;
+        });
+        assert_eq!(count, n_expected_children, "Unexpected number of children");
 
         // Check total capacity is >= parent capacity
-        let total_child_capacity: Capacity = children
-            .iter()
-            .map(|child| child.capacity.total_capacity())
-            .sum();
         assert!(
-            total_child_capacity >= asset.capacity.total_capacity(),
+            total_child_capacity >= asset.total_capacity(),
             "Total capacity should be >= parent capacity"
         );
+    }
+
+    #[rstest]
+    fn into_for_each_child_nondivisible(asset: Asset) {
+        assert!(
+            asset.process.unit_size.is_none(),
+            "Asset should be non-divisible"
+        );
+
+        let asset = AssetRef::from(asset);
+        let mut count = 0;
+        asset.clone().into_for_each_child(&mut 0, |parent, child| {
+            assert!(parent.is_none());
+            assert_eq!(child, asset);
+            count += 1;
+        });
+        assert_eq!(count, 1);
     }
 
     #[rstest]
@@ -2209,6 +2289,35 @@ mod tests {
         asset.decommission(requested_decommission_year, "");
         assert!(!asset.is_commissioned());
         assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
+    }
+
+    #[rstest]
+    fn asset_decommission_divisible(asset_divisible: Asset) {
+        let asset = AssetRef::from(asset_divisible);
+        let original_capacity = asset.capacity();
+
+        // Commission children
+        let mut children = Vec::new();
+        let mut next_id = 0;
+        asset.into_for_each_child(&mut 0, |parent, mut child| {
+            child
+                .make_mut()
+                .commission(AssetID(next_id), parent.cloned(), "");
+            next_id += 1;
+            children.push(child);
+        });
+
+        let parent = children[0].parent().unwrap().clone();
+        assert_eq!(parent.capacity(), original_capacity);
+        children[0].make_mut().decommission(2020, "");
+
+        let AssetCapacity::Discrete(original_units, original_unit_size) = original_capacity else {
+            panic!("Capacity type should be discrete");
+        };
+        assert_eq!(
+            parent.capacity(),
+            AssetCapacity::Discrete(original_units - 1, original_unit_size)
+        );
     }
 
     #[rstest]
