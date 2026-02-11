@@ -1079,6 +1079,10 @@ impl Asset {
             !self.is_commissioned(),
             "max_installable_capacity can only be called on uncommissioned assets"
         );
+        assert!(
+            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
+            "commodity_portion must be between 0 and 1 inclusive"
+        );
 
         self.process
             .investment_constraints
