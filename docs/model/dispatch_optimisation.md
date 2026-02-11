@@ -372,7 +372,7 @@ Else (if SVD \\( c \\) must be strictly met and is not included in \\( \mathbf{C
     \ge demand[r,c] \times timeslice\\_ share[c,t]
 \\]
 
-### C.4. Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
+### C.3. Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
 
 These constraints ensure that for all intermediate SED commodities, total supply equals total demand
 within each region \\( r \\) and for each balancing period defined by \\( balance\\_ level[c,r] \\)
