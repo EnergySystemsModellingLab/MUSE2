@@ -246,6 +246,7 @@ commodity values), and costs/revenues for auxiliary inputs and outputs.
     &+ \sum\_{c \in \mathbf{C}^{aux\\_ in}\_a} (act[a,r,t] \cdot coeff\_{aux\\_ in}[a,c])
       \cdot cost\_{input}[a,c] \\\\
     &+ \sum\_{c \in \mathbf{C}^{aux\\_ out}\_a} (act[a,r,t] \cdot coeff\_{aux\\_ out}[a,c])
+      \cdot cost\_{output}[a,c] \\\\
   \end{aligned}
 \\]
 
