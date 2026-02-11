@@ -185,8 +185,8 @@ These sets categorize the commodities involved in the flexible asset's operation
 These parameters define the technical and economic behavior of flexible assets.
 
 - \\( \eta[a] \\): The overall process efficiency (\\( \in (0,1] \\)) of flexible asset \\( a \\),
-  relating total common units of outputs in \\( \mathbf{C}^{eff\_out}_a \\) to inputs in \\(
-  \mathbf{C}^{eff\_in}_a \\).
+  relating total common units of outputs in \\( \mathbf{C}^{eff\\_out}_a \\) to inputs in \\(
+  \mathbf{C}^{eff\\_in}_a \\).
 
 - \\( factor_{CU}[c] \\): A commodity-specific factor to convert its native physical units (e.g.,
   tonnes, m³) to a common unit (e.g., MWh of energy content, or tonnes of mass if it's a mass
@@ -276,11 +276,11 @@ from the output and efficiency).
   output parameter:
 
   \\[
-    \sum_{c \in \mathbf{C}^{eff\_out}\_a} OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
+    \sum_{c \in \mathbf{C}^{eff\\_out}\_a} OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
       = ActualTotalEffOutputCU[a,r,t]
   \\]
 
-- **Input Share Constraints** (for each \\( c \in \mathbf{C}^{eff\_in}_a \\)): Ensure that each
+- **Input Share Constraints** (for each \\( c \in \mathbf{C}^{eff\\_in}_a \\)): Ensure that each
   individual efficiency-constrained input (in common units) stays within its defined minimum (\\(
   minInputShare[a,c] \\)) and maximum (\\( maxInputShare[a,c] \\)) fractional share of the \\(
   ActualTotalEffInputCU[a,r,t] \\).
@@ -294,7 +294,7 @@ from the output and efficiency).
     \end{aligned}
   \\]
 
-- **Output Share Constraints** (for each \\( c \in \mathbf{C}^{eff\_out}_a \\)): Ensure that each
+- **Output Share Constraints** (for each \\( c \in \mathbf{C}^{eff\\_out}_a \\)): Ensure that each
   individual efficiency-constrained output (in common units) stays within its defined minimum (\\(
   minOutputShare[a,c] \\)) and maximum (\\( maxOutputShare[a,c] \\)) fractional share of the \\(
   ActualTotalEffOutputCU[a,r,t] \\).
@@ -392,7 +392,7 @@ other regions).
       \left(
         \begin{cases}
           OutputSpec[a,c,r,t] & \text{if } c \in \mathbf{C}^{eff\\_out}\_a \\\\
-          act[a,r,t] \cdot coeff\_{aux\\_out}[a,c] & \text{if } c \in \mathbf{C}^{aux\_out}\_a \\ 0
+          act[a,r,t] \cdot coeff\_{aux\\_out}[a,c] & \text{if } c \in \mathbf{C}^{aux\\_out}\_a \\ 0
             & \text{otherwise}
         \end{cases}
       \right)
