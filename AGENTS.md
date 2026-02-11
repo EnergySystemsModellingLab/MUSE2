@@ -12,3 +12,6 @@ For Rust code:
 
 - Prefer `use` imports to fully qualified paths
 - Prefer named format arguments (e.g. `"{x}"`) over positional formatting (e.g. `"{}", x`)
+- Test function names should not be prefixed with `test_`
+- Prefer using parameterised tests (using `rstest`) over separate ones where testing similar
+  functionality
