@@ -1,2 +1,2 @@
 commodity_id,regions,years,time_slice,balance_type,value
-CO2EMT,all,all,annual,net,0.04
+CO2EMT,all,all,annual,net,0.25
