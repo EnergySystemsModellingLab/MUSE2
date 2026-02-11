@@ -95,11 +95,11 @@ macro_rules! patch_and_run_simple {
     ($file_patches:expr) => {{
         (|| -> Result<()> {
             let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
-            let (model, assets) = crate::input::load_model(tmp.path())?;
+            let model = crate::input::load_model(tmp.path())?;
             let output_path = tmp.path().join("output");
             std::fs::create_dir_all(&output_path)?;
 
-            crate::simulation::run(&model, assets, &output_path, false)?;
+            crate::simulation::run(&model, &output_path, false)?;
             Ok(())
         })()
     }};
@@ -150,6 +150,7 @@ pub fn svd_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
+        units: "PJ".into(),
     }
 }
 
@@ -164,6 +165,7 @@ pub fn sed_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
+        units: "PJ".into(),
     }
 }
 
@@ -178,6 +180,7 @@ pub fn other_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
+        units: "PJ".into(),
     }
 }
 
@@ -203,8 +206,8 @@ pub fn asset(process: Process) -> Asset {
 #[fixture]
 pub fn assets(asset: Asset) -> AssetPool {
     let year = asset.commission_year();
-    let mut assets = AssetPool::new(iter::once(asset).collect());
-    assets.update_for_year(year);
+    let mut assets = AssetPool::new();
+    assets.commission_new(year, &mut vec![asset.into()]);
     assets
 }
 
@@ -415,14 +418,14 @@ mod tests {
     #[test]
     fn patch_and_validate_simple_fail() {
         let patch = FilePatch::new("commodities.csv")
-            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+            .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_validate_simple!(vec![patch]).is_err());
     }
 
     #[test]
     fn patch_and_run_simple_fail() {
         let patch = FilePatch::new("commodities.csv")
-            .with_deletion("RSHEAT,Residential heating,svd,daynight");
+            .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_run_simple!(vec![patch]).is_err());
     }
 }

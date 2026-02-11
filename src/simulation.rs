@@ -22,16 +22,13 @@ pub use prices::CommodityPrices;
 /// # Arguments:
 ///
 /// * `model` - The model to run
-/// * `assets` - The asset pool
 /// * `output_path` - The folder to which output files will be written
 /// * `debug_model` - Whether to write additional information (e.g. duals) to output files
-pub fn run(
-    model: &Model,
-    mut assets: AssetPool,
-    output_path: &Path,
-    debug_model: bool,
-) -> Result<()> {
+pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
+    let mut user_assets = model.user_assets.clone();
+    let mut asset_pool = AssetPool::new(); // active assets
+    let mut decommissioned = Vec::new();
 
     // Iterate over milestone years
     let mut year_iter = model.iter_years().peekable();
@@ -40,10 +37,10 @@ pub fn run(
     info!("Milestone year: {year}");
 
     // Commission assets for base year
-    assets.update_for_year(year);
+    asset_pool.commission_new(year, &mut user_assets);
 
     // Write assets to file
-    writer.write_assets(assets.iter_all())?;
+    writer.write_assets(asset_pool.iter())?;
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
@@ -56,7 +53,7 @@ pub fn run(
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
     let (flow_map, mut prices) =
-        run_dispatch_for_year(model, assets.as_slice(), &candidates, year, &mut writer)?;
+        run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
 
     // Write results of dispatch optimisation to file
     writer.write_flows(year, &flow_map)?;
@@ -65,13 +62,14 @@ pub fn run(
     while let Some(year) = year_iter.next() {
         info!("Milestone year: {year}");
 
-        // Commission new assets and decommission those whose lifetime has passed. We do this
-        // *before* agent investment, to prevent agents from selecting assets that are being
-        // decommissioned in this milestone year.
-        assets.update_for_year(year);
+        // Decommission assets whose lifetime has passed
+        asset_pool.decommission_old(year, &mut decommissioned);
+
+        // Commission user-defined assets for this year
+        asset_pool.commission_new(year, &mut user_assets);
 
         // Take all the active assets as a list of existing assets
-        let existing_assets = assets.take();
+        let existing_assets = asset_pool.take();
 
         // Iterative loop to "iron out" prices via repeated investment and dispatch
         let mut ironing_out_iter = 0;
@@ -121,14 +119,18 @@ pub fn run(
         };
 
         // Add selected_assets to the active pool
-        assets.extend(selected_assets);
+        asset_pool.extend(selected_assets);
 
         // Decommission unused assets
-        assets.mothball_unretained(existing_assets, year);
-        assets.decommission_mothballed(year, model.parameters.mothball_years);
+        asset_pool.mothball_unretained(existing_assets, year);
+        asset_pool.decommission_mothballed(
+            year,
+            model.parameters.mothball_years,
+            &mut decommissioned,
+        );
 
         // Write assets
-        writer.write_assets(assets.iter_all())?;
+        writer.write_assets(decommissioned.iter().chain(asset_pool.iter()))?;
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();
@@ -141,7 +143,7 @@ pub fn run(
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
         let (flow_map, new_prices) =
-            run_dispatch_for_year(model, assets.as_slice(), &candidates, year, &mut writer)?;
+            run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;

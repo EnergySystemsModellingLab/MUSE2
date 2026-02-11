@@ -14,14 +14,15 @@ use crate::units::{
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
-use itertools::{Itertools, chain};
+use itertools::Itertools;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::cmp::{Ordering, min};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Deref, RangeInclusive, Sub};
 use std::rc::Rc;
-use std::slice;
+use std::{iter, slice};
 
 /// A unique identifier for an asset
 #[derive(
@@ -76,8 +77,10 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
-        /// ID of the asset group, if any. None, if this asset is not resulting from dividing a parent
-        group_id: Option<AssetGroupID>,
+        /// Parent asset, if any.
+        ///
+        /// All divided assets have a parent, which tracks the total capacity across the children.
+        parent: Option<AssetRef>,
     },
     /// The asset has been decommissioned
     Decommissioned {
@@ -97,6 +100,16 @@ pub enum AssetState {
     Selected {
         /// The ID of the agent that would own the asset
         agent_id: AgentID,
+    },
+    /// The asset is a parent of other assets.
+    ///
+    /// Parents are used for grouping (commissioned) divided assets, which can be used as an
+    /// optimisation.
+    Parent {
+        /// The ID of the agent which owns this asset's children
+        agent_id: AgentID,
+        /// ID of the asset group
+        group_id: AssetGroupID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -267,7 +280,7 @@ pub struct Asset {
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
-    capacity: AssetCapacity,
+    capacity: Cell<AssetCapacity>,
     /// The year the asset was/will be commissioned
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
@@ -404,7 +417,7 @@ impl Asset {
                 id: AssetID(0),
                 agent_id,
                 mothballed_year: None,
-                group_id: None,
+                parent: None,
             },
             process,
             region_id,
@@ -483,7 +496,7 @@ impl Asset {
             flows,
             process_parameter,
             region_id,
-            capacity,
+            capacity: Cell::new(capacity),
             commission_year,
             max_decommission_year,
         })
@@ -521,7 +534,7 @@ impl Asset {
     ) -> RangeInclusive<Activity> {
         let activity_per_capacity_limits = self.activity_limits.get_limit(time_slice_selection);
         let cap2act = self.process.capacity_to_activity;
-        let max_activity = self.capacity.total_capacity() * cap2act;
+        let max_activity = self.total_capacity() * cap2act;
         let lb = max_activity * *activity_per_capacity_limits.start();
         let ub = max_activity * *activity_per_capacity_limits.end();
         lb..=ub
@@ -752,8 +765,7 @@ impl Asset {
         annual_activity: Activity,
     ) -> MoneyPerActivity {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
-        let total_annual_capital_cost =
-            annual_capital_cost_per_capacity * self.capacity.total_capacity();
+        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.total_capacity();
         assert!(
             annual_activity > Activity::EPSILON,
             "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
@@ -775,7 +787,7 @@ impl Asset {
 
     /// Maximum activity for this asset
     pub fn max_activity(&self) -> Activity {
-        self.capacity.total_capacity() * self.process.capacity_to_activity
+        self.total_capacity() * self.process.capacity_to_activity
     }
 
     /// Get a specific process flow
@@ -852,28 +864,49 @@ impl Asset {
         }
     }
 
-    /// Get the group ID for this asset
-    pub fn group_id(&self) -> Option<AssetGroupID> {
+    /// Get the parent asset of this asset, if any
+    pub fn parent(&self) -> Option<&AssetRef> {
         match &self.state {
-            AssetState::Commissioned { group_id, .. } => *group_id,
+            AssetState::Commissioned { parent, .. } => parent.as_ref(),
             _ => None,
         }
     }
 
-    /// Get the agent ID for this asset
+    /// Get the group ID for this asset, if any
+    pub fn group_id(&self) -> Option<AssetGroupID> {
+        match &self.state {
+            AssetState::Commissioned { parent, .. } => {
+                // Get group ID from parent
+                parent
+                    .as_ref()
+                    // Safe because parents always have state `Parent`
+                    .map(|parent| parent.group_id().unwrap())
+            }
+            AssetState::Parent { group_id, .. } => Some(*group_id),
+            _ => None,
+        }
+    }
+
+    /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
             AssetState::Commissioned { agent_id, .. }
             | AssetState::Decommissioned { agent_id, .. }
             | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id } => Some(agent_id),
+            | AssetState::Selected { agent_id }
+            | AssetState::Parent { agent_id, .. } => Some(agent_id),
             AssetState::Candidate => None,
         }
     }
 
     /// Get the capacity for this asset
     pub fn capacity(&self) -> AssetCapacity {
-        self.capacity
+        self.capacity.get()
+    }
+
+    /// Get the total capacity for this asset
+    pub fn total_capacity(&self) -> Capacity {
+        self.capacity().total_capacity()
     }
 
     /// Set the capacity for this asset (only for Candidate or Selected assets)
@@ -889,8 +922,11 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
-        self.capacity.assert_same_type(capacity);
-        self.capacity = capacity;
+        self.capacity().assert_same_type(capacity);
+
+        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
+        // changing the capacity of immutable refs would be potentially dangerous
+        self.capacity.set(capacity);
     }
 
     /// Increase the capacity for this asset (only for Candidate assets)
@@ -903,13 +939,38 @@ impl Asset {
             capacity.total_capacity() > Capacity(0.0),
             "Capacity increase must be positive"
         );
-        self.capacity = self.capacity + capacity;
+
+        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
+        // changing the capacity of immutable refs would be potentially dangerous
+        self.capacity.update(|c| c + capacity);
+    }
+
+    /// Decrease the unit count (number of units) of this asset by one.
+    ///
+    /// Note that this method uses interior mutability so that we can operate on an immutable ref to
+    /// `self`. Accordingly, calling this method will result in a change in the capacity for all
+    /// `Rc` copies of the asset, which is potentially dangerous. This method is therefore private
+    /// and should **only** be used for the case where we want to decrease the unit count for parent
+    /// assets.
+    fn decrement_unit_count(&self) {
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
+            panic!("Cannot decrement unit count of non-divisible asset");
+        };
+        assert!(n_units > 0, "Unit count has dropped below zero");
+
+        self.capacity
+            .set(AssetCapacity::Discrete(n_units - 1, unit_size));
     }
 
     /// Decommission this asset
     fn decommission(&mut self, decommission_year: u32, reason: &str) {
-        let (id, agent_id) = match &self.state {
-            AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
+        let (id, agent_id, parent) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                parent,
+                ..
+            } => (*id, agent_id.clone(), parent),
             _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
         };
         debug!(
@@ -919,6 +980,11 @@ impl Asset {
             agent_id,
             reason
         );
+
+        // If this is a child asset, we need to decrease the parent's capacity appropriately
+        if let Some(parent) = parent {
+            parent.decrement_unit_count();
+        }
 
         self.state = AssetState::Decommissioned {
             id,
@@ -936,8 +1002,8 @@ impl Asset {
     ///
     /// * `id` - The ID to give the newly commissioned asset
     /// * `reason` - The reason for commissioning (included in log)
-    /// * `group_id` - The ID of the group of this asset, if any.
-    fn commission(&mut self, id: AssetID, group_id: Option<AssetGroupID>, reason: &str) {
+    /// * `parent` - The parent asset, if this is a child asset
+    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>, reason: &str) {
         let agent_id = match &self.state {
             AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
             state => panic!("Assets with state {state} cannot be commissioned"),
@@ -946,7 +1012,7 @@ impl Asset {
             "Commissioning '{}' asset (ID: {}, capacity: {}) for agent '{}' (reason: {})",
             self.process_id(),
             id,
-            self.capacity.total_capacity(),
+            self.total_capacity(),
             agent_id,
             reason
         );
@@ -954,7 +1020,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
-            group_id,
+            parent,
         };
     }
 
@@ -964,45 +1030,45 @@ impl Asset {
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.capacity.total_capacity()).unwrap();
+        check_capacity_valid_for_asset(self.total_capacity()).unwrap();
         self.state = AssetState::Selected { agent_id };
     }
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id, group_id) = match &self.state {
+        let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                group_id,
+                parent,
                 ..
-            } => (*id, agent_id.clone(), *group_id),
+            } => (*id, agent_id.clone(), parent.clone()),
             _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
-            agent_id: agent_id.clone(),
+            agent_id,
             mothballed_year: Some(year),
-            group_id,
+            parent,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id, group_id) = match &self.state {
+        let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
                 agent_id,
-                group_id,
+                parent,
                 ..
-            } => (*id, agent_id.clone(), *group_id),
+            } => (*id, agent_id.clone(), parent.clone()),
             _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
-            agent_id: agent_id.clone(),
+            agent_id,
             mothballed_year: None,
-            group_id,
+            parent,
         };
     }
 
@@ -1019,48 +1085,10 @@ impl Asset {
 
     /// Get the unit size for this asset's capacity (if any)
     pub fn unit_size(&self) -> Option<Capacity> {
-        match self.capacity {
+        match self.capacity() {
             AssetCapacity::Discrete(_, size) => Some(size),
             AssetCapacity::Continuous(_) => None,
         }
-    }
-
-    /// Checks if the asset corresponds to a process that has a `unit_size` and is therefore divisible.
-    pub fn is_divisible(&self) -> bool {
-        self.process.unit_size.is_some()
-    }
-
-    /// Divides an asset if it is divisible and returns a vector of children
-    ///
-    /// Assets with capacity of type `AssetCapacity::Discrete` are divided into multiple assets each
-    /// made up of a single unit of the original asset's unit size. Will panic if the asset does not
-    /// have a discrete capacity.
-    ///
-    /// Only `Future` and `Selected` assets can be divided.
-    ///
-    /// TODO: To be deleted
-    pub fn divide_asset(&self) -> Vec<AssetRef> {
-        assert!(
-            matches!(
-                self.state,
-                AssetState::Future { .. } | AssetState::Selected { .. }
-            ),
-            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
-            self.state
-        );
-
-        // Ensure the asset is discrete
-        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity else {
-            panic!("Only discrete assets can be divided")
-        };
-
-        // Divide the asset into `n_units` children of size `unit_size`
-        let child_asset = Self {
-            capacity: AssetCapacity::Discrete(1, unit_size),
-            ..self.clone()
-        };
-        let child_asset = AssetRef::from(Rc::new(child_asset));
-        std::iter::repeat_n(child_asset, n_units as usize).collect()
     }
 
     /// For non-commissioned assets, get the maximum capacity permitted to be installed based on the
@@ -1099,7 +1127,7 @@ impl std::fmt::Debug for Asset {
             .field("state", &self.state)
             .field("process_id", &self.process_id())
             .field("region_id", &self.region_id)
-            .field("capacity", &self.capacity.total_capacity())
+            .field("capacity", &self.total_capacity())
             .field("commission_year", &self.commission_year)
             .finish()
     }
@@ -1149,6 +1177,57 @@ impl AssetRef {
     pub fn make_mut(&mut self) -> &mut Asset {
         Rc::make_mut(&mut self.0)
     }
+
+    /// Apply a function to each of this asset's children, consuming the asset in the process.
+    ///
+    /// If this asset is divisible, the first argument to `f` will be this asset after it has been
+    /// converted to a parent and the second will be each child.
+    ///
+    /// If this asset is non-divisible (i.e. does not have a discrete capacity), then `f` will be
+    /// called with the first argument set to `None` and the second will be `self`.
+    ///
+    /// When the asset has a discrete capacity, each of the children will be made up of a single
+    /// unit of the original asset's unit size.
+    ///
+    /// Panics if this asset's state is not `Future` or `Selected`.
+    fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
+    where
+        F: FnMut(Option<&AssetRef>, AssetRef),
+    {
+        assert!(
+            matches!(
+                self.state,
+                AssetState::Future { .. } | AssetState::Selected { .. }
+            ),
+            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
+            self.state
+        );
+
+        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
+            // Asset is non-divisible
+            f(None, self);
+            return;
+        };
+
+        // Create a child of size `unit_size`
+        let child = AssetRef::from(Asset {
+            capacity: Cell::new(AssetCapacity::Discrete(1, unit_size)),
+            ..Asset::clone(&self)
+        });
+
+        // Turn this asset into a parent
+        let agent_id = self.agent_id().unwrap().clone();
+        self.make_mut().state = AssetState::Parent {
+            agent_id,
+            group_id: AssetGroupID(*next_group_id),
+        };
+        *next_group_id += 1;
+
+        // Run `f` over each child
+        for child in iter::repeat_n(child, n_units as usize) {
+            f(Some(&self), child);
+        }
+    }
 }
 
 impl From<Rc<Asset>> for AssetRef {
@@ -1193,8 +1272,10 @@ impl Eq for AssetRef {}
 impl Hash for AssetRef {
     /// Hash an asset according to its state:
     /// - Commissioned assets are hashed based on their ID alone
-    /// - Selected assets are hashed based on `process_id`, `region_id`, `commission_year` and `agent_id`
+    /// - Selected assets are hashed based on `process_id`, `region_id`, `commission_year` and
+    ///   `agent_id`
     /// - Candidate assets are hashed based on `process_id`, `region_id` and `commission_year`
+    /// - Parent assets are hashed based on `agent_id` and `group_id`
     /// - Future and Decommissioned assets cannot currently be hashed
     fn hash<H: Hasher>(&self, state: &mut H) {
         match &self.0.state {
@@ -1203,17 +1284,16 @@ impl Hash for AssetRef {
                 // asset
                 id.hash(state);
             }
-            AssetState::Candidate | AssetState::Selected { .. } => {
-                // Hashed based on process_id, region_id, commission_year and (for Selected assets)
-                // agent_id
+            AssetState::Candidate | AssetState::Selected { .. } | AssetState::Parent { .. } => {
                 self.0.process.id.hash(state);
                 self.0.region_id.hash(state);
                 self.0.commission_year.hash(state);
                 self.0.agent_id().hash(state);
+                self.0.group_id().hash(state);
             }
-            AssetState::Future { .. } | AssetState::Decommissioned { .. } => {
-                // We shouldn't currently need to hash Future or Decommissioned assets
-                panic!("Cannot hash Future or Decommissioned assets");
+            state => {
+                // We don't need to hash other types of asset
+                panic!("Cannot hash {state} assets");
             }
         }
     }
@@ -1231,14 +1311,11 @@ impl Ord for AssetRef {
     }
 }
 
-/// A pool of [`Asset`]s
+/// The active pool of [`Asset`]s
+#[derive(Default)]
 pub struct AssetPool {
     /// The pool of active assets, sorted by ID
-    active: Vec<AssetRef>,
-    /// Assets that have not yet been commissioned, sorted by commission year
-    future: Vec<Asset>,
-    /// Assets that have been decommissioned
-    decommissioned: Vec<AssetRef>,
+    assets: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
     /// Next available group ID number
@@ -1246,43 +1323,21 @@ pub struct AssetPool {
 }
 
 impl AssetPool {
-    /// Create a new [`AssetPool`]
-    pub fn new(mut assets: Vec<Asset>) -> Self {
-        // Sort in order of commission year
-        assets.sort_by(|a, b| a.commission_year.cmp(&b.commission_year));
-
-        Self {
-            active: Vec::new(),
-            future: assets,
-            decommissioned: Vec::new(),
-            next_id: 0,
-            next_group_id: 0,
-        }
+    /// Create a new empty [`AssetPool`]
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Get the active pool as a slice of [`AssetRef`]s
     pub fn as_slice(&self) -> &[AssetRef] {
-        &self.active
-    }
-
-    /// Decommission assets whose lifetime has passed,
-    /// and commission new assets
-    pub fn update_for_year(&mut self, year: u32) {
-        self.decommission_old(year);
-        self.commission_new(year);
+        &self.assets
     }
 
     /// Commission new assets for the specified milestone year from the input data
-    fn commission_new(&mut self, year: u32) {
-        // Count the number of assets to move
-        let count = self
-            .future
-            .iter()
-            .take_while(|asset| asset.commission_year <= year)
-            .count();
+    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) {
+        let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
 
-        // Move assets from future to active
-        for mut asset in self.future.drain(0..count) {
+        for asset in to_commission {
             // Ignore assets that have already been decommissioned
             if asset.max_decommission_year() <= year {
                 warn!(
@@ -1295,59 +1350,59 @@ impl AssetPool {
                 continue;
             }
 
-            // If it is divisible, we divide and commission all the children
-            if asset.is_divisible() {
-                for mut child in asset.divide_asset() {
-                    child.make_mut().commission(
-                        AssetID(self.next_id),
-                        Some(AssetGroupID(self.next_group_id)),
-                        "user input",
-                    );
-                    self.next_id += 1;
-                    self.active.push(child);
-                }
-                self.next_group_id += 1;
-            }
-            // If not, we just commission it as a single asset
-            else {
-                asset.commission(AssetID(self.next_id), None, "user input");
-                self.next_id += 1;
-                self.active.push(asset.into());
-            }
+            self.commission(asset, "user input");
         }
+    }
+
+    /// Commission the specified asset or, if divisible, its children
+    fn commission(&mut self, asset: AssetRef, reason: &str) {
+        asset.into_for_each_child(&mut self.next_group_id, |parent, mut child| {
+            child
+                .make_mut()
+                .commission(AssetID(self.next_id), parent.cloned(), reason);
+            self.next_id += 1;
+            self.assets.push(child);
+        });
     }
 
     /// Decommission old assets for the specified milestone year
-    fn decommission_old(&mut self, year: u32) {
-        // Remove assets which are due for decommissioning
+    pub fn decommission_old<E: Extend<AssetRef>>(&mut self, year: u32, decommissioned: &mut E) {
         let to_decommission = self
-            .active
-            .extract_if(.., |asset| asset.max_decommission_year() <= year);
-
-        for mut asset in to_decommission {
-            // Set `decommission_year` and move to `self.decommissioned`
-            asset.make_mut().decommission(year, "end of life");
-            self.decommissioned.push(asset);
-        }
+            .assets
+            .extract_if(.., move |asset| asset.max_decommission_year() <= year)
+            .map(move |mut asset| {
+                asset.make_mut().decommission(year, "end of life");
+                asset
+            });
+        decommissioned.extend(to_decommission);
     }
 
-    /// Decomission mothballed assets if mothballed long enough
-    pub fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
-        // Remove assets which are due for decommissioning
-        let to_decommission = self.active.extract_if(.., |asset| {
-            asset.get_mothballed_year().is_some()
-                && asset.get_mothballed_year() <= Some(year - min(mothball_years, year))
-        });
-
-        for mut asset in to_decommission {
-            // Set `decommission_year` and move to `self.decommissioned`
-            let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
-            asset.make_mut().decommission(
-                decommissioned,
-                &format!("The asset has not been used for the set mothball years ({mothball_years} years)."),
-            );
-            self.decommissioned.push(asset);
-        }
+    /// Decommission mothballed assets if mothballed long enough
+    pub fn decommission_mothballed<E: Extend<AssetRef>>(
+        &mut self,
+        year: u32,
+        mothball_years: u32,
+        decommissioned: &mut E,
+    ) {
+        let to_decommission = self
+            .assets
+            .extract_if(.., move |asset| {
+                asset
+                    .get_mothballed_year()
+                    .is_some_and(|myear| myear <= year - min(mothball_years, year))
+            })
+            .map(move |mut asset| {
+                let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
+                asset.make_mut().decommission(
+                    decommissioned,
+                    &format!(
+                        "The asset has not been used for the set mothball years ({mothball_years} \
+                        years)."
+                    ),
+                );
+                asset
+            });
+        decommissioned.extend(to_decommission);
     }
 
     /// Mothball the specified assets if they are no longer in the active pool and put them back again.
@@ -1366,7 +1421,7 @@ impl AssetPool {
     {
         for mut asset in assets {
             if match asset.state {
-                AssetState::Commissioned { .. } => !self.active.contains(&asset),
+                AssetState::Commissioned { .. } => !self.assets.contains(&asset),
                 _ => panic!("Cannot mothball asset that has not been commissioned"),
             } {
                 // If not already set, we set the current year as the mothball year,
@@ -1377,10 +1432,10 @@ impl AssetPool {
 
                 // And we put it back to the pool, so they can be chosen the next milestone year
                 // if not decommissioned earlier.
-                self.active.push(asset);
+                self.assets.push(asset);
             }
         }
-        self.active.sort();
+        self.assets.sort();
     }
 
     /// Get an asset with the specified ID.
@@ -1390,38 +1445,27 @@ impl AssetPool {
     /// An [`AssetRef`] if found, else `None`. The asset may not be found if it has already been
     /// decommissioned.
     pub fn get(&self, id: AssetID) -> Option<&AssetRef> {
-        // The assets in `active` are in order of ID
+        // Assets are sorted by ID
         let idx = self
-            .active
+            .assets
             .binary_search_by(|asset| match &asset.state {
                 AssetState::Commissioned { id: asset_id, .. } => asset_id.cmp(&id),
                 _ => panic!("Active pool should only contain commissioned assets"),
             })
             .ok()?;
 
-        Some(&self.active[idx])
+        Some(&self.assets[idx])
     }
 
     /// Iterate over active assets
-    pub fn iter_active(&self) -> slice::Iter<'_, AssetRef> {
-        self.active.iter()
-    }
-
-    /// Iterate over decommissioned assets
-    pub fn iter_decommissioned(&self) -> slice::Iter<'_, AssetRef> {
-        self.decommissioned.iter()
-    }
-
-    /// Iterate over all commissioned and decommissioned assets.
-    ///
-    /// NB: Not-yet-commissioned assets are not included.
-    pub fn iter_all(&self) -> impl Iterator<Item = &AssetRef> {
-        chain(self.iter_active(), self.iter_decommissioned())
+    #[allow(clippy::iter_without_into_iter)]
+    pub fn iter(&self) -> slice::Iter<'_, AssetRef> {
+        self.assets.iter()
     }
 
     /// Return current active pool and clear
     pub fn take(&mut self) -> Vec<AssetRef> {
-        std::mem::take(&mut self.active)
+        std::mem::take(&mut self.assets)
     }
 
     /// Extend the active pool with Commissioned or Selected assets
@@ -1435,30 +1479,10 @@ impl AssetPool {
             match &asset.state {
                 AssetState::Commissioned { .. } => {
                     asset.make_mut().unmothball();
-                    self.active.push(asset);
+                    self.assets.push(asset);
                 }
                 AssetState::Selected { .. } => {
-                    // If it is divisible, we divide and commission all the children
-                    if asset.is_divisible() {
-                        for mut child in asset.divide_asset() {
-                            child.make_mut().commission(
-                                AssetID(self.next_id),
-                                Some(AssetGroupID(self.next_group_id)),
-                                "selected",
-                            );
-                            self.next_id += 1;
-                            self.active.push(child);
-                        }
-                        self.next_group_id += 1;
-                    }
-                    // If not, we just commission it as a single asset
-                    else {
-                        asset
-                            .make_mut()
-                            .commission(AssetID(self.next_id), None, "selected");
-                        self.next_id += 1;
-                        self.active.push(asset);
-                    }
+                    self.commission(asset, "selected");
                 }
                 _ => panic!(
                     "Cannot extend asset pool with asset in state {}. Only assets in \
@@ -1468,11 +1492,11 @@ impl AssetPool {
             }
         }
 
-        // New assets may not have been sorted, but active needs to be sorted by ID
-        self.active.sort();
+        // New assets may not have been sorted, but we need them sorted by ID
+        self.assets.sort();
 
         // Sanity check: all assets should be unique
-        debug_assert_eq!(self.active.iter().unique().count(), self.active.len());
+        debug_assert_eq!(self.assets.iter().unique().count(), self.assets.len());
     }
 }
 
@@ -1542,7 +1566,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.capacity.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
+        (asset.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
             .value()
             .ceil() as usize
     }
@@ -1685,7 +1709,7 @@ mod tests {
     }
 
     #[fixture]
-    fn asset_pool(mut process: Process) -> AssetPool {
+    fn user_assets(mut process: Process) -> Vec<AssetRef> {
         // Update process parameters (lifetime = 20 years)
         let process_param = ProcessParameter {
             capital_cost: MoneyPerCapacity(5.0),
@@ -1698,7 +1722,7 @@ mod tests {
         process.parameters = process_parameter_map;
 
         let rc_process = Rc::new(process);
-        let future = [2020, 2010]
+        [2020, 2010]
             .map(|year| {
                 Asset::new_future(
                     "agent1".into(),
@@ -1708,11 +1732,10 @@ mod tests {
                     year,
                 )
                 .unwrap()
+                .into()
             })
             .into_iter()
-            .collect_vec();
-
-        AssetPool::new(future)
+            .collect_vec()
     }
 
     #[fixture]
@@ -1774,168 +1797,191 @@ mod tests {
     #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
     #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
     #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
-    fn divide_asset(
+    fn into_for_each_child_divisible(
         mut process: Process,
         #[case] capacity: Capacity,
         #[case] unit_size: Capacity,
         #[case] n_expected_children: usize,
     ) {
         process.unit_size = Some(unit_size);
-        let asset = Asset::new_future(
-            "agent1".into(),
-            Rc::new(process),
-            "GBR".into(),
-            capacity,
-            2010,
-        )
-        .unwrap();
-
-        assert!(asset.is_divisible(), "Asset should be divisible!");
-
-        let children = asset.divide_asset();
-        assert_eq!(
-            children.len(),
-            n_expected_children,
-            "Unexpected number of children"
+        let asset = AssetRef::from(
+            Asset::new_future(
+                "agent1".into(),
+                Rc::new(process),
+                "GBR".into(),
+                capacity,
+                2010,
+            )
+            .unwrap(),
         );
 
-        // Check all children have capacity equal to unit_size
-        for child in children.clone() {
+        let mut count = 0;
+        let mut total_child_capacity = Capacity(0.0);
+        asset.clone().into_for_each_child(&mut 0, |parent, child| {
+            assert!(parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. })));
+
+            // Check each child has capacity equal to unit_size
             assert_eq!(
-                child.capacity.total_capacity(),
+                child.total_capacity(),
                 unit_size,
                 "Child capacity should equal unit_size"
             );
-        }
+
+            total_child_capacity += child.total_capacity();
+            count += 1;
+        });
+        assert_eq!(count, n_expected_children, "Unexpected number of children");
 
         // Check total capacity is >= parent capacity
-        let total_child_capacity: Capacity = children
-            .iter()
-            .map(|child| child.capacity.total_capacity())
-            .sum();
         assert!(
-            total_child_capacity >= asset.capacity.total_capacity(),
+            total_child_capacity >= asset.total_capacity(),
             "Total capacity should be >= parent capacity"
         );
     }
 
     #[rstest]
-    fn asset_pool_new(asset_pool: AssetPool) {
-        // Should be in order of commission year
-        assert!(asset_pool.active.is_empty());
-        assert!(asset_pool.future.len() == 2);
-        assert!(asset_pool.future[0].commission_year == 2010);
-        assert!(asset_pool.future[1].commission_year == 2020);
+    fn into_for_each_child_nondivisible(asset: Asset) {
+        assert!(
+            asset.process.unit_size.is_none(),
+            "Asset should be non-divisible"
+        );
+
+        let asset = AssetRef::from(asset);
+        let mut count = 0;
+        asset.clone().into_for_each_child(&mut 0, |parent, child| {
+            assert!(parent.is_none());
+            assert_eq!(child, asset);
+            count += 1;
+        });
+        assert_eq!(count, 1);
     }
 
     #[rstest]
-    fn asset_pool_commission_new1(mut asset_pool: AssetPool) {
+    fn asset_pool_new() {
+        assert!(AssetPool::new().assets.is_empty());
+    }
+
+    #[rstest]
+    fn asset_pool_commission_new1(mut user_assets: Vec<AssetRef>) {
         // Asset to be commissioned in this year
-        asset_pool.commission_new(2010);
-        assert_equal(asset_pool.iter_active(), iter::once(&asset_pool.active[0]));
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2010, &mut user_assets);
+        assert_equal(asset_pool.iter(), iter::once(&asset_pool.assets[0]));
     }
 
     #[rstest]
-    fn asset_pool_commission_new2(mut asset_pool: AssetPool) {
+    fn asset_pool_commission_new2(mut user_assets: Vec<AssetRef>) {
         // Commission year has passed
-        asset_pool.commission_new(2011);
-        assert_equal(asset_pool.iter_active(), iter::once(&asset_pool.active[0]));
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2011, &mut user_assets);
+        assert_equal(asset_pool.iter(), iter::once(&asset_pool.assets[0]));
     }
 
     #[rstest]
-    fn asset_pool_commission_new3(mut asset_pool: AssetPool) {
+    fn asset_pool_commission_new3(mut user_assets: Vec<AssetRef>) {
         // Nothing to commission for this year
-        asset_pool.commission_new(2000);
-        assert!(asset_pool.iter_active().next().is_none()); // no active assets
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2000, &mut user_assets);
+        assert!(asset_pool.iter().next().is_none()); // no active assets
     }
 
     #[rstest]
     fn asset_pool_commission_new_divisible(asset_divisible: Asset) {
         let commision_year = asset_divisible.commission_year;
         let expected_children = expected_children_for_divisible(&asset_divisible);
-        let mut asset_pool = AssetPool::new(vec![asset_divisible.clone()]);
-        assert!(asset_pool.active.is_empty());
-        asset_pool.commission_new(commision_year);
-        assert!(asset_pool.future.is_empty());
-        assert!(!asset_pool.active.is_empty());
-        assert_eq!(asset_pool.active.len(), expected_children);
+        let mut asset_pool = AssetPool::new();
+        let mut user_assets = vec![asset_divisible.into()];
+        assert!(asset_pool.assets.is_empty());
+        asset_pool.commission_new(commision_year, &mut user_assets);
+        assert!(user_assets.is_empty());
+        assert!(!asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets.len(), expected_children);
         assert_eq!(asset_pool.next_group_id, 1);
     }
 
     #[rstest]
     fn asset_pool_commission_already_decommissioned(asset: Asset) {
         let year = asset.max_decommission_year();
-        let mut asset_pool = AssetPool::new(vec![asset]);
-        assert!(asset_pool.active.is_empty());
-        asset_pool.update_for_year(year);
-        assert!(asset_pool.active.is_empty());
+        let mut asset_pool = AssetPool::new();
+        assert!(asset_pool.assets.is_empty());
+        asset_pool.commission_new(year, &mut vec![asset.into()]);
+        assert!(asset_pool.assets.is_empty());
     }
 
     #[rstest]
-    fn asset_pool_decommission_old(mut asset_pool: AssetPool) {
-        asset_pool.commission_new(2020);
-        assert!(asset_pool.future.is_empty());
-        assert_eq!(asset_pool.active.len(), 2);
-        asset_pool.decommission_old(2030); // should decommission first asset (lifetime == 5)
-        assert_eq!(asset_pool.active.len(), 1);
-        assert_eq!(asset_pool.active[0].commission_year, 2020);
-        assert_eq!(asset_pool.decommissioned.len(), 1);
-        assert_eq!(asset_pool.decommissioned[0].commission_year, 2010);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2030));
-        asset_pool.decommission_old(2032); // nothing to decommission
-        assert_eq!(asset_pool.active.len(), 1);
-        assert_eq!(asset_pool.active[0].commission_year, 2020);
-        assert_eq!(asset_pool.decommissioned.len(), 1);
-        assert_eq!(asset_pool.decommissioned[0].commission_year, 2010);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2030));
-        asset_pool.decommission_old(2040); // should decommission second asset
-        assert!(asset_pool.active.is_empty());
-        assert_eq!(asset_pool.decommissioned.len(), 2);
-        assert_eq!(asset_pool.decommissioned[0].commission_year, 2010);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2030));
-        assert_eq!(asset_pool.decommissioned[1].commission_year, 2020);
-        assert_eq!(asset_pool.decommissioned[1].decommission_year(), Some(2040));
+    fn asset_pool_decommission_old(mut user_assets: Vec<AssetRef>) {
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        assert!(user_assets.is_empty());
+        assert_eq!(asset_pool.assets.len(), 2);
+        let mut decommissioned = Vec::new();
+
+        // should decommission first asset (lifetime == 5)
+        asset_pool.decommission_old(2030, &mut decommissioned);
+        assert_eq!(asset_pool.assets.len(), 1);
+        assert_eq!(asset_pool.assets[0].commission_year, 2020);
+        assert_eq!(decommissioned.len(), 1);
+        assert_eq!(decommissioned[0].commission_year, 2010);
+        assert_eq!(decommissioned[0].decommission_year(), Some(2030));
+
+        // nothing to decommission
+        decommissioned.clear();
+        asset_pool.decommission_old(2032, &mut decommissioned);
+        assert_eq!(asset_pool.assets.len(), 1);
+        assert_eq!(asset_pool.assets[0].commission_year, 2020);
+
+        // should decommission second asset
+        decommissioned.clear();
+        asset_pool.decommission_old(2040, &mut decommissioned);
+        assert!(asset_pool.assets.is_empty());
+        assert_eq!(decommissioned.len(), 1);
+        assert_eq!(decommissioned[0].commission_year, 2020);
+        assert_eq!(decommissioned[0].decommission_year(), Some(2040));
     }
 
     #[rstest]
-    fn asset_pool_get(mut asset_pool: AssetPool) {
-        asset_pool.commission_new(2020);
-        assert_eq!(asset_pool.get(AssetID(0)), Some(&asset_pool.active[0]));
-        assert_eq!(asset_pool.get(AssetID(1)), Some(&asset_pool.active[1]));
+    fn asset_pool_get(mut user_assets: Vec<AssetRef>) {
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        assert_eq!(asset_pool.get(AssetID(0)), Some(&asset_pool.assets[0]));
+        assert_eq!(asset_pool.get(AssetID(1)), Some(&asset_pool.assets[1]));
     }
 
     #[rstest]
-    fn asset_pool_extend_empty(mut asset_pool: AssetPool) {
+    fn asset_pool_extend_empty(mut user_assets: Vec<AssetRef>) {
         // Start with commissioned assets
-        asset_pool.commission_new(2020);
-        let original_count = asset_pool.active.len();
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        let original_count = asset_pool.assets.len();
 
         // Extend with empty iterator
         asset_pool.extend(Vec::<AssetRef>::new());
 
-        assert_eq!(asset_pool.active.len(), original_count);
+        assert_eq!(asset_pool.assets.len(), original_count);
     }
 
     #[rstest]
-    fn asset_pool_extend_existing_assets(mut asset_pool: AssetPool) {
+    fn asset_pool_extend_existing_assets(mut user_assets: Vec<AssetRef>) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
-        assert_eq!(asset_pool.active.len(), 2);
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        assert_eq!(asset_pool.assets.len(), 2);
         let existing_assets = asset_pool.take();
 
         // Extend with the same assets (should maintain their IDs)
         asset_pool.extend(existing_assets.clone());
 
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.active[0].id(), Some(AssetID(0)));
-        assert_eq!(asset_pool.active[1].id(), Some(AssetID(1)));
+        assert_eq!(asset_pool.assets.len(), 2);
+        assert_eq!(asset_pool.assets[0].id(), Some(AssetID(0)));
+        assert_eq!(asset_pool.assets[1].id(), Some(AssetID(1)));
     }
 
     #[rstest]
-    fn asset_pool_extend_new_assets(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_new_assets(mut user_assets: Vec<AssetRef>, process: Process) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
-        let original_count = asset_pool.active.len();
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        let original_count = asset_pool.assets.len();
 
         // Create new non-commissioned assets
         let process_rc = Rc::new(process);
@@ -1962,25 +2008,29 @@ mod tests {
 
         asset_pool.extend(new_assets);
 
-        assert_eq!(asset_pool.active.len(), original_count + 2);
+        assert_eq!(asset_pool.assets.len(), original_count + 2);
         // New assets should get IDs 2 and 3
-        assert_eq!(asset_pool.active[original_count].id(), Some(AssetID(2)));
-        assert_eq!(asset_pool.active[original_count + 1].id(), Some(AssetID(3)));
+        assert_eq!(asset_pool.assets[original_count].id(), Some(AssetID(2)));
+        assert_eq!(asset_pool.assets[original_count + 1].id(), Some(AssetID(3)));
         assert_eq!(
-            asset_pool.active[original_count].agent_id(),
+            asset_pool.assets[original_count].agent_id(),
             Some(&"agent2".into())
         );
         assert_eq!(
-            asset_pool.active[original_count + 1].agent_id(),
+            asset_pool.assets[original_count + 1].agent_id(),
             Some(&"agent3".into())
         );
     }
 
     #[rstest]
-    fn asset_pool_extend_new_divisible_assets(mut asset_pool: AssetPool, mut process: Process) {
+    fn asset_pool_extend_new_divisible_assets(
+        mut user_assets: Vec<AssetRef>,
+        mut process: Process,
+    ) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
-        let original_count = asset_pool.active.len();
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        let original_count = asset_pool.assets.len();
 
         // Create new non-commissioned assets
         process.unit_size = Some(Capacity(4.0));
@@ -1998,13 +2048,14 @@ mod tests {
         ];
         let expected_children = expected_children_for_divisible(&new_assets[0]);
         asset_pool.extend(new_assets);
-        assert_eq!(asset_pool.active.len(), original_count + expected_children);
+        assert_eq!(asset_pool.assets.len(), original_count + expected_children);
     }
 
     #[rstest]
-    fn asset_pool_extend_mixed_assets(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_mixed_assets(mut user_assets: Vec<AssetRef>, process: Process) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
 
         // Create a new non-commissioned asset
         let new_asset = Asset::new_selected(
@@ -2020,24 +2071,25 @@ mod tests {
         // Extend with just the new asset (not mixing with existing to avoid duplicates)
         asset_pool.extend(vec![new_asset]);
 
-        assert_eq!(asset_pool.active.len(), 3);
+        assert_eq!(asset_pool.assets.len(), 3);
         // Check that we have the original assets plus the new one
-        assert!(asset_pool.active.iter().any(|a| a.id() == Some(AssetID(0))));
-        assert!(asset_pool.active.iter().any(|a| a.id() == Some(AssetID(1))));
-        assert!(asset_pool.active.iter().any(|a| a.id() == Some(AssetID(2))));
+        assert!(asset_pool.assets.iter().any(|a| a.id() == Some(AssetID(0))));
+        assert!(asset_pool.assets.iter().any(|a| a.id() == Some(AssetID(1))));
+        assert!(asset_pool.assets.iter().any(|a| a.id() == Some(AssetID(2))));
         // Check that the new asset has the correct agent
         assert!(
             asset_pool
-                .active
+                .assets
                 .iter()
                 .any(|a| a.agent_id() == Some(&"agent_new".into()))
         );
     }
 
     #[rstest]
-    fn asset_pool_extend_maintains_sort_order(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_maintains_sort_order(mut user_assets: Vec<AssetRef>, process: Process) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
 
         // Create new assets that would be out of order if added at the end
         let process_rc = Rc::new(process);
@@ -2065,35 +2117,34 @@ mod tests {
         asset_pool.extend(new_assets);
 
         // Check that assets are sorted by ID
-        let ids: Vec<u32> = asset_pool
-            .iter_active()
-            .map(|a| a.id().unwrap().0)
-            .collect();
+        let ids: Vec<u32> = asset_pool.iter().map(|a| a.id().unwrap().0).collect();
         assert_equal(ids, 0..4);
     }
 
     #[rstest]
-    fn asset_pool_extend_no_duplicates_expected(mut asset_pool: AssetPool) {
+    fn asset_pool_extend_no_duplicates_expected(mut user_assets: Vec<AssetRef>) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
-        let original_count = asset_pool.active.len();
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        let original_count = asset_pool.assets.len();
 
         // The extend method expects unique assets - adding duplicates would violate
         // the debug assertion, so this test verifies the normal case
         asset_pool.extend(Vec::new());
 
-        assert_eq!(asset_pool.active.len(), original_count);
+        assert_eq!(asset_pool.assets.len(), original_count);
         // Verify all assets are still unique (this is what the debug_assert checks)
         assert_eq!(
-            asset_pool.active.iter().unique().count(),
-            asset_pool.active.len()
+            asset_pool.assets.iter().unique().count(),
+            asset_pool.assets.len()
         );
     }
 
     #[rstest]
-    fn asset_pool_extend_increments_next_id(mut asset_pool: AssetPool, process: Process) {
+    fn asset_pool_extend_increments_next_id(mut user_assets: Vec<AssetRef>, process: Process) {
         // Start with some commissioned assets
-        asset_pool.commission_new(2020);
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
         assert_eq!(asset_pool.next_id, 2); // Should be 2 after commissioning 2 assets
 
         // Create new non-commissioned assets
@@ -2123,82 +2174,82 @@ mod tests {
 
         // next_id should have incremented for each new asset
         assert_eq!(asset_pool.next_id, 4);
-        assert_eq!(asset_pool.active[2].id(), Some(AssetID(2)));
-        assert_eq!(asset_pool.active[3].id(), Some(AssetID(3)));
+        assert_eq!(asset_pool.assets[2].id(), Some(AssetID(2)));
+        assert_eq!(asset_pool.assets[3].id(), Some(AssetID(3)));
     }
 
     #[rstest]
-    fn asset_pool_mothball_unretained(mut asset_pool: AssetPool) {
+    fn asset_pool_mothball_unretained(mut user_assets: Vec<AssetRef>) {
         // Commission some assets
-        asset_pool.commission_new(2020);
-        assert_eq!(asset_pool.active.len(), 2);
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        assert_eq!(asset_pool.assets.len(), 2);
 
         // Remove one asset from the active pool (simulating it being removed elsewhere)
-        let removed_asset = asset_pool.active.remove(0);
-        assert_eq!(asset_pool.active.len(), 1);
+        let removed_asset = asset_pool.assets.remove(0);
+        assert_eq!(asset_pool.assets.len(), 1);
 
         // Try to mothball both the removed asset (not in active) and an active asset
-        let assets_to_check = vec![removed_asset.clone(), asset_pool.active[0].clone()];
+        let assets_to_check = vec![removed_asset.clone(), asset_pool.assets[0].clone()];
         asset_pool.mothball_unretained(assets_to_check, 2025);
 
         // Only the removed asset should be mothballed (since it's not in active pool)
-        assert_eq!(asset_pool.active.len(), 2); // And should be back into the pool
-        assert_eq!(asset_pool.active[0].get_mothballed_year(), Some(2025));
+        assert_eq!(asset_pool.assets.len(), 2); // And should be back into the pool
+        assert_eq!(asset_pool.assets[0].get_mothballed_year(), Some(2025));
     }
 
     #[rstest]
-    fn asset_pool_decommission_unused(mut asset_pool: AssetPool) {
+    fn asset_pool_decommission_unused(mut user_assets: Vec<AssetRef>) {
         // Commission some assets
-        asset_pool.commission_new(2020);
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.decommissioned.len(), 0);
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        assert_eq!(asset_pool.assets.len(), 2);
 
         // Make an asset unused for a few years
         let mothball_years: u32 = 10;
-        asset_pool.active[0]
+        asset_pool.assets[0]
             .make_mut()
             .mothball(2025 - mothball_years);
 
         assert_eq!(
-            asset_pool.active[0].get_mothballed_year(),
+            asset_pool.assets[0].get_mothballed_year(),
             Some(2025 - mothball_years)
         );
 
         // Decomission unused assets
-        asset_pool.decommission_mothballed(2025, mothball_years);
+        let mut decommissioned = Vec::new();
+        asset_pool.decommission_mothballed(2025, mothball_years, &mut decommissioned);
 
         // Only the removed asset should be decommissioned (since it's not in active pool)
-        assert_eq!(asset_pool.active.len(), 1); // Active pool unchanged
-        assert_eq!(asset_pool.decommissioned.len(), 1);
-        assert_eq!(asset_pool.decommissioned[0].decommission_year(), Some(2025));
+        assert_eq!(asset_pool.assets.len(), 1); // Active pool unchanged
+        assert_eq!(decommissioned.len(), 1);
+        assert_eq!(decommissioned[0].decommission_year(), Some(2025));
     }
 
     #[rstest]
-    fn asset_pool_decommission_if_not_active_none_active(mut asset_pool: AssetPool) {
+    fn asset_pool_decommission_if_not_active_none_active(mut user_assets: Vec<AssetRef>) {
         // Commission some assets
-        asset_pool.commission_new(2020);
-        let all_assets = asset_pool.active.clone();
+        let mut asset_pool = AssetPool::new();
+        asset_pool.commission_new(2020, &mut user_assets);
+        let all_assets = asset_pool.assets.clone();
 
         // Clear the active pool (simulating all assets being removed)
-        asset_pool.active.clear();
+        asset_pool.assets.clear();
 
         // Try to mothball the assets that are no longer active
         asset_pool.mothball_unretained(all_assets.clone(), 2025);
 
         // All assets should be mothballed
-        assert_eq!(asset_pool.active.len(), 2);
-        assert_eq!(asset_pool.active[0].id(), all_assets[0].id());
-        assert_eq!(asset_pool.active[0].get_mothballed_year(), Some(2025));
-        assert_eq!(asset_pool.active[1].id(), all_assets[1].id());
-        assert_eq!(asset_pool.active[1].get_mothballed_year(), Some(2025));
+        assert_eq!(asset_pool.assets.len(), 2);
+        assert_eq!(asset_pool.assets[0].id(), all_assets[0].id());
+        assert_eq!(asset_pool.assets[0].get_mothballed_year(), Some(2025));
+        assert_eq!(asset_pool.assets[1].id(), all_assets[1].id());
+        assert_eq!(asset_pool.assets[1].get_mothballed_year(), Some(2025));
     }
 
     #[rstest]
     #[should_panic(expected = "Cannot mothball asset that has not been commissioned")]
-    fn asset_pool_decommission_if_not_active_non_commissioned_asset(
-        mut asset_pool: AssetPool,
-        process: Process,
-    ) {
+    fn asset_pool_decommission_if_not_active_non_commissioned_asset(process: Process) {
         // Create a non-commissioned asset
         let non_commissioned_asset = Asset::new_future(
             "agent_new".into(),
@@ -2211,6 +2262,7 @@ mod tests {
         .into();
 
         // This should panic because the asset was never commissioned
+        let mut asset_pool = AssetPool::new();
         asset_pool.mothball_unretained(vec![non_commissioned_asset], 2025);
     }
 
@@ -2302,6 +2354,35 @@ mod tests {
         asset.decommission(requested_decommission_year, "");
         assert!(!asset.is_commissioned());
         assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
+    }
+
+    #[rstest]
+    fn asset_decommission_divisible(asset_divisible: Asset) {
+        let asset = AssetRef::from(asset_divisible);
+        let original_capacity = asset.capacity();
+
+        // Commission children
+        let mut children = Vec::new();
+        let mut next_id = 0;
+        asset.into_for_each_child(&mut 0, |parent, mut child| {
+            child
+                .make_mut()
+                .commission(AssetID(next_id), parent.cloned(), "");
+            next_id += 1;
+            children.push(child);
+        });
+
+        let parent = children[0].parent().unwrap().clone();
+        assert_eq!(parent.capacity(), original_capacity);
+        children[0].make_mut().decommission(2020, "");
+
+        let AssetCapacity::Discrete(original_units, original_unit_size) = original_capacity else {
+            panic!("Capacity type should be discrete");
+        };
+        assert_eq!(
+            parent.capacity(),
+            AssetCapacity::Discrete(original_units - 1, original_unit_size)
+        );
     }
 
     #[rstest]
