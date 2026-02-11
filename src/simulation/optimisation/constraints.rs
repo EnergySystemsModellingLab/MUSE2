@@ -113,7 +113,7 @@ where
 /// commodity-balance constraint added to `problem` and `keys` lists the
 /// `(commodity, region, time_selection)` entries in the same order as the rows.
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#c3-commodity-balance-for--cin-mathbfcmathrmsed-
+/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#commodity-balance-for--cin-mathbfcmathrmsed-
 fn add_commodity_balance_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,

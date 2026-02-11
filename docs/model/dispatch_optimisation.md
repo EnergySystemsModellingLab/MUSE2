@@ -314,12 +314,14 @@ in common units, derived from the output and efficiency).
 > completeness. This represents the roadmap for future MUSE2 development.
 
 This section describes how all preceding components are integrated to form the complete dispatch
-optimisation problem. 1. **Sets, Parameters, Decision Variables:** The union of all previously
-defined elements. 2. **Objective Function:** The overall objective is to minimise the total system
-cost, which is the sum of all operational costs from assets (standard and flexible), financial
-impacts from policy scopes (taxes minus credits), costs of inter-regional trade, costs of pool-based
-trade, and importantly, the high economic penalties associated with any unserved demand for critical
-commodities:
+optimisation problem.
+
+### C.1. Objective Function
+
+The overall objective is to minimise the total system cost, which is the sum of all operational
+costs from assets (standard and flexible), financial impacts from policy scopes (taxes minus
+credits), costs of inter-regional trade, costs of pool-based trade, and importantly, the high
+economic penalties associated with any unserved demand for critical commodities:
 
 \\[
   \begin{aligned}
@@ -332,7 +334,7 @@ commodities:
 Note that the unmet demand variables (\\( UnmetD[c,r,t] \\)) are normally not included in the
 optimisation and are currently only used to diagnose the source of errors when running the model.
 
-### C.1. Constraints
+### C.2. Constraints
 
 The complete set of constraints that the optimisation must satisfy includes:
 
@@ -344,7 +346,7 @@ The complete set of constraints that the optimisation must satisfy includes:
 [A.4]: #a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
 [B.5]: #b5-constraints-for--a-in-mathbfaflex-r-in-mathbfr-t-in-mathbft-
 
-### C.2. Demand Satisfaction for \\( c\in \mathbf{C}^{\mathrm{SVD}} \\)
+#### Demand Satisfaction for \\( c\in \mathbf{C}^{\mathrm{SVD}} \\)
 
 These constraints ensure that exogenously defined final demands for SVDs are met in each region \\(
 r \\) and time slice \\( t \\), or any shortfall is explicitly accounted for.
@@ -371,7 +373,7 @@ Else (if SVD \\( c \\) must be strictly met and is not included in \\( \mathbf{C
     \ge demand[r,c] \times timeslice\\_ share[c,t]
 \\]
 
-### C.3. Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
+#### Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
 
 These constraints ensure that for all intermediate SED commodities, total supply equals total demand
 within each region \\( r \\) and for each balancing period defined by \\( balance\\_ level[c,r] \\)
