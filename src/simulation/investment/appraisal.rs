@@ -11,6 +11,7 @@ use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
 use indexmap::IndexMap;
+use log::warn;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
@@ -238,6 +239,8 @@ fn calculate_lcox(
         highs::Sense::Minimise,
     )?;
 
+    println!("ASSET: {:?}: {:?}", asset.id(), asset.capacity());
+
     let cost_index = lcox(
         results.capacity.total_capacity(),
         coefficients.capacity_coefficient,
@@ -347,7 +350,12 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// of the returned vector may be less than the input.
 ///
 pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<AppraisalOutput>) {
+    let old = outputs_for_opts.len();
     outputs_for_opts.retain(|output| output.capacity.total_capacity() > Capacity(0.0));
+    let new = outputs_for_opts.len();
+    if new != old {
+        warn!("Dropped {} assets; new count: {}", old - new, new);
+    }
     outputs_for_opts.sort_by(|output1, output2| match output1.compare_metric(output2) {
         // If equal, we fall back on comparing asset properties
         Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),

@@ -92,6 +92,9 @@ pub fn lcox(
         total_activity_costs += activity_cost * *activity;
     }
 
+    // if total_activity == Activity(0.0) {
+    //     return MoneyPerActivity(f64::INFINITY);
+    // }
     (annualised_fixed_cost + total_activity_costs) / total_activity
 }
 

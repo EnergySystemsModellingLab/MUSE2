@@ -803,7 +803,8 @@ fn select_best_assets(
 
 /// Check whether there is any remaining demand that is unmet in any time slice
 fn is_any_remaining_demand(demand: &DemandMap) -> bool {
-    demand.values().any(|flow| *flow > Flow(0.0))
+    demand.values().any(|flow| *flow > Flow(1e-10))
+    // demand.values().any(|flow| *flow > Flow(0.0))
 }
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
