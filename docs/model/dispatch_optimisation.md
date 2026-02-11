@@ -393,8 +393,8 @@ other regions).
       \left(
         \begin{cases}
           OutputSpec[a,c,r,t] & \text{if } c \in \mathbf{C}^{eff\\_out}\_a \\\\
-          act[a,r,t] \cdot coeff\_{aux\\_out}[a,c] & \text{if } c \in \mathbf{C}^{aux\\_out}\_a \\ 0
-            & \text{otherwise}
+          act[a,r,t] \cdot coeff\_{aux\\_out}[a,c] & \text{if } c \in \mathbf{C}^{aux\\_out}\_a \\\\
+          0 & \text{otherwise}
         \end{cases}
       \right)
       && \text{(Flex Asset Production)} \\\\
