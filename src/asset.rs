@@ -207,6 +207,22 @@ impl AssetCapacity {
         }
     }
 
+    /// Create an `AssetCapacity` from a total capacity and optional unit size
+    ///
+    /// If a unit size is provided, the capacity is represented as a discrete number of units,
+    /// calculated as the floor of (capacity / `unit_size`). If no unit size is provided, the
+    /// capacity is represented as continuous.
+    pub fn from_capacity_floor(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        match unit_size {
+            Some(size) => {
+                let num_units = (capacity / size).value().floor() as u32;
+                AssetCapacity::Discrete(num_units, size)
+            }
+            None => AssetCapacity::Continuous(capacity),
+        }
+    }
+
     /// Returns the total capacity represented by this `AssetCapacity`.
     pub fn total_capacity(&self) -> Capacity {
         match self {
@@ -1074,6 +1090,34 @@ impl Asset {
             AssetCapacity::Continuous(_) => None,
         }
     }
+
+    /// For non-commissioned assets, get the maximum capacity permitted to be installed based on the
+    /// investment constraints for the asset's process.
+    ///
+    /// The limit is taken from the process's investment constraints for the asset's region and
+    /// commission year, and the portion of the commodity demand being considered.
+    ///
+    /// For divisible assets, the returned capacity will be rounded down to the nearest multiple of
+    /// the asset's unit size.
+    pub fn max_installable_capacity(
+        &self,
+        commodity_portion: Dimensionless,
+    ) -> Option<AssetCapacity> {
+        assert!(
+            !self.is_commissioned(),
+            "max_installable_capacity can only be called on uncommissioned assets"
+        );
+        assert!(
+            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
+            "commodity_portion must be between 0 and 1 inclusive"
+        );
+
+        self.process
+            .investment_constraints
+            .get(&(self.region_id.clone(), self.commission_year))
+            .and_then(|c| c.get_addition_limit().map(|l| l * commodity_portion))
+            .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
+    }
 }
 
 #[allow(clippy::missing_fields_in_debug)]
@@ -1544,6 +1588,27 @@ mod tests {
         #[case] expected_total: Capacity,
     ) {
         let got = AssetCapacity::from_capacity(capacity, unit_size);
+        assert_eq!(got.n_units(), expected_n);
+        assert_eq!(got.total_capacity(), expected_total);
+    }
+
+    #[rstest]
+    #[case::exact_multiple(Capacity(12.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
+    #[case::rounded_down(Capacity(11.0), Some(Capacity(4.0)), Some(2), Capacity(8.0))]
+    #[case::unit_size_greater_than_capacity(
+        Capacity(3.0),
+        Some(Capacity(4.0)),
+        Some(0),
+        Capacity(0.0)
+    )]
+    #[case::continuous(Capacity(5.5), None, None, Capacity(5.5))]
+    fn from_capacity_floor(
+        #[case] capacity: Capacity,
+        #[case] unit_size: Option<Capacity>,
+        #[case] expected_n: Option<u32>,
+        #[case] expected_total: Capacity,
+    ) {
+        let got = AssetCapacity::from_capacity_floor(capacity, unit_size);
         assert_eq!(got.n_units(), expected_n);
         assert_eq!(got.total_capacity(), expected_total);
     }
@@ -2383,5 +2448,26 @@ mod tests {
             patches,
             "Agent A0_GEX has asset with commission year 2060, not within process GASDRV commission years: 2020..=2050"
         );
+    }
+
+    #[rstest]
+    fn max_installable_capacity(mut process: Process, region_id: RegionID) {
+        // Set an addition limit of 3 for (region, year 2015)
+        process.investment_constraints.insert(
+            (region_id.clone(), 2015),
+            Rc::new(crate::process::ProcessInvestmentConstraint {
+                addition_limit: Some(Capacity(3.0)),
+            }),
+        );
+        let process_rc = Rc::new(process);
+
+        // Create a candidate asset with commission year 2015
+        let asset =
+            Asset::new_candidate(process_rc.clone(), region_id.clone(), Capacity(1.0), 2015)
+                .unwrap();
+
+        // commodity_portion = 0.5 -> limit = 3 * 0.5 = 1.5
+        let result = asset.max_installable_capacity(Dimensionless(0.5));
+        assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(1.5))));
     }
 }
