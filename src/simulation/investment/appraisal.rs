@@ -12,6 +12,7 @@ use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
 use indexmap::IndexMap;
+use log::debug;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
@@ -80,6 +81,7 @@ impl AppraisalOutput {
         coefficients: Rc<ObjectiveCoefficients>,
     ) -> Option<Self> {
         if results.capacity.total_capacity() == Capacity(0.0) {
+            debug!("Skipping investment option with zero capacity");
             return None;
         }
 
