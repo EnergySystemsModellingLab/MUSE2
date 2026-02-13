@@ -95,20 +95,20 @@ providing investment and dynamic decommissioning decisions.
   of interest (primary output \\( c_{primary} \\)) is excluded from the price term:
   \\[
     \begin{aligned}
-      AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
-        &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
-        cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
-        &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
-        [c] \Big)
-          \cdot \lambda\_{c,r,t} \\\\
-        &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-        &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
-          \cdot output\_{\text{coeff}}[c] \\\\
-        &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
-          \cdot input\_{\text{coeff}}[c] \\\\
-        &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
-          \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-        &\Big\\}
+        AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
+          &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
+          cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+          &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
+          [c] \Big)
+            \cdot \lambda\_{c,r,t} \\\\
+          &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
+          &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
+            \cdot output\_{\text{coeff}}[c] \\\\
+          &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
+            \cdot input\_{\text{coeff}}[c] \\\\
+          &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
+            \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
+          &\Big\\}
     \end{aligned}
   \\]
 
