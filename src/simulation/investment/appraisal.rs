@@ -267,12 +267,15 @@ fn calculate_lcox(
         highs::Sense::Minimise,
     )?;
 
-    let cost_index = lcox(
+    let Some(cost_index) = lcox(
         results.capacity.total_capacity(),
         coefficients.capacity_coefficient,
         &results.activity,
         &coefficients.activity_coefficients,
-    );
+    ) else {
+        debug!("Skipping investment option with zero activity");
+        return Ok(None);
+    };
 
     Ok(AppraisalOutput::new(
         asset.clone(),
