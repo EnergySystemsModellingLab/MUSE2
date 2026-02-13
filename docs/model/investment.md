@@ -75,7 +75,7 @@ providing investment and dynamic decommissioning decisions.
 - Calculate net revenue per unit of activity \\(AC_{t}^{NPV} \\) (Tool A):
   \\[
   \begin{aligned}
-  AC_{t}^{NPV} = & \quad -cost\_{\text{var}}[t] \\\\
+  AC_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
   &- \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
   cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
   &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
@@ -92,13 +92,13 @@ providing investment and dynamic decommissioning decisions.
   \\]
 
 - Calculate cost per unit of activity \\( AC_{t}^{LCOX} \\) (Tool B). Note that the commodity
- of interest (primary output \\( c_{primary} \\)) is excluded from the price term:
+  of interest (primary output \\( c_{primary} \\)) is excluded from the price term:
   \\[
   \begin{aligned}
   AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
   &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
   cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
-  &+ \sum\_{c \neq c_{primary}} \Big( input\_{\text{coeff}}[c] - output\_{\text{coeff}}
+  &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
   [c] \Big)
     \cdot \lambda\_{c,r,t} \\\\
   &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
@@ -147,8 +147,8 @@ providing investment and dynamic decommissioning decisions.
 
 #### Tool A: NPV
 
-This method is used when decision rule is single objective and objective is annualised profit for
-agents' serving commodity \\( c \\). It iteratively builds a supply portfolio by selecting
+This method is used when the decision rule is `single` and the objective is annualised profit for
+agents serving commodity \\( c \\). It iteratively builds a supply portfolio by selecting
 options that offer the highest annualised profit for serving the current commodity demand. The
 economic evaluation uses \\( \pi_{prevMSY} \\) prices and takes account of asset-specific
 operational constraints (e.g., minimum load levels) and the balance level of the target commodity
@@ -179,7 +179,7 @@ operational constraints (e.g., minimum load levels) and the balance level of the
  annualised fixed cost.
   \\[
   \text{Profitability Index} =
-  \frac{\sum_t \text{act}_t \times \text{AC}_t^{\text{NPV}}}{\text{AFC} \times \text{cap}}
+  \frac{\sum_t \text{act}_t \cdot \text{AC}_t^{\text{NPV}}}{\text{AFC} \cdot \text{cap}}
   \\]
 
 #### Tool B: LCOX
@@ -200,7 +200,7 @@ For each asset option:
 
   \\[
     minimise \Big\\{
-      AF \* cap + \sum_t act_t \* AC_{t}^{LCOX} + VoLL \* UnmetD_t
+      AF \times cap + \sum_t act_t \times AC_{t}^{LCOX} + VoLL \times UnmetD_t
     \Big\\}
   \\]
 
@@ -276,7 +276,7 @@ AC_t^{NPV} = \sum_{c} \Big( output\_{coeff}[c] - input\_{coeff}[c] \Big) \cdot \
 \begin{aligned}
 AC_{t1}^{NPV} &= (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5 \\\\
 &= 90 + 12.5 - 87.5 - 5 \\\\
-&= 10 \text{ £/MWh}
+&= \text{£10/MWh}
 \end{aligned}
 \\]
 
@@ -288,7 +288,7 @@ The asset earns £10 profit for every MWh it operates during peak periods.
 \begin{aligned}
 AC_{t2}^{NPV} &= (1.0 \times 50) + (0.5 \times 15) + (-2.5 \times 25) - 5 \\\\
 &= 50 + 7.5 - 62.5 - 5 \\\\
-&= -10 \text{ £/MWh}
+&= \text{£} -10 \text{/MWh}
 \end{aligned}
 \\]
 
@@ -349,7 +349,7 @@ AC_t^{LCOX} = cost\_{var}[t] + \sum_{c \neq c_{primary}} \Big( input\_{coeff}[c]
 \begin{aligned}
 AC_{t1}^{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) \\\\
 &= 5 + 87.5 - 12.5 \\\\
-&= 80 \text{ £/MWh}
+&= \text{£80/MWh}
 \end{aligned}
 \\]
 
@@ -361,9 +361,10 @@ It costs £80 per MWh to operate during peak periods (net of heat by-product sal
 \begin{aligned}
 AC_{t2}^{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) \\\\
 &= 5 + 62.5 - 7.5 \\\\
-&= 60 \text{ £/MWh}
+&= \text{£60/MWh}
 \end{aligned}
 \\]
+
 It costs £60 per MWh to operate during off-peak periods, reflecting lower gas prices
  and lower heat by-product value.
 
@@ -394,7 +395,7 @@ Suppose the optimiser determines \\( cap = 100 \\) MW, \\( act_{t1} = 150 \\) MW
 \text{cost index} &= \frac{(1{,}000 \times 100) + (150 \times 80) + (80 \times 60)}{150 + 80} \\\\
 &= \frac{100{,}000 + 12{,}000 + 4{,}800}{230} \\\\
 &= \frac{116{,}800}{230} \\\\
-&= 508 \text{ £/MWh}
+&= \text{£508/MWh}
 \end{aligned}
 \\]
 
