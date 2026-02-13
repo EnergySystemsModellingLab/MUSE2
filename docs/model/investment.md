@@ -76,18 +76,18 @@ providing investment and dynamic decommissioning decisions.
   \\[
     \begin{aligned}
         AC_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
-        &- \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
-        cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
-        &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
-          \cdot \lambda\_{c,r,t} \\\\
-        &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-        &\quad \quad (\mu\_{s,c}^{\text{prod}} - cost\_{\text{prod}}[s,c])
-          \cdot output\_{\text{coeff}}[c] \\\\
-        &\quad \quad + (\mu\_{s,c}^{\text{cons}} - cost\_{\text{cons}}[s,c])
-          \cdot input\_{\text{coeff}}[c] \\\\
-        &\quad \quad + (\mu\_{s,c}^{\text{net}} - cost\_{\text{net}}[s,c])
-          \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-        &\Big\\}
+          &- \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
+          cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+          &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
+            \cdot \lambda\_{c,r,t} \\\\
+          &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
+          &\quad \quad (\mu\_{s,c}^{\text{prod}} - cost\_{\text{prod}}[s,c])
+            \cdot output\_{\text{coeff}}[c] \\\\
+          &\quad \quad + (\mu\_{s,c}^{\text{cons}} - cost\_{\text{cons}}[s,c])
+            \cdot input\_{\text{coeff}}[c] \\\\
+          &\quad \quad + (\mu\_{s,c}^{\text{net}} - cost\_{\text{net}}[s,c])
+            \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
+          &\Big\\}
     \end{aligned}
   \\]
 
@@ -96,19 +96,19 @@ providing investment and dynamic decommissioning decisions.
   \\[
     \begin{aligned}
       AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
-      &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
-      cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
-      &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
-      [c] \Big)
-        \cdot \lambda\_{c,r,t} \\\\
-      &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-      &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
-        \cdot output\_{\text{coeff}}[c] \\\\
-      &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
-        \cdot input\_{\text{coeff}}[c] \\\\
-      &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
-        \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-      &\Big\\}
+        &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
+        cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+        &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
+        [c] \Big)
+          \cdot \lambda\_{c,r,t} \\\\
+        &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
+        &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
+          \cdot output\_{\text{coeff}}[c] \\\\
+        &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
+          \cdot input\_{\text{coeff}}[c] \\\\
+        &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
+          \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
+        &\Big\\}
     \end{aligned}
   \\]
 
@@ -231,7 +231,7 @@ The following is an illustrative example of how the NPV and LCOX approaches work
 gas combined-cycle power plant as the supply option under consideration.
 This example demonstrates the evaluation across two time periods
 t1 (peak period) and t2 (off-peak period) with variable operating costs \\( cost\_{var}[t] \\)
-fixed.
+constant in all time periods.
 
 ### Model Parameters
 
