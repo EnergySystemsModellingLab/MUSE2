@@ -197,12 +197,12 @@ commodities are set to zero, and the commodity of interest is assumed to have ze
 For each asset option:
 
 - **Optimise capacity and dispatch to minimise annualised cost:** Solve a small optimisation
-  sub-problem to maximise the asset's surplus, subject to its operational rules and the specific
+  sub-problem to minimise the asset's annualised cost, subject to its operational rules and the specific
   demand tranche it is being asked to serve.
 
   \\[
     minimise \Big\\{
-      AF \times cap + \sum_t act_t \times AC_{t}^{LCOX} + VoLL \times UnmetD_t
+      \text{AFC} \times cap + \sum_t act_t \times AC_{t}^{LCOX} + VoLL \times UnmetD_t
     \Big\\}
   \\]
 
@@ -232,8 +232,8 @@ For each asset option:
 The following is an illustrative example of how the NPV and LCOX approaches work, using a simple
 gas combined-cycle power plant as the supply option under consideration.
 This example demonstrates the evaluation across two time periods
-t1 (peak period) and t2 (off-peak period) with variable operating costs \\( cost\_{var}[t] \\)
-constant in all time periods.
+\\(t_0\\) (peak period) and \\(t_1\\) (off-peak period) with variable operating costs
+ \\( cost\_{var}[t] \\) constant in all time periods.
 
 ### Model Parameters
 
@@ -256,7 +256,7 @@ constant in all time periods.
 
 #### Market Prices by Time Period
 
-| Commodity | Notation | t1 (Peak) | t2 (Off-peak) |
+| Commodity | Notation | \\(t_0\\) (Peak) | \\(t_1\\) (Off-peak) |
 |-----------|----------|-----------|---------------|
 | Electricity | \\( \lambda\_{c_{elec},r,t} \\) | £90/MWh | £50/MWh |
 | Heat | \\( \lambda\_{c_{heat},r,t} \\) | £25/MWh | £15/MWh |
@@ -269,14 +269,15 @@ constant in all time periods.
 The net revenue calculation follows the general form:
 
 \\[
-AC_t^{NPV} = \sum_{c} \Big( output\_{coeff}[c] - input\_{coeff}[c] \Big) \cdot \lambda_{c,r,t} - cost\_{var}[t]
+AC_t^{NPV} = \sum_{c} \Big( output\_{coeff}[c] - input\_{coeff}[c] \Big)
+\cdot \lambda_{c,r,t} - cost\_{var}[t]
 \\]
 
-**For t1 (peak period):**
+**For \\(t_0\\) (peak period):**
 
 \\[
 \begin{aligned}
-AC_{t1}^{NPV} &= (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5 \\\\
+AC_{t_{0}}^{NPV} &= (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5 \\\\
 &= 90 + 12.5 - 87.5 - 5 \\\\
 &= \text{£10/MWh}
 \end{aligned}
@@ -284,11 +285,11 @@ AC_{t1}^{NPV} &= (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5 \\\\
 
 The asset earns £10 profit for every MWh it operates during peak periods.
 
-**For t2 (off-peak period):**
+**For \\(t_1\\) (off-peak period):**
 
 \\[
 \begin{aligned}
-AC_{t2}^{NPV} &= (1.0 \times 50) + (0.5 \times 15) + (-2.5 \times 25) - 5 \\\\
+AC_{t_1}^{NPV} &= (1.0 \times 50) + (0.5 \times 15) + (-2.5 \times 25) - 5 \\\\
 &= 50 + 7.5 - 62.5 - 5 \\\\
 &= \text{£} -10 \text{/MWh}
 \end{aligned}
@@ -301,14 +302,14 @@ The asset loses £10 for every MWh it operates during off-peak periods.
 The optimisation maximises total net revenue across all time periods:
 
 \\[
-\max \sum_t act_t \cdot AC_t^{NPV} = act_{t1} \cdot 10 + act_{t2} \cdot (-10)
+\max \sum_t act_t \cdot AC_t^{NPV} = act_{t_{0}} \cdot 10 + act_{t_1} \cdot (-10)
 \\]
 
 where \\( act_t \\) is the activity (operational level) in each time slice, subject to operational
  constraints and demand requirements.
 
-In this case, the optimiser will prefer to dispatch the asset during t1 (profitable) and
- minimise operation during t2 (unprofitable), subject to technical constraints such as minimum
+In this case, the optimiser will prefer to dispatch the asset during \\(t_0\\) (profitable) and
+ minimise operation during \\(t_1\\) (unprofitable), subject to technical constraints such as minimum
 load requirements.
 
 #### Profitability Index
@@ -319,8 +320,8 @@ The profitability index is calculated as:
 \text{PI} = \frac{\sum_t act_t \cdot AC_t^{NPV}}{AFC \times cap}
 \\]
 
-Suppose the dispatch optimiser determines \\( act_{t1} = 80 \\) MWh and \\( act_{t2} = 20 \\) MWh are
-the optimal activity levels:
+Suppose the dispatch optimiser determines \\( act_{t_{0}} = 80 \\) MWh and \\( act_{t_1} = 20 \\)
+MWh are the optimal activity levels:
 
 \\[
 \begin{aligned}
@@ -345,11 +346,11 @@ AC_t^{LCOX} = cost\_{var}[t] + \sum_{c \neq c_{primary}} \Big( input\_{coeff}[c]
  output\_{coeff}[c] \Big) \cdot \lambda_{c,r,t}
 \\]
 
-**For t1 (peak period):**
+**For \\(t_0\\) (peak period):**
 
 \\[
 \begin{aligned}
-AC_{t1}^{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) \\\\
+AC_{t_{0}}^{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) \\\\
 &= 5 + 87.5 - 12.5 \\\\
 &= \text{£80/MWh}
 \end{aligned}
@@ -357,11 +358,11 @@ AC_{t1}^{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) \\\\
 
 It costs £80 per MWh to operate during peak periods (net of heat by-product sales).
 
-**For t2 (off-peak period):**
+**For \\(t_1\\) (off-peak period):**
 
 \\[
 \begin{aligned}
-AC_{t2}^{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) \\\\
+AC_{t_1}^{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) \\\\
 &= 5 + 62.5 - 7.5 \\\\
 &= \text{£60/MWh}
 \end{aligned}
@@ -377,8 +378,8 @@ The optimiser determines the most cost-effective capacity and dispatch pattern t
  \\( cap \\) and \\( act_t \\):
 
 \\[
-AFC \cdot cap + \sum_t act_t \cdot AC_t^{LCOX} = 1{,}000 \cdot cap + act_{t1}
- \cdot 80 + act_{t2} \cdot 60
+AFC \cdot cap + \sum_t act_t \cdot AC_t^{LCOX} = 1{,}000 \cdot cap + act_{t_{0}}
+ \cdot 80 + act_{t_1} \cdot 60
 \\]
 
 #### Cost Index (Levelised Cost of X)
@@ -389,8 +390,8 @@ The cost index is calculated as:
 \text{cost index} = \frac{AFC \cdot cap + \sum_t act_t \cdot AC_t^{LCOX}}{\sum_t act_t}
 \\]
 
-Suppose the optimiser determines \\( cap = 100 \\) MW, \\( act_{t1} = 150 \\) MWh,
- and \\( act_{t2} = 80 \\) MWh are the optimal capacity and activity levels:
+Suppose the optimiser determines \\( cap = 100 \\) MW, \\( act_{t_{0}} = 150 \\) MWh,
+ and \\( act_{t_1} = 80 \\) MWh are the optimal capacity and activity levels:
 
 \\[
 \begin{aligned}
