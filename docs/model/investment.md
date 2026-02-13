@@ -239,28 +239,28 @@ This example demonstrates the evaluation across two time periods
 
 #### Asset Parameters
 <!-- markdownlint-disable MD013 -->
-| Parameter                      | Notation                             | Value                     | Description                       |
-|--------------------------------|--------------------------------------|---------------------------|-----------------------------------|
-| Primary output (Electricity)   | \\( output\_{coeff}[c_{primary}] \\) | 1.0 MWh per unit activity | Main commodity produced           |
-| By-product output (Waste heat) | \\( output\_{coeff}[c_{heat}] \\)    | 0.5 MWh per unit activity | Co-product from generation        |
-| Input (Natural gas)            | \\( input\_{coeff}[c_{gas}] \\)      | 2.5 MWh per unit activity | Fuel consumption                  |
-| Variable operating cost        | \\( cost\_{var}[t] \\)               | £5/MWh of activity        | Operating costs per unit activity |
+| Parameter | Notation | Value | Description |
+|-----------|----------|-------|-------------|
+| Primary output (Electricity) | \\( output\_{coeff}[c_{primary}] \\) | 1.0 MWh per unit activity | Main commodity produced |
+| By-product output (Waste heat) | \\( output\_{coeff}[c_{heat}] \\) | 0.5 MWh per unit activity | Co-product from generation |
+| Input (Natural gas) | \\( input\_{coeff}[c_{gas}] \\) | 2.5 MWh per unit activity | Fuel consumption |
+| Variable operating cost | \\( cost\_{var}[t] \\) | £5/MWh of activity | Operating costs per unit activity |
 <!-- markdownlint-enable MD013 -->
 
 #### Investment Parameters
 
-| Parameter             | Notation             | Value     |
-|-----------------------|----------------------|-----------|
+| Parameter | Notation | Value |
+|-----------|----------|-------|
 | Annualised fixed cost | \\( AFC\_{opt,r} \\) | £1,000/MW |
-| Capacity              | \\( cap \\)          | 100 MW    |
+| Capacity | \\( cap \\) | 100 MW |
 
 #### Market Prices by Time Period
 
-| Commodity   | Notation                        | \\(t_0\\) (Peak) | \\(t_1\\) (Off-peak) |
-|-------------|---------------------------------|------------------|----------------------|
-| Electricity | \\( \lambda\_{c_{elec},r,t} \\) | £90/MWh          | £50/MWh              |
-| Heat        | \\( \lambda\_{c_{heat},r,t} \\) | £25/MWh          | £15/MWh              |
-| Natural gas | \\( \lambda\_{c_{gas},r,t} \\)  | £35/MWh          | £25/MWh              |
+| Commodity | Notation | \\(t_0\\) (Peak) | \\(t_1\\) (Off-peak) |
+|-----------|----------|-----------|---------------|
+| Electricity | \\( \lambda\_{c_{elec},r,t} \\) | £90/MWh | £50/MWh |
+| Heat | \\( \lambda\_{c_{heat},r,t} \\) | £25/MWh | £15/MWh |
+| Natural gas | \\( \lambda\_{c_{gas},r,t} \\) | £35/MWh | £25/MWh |
 
 ### NPV Approach (Tool A)
 
