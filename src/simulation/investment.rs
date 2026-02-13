@@ -776,7 +776,7 @@ fn select_best_assets(
                 continue;
             }
 
-            let output = appraise_investment(
+            if let Some(output) = appraise_investment(
                 model,
                 asset,
                 max_capacity,
@@ -784,8 +784,9 @@ fn select_best_assets(
                 objective_type,
                 &coefficients[asset],
                 &demand,
-            )?;
-            outputs_for_opts.push(output);
+            )? {
+                outputs_for_opts.push(output);
+            }
         }
 
         // Save appraisal results
@@ -793,6 +794,7 @@ fn select_best_assets(
             year,
             &format!("{} {} round {}", &commodity.id, &agent.id, round),
             &outputs_for_opts,
+            &demand,
         )?;
 
         sort_appraisal_outputs_by_investment_priority(&mut outputs_for_opts);

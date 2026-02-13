@@ -8,6 +8,7 @@ use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow};
 use indexmap::IndexMap;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Map storing cost coefficients for an asset.
 ///
@@ -32,7 +33,7 @@ pub fn calculate_coefficients_for_assets(
     assets: &[AssetRef],
     prices: &CommodityPrices,
     year: u32,
-) -> HashMap<AssetRef, ObjectiveCoefficients> {
+) -> HashMap<AssetRef, Rc<ObjectiveCoefficients>> {
     assets
         .iter()
         .map(|asset| {
@@ -48,7 +49,7 @@ pub fn calculate_coefficients_for_assets(
                     calculate_coefficients_for_npv(asset, &model.time_slice_info, prices, year)
                 }
             };
-            (asset.clone(), coefficient)
+            (asset.clone(), Rc::new(coefficient))
         })
         .collect()
 }

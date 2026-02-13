@@ -74,12 +74,14 @@ pub fn profitability_index(
 }
 
 /// Calculates annual LCOX based on capacity and activity.
+///
+/// If the total activity is zero, then it returns `None`, otherwise `Some` LCOX value.
 pub fn lcox(
     capacity: Capacity,
     annual_fixed_cost: MoneyPerCapacity,
     activity: &IndexMap<TimeSliceID, Activity>,
     activity_costs: &IndexMap<TimeSliceID, MoneyPerActivity>,
-) -> MoneyPerActivity {
+) -> Option<MoneyPerActivity> {
     // Calculate the annualised fixed costs
     let annualised_fixed_cost = annual_fixed_cost * capacity;
 
@@ -92,7 +94,8 @@ pub fn lcox(
         total_activity_costs += activity_cost * *activity;
     }
 
-    (annualised_fixed_cost + total_activity_costs) / total_activity
+    (total_activity > Activity(0.0))
+        .then(|| (annualised_fixed_cost + total_activity_costs) / total_activity)
 }
 
 #[cfg(test)]
@@ -223,20 +226,26 @@ mod tests {
         100.0, 50.0,
         vec![("winter", "day", 10.0), ("summer", "night", 20.0)],
         vec![("winter", "day", 5.0), ("summer", "night", 3.0)],
-        170.33333333333334 // (100*50 + 10*5 + 20*3) / (10+20) = 5110/30
+        Some(170.33333333333334) // (100*50 + 10*5 + 20*3) / (10+20) = 5110/30
     )]
     #[case(
         50.0, 100.0,
         vec![("winter", "day", 25.0)],
         vec![("winter", "day", 0.0)],
-        200.0 // (50*100 + 25*0) / 25 = 5000/25
+        Some(200.0) // (50*100 + 25*0) / 25 = 5000/25
+    )]
+    #[case(
+        50.0, 100.0,
+        vec![("winter", "day", 0.0)],
+        vec![("winter", "day", 0.0)],
+        None // (50*0 + 25*0) / 0 = not feasible
     )]
     fn lcox_works(
         #[case] capacity: f64,
         #[case] annual_fixed_cost: f64,
         #[case] activity_data: Vec<(&str, &str, f64)>,
         #[case] cost_data: Vec<(&str, &str, f64)>,
-        #[case] expected: f64,
+        #[case] expected: Option<f64>,
     ) {
         let activity = activity_data
             .into_iter()
@@ -271,7 +280,7 @@ mod tests {
             &activity_costs,
         );
 
-        let expected = MoneyPerActivity(expected);
-        assert_approx_eq!(MoneyPerActivity, result, expected);
+        let expected = expected.map(MoneyPerActivity);
+        assert_approx_eq!(Option<MoneyPerActivity>, result, expected);
     }
 }
