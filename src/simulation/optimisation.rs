@@ -414,11 +414,11 @@ fn filter_input_prices(
         .collect()
 }
 
-/// Get the parent for each asset.
+/// Get the parent for each asset, if it has one, or itself.
 ///
 /// Child assets are converted to their parents and non-divisible assets are returned as is. Each
 /// parent asset is returned only once.
-fn convert_assets_to_parents(assets: &[AssetRef]) -> impl Iterator<Item = AssetRef> {
+fn get_parent_or_self(assets: &[AssetRef]) -> impl Iterator<Item = AssetRef> {
     let mut parents = HashSet::new();
     assets
         .iter()
@@ -605,7 +605,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         allow_unmet_demand: bool,
         input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
-        let parent_assets = convert_assets_to_parents(self.existing_assets).collect_vec();
+        let parent_assets = get_parent_or_self(self.existing_assets).collect_vec();
 
         // Set up problem
         let mut problem = Problem::default();
