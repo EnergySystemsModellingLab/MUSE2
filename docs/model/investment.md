@@ -74,42 +74,42 @@ providing investment and dynamic decommissioning decisions.
 
 - Calculate net revenue per unit of activity \\(AC_{t}^{NPV} \\) (Tool A):
   \\[
-  \begin{aligned}
-  AC_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
-  &- \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
-  cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
-  &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
-    \cdot \lambda\_{c,r,t} \\\\
-  &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-  &\quad \quad (\mu\_{s,c}^{\text{prod}} - cost\_{\text{prod}}[s,c])
-    \cdot output\_{\text{coeff}}[c] \\\\
-  &\quad \quad + (\mu\_{s,c}^{\text{cons}} - cost\_{\text{cons}}[s,c])
-    \cdot input\_{\text{coeff}}[c] \\\\
-  &\quad \quad + (\mu\_{s,c}^{\text{net}} - cost\_{\text{net}}[s,c])
-    \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-  &\Big\\}
-  \end{aligned}
+    \begin{aligned}
+      AC_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
+      &- \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
+      cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+      &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
+        \cdot \lambda\_{c,r,t} \\\\
+      &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
+      &\quad \quad (\mu\_{s,c}^{\text{prod}} - cost\_{\text{prod}}[s,c])
+        \cdot output\_{\text{coeff}}[c] \\\\
+      &\quad \quad + (\mu\_{s,c}^{\text{cons}} - cost\_{\text{cons}}[s,c])
+        \cdot input\_{\text{coeff}}[c] \\\\
+      &\quad \quad + (\mu\_{s,c}^{\text{net}} - cost\_{\text{net}}[s,c])
+        \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
+      &\Big\\}
+    \end{aligned}
   \\]
 
 - Calculate cost per unit of activity \\( AC_{t}^{LCOX} \\) (Tool B). Note that the commodity
   of interest (primary output \\( c_{primary} \\)) is excluded from the price term:
   \\[
-  \begin{aligned}
-  AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
-  &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
-  cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
-  &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
-  [c] \Big)
-    \cdot \lambda\_{c,r,t} \\\\
-  &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-  &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
-    \cdot output\_{\text{coeff}}[c] \\\\
-  &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
-    \cdot input\_{\text{coeff}}[c] \\\\
-  &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
-    \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-  &\Big\\}
-  \end{aligned}
+    \begin{aligned}
+      AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
+      &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
+      cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+      &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
+      [c] \Big)
+        \cdot \lambda\_{c,r,t} \\\\
+      &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
+      &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
+        \cdot output\_{\text{coeff}}[c] \\\\
+      &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
+        \cdot input\_{\text{coeff}}[c] \\\\
+      &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
+        \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
+      &\Big\\}
+    \end{aligned}
   \\]
 
  > Note: "scopes" are not implemented in the current model.
