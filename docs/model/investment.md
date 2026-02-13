@@ -80,14 +80,6 @@ providing investment and dynamic decommissioning decisions.
             cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
             &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
-            &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-            &\quad \quad (\mu\_{s,c}^{\text{prod}} - cost\_{\text{prod}}[s,c])
-              \cdot output\_{\text{coeff}}[c] \\\\
-            &\quad \quad + (\mu\_{s,c}^{\text{cons}} - cost\_{\text{cons}}[s,c])
-              \cdot input\_{\text{coeff}}[c] \\\\
-            &\quad \quad + (\mu\_{s,c}^{\text{net}} - cost\_{\text{net}}[s,c])
-              \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-            &\Big\\}
     \end{aligned}
   \\]
 
@@ -101,18 +93,8 @@ providing investment and dynamic decommissioning decisions.
             &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
             [c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
-            &+ \sum\_{s,c} in\\_scope[s] \cdot \Big\\{ \\\\
-            &\quad \quad (cost\_{\text{prod}}[s,c] - \mu\_{s,c}^{\text{prod}})
-              \cdot output\_{\text{coeff}}[c] \\\\
-            &\quad \quad + (cost\_{\text{cons}}[s,c] - \mu\_{s,c}^{\text{cons}})
-              \cdot input\_{\text{coeff}}[c] \\\\
-            &\quad \quad + (cost\_{\text{net}}[s,c] - \mu\_{s,c}^{\text{net}})
-              \cdot (output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c]) \\\\
-            &\Big\\}
     \end{aligned}
   \\]
-
- > Note: "scopes" are not implemented in the current model.
 
 ### Initialise demand profiles for commodity of interest
 
@@ -175,12 +157,32 @@ operational constraints (e.g., minimum load levels) and the balance level of the
   - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
-- **Calculate a profitability index:** This is the total annualised surplus divided by the
- annualised fixed cost.
+- **Decide on metric:** The type of metric used to compare profitability is dependent on the value of
+\\(\text{AFC}\\). If \\(\text{AFC} = 0\\), this is always preferred over options with
+\\(\text{AFC} > 0\\) so the latter are discarded as investment options.
+
+- **If \\(\text{AFC} > 0\\), Use the profitability index \\(\text{PI}\\) metric:** This is the total
+ annualised surplus divided by the annualised fixed cost.
   \\[
-  \text{Profitability Index} =
+  \text{PI} =
   \frac{\sum_t \text{act}_t \cdot \text{AC}_t^{\text{NPV}}}{\text{AFC} \cdot \text{cap}}
   \\]
+
+- **If \\(\text{AFC} = 0\\), Use the total annualised surplus metric \\(\text{TAS}\\):**
+    \\[
+  \text{TAS} =
+  \sum_t \text{act}_t \cdot \text{AC}_t^{\text{NPV}}
+  \\]
+
+- **Metric deadlock fallback** If two or more investment options have equal metrics, the following
+  tie-breaking rules are applied in order:
+
+  1. Assets which are already commissioned are preferred over new candidate assets.
+
+  2. Newer (commissioned later) assets are preferred over older assets.
+
+  3. If there is still a tie, the first option in the data structure is selected,
+   which is non-deterministic. A warning is emitted when this occurs.
 
 #### Tool B: LCOX
 
@@ -314,7 +316,7 @@ load requirements.
 The profitability index is calculated as:
 
 \\[
-\text{Profitability Index} = \frac{\sum_t act_t \cdot AC_t^{NPV}}{AFC \times cap}
+\text{PI} = \frac{\sum_t act_t \cdot AC_t^{NPV}}{AFC \times cap}
 \\]
 
 Suppose the dispatch optimiser determines \\( act_{t1} = 80 \\) MWh and \\( act_{t2} = 20 \\) MWh are
@@ -322,7 +324,7 @@ the optimal activity levels:
 
 \\[
 \begin{aligned}
-\text{Profitability Index} &= \frac{(80 \times 10) + (20 \times (-10))}{1{,}000 \times 100} \\\\
+\text{PI} &= \frac{(80 \times 10) + (20 \times (-10))}{1{,}000 \times 100} \\\\
 &= \frac{800 - 200}{100{,}000} \\\\
 &= \frac{600}{100{,}000} \\\\
 &= 0.006
