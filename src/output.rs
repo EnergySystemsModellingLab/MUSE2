@@ -467,11 +467,12 @@ impl DebugDataWriter {
         milestone_year: u32,
         run_description: &str,
         appraisal_results: &[AppraisalOutput],
+        demand: &IndexMap<TimeSliceID, Flow>,
     ) -> Result<()> {
         for result in appraisal_results {
             for (time_slice, activity) in &result.activity {
                 let activity_coefficient = result.coefficients.activity_coefficients[time_slice];
-                let demand = result.demand[time_slice];
+                let demand = demand[time_slice];
                 let unmet_demand = result.unmet_demand[time_slice];
                 let row = AppraisalResultsTimeSliceRow {
                     milestone_year,
@@ -564,6 +565,7 @@ impl DataWriter {
         milestone_year: u32,
         run_description: &str,
         appraisal_results: &[AppraisalOutput],
+        demand: &IndexMap<TimeSliceID, Flow>,
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug_writer {
             wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
@@ -571,6 +573,7 @@ impl DataWriter {
                 milestone_year,
                 run_description,
                 appraisal_results,
+                demand,
             )?;
         }
 
@@ -1006,6 +1009,7 @@ mod tests {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let dir = tempdir().unwrap();
+        let demand = indexmap! {time_slice.clone() => Flow(100.0) };
 
         // Write appraisal time slice results
         {
@@ -1015,6 +1019,7 @@ mod tests {
                     milestone_year,
                     &run_description,
                     &[appraisal_output],
+                    &demand,
                 )
                 .unwrap();
             writer.flush().unwrap();
