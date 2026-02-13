@@ -61,8 +61,6 @@ pub struct AppraisalOutput {
     pub metric: Box<dyn MetricTrait>,
     /// Capacity and activity coefficients used in the appraisal
     pub coefficients: ObjectiveCoefficients,
-    /// Demand profile used in the appraisal
-    pub demand: DemandMap,
 }
 
 impl AppraisalOutput {
@@ -252,7 +250,6 @@ fn calculate_lcox(
         unmet_demand: results.unmet_demand,
         metric: Box::new(LCOXMetric::new(cost_index)),
         coefficients: coefficients.clone(),
-        demand: demand.clone(),
     })
 }
 
@@ -299,7 +296,6 @@ fn calculate_npv(
         unmet_demand: results.unmet_demand,
         metric: Box::new(NPVMetric::new(profitability_index)),
         coefficients: coefficients.clone(),
-        demand: demand.clone(),
     })
 }
 
@@ -553,7 +549,6 @@ mod tests {
                 capacity: AssetCapacity::Continuous(Capacity(10.0)),
                 coefficients: ObjectiveCoefficients::default(),
                 activity: IndexMap::new(),
-                demand: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
                 metric,
             })
@@ -879,7 +874,6 @@ mod tests {
                 capacity: AssetCapacity::Continuous(Capacity(0.0)),
                 coefficients: ObjectiveCoefficients::default(),
                 activity: IndexMap::new(),
-                demand: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
                 metric,
             })
