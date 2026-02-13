@@ -181,10 +181,7 @@ impl VariableMap {
     }
 }
 
-/// Create a map of commodity flows for each asset's coeffs at every time slice.
-///
-/// Note that this only includes commodity flows which relate to existing assets, so not every
-/// commodity in the simulation will necessarily be represented.
+/// Create a map of commodity flows for each asset's coeffs at every time slice
 fn create_flow_map<'a>(
     existing_assets: &[AssetRef],
     time_slice_info: &TimeSliceInfo,
@@ -237,9 +234,6 @@ pub struct Solution<'a> {
 
 impl Solution<'_> {
     /// Create a map of commodity flows for each asset's coeffs at every time slice.
-    ///
-    /// Note that this only includes commodity flows which relate to existing assets, so not every
-    /// commodity in the simulation will necessarily be represented.
     ///
     /// Note: The flow map is actually already created and is taken from `self` when this method is
     /// called (hence it can only be called once). The reason for this is because we need to convert
