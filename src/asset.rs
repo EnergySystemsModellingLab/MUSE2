@@ -872,6 +872,21 @@ impl Asset {
         }
     }
 
+    /// Whether this asset is a parent of divided assets
+    pub fn is_parent(&self) -> bool {
+        matches!(self.state, AssetState::Parent { .. })
+    }
+
+    /// Get the number of children this asset has.
+    ///
+    /// If this asset is not a parent, then `None` is returned.
+    pub fn num_children(&self) -> Option<u32> {
+        match &self.state {
+            AssetState::Parent { .. } => Some(self.capacity().n_units().unwrap()),
+            _ => None,
+        }
+    }
+
     /// Get the group ID for this asset, if any
     pub fn group_id(&self) -> Option<AssetGroupID> {
         match &self.state {
