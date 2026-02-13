@@ -31,6 +31,9 @@ ready to be released, carry out the following steps:
 - Allow for adding both a `prod` and `cons` levy to a commodity ([#969])
 - Availability limits can now be provided at multiple levels for a process ([#1018])
 - Pricing strategy can now vary by commodity ([#1021])
+- Users can now specify investment limits ([#1096])
+- It is now required to provide unit types for every commodity; this is used for validation
+  ([#1110])
 
 ## Experimental features
 
@@ -71,4 +74,6 @@ ready to be released, carry out the following steps:
 [#1021]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1021
 [#1022]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1022
 [#1030]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1030
+[#1096]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1096
+[#1110]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1110
 [#1129]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1129
