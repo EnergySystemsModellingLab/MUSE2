@@ -381,11 +381,13 @@ mod tests {
     use super::*;
     use crate::agent::AgentID;
     use crate::finance::ProfitabilityIndex;
-    use crate::fixture::{agent_id, asset, process, region_id};
+    use crate::fixture::{agent_id, asset, process, region_id, time_slice};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity};
+    use crate::simulation::investment::appraisal::optimisation::ResultsMap;
+    use crate::units::{Flow, Money, MoneyPerActivity, MoneyPerFlow};
     use float_cmp::assert_approx_eq;
+    use indexmap::indexmap;
     use rstest::rstest;
     use std::rc::Rc;
 
@@ -880,5 +882,64 @@ mod tests {
 
         // non-commissioned asset prioritised because it has a slightly better metric
         assert_approx_eq!(f64, outputs[0].metric.value(), best_metric_value);
+    }
+
+    /// Tests for `AppraisalOutput::new()` method.
+    #[rstest]
+    #[case(AssetCapacity::Continuous(Capacity(10.0)), true, "non_zero_capacity")]
+    #[case(
+        AssetCapacity::Continuous(Capacity(0.0)),
+        false,
+        "zero_continuous_capacity"
+    )]
+    #[case(
+        AssetCapacity::Discrete(0, Capacity(1.0)),
+        false,
+        "zero_discrete_capacity"
+    )]
+    fn appraisal_output_new_capacity_validation(
+        asset: Asset,
+        time_slice: TimeSliceID,
+        #[case] capacity: AssetCapacity,
+        #[case] should_succeed: bool,
+        #[case] description: &str,
+    ) {
+        // Arrange
+        let asset_ref = AssetRef::from(asset);
+        let activity = indexmap! { time_slice.clone() => Activity(5.0) };
+        let unmet_demand = indexmap! { time_slice => Flow(2.0) };
+
+        let results = ResultsMap {
+            capacity,
+            activity: activity.clone(),
+            unmet_demand: unmet_demand.clone(),
+        };
+
+        let metric = LCOXMetric::new(MoneyPerActivity(42.0));
+        let coefficients = Rc::new(ObjectiveCoefficients {
+            capacity_coefficient: MoneyPerCapacity(1.5),
+            activity_coefficients: indexmap! {
+                TimeSliceID { season: "winter".into(), time_of_day: "day".into() } => MoneyPerActivity(0.8)
+            },
+            unmet_demand_coefficient: MoneyPerFlow(1000.0),
+        });
+
+        // Act
+        let result = AppraisalOutput::new(asset_ref.clone(), results, metric, coefficients.clone());
+
+        // Assert
+        if should_succeed {
+            assert!(result.is_some(), "Should succeed for case: {description}");
+            let output = result.unwrap();
+            assert_eq!(output.asset, asset_ref);
+            assert_eq!(output.capacity, capacity);
+            assert_eq!(output.activity, activity);
+            assert_eq!(output.unmet_demand, unmet_demand);
+            // Note: Cannot directly compare Rc<ObjectiveCoefficients> as it doesn't implement PartialEq
+            assert!(Rc::ptr_eq(&output.coefficients, &coefficients));
+            assert_approx_eq!(f64, output.metric.value(), 42.0);
+        } else {
+            assert!(result.is_none(), "Should fail for case: {description}");
+        }
     }
 }
