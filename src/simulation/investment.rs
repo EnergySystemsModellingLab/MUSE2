@@ -793,6 +793,7 @@ fn select_best_assets(
             year,
             &format!("{} {} round {}", &commodity.id, &agent.id, round),
             &outputs_for_opts,
+            &demand,
         )?;
 
         sort_appraisal_outputs_by_investment_priority(&mut outputs_for_opts);
