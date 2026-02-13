@@ -52,6 +52,7 @@ ready to be released, carry out the following steps:
 - Users can now set demand to zero in `demand.csv` ([#871])
 - Fix: sign for levies of type `net` was wrong for inputs ([#969])
 - Fix `--overwrite` option for `save-graphs` command ([#1001])
+- Skip assets with zero activity when appraising with LCOX ([#1129])
 
 [#767]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/767
 [#868]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/868
@@ -70,3 +71,4 @@ ready to be released, carry out the following steps:
 [#1021]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1021
 [#1022]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1022
 [#1030]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1030
+[#1129]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1129
