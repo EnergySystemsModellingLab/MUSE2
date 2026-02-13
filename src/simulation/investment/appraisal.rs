@@ -14,6 +14,7 @@ use indexmap::IndexMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
+use std::rc::Rc;
 
 pub mod coefficients;
 mod constraints;
@@ -60,7 +61,7 @@ pub struct AppraisalOutput {
     /// The comparison metric to compare investment decisions
     pub metric: Box<dyn MetricTrait>,
     /// Capacity and activity coefficients used in the appraisal
-    pub coefficients: ObjectiveCoefficients,
+    pub coefficients: Rc<ObjectiveCoefficients>,
 }
 
 impl AppraisalOutput {
@@ -223,7 +224,7 @@ fn calculate_lcox(
     asset: &AssetRef,
     max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
-    coefficients: &ObjectiveCoefficients,
+    coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
@@ -263,7 +264,7 @@ fn calculate_npv(
     asset: &AssetRef,
     max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
-    coefficients: &ObjectiveCoefficients,
+    coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
@@ -311,7 +312,7 @@ pub fn appraise_investment(
     max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
-    coefficients: &ObjectiveCoefficients,
+    coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let appraisal_method = match objective_type {
@@ -547,7 +548,7 @@ mod tests {
             .map(|(asset, metric)| AppraisalOutput {
                 asset: AssetRef::from(asset),
                 capacity: AssetCapacity::Continuous(Capacity(10.0)),
-                coefficients: ObjectiveCoefficients::default(),
+                coefficients: Rc::default(),
                 activity: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
                 metric,
@@ -872,7 +873,7 @@ mod tests {
             .map(|metric| AppraisalOutput {
                 asset: AssetRef::from(asset.clone()),
                 capacity: AssetCapacity::Continuous(Capacity(0.0)),
-                coefficients: ObjectiveCoefficients::default(),
+                coefficients: Rc::default(),
                 activity: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
                 metric,
