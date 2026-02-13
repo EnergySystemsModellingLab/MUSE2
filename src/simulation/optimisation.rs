@@ -181,10 +181,7 @@ impl VariableMap {
     }
 }
 
-/// Create a map of commodity flows for each asset's coeffs at every time slice.
-///
-/// Note that this only includes commodity flows which relate to existing assets, so not every
-/// commodity in the simulation will necessarily be represented.
+/// Create a map of commodity flows for each asset's coeffs at every time slice
 fn create_flow_map<'a>(
     existing_assets: &[AssetRef],
     time_slice_info: &TimeSliceInfo,
@@ -237,9 +234,6 @@ pub struct Solution<'a> {
 
 impl Solution<'_> {
     /// Create a map of commodity flows for each asset's coeffs at every time slice.
-    ///
-    /// Note that this only includes commodity flows which relate to existing assets, so not every
-    /// commodity in the simulation will necessarily be represented.
     ///
     /// Note: The flow map is actually already created and is taken from `self` when this method is
     /// called (hence it can only be called once). The reason for this is because we need to convert
@@ -420,11 +414,11 @@ fn filter_input_prices(
         .collect()
 }
 
-/// Get the parent for each asset.
+/// Get the parent for each asset, if it has one, or itself.
 ///
 /// Child assets are converted to their parents and non-divisible assets are returned as is. Each
 /// parent asset is returned only once.
-fn convert_assets_to_parents(assets: &[AssetRef]) -> impl Iterator<Item = AssetRef> {
+fn get_parent_or_self(assets: &[AssetRef]) -> impl Iterator<Item = AssetRef> {
     let mut parents = HashSet::new();
     assets
         .iter()
@@ -611,7 +605,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         allow_unmet_demand: bool,
         input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
-        let parent_assets = convert_assets_to_parents(self.existing_assets).collect_vec();
+        let parent_assets = get_parent_or_self(self.existing_assets).collect_vec();
 
         // Set up problem
         let mut problem = Problem::default();
