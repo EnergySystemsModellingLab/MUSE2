@@ -386,11 +386,11 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
     AppraisalOutput {
         asset: AssetRef::from(asset),
         capacity: AssetCapacity::Continuous(Capacity(42.0)),
-        coefficients: ObjectiveCoefficients {
+        coefficients: Rc::new(ObjectiveCoefficients {
             capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
             unmet_demand_coefficient: MoneyPerFlow(10000.0),
-        },
+        }),
         activity,
         unmet_demand,
         metric: Box::new(LCOXMetric::new(MoneyPerActivity(4.14))),
