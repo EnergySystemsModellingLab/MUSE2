@@ -258,20 +258,13 @@ This example demonstrates the evaluation across two time periods
 
 | Commodity | Notation | \\(t_0\\) (Peak) | \\(t_1\\) (Off-peak) |
 |-----------|----------|-----------|---------------|
-| Electricity | \\( \lambda\_{c_{elec},r,t} \\) | £90/MWh | £50/MWh |
+| Electricity | \\( \lambda\_{c_{primary},r,t} \\) | £90/MWh | £50/MWh |
 | Heat | \\( \lambda\_{c_{heat},r,t} \\) | £25/MWh | £15/MWh |
 | Natural gas | \\( \lambda\_{c_{gas},r,t} \\) | £35/MWh | £25/MWh |
 
 ### NPV Approach (Tool A)
 
 #### Calculate Net Revenue per Unit of Activity
-
-The net revenue calculation follows the general form:
-
-\\[
-AC_t^{NPV} = \sum_{c} \Big( output\_{coeff}[c] - input\_{coeff}[c] \Big)
-\cdot \lambda_{c,r,t} - cost\_{var}[t]
-\\]
 
 **For \\(t_0\\) (peak period):**
 
@@ -338,13 +331,6 @@ The profitability index is then compared against all other options to determine 
 ### LCOX Approach (Tool B)
 
 #### Net Cost per Unit of Activity
-
-The net cost excludes the primary output (electricity) and is calculated as:
-
-\\[
-AC_t^{LCOX} = cost\_{var}[t] + \sum_{c \neq c_{primary}} \Big( input\_{coeff}[c] -
- output\_{coeff}[c] \Big) \cdot \lambda_{c,r,t}
-\\]
 
 **For \\(t_0\\) (peak period):**
 
