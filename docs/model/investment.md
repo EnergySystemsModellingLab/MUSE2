@@ -221,7 +221,7 @@ For each asset option:
   - VoLL variables are active to ensure a feasible solution alongside maximum operation of the
     asset.
 
-- **Calculate a cost index:** This is the total annualised cost divided by the annual output.
+- **Calculate a Cost Index:** This is the total annualised cost divided by the annual output.
   \\[
   \text{Cost Index} = \frac{\text{AFC} \times \text{cap}_r + \sum_t \text{act}_t
    \times \text{AC}_t^{\text{LCOX}}}{\sum_t \text{act}_t}
@@ -370,10 +370,10 @@ AFC \cdot cap + \sum_t act_t \cdot AC_t^{LCOX} = 1{,}000 \cdot cap + act_{t_{0}}
 
 #### Cost Index (Levelised Cost of X)
 
-The cost index is calculated as:
+The Cost Index is calculated as:
 
 \\[
-\text{cost index} = \frac{AFC \cdot cap + \sum_t act_t \cdot AC_t^{LCOX}}{\sum_t act_t}
+\text{Cost Index} = \frac{AFC \cdot cap + \sum_t act_t \cdot AC_t^{LCOX}}{\sum_t act_t}
 \\]
 
 Suppose the optimiser determines \\( cap = 100 \\) MW, \\( act_{t_{0}} = 150 \\) MWh,
@@ -381,14 +381,14 @@ Suppose the optimiser determines \\( cap = 100 \\) MW, \\( act_{t_{0}} = 150 \\)
 
 \\[
 \begin{aligned}
-\text{cost index} &= \frac{(1{,}000 \times 100) + (150 \times 80) + (80 \times 60)}{150 + 80} \\\\
+\text{Cost Index} &= \frac{(1{,}000 \times 100) + (150 \times 80) + (80 \times 60)}{150 + 80} \\\\
 &= \frac{100{,}000 + 12{,}000 + 4{,}800}{230} \\\\
 &= \frac{116{,}800}{230} \\\\
 &= \text{£508/MWh}
 \end{aligned}
 \\]
 
-The cost index is £508 per MWh of electricity produced.
+The Cost Index is £508 per MWh of electricity produced.
  This metric is compared across all supply options to identify
  the lowest-cost solution for meeting demand.
 
