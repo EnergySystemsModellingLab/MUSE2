@@ -76,6 +76,11 @@ define_unit_param_default!(default_candidate_asset_capacity, Capacity, 0.0001);
 define_unit_param_default!(default_capacity_limit_factor, Dimensionless, 0.1);
 define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
 define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
+define_unit_param_default!(
+    default_remaining_demand_absolute_tolerance,
+    Dimensionless,
+    1e-12
+);
 define_param_default!(default_max_ironing_out_iterations, u32, 10);
 define_param_default!(default_capacity_margin, f64, 0.2);
 define_param_default!(default_mothball_years, u32, 0);
@@ -123,6 +128,9 @@ pub struct ModelParameters {
     /// Number of years an asset can remain unused before being decommissioned
     #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
+    /// Absolute tolerance when checking if remaining demand is close enough to zero
+    #[serde(default = "default_remaining_demand_absolute_tolerance")]
+    pub remaining_demand_absolute_tolerance: Dimensionless,
 }
 
 /// Check that the `milestone_years` parameter is valid
@@ -159,6 +167,15 @@ fn check_price_tolerance(value: Dimensionless) -> Result<()> {
     ensure!(
         value.is_finite() && value >= Dimensionless(0.0),
         "price_tolerance must be a finite number greater than or equal to zero"
+    );
+
+    Ok(())
+}
+
+fn check_remaining_demand_absolute_tolerance(value: Dimensionless) -> Result<()> {
+    ensure!(
+        value.is_finite() && value >= Dimensionless(0.0),
+        "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero"
     );
 
     Ok(())
@@ -228,6 +245,9 @@ impl ModelParameters {
 
         // capacity_margin
         check_capacity_margin(self.capacity_margin)?;
+
+        // remaining_demand_absolute_tolerance
+        check_remaining_demand_absolute_tolerance(self.remaining_demand_absolute_tolerance)?;
 
         Ok(())
     }
@@ -353,6 +373,32 @@ mod tests {
             expected_valid,
             value,
             "price_tolerance must be a finite number greater than or equal to zero",
+        );
+    }
+
+    #[rstest]
+    #[case(0.0, true)] // Valid minimum value (exactly zero)
+    #[case(1e-10, true)] // Valid very small positive value
+    #[case(1e-6, true)] // Valid default value
+    #[case(1.0, true)] // Valid larger value
+    #[case(f64::MAX, true)] // Valid maximum finite value
+    #[case(-1e-10, false)] // Invalid: negative value
+    #[case(-1.0, false)] // Invalid: negative value
+    #[case(f64::INFINITY, false)] // Invalid: infinite value
+    #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
+    #[case(f64::NAN, false)] // Invalid: NaN value
+    fn check_remaining_demand_absolute_tolerance_works(
+        #[case] value: f64,
+        #[case] expected_valid: bool,
+    ) {
+        let dimensionless = Dimensionless::new(value);
+        let result = check_remaining_demand_absolute_tolerance(dimensionless);
+
+        assert_validation_result(
+            result,
+            expected_valid,
+            value,
+            "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero",
         );
     }
 

@@ -743,7 +743,10 @@ fn select_best_assets(
     // Iteratively select the best asset until demand is met
     let mut round = 0;
     let mut best_assets: Vec<AssetRef> = Vec::new();
-    while is_any_remaining_demand(&demand) {
+    while is_any_remaining_demand(
+        &demand,
+        model.parameters.remaining_demand_absolute_tolerance.value(),
+    ) {
         ensure!(
             !opt_assets.is_empty(),
             "Failed to meet demand for commodity '{}' in region '{}' with provided investment \
@@ -851,8 +854,8 @@ fn select_best_assets(
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
-fn is_any_remaining_demand(demand: &DemandMap) -> bool {
-    demand.values().any(|flow| *flow > Flow(0.0))
+fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: f64) -> bool {
+    demand.values().any(|flow| *flow > Flow(absolute_tolerance))
 }
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
