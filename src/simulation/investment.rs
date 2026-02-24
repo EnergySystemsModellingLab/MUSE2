@@ -9,7 +9,7 @@ use crate::region::RegionID;
 use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
@@ -808,11 +808,24 @@ fn select_best_assets(
         // demand.
         // - known issue with the NPV objective
         // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
-        ensure!(
-            !outputs_for_opts.is_empty(),
-            "No feasible investment options for commodity '{}' after appraisal",
-            &commodity.id
-        );
+        if outputs_for_opts.is_empty() {
+            let remaining_demands: Vec<_> = demand
+                .iter()
+                .filter(|(_, flow)| **flow > Flow(0.0))
+                .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
+                .collect();
+
+            bail!(
+                "No feasible investment options left for \
+                commodity '{}', region '{}', year '{}', agent '{}' after appraisal.\n\
+                Remaining unmet demand (time_slice : flow):\n{}",
+                &commodity.id,
+                region_id,
+                year,
+                agent.id,
+                remaining_demands.join("\n")
+            );
+        }
 
         // Warn if there are multiple equally good assets
         warn_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
