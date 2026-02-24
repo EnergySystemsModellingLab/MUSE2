@@ -745,7 +745,7 @@ fn select_best_assets(
     let mut best_assets: Vec<AssetRef> = Vec::new();
     while is_any_remaining_demand(
         &demand,
-        model.parameters.remaining_demand_absolute_tolerance.value(),
+        model.parameters.remaining_demand_absolute_tolerance,
     ) {
         ensure!(
             !opt_assets.is_empty(),
@@ -854,8 +854,8 @@ fn select_best_assets(
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
-fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: f64) -> bool {
-    demand.values().any(|flow| *flow > Flow(absolute_tolerance))
+fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool {
+    demand.values().any(|flow| *flow > absolute_tolerance)
 }
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
