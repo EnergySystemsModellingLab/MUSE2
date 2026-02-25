@@ -650,7 +650,7 @@ impl Asset {
                 flow.coeff
                     * prices
                         .get(&flow.commodity.id, &self.region_id, time_slice)
-                        .unwrap_or_default()
+                        .unwrap_or(MoneyPerFlow(0.0))
             })
             .sum()
     }
