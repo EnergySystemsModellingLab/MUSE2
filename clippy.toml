@@ -1,0 +1,6 @@
+# Clippy configuration file
+# This file contains configuration for clippy lints that cannot be easily configured in Cargo.toml
+
+# The AssetRef type uses Rc<Asset> internally for shared ownership, but the hash
+# implementation is carefully designed to be consistent regardless of interior mutability
+ignore-interior-mutability = ["muse2::asset::AssetRef"]
