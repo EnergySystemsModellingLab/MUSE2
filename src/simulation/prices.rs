@@ -183,7 +183,7 @@ impl CommodityPrices {
             weighted_prices
                 .entry(key)
                 .and_modify(|v| *v += *price * weight)
-                .or_insert(*price * weight);
+                .or_insert_with(|| *price * weight);
         }
 
         weighted_prices
