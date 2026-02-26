@@ -3,12 +3,12 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
+use crate::simulation::investment::InvestmentSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use indexmap::IndexMap;
-use itertools::iproduct;
 use std::collections::{HashMap, HashSet};
 
 /// Iterator item type for asset activity iterators
@@ -30,73 +30,86 @@ type Item<'a> = (&'a AssetRef, &'a TimeSliceID, Activity);
 /// A `CommodityPrices` mapping `(commodity, region, time_slice)` to `MoneyPerFlow` representing
 /// endogenous prices computed from the optimisation solution.
 pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<CommodityPrices> {
-    // Compute shadow prices for all SED/SVD commodities (needed by all strategies)
+    // Collect shadow prices for all SED/SVD commodities
     let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
-
-    // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
-    // For now, commodities use a single strategy for all regions, but this may change in the future.
-    let mut pricing_sets = HashMap::new();
-    for ((commodity_id, commodity), region_id) in
-        iproduct!(&model.commodities, model.iter_regions())
-    {
-        if commodity.pricing_strategy == PricingStrategy::Unpriced {
-            continue;
-        }
-        pricing_sets
-            .entry(&commodity.pricing_strategy)
-            .or_insert_with(HashSet::new)
-            .insert((commodity_id.clone(), region_id.clone()));
-    }
 
     // Set up empty prices map
     let mut result = CommodityPrices::default();
 
-    // Add prices for shadow-priced commodities
-    if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
-        for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
-            if shadow_set.contains(&(commodity_id.clone(), region_id.clone())) {
-                let price = shadow_prices
-                    .get(commodity_id, region_id, time_slice)
-                    .unwrap();
-                result.insert(commodity_id, region_id, time_slice, price);
+    // Get investment order for the year - prices will be calculated in the reverse of this order
+    let investment_order = &model.investment_order[&year];
+
+    // Iterate over investment sets in reverse order. Markets within the same set can be priced
+    // simultaneously, since they are interdependent (apart from Cycle sets which we bail on).
+    for investment_set in investment_order.iter().rev() {
+        // Bail if the investment set is type Cycle - we don't yet know how to handle this
+        ensure!(
+            !matches!(investment_set, InvestmentSet::Cycle(_)),
+            "Cannot calculate prices for Cycle investment sets"
+        );
+
+        // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
+        // For now, commodities use a single strategy for all regions, but this may change in the future.
+        let mut pricing_sets = HashMap::new();
+        for (commodity_id, region_id) in investment_set.iter_markets() {
+            let commodity = &model.commodities[commodity_id];
+            if commodity.pricing_strategy == PricingStrategy::Unpriced {
+                continue;
+            }
+            pricing_sets
+                .entry(&commodity.pricing_strategy)
+                .or_insert_with(HashSet::new)
+                .insert((commodity_id.clone(), region_id.clone()));
+        }
+
+        // Add prices for shadow-priced commodities
+        if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
+            for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
+                if shadow_set.contains(&(commodity_id.clone(), region_id.clone())) {
+                    let price = shadow_prices
+                        .get(commodity_id, region_id, time_slice)
+                        .unwrap();
+                    result.insert(commodity_id, region_id, time_slice, price);
+                }
             }
         }
-    }
 
-    // Add prices for scarcity-adjusted commodities
-    if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
-        let scarcity_prices = calculate_scarcity_adjusted_prices(
-            solution.iter_activity_duals(),
-            &shadow_prices,
-            scarcity_set,
-        );
-        result.extend(scarcity_prices);
-    }
+        // Add prices for scarcity-adjusted commodities
+        if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
+            let scarcity_prices = calculate_scarcity_adjusted_prices(
+                solution.iter_activity_duals(),
+                &shadow_prices,
+                scarcity_set,
+            );
+            result.extend(scarcity_prices);
+        }
 
-    // Add prices for marginal cost commodities
-    if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
-        let marginal_cost_prices = calculate_marginal_cost_prices(
-            solution.iter_activity_for_existing(),
-            solution.iter_activity_for_candidates(),
-            &shadow_prices,
-            year,
-            marginal_set,
-        );
-        result.extend(marginal_cost_prices);
-    }
+        // Add prices for marginal cost commodities
+        if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
+            let marginal_cost_prices = calculate_marginal_cost_prices(
+                solution.iter_activity_for_existing(),
+                solution.iter_activity_for_candidates(),
+                &result,
+                year,
+                marginal_set,
+            );
+            result.extend(marginal_cost_prices);
+        }
 
-    // Add prices for full cost commodities
-    if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
-        let annual_activities = calculate_annual_activities(solution.iter_activity_for_existing());
-        let full_cost_prices = calculate_full_cost_prices(
-            solution.iter_activity_for_existing(),
-            solution.iter_activity_for_candidates(),
-            &annual_activities,
-            &shadow_prices,
-            year,
-            fullcost_set,
-        );
-        result.extend(full_cost_prices);
+        // Add prices for full cost commodities
+        if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
+            let annual_activities =
+                calculate_annual_activities(solution.iter_activity_for_existing());
+            let full_cost_prices = calculate_full_cost_prices(
+                solution.iter_activity_for_existing(),
+                solution.iter_activity_for_candidates(),
+                &annual_activities,
+                &result,
+                year,
+                fullcost_set,
+            );
+            result.extend(full_cost_prices);
+        }
     }
 
     // Return the completed prices map
@@ -365,7 +378,7 @@ where
 ///   assets. Note: we only need the keys, since we assume full utilisation for candidates.
 /// * `annual_activities` - Map of annual activities for each asset computed by
 ///   `calculate_annual_activities`. This only needs to include existing assets.
-/// * `shadow_prices` - Shadow prices for all commodities
+/// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
 ///
@@ -375,7 +388,7 @@ where
 fn calculate_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
-    shadow_prices: &CommodityPrices,
+    upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
@@ -399,7 +412,7 @@ where
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            shadow_prices,
+            upstream_prices,
             year,
             time_slice,
             |commodity_id: &CommodityID| {
@@ -433,7 +446,7 @@ where
 
         // Iterate over all the SED/SVD marginal costs for markets we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            shadow_prices,
+            upstream_prices,
             year,
             time_slice,
             |cid: &CommodityID| should_process(cid),
@@ -516,7 +529,7 @@ where
 ///   assets. Note: we only need the keys, since we assume full dispatch for candidates.
 /// * `annual_activities` - Map of annual activities for each asset computed by
 ///   `calculate_annual_activities`. This only needs to include existing assets.
-/// * `shadow_prices` - Shadow prices for all commodities
+/// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
 ///
@@ -527,7 +540,7 @@ fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
-    shadow_prices: &CommodityPrices,
+    upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
@@ -566,7 +579,7 @@ where
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            shadow_prices,
+            upstream_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -621,7 +634,7 @@ where
 
         // Iterate over all the SED/SVD marginal costs for markets we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            shadow_prices,
+            upstream_prices,
             year,
             time_slice,
             |cid: &CommodityID| should_process(cid),
