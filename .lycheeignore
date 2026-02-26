@@ -1,6 +1,9 @@
 # For some reason these spurious links appear in some cargo doc-generated files
 ^file://.+/MUSE2/book/api/index\.html$
 
+# Some of these links give a 404, even though they're generated in the API docs. No idea why.
+^https://docs.rs/erased-serde/
+
 # Times out on GitHub runner
 ^http://www.adobe.com
 
