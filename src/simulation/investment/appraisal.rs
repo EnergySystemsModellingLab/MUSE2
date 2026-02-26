@@ -74,11 +74,19 @@ impl AppraisalOutput {
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
+        assert!(self.is_valid(), "Cannot compare non-valid outputs");
         assert!(
             !(self.metric.value().is_nan() || other.metric.value().is_nan()),
             "Appraisal metric cannot be NaN"
         );
         self.metric.compare(other.metric.as_ref())
+    }
+
+    /// Whether this [`AppraisalOutput`] is a valid output.
+    ///
+    /// Specifically, it checks whether the calculated capacity is greater than zero.
+    pub fn is_valid(&self) -> bool {
+        self.capacity.total_capacity() >= Capacity(0.0)
     }
 }
 
@@ -342,9 +350,8 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// Assets with zero capacity are filtered out before sorting,
 /// as their metric would be `NaN` and could cause the program to panic. So the length
 /// of the returned vector may be less than the input.
-///
 pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<AppraisalOutput>) {
-    outputs_for_opts.retain(|output| output.capacity.total_capacity() > Capacity(0.0));
+    outputs_for_opts.retain(AppraisalOutput::is_valid);
     outputs_for_opts.sort_by(|output1, output2| match output1.compare_metric(output2) {
         // If equal, we fall back on comparing asset properties
         Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
