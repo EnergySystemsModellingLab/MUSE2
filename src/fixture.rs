@@ -382,18 +382,16 @@ pub fn time_slice_info2() -> TimeSliceInfo {
 pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
     let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
     let activity = indexmap! { time_slice.clone() => Activity(10.0) };
-    let demand = indexmap! { time_slice.clone() => Flow(100.0) };
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
     AppraisalOutput {
         asset: AssetRef::from(asset),
         capacity: AssetCapacity::Continuous(Capacity(42.0)),
-        coefficients: ObjectiveCoefficients {
+        coefficients: Rc::new(ObjectiveCoefficients {
             capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
             unmet_demand_coefficient: MoneyPerFlow(10000.0),
-        },
+        }),
         activity,
-        demand,
         unmet_demand,
         metric: Box::new(LCOXMetric::new(MoneyPerActivity(4.14))),
     }
