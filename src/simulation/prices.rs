@@ -37,7 +37,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     let investment_order = &model.investment_order[&year];
 
     // Iterate over investment sets in reverse order. Markets within the same set can be priced
-    // simultaneously, since they are interdependent (apart from Cycle sets which we bail on).
+    // simultaneously, since they are independent (apart from Cycle sets when using the "marginal"
+    // and "full" strategies, which we bail on).
     for investment_set in investment_order.iter().rev() {
         // Bail if the investment set is type Cycle - we don't yet know how to handle this
         ensure!(
@@ -355,13 +356,12 @@ where
 ///
 /// ---
 ///
-/// If any existing assets produce a given commodity in a particular region and time slice, the
-/// price is taken from the asset with the highest marginal cost among those existing assets. If _no_
-/// existing assets produce the commodity in that region and time slice (in particular, this will
-/// occur when there's no demand for the commodity), then candidate assets are considered: we
-/// take the price from the candidate asset with the _lowest_ marginal cost, assuming full utilisation
-/// (i.e. the single candidate asset that would be most competitive if a small amount of demand was
-/// added).
+/// For each region, the price in each time slice is taken from the installed asset with the highest
+/// marginal cost. If there are no producers of the commodity in that region (in particular, this
+/// may occur when there's no demand for the commodity), then candidate assets are considered: we
+/// take the price from the candidate asset with the _lowest_ marginal cost, assuming full
+/// utilisation (i.e. the single candidate asset that would be most competitive if a small amount of
+/// demand was added).
 ///
 /// Note: this should be similar to the "shadow price" strategy, which is also based on marginal
 /// costs of the most expensive producer, but may be more successful in cases where there are
@@ -505,13 +505,13 @@ where
 ///
 /// ---
 ///
-/// If any existing assets produce a given commodity in a particular region and time slice, the
-/// price is taken from the asset with the highest full cost among those existing assets. If _no_
-/// existing assets produce the commodity in that region and time slice (in particular, this will
-/// occur when there's no demand for the commodity), then candidate assets are considered: we
-/// take the price from the candidate asset with the _lowest_ full cost, assuming maximum
-/// possible dispatch (i.e. the single candidate asset that would be most competitive if a small
-/// amount of demand was added).
+/// For each region, the price in each time slice is taken from the installed asset with the highest
+/// full cost (excluding assets with zero annual activity, as the full cost of these as calculated
+/// above would be infinite). If there are no producers of the commodity in that region (in
+/// particular, this may occur when there's no demand for the commodity), then candidate assets are
+/// considered: we take the price from the candidate asset with the _lowest_ full cost, assuming
+/// maximum possible dispatch (i.e. the single candidate asset that would be most competitive if a
+/// small amount of demand was added).
 ///
 /// # Arguments
 ///
