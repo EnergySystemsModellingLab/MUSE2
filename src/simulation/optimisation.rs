@@ -267,12 +267,8 @@ impl Solution<'_> {
     pub fn iter_activity_keys_for_existing(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
-        let cols = &self.solution.columns()[self.variables.existing_asset_var_idx.clone()];
-        self.variables
-            .activity_var_keys()
-            .skip(self.variables.existing_asset_var_idx.start)
-            .zip(cols.iter())
-            .map(|((asset, time_slice), _)| (asset, time_slice))
+        self.iter_activity_for_existing()
+            .map(|(asset, time_slice, _activity)| (asset, time_slice))
     }
 
     /// Activity for each candidate asset
@@ -291,12 +287,8 @@ impl Solution<'_> {
     pub fn iter_activity_keys_for_candidates(
         &self,
     ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
-        let cols = &self.solution.columns()[self.variables.candidate_asset_var_idx.clone()];
-        self.variables
-            .activity_var_keys()
-            .skip(self.variables.candidate_asset_var_idx.start)
-            .zip(cols.iter())
-            .map(|((asset, time_slice), _)| (asset, time_slice))
+        self.iter_activity_for_candidates()
+            .map(|(asset, time_slice, _activity)| (asset, time_slice))
     }
 
     /// Iterate over unmet demand
