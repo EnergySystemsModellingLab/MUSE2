@@ -11,9 +11,6 @@ use anyhow::{Result, ensure};
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 
-/// Iterator item type for asset activity iterators
-type Item<'a> = (&'a AssetRef, &'a TimeSliceID, Activity);
-
 /// Calculate commodity prices.
 ///
 /// Calculate prices for each commodity/region/time-slice according to the commodity's configured
@@ -87,8 +84,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         // Add prices for marginal cost commodities
         if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
             let marginal_cost_prices = calculate_marginal_cost_prices(
-                solution.iter_activity_for_existing(),
-                solution.iter_activity_for_candidates(),
+                solution.iter_activity_keys_for_existing(),
+                solution.iter_activity_keys_for_candidates(),
                 &result,
                 year,
                 marginal_set,
@@ -101,8 +98,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             let annual_activities =
                 calculate_annual_activities(solution.iter_activity_for_existing());
             let full_cost_prices = calculate_full_cost_prices(
-                solution.iter_activity_for_existing(),
-                solution.iter_activity_for_candidates(),
+                solution.iter_activity_keys_for_existing(),
+                solution.iter_activity_keys_for_candidates(),
                 &annual_activities,
                 &result,
                 year,
@@ -372,10 +369,10 @@ where
 ///
 /// # Arguments
 ///
-/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
-///   assets
-/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
-///   assets. Note: we only need the keys, since we assume full utilisation for candidates.
+/// * `activity_keys_for_existing` - Iterator over activity keys from optimisation solution for
+///   existing assets
+/// * `activity_keys_for_candidates` - Iterator over activity keys from optimisation solution for
+///   candidate assets
 /// * `annual_activities` - Map of annual activities for each asset computed by
 ///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
@@ -386,15 +383,15 @@ where
 ///
 /// A map of marginal cost prices for the specified markets in all time slices
 fn calculate_marginal_cost_prices<'a, I, J>(
-    activity_for_existing: I,
-    activity_for_candidates: J,
+    activity_keys_for_existing: I,
+    activity_keys_for_candidates: J,
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = Item<'a>>,
-    J: Iterator<Item = Item<'a>>,
+    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
 
@@ -402,7 +399,7 @@ where
     // Calculate highest marginal cost for each commodity/region/time slice
     // Keep track of keys with prices - missing keys will be handled by candidates later
     let mut priced_by_existing = HashSet::new();
-    for (asset, time_slice, _activity) in activity_for_existing {
+    for (asset, time_slice) in activity_keys_for_existing {
         let region_id = asset.region_id();
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
@@ -426,7 +423,7 @@ where
 
     // Next, look at candidate assets for any markets not covered by existing assets
     // For these, we take the _lowest_ marginal cost
-    for (asset, time_slice, _activity) in activity_for_candidates {
+    for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
         // Only consider markets not already priced by existing assets
@@ -462,7 +459,7 @@ where
 /// Calculated annual activities for each asset by summing across all time slices
 fn calculate_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
 where
-    I: IntoIterator<Item = Item<'a>>,
+    I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     activities
         .into_iter()
@@ -518,10 +515,10 @@ where
 ///
 /// # Arguments
 ///
-/// * `activity_for_existing` - Iterator over activity from optimisation solution for existing
-///   assets
-/// * `activity_for_candidates` - Iterator over activity from optimisation solution for candidate
-///   assets. Note: we only need the keys, since we assume full dispatch for candidates.
+/// * `activity_keys_for_existing` - Iterator over activity keys from optimisation solution for
+///   existing assets
+/// * `activity_keys_for_candidates` - Iterator over activity keys from optimisation solution for
+///   candidate assets
 /// * `annual_activities` - Map of annual activities for each asset computed by
 ///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
@@ -532,16 +529,16 @@ where
 ///
 /// A map of full cost prices for the specified markets in all time slices
 fn calculate_full_cost_prices<'a, I, J>(
-    activity_for_existing: I,
-    activity_for_candidates: J,
+    activity_keys_for_existing: I,
+    activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = Item<'a>>,
-    J: Iterator<Item = Item<'a>>,
+    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
 
@@ -550,9 +547,15 @@ where
     // Keep track of keys with prices - missing keys will be handled by candidates later
     let mut annual_capital_costs_cache = HashMap::new();
     let mut priced_by_existing = HashSet::new();
-    for (asset, time_slice, _activity) in activity_for_existing {
+    for (asset, time_slice) in activity_keys_for_existing {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
+
+        // If annual activity is zero, we can't calculate a capital cost per flow, so skip this
+        // asset.
+        if annual_activity < Activity::EPSILON {
+            continue;
+        }
 
         // Only proceed if the asset produces at least one commodity we need prices for
         if !asset
@@ -589,7 +592,7 @@ where
 
     // Next, look at candidate assets for any markets not covered by existing assets
     // For these we assume full utilisation, and take the _lowest_ full cost
-    for (asset, time_slice, _activity) in activity_for_candidates {
+    for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
         // Only consider markets not already priced by existing assets
@@ -834,7 +837,7 @@ mod tests {
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
 
-        let existing = vec![(&asset_ref, &time_slice, Activity(1.0))];
+        let existing = vec![(&asset_ref, &time_slice)];
         let candidates = Vec::new();
 
         let prices = calculate_marginal_cost_prices(
@@ -909,7 +912,7 @@ mod tests {
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
 
-        let existing = vec![(&asset_ref, &time_slice, Activity(2.0))];
+        let existing = vec![(&asset_ref, &time_slice)];
         let candidates = Vec::new();
 
         let mut annual_activities = HashMap::new();
