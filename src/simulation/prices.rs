@@ -38,14 +38,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
     // Iterate over investment sets in reverse order. Markets within the same set can be priced
     // simultaneously, since they are independent (apart from Cycle sets when using the "marginal"
-    // and "full" strategies, which we bail on).
+    // and "full" strategies, which we bail on below).
     for investment_set in investment_order.iter().rev() {
-        // Bail if the investment set is type Cycle - we don't yet know how to handle this
-        ensure!(
-            !matches!(investment_set, InvestmentSet::Cycle(_)),
-            "Cannot calculate prices for Cycle investment sets"
-        );
-
         // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
         // For now, commodities use a single strategy for all regions, but this may change in the future.
         let mut pricing_sets = HashMap::new();
@@ -58,6 +52,18 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
                 .entry(&commodity.pricing_strategy)
                 .or_insert_with(HashSet::new)
                 .insert((commodity_id.clone(), region_id.clone()));
+        }
+
+        // Bail if the investment set is type Cycle and commodities have "marginal" or "full"
+        // pricing strategies, since we don't know how to handle this scenario.
+        if pricing_sets.contains_key(&PricingStrategy::MarginalCost)
+            || pricing_sets.contains_key(&PricingStrategy::FullCost)
+        {
+            ensure!(
+                !matches!(investment_set, InvestmentSet::Cycle(_)),
+                "Cannot calculate prices using the `marginal` and `full` pricing strategies \
+                for Cycle investment sets."
+            );
         }
 
         // Add prices for shadow-priced commodities
