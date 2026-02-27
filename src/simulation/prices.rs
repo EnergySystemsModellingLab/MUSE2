@@ -402,13 +402,8 @@ where
     // Calculate highest marginal cost for each commodity/region/time slice
     // Keep track of keys with prices - missing keys will be handled by candidates later
     let mut priced_by_existing = HashSet::new();
-    for (asset, time_slice, activity) in activity_for_existing {
+    for (asset, time_slice, _activity) in activity_for_existing {
         let region_id = asset.region_id();
-
-        // Only proceed if the asset has non-zero activity in this time slice
-        if activity < Activity::EPSILON {
-            continue;
-        }
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
@@ -555,14 +550,9 @@ where
     // Keep track of keys with prices - missing keys will be handled by candidates later
     let mut annual_capital_costs_cache = HashMap::new();
     let mut priced_by_existing = HashSet::new();
-    for (asset, time_slice, activity) in activity_for_existing {
+    for (asset, time_slice, _activity) in activity_for_existing {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
-
-        // Only proceed if the asset has non-zero activity in this time slice
-        if activity < Activity::EPSILON {
-            continue;
-        }
 
         // Only proceed if the asset produces at least one commodity we need prices for
         if !asset
