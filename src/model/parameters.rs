@@ -7,7 +7,7 @@ use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
 };
-use crate::units::{Capacity, Dimensionless, MoneyPerFlow};
+use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use log::warn;
 use serde::Deserialize;
@@ -76,6 +76,7 @@ define_unit_param_default!(default_candidate_asset_capacity, Capacity, 0.0001);
 define_unit_param_default!(default_capacity_limit_factor, Dimensionless, 0.1);
 define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
 define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
+define_unit_param_default!(default_remaining_demand_absolute_tolerance, Flow, 1e-12);
 define_param_default!(default_max_ironing_out_iterations, u32, 10);
 define_param_default!(default_capacity_margin, f64, 0.2);
 define_param_default!(default_mothball_years, u32, 0);
@@ -123,6 +124,9 @@ pub struct ModelParameters {
     /// Number of years an asset can remain unused before being decommissioned
     #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
+    /// Absolute tolerance when checking if remaining demand is close enough to zero
+    #[serde(default = "default_remaining_demand_absolute_tolerance")]
+    pub remaining_demand_absolute_tolerance: Flow,
 }
 
 /// Check that the `milestone_years` parameter is valid
@@ -160,6 +164,29 @@ fn check_price_tolerance(value: Dimensionless) -> Result<()> {
         value.is_finite() && value >= Dimensionless(0.0),
         "price_tolerance must be a finite number greater than or equal to zero"
     );
+
+    Ok(())
+}
+
+fn check_remaining_demand_absolute_tolerance(
+    allow_broken_options: bool,
+    value: Flow,
+) -> Result<()> {
+    ensure!(
+        value.is_finite() && value >= Flow(0.0),
+        "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero"
+    );
+
+    let default_value = default_remaining_demand_absolute_tolerance();
+    if !allow_broken_options {
+        ensure!(
+            value == default_value,
+            "Setting a remaining_demand_absolute_tolerance different from the default value of {:e} \
+             is potentially dangerous, set please_give_me_broken_results to true \
+             if you want to allow this.",
+            default_value.0
+        );
+    }
 
     Ok(())
 }
@@ -228,6 +255,12 @@ impl ModelParameters {
 
         // capacity_margin
         check_capacity_margin(self.capacity_margin)?;
+
+        // remaining_demand_absolute_tolerance
+        check_remaining_demand_absolute_tolerance(
+            self.allow_broken_options,
+            self.remaining_demand_absolute_tolerance,
+        )?;
 
         Ok(())
     }
@@ -353,6 +386,57 @@ mod tests {
             expected_valid,
             value,
             "price_tolerance must be a finite number greater than or equal to zero",
+        );
+    }
+
+    #[rstest]
+    #[case(true, 0.0, true)] // Valid minimum value broken options allowed
+    #[case(true, 1e-10, true)] // Valid value with broken options allowed
+    #[case(true, 1e-15, true)] // Valid value with broken options allowed
+    #[case(false, 1e-12, true)] // Valid value same as default, no broken options needed
+    #[case(true, 1.0, true)] // Valid larger value with broken options allowed
+    #[case(true, f64::MAX, true)] // Valid maximum finite value with broken options allowed
+    #[case(true, -1e-10, false)] // Invalid: negative value
+    #[case(true, f64::INFINITY, false)] // Invalid: positive infinity
+    #[case(true, f64::NEG_INFINITY, false)] // Invalid: negative infinity
+    #[case(true, f64::NAN, false)] // Invalid: NaN
+    #[case(false, -1e-10, false)] // Invalid: negative value
+    #[case(false, f64::INFINITY, false)] // Invalid: positive infinity
+    #[case(false, f64::NEG_INFINITY, false)] // Invalid: negative infinity
+    #[case(false, f64::NAN, false)] // Invalid: NaN
+    fn check_remaining_demand_absolute_tolerance_works(
+        #[case] allow_broken_options: bool,
+        #[case] value: f64,
+        #[case] expected_valid: bool,
+    ) {
+        let flow = Flow::new(value);
+        let result = check_remaining_demand_absolute_tolerance(allow_broken_options, flow);
+
+        assert_validation_result(
+            result,
+            expected_valid,
+            value,
+            "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero",
+        );
+    }
+
+    #[rstest]
+    #[case(0.0)] // smaller than default
+    #[case(1e-10)] // Larger than default (1e-12)
+    #[case(1.0)] // Well above default
+    #[case(f64::MAX)] // Maximum finite value
+    fn check_remaining_demand_absolute_tolerance_requires_broken_options_if_non_default(
+        #[case] value: f64,
+    ) {
+        let flow = Flow::new(value);
+        let result = check_remaining_demand_absolute_tolerance(false, flow);
+        assert_validation_result(
+            result,
+            false,
+            value,
+            "Setting a remaining_demand_absolute_tolerance different from the default value \
+             of 1e-12 is potentially dangerous, set \
+             please_give_me_broken_results to true if you want to allow this.",
         );
     }
 

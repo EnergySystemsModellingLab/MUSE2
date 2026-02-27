@@ -50,5 +50,12 @@ properties:
     type: boolean
     description: |
       Allows other options that are known to be broken to be used. Please don't ever enable this.
+  remaining_demand_absolute_tolerance:
+    type: number
+    description: |
+      Absolute tolerance when checking if remaining demand is close enough to zero in the
+      investment cycle. Changing the value of this parameter is potentially dangerous,
+      so it requires setting `please_give_me_broken_results` to true.
+    default: 1e-12
 
 required: [milestone_years]
