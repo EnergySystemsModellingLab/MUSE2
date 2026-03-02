@@ -869,10 +869,11 @@ mod tests {
     /// Test that appraisal outputs with zero capacity are filtered out during sorting.
     #[rstest]
     fn appraisal_sort_filters_zero_capacity_outputs(asset: Asset) {
-        let metrics: Vec<Box<dyn MetricTrait>> = vec![
-            Box::new(LCOXMetric::new(MoneyPerActivity(f64::NAN))),
-            Box::new(LCOXMetric::new(MoneyPerActivity(f64::NAN))),
-            Box::new(LCOXMetric::new(MoneyPerActivity(f64::NAN))),
+        let metric = LCOXMetric::new(MoneyPerActivity(1.0));
+        let metrics = [
+            Box::new(metric.clone()),
+            Box::new(metric.clone()),
+            Box::new(metric),
         ];
 
         // Create outputs with zero capacity
