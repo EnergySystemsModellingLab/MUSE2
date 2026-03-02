@@ -5,7 +5,7 @@ use log::warn;
 use std::cmp::min;
 use std::slice;
 
-/// The active pool of [`Asset`]s
+/// The active pool of [`super::Asset`]s
 #[derive(Default)]
 pub struct AssetPool {
     /// The pool of active assets, sorted by ID
