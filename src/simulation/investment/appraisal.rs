@@ -67,7 +67,7 @@ pub struct AppraisalOutput {
 
 impl AppraisalOutput {
     /// Create a new `AppraisalOutput`
-    pub fn new<T: MetricTrait>(
+    fn new<T: MetricTrait>(
         asset: AssetRef,
         results: ResultsMap,
         metric: Option<T>,
