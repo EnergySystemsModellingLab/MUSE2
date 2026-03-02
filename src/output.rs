@@ -220,7 +220,7 @@ struct AppraisalResultsRow {
     region_id: RegionID,
     capacity: Capacity,
     capacity_coefficient: MoneyPerCapacity,
-    metric: f64,
+    metric: Option<f64>,
 }
 
 /// Represents the appraisal results in a row of the appraisal results CSV file
@@ -453,7 +453,7 @@ impl DebugDataWriter {
                 region_id: result.asset.region_id().clone(),
                 capacity: result.capacity.total_capacity(),
                 capacity_coefficient: result.coefficients.capacity_coefficient,
-                metric: result.metric.value(),
+                metric: result.metric.as_ref().map(|m| m.value()),
             };
             self.appraisal_results_writer.serialize(row)?;
         }
@@ -989,7 +989,7 @@ mod tests {
             region_id: asset.region_id().clone(),
             capacity: Capacity(42.0),
             capacity_coefficient: MoneyPerCapacity(2.14),
-            metric: 4.14,
+            metric: Some(4.14),
         };
         let records: Vec<AppraisalResultsRow> =
             csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_FILE_NAME))
