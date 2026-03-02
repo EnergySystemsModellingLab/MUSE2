@@ -15,7 +15,7 @@ jobs:
       - name: Enable auto-merge for bot PRs
         run: |
           gh pr review --approve "$PR_URL"
-          gh pr merge --auto --merge "$PR_URL"
+          gh pr merge --auto --rebase "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           # GitHub provides this variable in the CI env. You don't
