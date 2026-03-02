@@ -278,12 +278,12 @@ mod tests {
 
     #[rstest]
     fn asset_pool_commission_new_divisible(asset_divisible: Asset) {
-        let commision_year = asset_divisible.commission_year;
+        let commission_year = asset_divisible.commission_year;
         let expected_children = expected_children_for_divisible(&asset_divisible);
         let mut asset_pool = AssetPool::new();
         let mut user_assets = vec![asset_divisible.into()];
         assert!(asset_pool.assets.is_empty());
-        asset_pool.commission_new(commision_year, &mut user_assets);
+        asset_pool.commission_new(commission_year, &mut user_assets);
         assert!(user_assets.is_empty());
         assert!(!asset_pool.assets.is_empty());
         assert_eq!(asset_pool.assets.len(), expected_children);
@@ -607,7 +607,7 @@ mod tests {
             Some(2025 - mothball_years)
         );
 
-        // Decomission unused assets
+        // Decommission unused assets
         let mut decommissioned = Vec::new();
         asset_pool.decommission_mothballed(2025, mothball_years, &mut decommissioned);
 
