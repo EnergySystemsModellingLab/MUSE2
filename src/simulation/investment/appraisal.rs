@@ -277,7 +277,7 @@ fn calculate_lcox(
     Ok(AppraisalOutput::new(
         asset.clone(),
         results,
-        Some(LCOXMetric::new(cost_index)),
+        cost_index.map(LCOXMetric::new),
         coefficients.clone(),
     ))
 }
@@ -921,6 +921,25 @@ mod tests {
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
         // All zero capacity outputs should be filtered out
+        assert_eq!(outputs.len(), 0);
+    }
+
+    /// Test that appraisal outputs with an invalid metric are filtered out
+    #[rstest]
+    fn appraisal_sort_filters_invalid_metric(asset: Asset) {
+        let output = AppraisalOutput {
+            asset: AssetRef::from(asset),
+            capacity: AssetCapacity::Continuous(Capacity(1.0)), // non-zero capacity
+            coefficients: objective_coeffs(),
+            activity: IndexMap::new(),
+            unmet_demand: IndexMap::new(),
+            metric: None,
+        };
+        let mut outputs = vec![output];
+
+        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+
+        // The invalid output should have been filtered out
         assert_eq!(outputs.len(), 0);
     }
 }
