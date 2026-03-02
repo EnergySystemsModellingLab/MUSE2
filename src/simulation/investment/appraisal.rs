@@ -365,9 +365,10 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// are preferred over uncommissioned assets, and newer assets are preferred over older
 /// ones. The function does not guarantee that all ties will be resolved.
 ///
-/// Assets with zero capacity are filtered out before sorting,
-/// as their metric would be `NaN` and could cause the program to panic. So the length
-/// of the returned vector may be less than the input.
+/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which
+/// excludes entries with invalid metrics (e.g. `None`) as well as zero capacity. This
+/// avoids meaningless or `NaN` appraisal metrics that could cause the program to panic,
+/// so the length of the returned vector may be less than the input.
 pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<AppraisalOutput>) {
     outputs_for_opts.retain(AppraisalOutput::is_valid);
     outputs_for_opts.sort_by(|output1, output2| match output1.compare_metric(output2) {
