@@ -11,6 +11,7 @@ use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
 use indexmap::IndexMap;
+use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
@@ -65,6 +66,22 @@ pub struct AppraisalOutput {
 }
 
 impl AppraisalOutput {
+    /// Create a new `AppraisalOutput`
+    pub fn new<T: MetricTrait>(
+        asset: AssetRef,
+        results: ResultsMap,
+        metric: T,
+        coefficients: Rc<ObjectiveCoefficients>,
+    ) -> Self {
+        Self {
+            asset,
+            capacity: results.capacity,
+            activity: results.activity,
+            unmet_demand: results.unmet_demand,
+            metric: Box::new(metric),
+            coefficients,
+        }
+    }
     /// Compare this appraisal to another on the basis of the comparison metric.
     ///
     /// Note that if the metrics are approximately equal (as determined by the [`approx_eq!`] macro)
@@ -244,14 +261,12 @@ fn calculate_lcox(
         &coefficients.activity_coefficients,
     );
 
-    Ok(AppraisalOutput {
-        asset: asset.clone(),
-        capacity: results.capacity,
-        activity: results.activity,
-        unmet_demand: results.unmet_demand,
-        metric: Box::new(LCOXMetric::new(cost_index)),
-        coefficients: coefficients.clone(),
-    })
+    Ok(AppraisalOutput::new(
+        asset.clone(),
+        results,
+        LCOXMetric::new(cost_index),
+        coefficients.clone(),
+    ))
 }
 
 /// Calculate NPV for a hypothetical investment in the given asset.
@@ -290,14 +305,12 @@ fn calculate_npv(
         &coefficients.activity_coefficients,
     );
 
-    Ok(AppraisalOutput {
-        asset: asset.clone(),
-        capacity: results.capacity,
-        activity: results.activity,
-        unmet_demand: results.unmet_demand,
-        metric: Box::new(NPVMetric::new(profitability_index)),
-        coefficients: coefficients.clone(),
-    })
+    Ok(AppraisalOutput::new(
+        asset.clone(),
+        results,
+        NPVMetric::new(profitability_index),
+        coefficients.clone(),
+    ))
 }
 
 /// Appraise the given investment with the specified objective type
