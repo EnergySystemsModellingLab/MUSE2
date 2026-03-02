@@ -62,7 +62,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             ensure!(
                 !matches!(investment_set, InvestmentSet::Cycle(_)),
                 "Cannot calculate prices using the `marginal` and `full` pricing strategies \
-                for Cycle investment sets."
+                for markets with cyclical commodity dependencies."
             );
         }
 
@@ -551,7 +551,7 @@ where
     // Start by looking at existing assets
     // Calculate highest full cost for each commodity/region/time slice
     // Keep track of keys with prices - missing keys will be handled by candidates later
-    let mut annual_capital_costs_cache = HashMap::new();
+    let mut annual_fixed_costs_cache = HashMap::new();
     let mut priced_by_existing = HashSet::new();
     for (asset, time_slice) in activity_keys_for_existing {
         let annual_activity = annual_activities[asset];
@@ -571,10 +571,10 @@ where
             continue;
         }
 
-        // Calculate/cache annual capital cost for this asset
-        let annual_capital_cost_per_flow = *annual_capital_costs_cache
+        // Calculate/cache annual fixed costs for this asset
+        let annual_fixed_costs_per_flow = *annual_fixed_costs_cache
             .entry(asset.clone())
-            .or_insert_with(|| asset.get_annual_capital_cost_per_flow(annual_activity));
+            .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activity));
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
@@ -583,8 +583,8 @@ where
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
         ) {
-            // Add capital cost per flow to marginal cost to get full cost
-            let marginal_cost = marginal_cost + annual_capital_cost_per_flow;
+            // Add annual fixed costs per flow to marginal cost to get full cost
+            let marginal_cost = marginal_cost + annual_fixed_costs_per_flow;
 
             // Update the highest cost for this commodity/region/time slice
             let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
@@ -619,12 +619,12 @@ where
             continue;
         }
 
-        // Calculate/cache annual capital cost per flow for this asset assuming full dispatch
+        // Calculate/cache annual fixed cost per flow for this asset assuming full dispatch
         // (bound by the activity limits of the asset)
-        let annual_capital_cost_per_flow = *annual_capital_costs_cache
+        let annual_fixed_costs_per_flow = *annual_fixed_costs_cache
             .entry(asset.clone())
             .or_insert_with(|| {
-                asset.get_annual_capital_cost_per_flow(
+                asset.get_annual_fixed_costs_per_flow(
                     *asset
                         .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
                         .end(),
@@ -638,8 +638,8 @@ where
             time_slice,
             |cid: &CommodityID| should_process(cid),
         ) {
-            // Add capital cost per flow to marginal cost to get full cost
-            let full_cost = marginal_cost + annual_capital_cost_per_flow;
+            // Add annual fixed costs per flow to marginal cost to get full cost
+            let full_cost = marginal_cost + annual_fixed_costs_per_flow;
 
             // Update the _lowest_ cost for this commodity/region/time slice
             let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
