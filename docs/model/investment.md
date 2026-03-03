@@ -41,12 +41,6 @@ investments.
   - \\( \text{FOM}_{opt,r} \\): Annual fixed Operations & Maintenance costs per unit of capacity for
     \\( opt \\) in \\( r \\).
 
-  - \\( FinancingInDecomDec_{ex} \\) (binary flag). This user-defined option specifies whether to
-    include estimated financing costs in the economic viability threshold when considering the
-    decommissioning of an existing asset. This can only be used on profit-evaluable assets. Used
-    with \\( PercentDebt_{ex} \\). Where financing costs are included, the percentage debt is
-    multiplied by the original capex, and the result is annualised.
-
 - For new candidate assets:
 
   - \\( \text{CAPEX}_{ca,r} \\): Upfront capital expenditure required per unit of new capacity for
@@ -165,13 +159,13 @@ operational constraints (e.g., minimum load levels) and the balance level of the
  annualised surplus divided by the annualised fixed cost.
   \\[
   \text{PI} =
-  \frac{\sum_t \text{act}_t \cdot \text{AC}_t^{\text{NPV}}}{\text{AFC} \cdot \text{cap}}
+  \frac{\sum_t act_t \cdot \text{AC}_t^{\text{NPV}}}{\text{AFC} \cdot \text{cap}}
   \\]
 
 - **If \\(\text{AFC} = 0\\), Use the total annualised surplus metric \\(\text{TAS}\\):**
     \\[
   \text{TAS} =
-  \sum_t \text{act}_t \cdot \text{AC}_t^{\text{NPV}}
+  \sum_t act_t \cdot \text{AC}_t^{\text{NPV}}
   \\]
 
 - **Metric deadlock fallback** If two or more investment options have equal metrics, the following
@@ -223,8 +217,8 @@ For each asset option:
 
 - **Calculate a Cost Index:** This is the total annualised cost divided by the annual output.
   \\[
-  \text{Cost Index} = \frac{\text{AFC} \times \text{cap}_r + \sum_t \text{act}_t
-   \times \text{AC}_t^{\text{LCOX}}}{\sum_t \text{act}_t}
+  \text{Cost Index} = \frac{\text{AFC} \times \text{cap}_r + \sum_t act_t
+   \times \text{AC}_t^{\text{LCOX}}}{\sum_t act_t}
   \\]
 
 ## Example: Gas Power Plant
@@ -246,6 +240,9 @@ This example demonstrates the evaluation across two time periods
 | Input (Natural gas) | \\( input\_{coeff}[c_{gas}] \\) | 2.5 MWh per unit activity | Fuel consumption |
 | Variable operating cost | \\( cost\_{var}[t] \\) | £5/MWh of activity | Operating costs per unit activity |
 <!-- markdownlint-enable MD013 -->
+
+All per-flow costs associated represented in the general formulas as \\( cost\_{input} \\) and
+\\( cost\_{output} \\) are assumed to be zero.
 
 #### Investment Parameters
 
