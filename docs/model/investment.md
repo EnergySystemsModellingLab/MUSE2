@@ -66,12 +66,20 @@ providing investment and dynamic decommissioning decisions.
 - Annualised fixed costs per unit of capacity (\\( AFC_{opt,r} \\)): For new candidates, this is
   their annualised CAPEX plus FOM. For existing assets, the relevant fixed cost is its FOM.
 
+- Calculate the specific process and commodity flow costs:
+
+  \\[
+    \text{SPCF} = \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
+            cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big)
+  \\]
+
+#### Coefficients of activity
+
 - Calculate net revenue per unit of activity \\(AC_{t}^{NPV} \\) (Tool A):
   \\[
     \begin{aligned}
           AC_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
-            &- \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
-            cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+            &- \text{SPCF} \\\\
             &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
     \end{aligned}
@@ -82,13 +90,17 @@ providing investment and dynamic decommissioning decisions.
   \\[
     \begin{aligned}
           AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
-            &+ \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c]+
-            cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big) \\\\
+            &+ \text{SPCF} \\\\
             &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
             [c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
     \end{aligned}
   \\]
+
+- The third term in both activity coefficients accounts for commodity price flow costs, which are
+ the net costs or revenues associated with the commodity flows. In the LCOX case the commodity of
+interest is excluded from this term because the cost of production shouldn't depend on the market
+price of the commodity being produced.
 
 ### Initialise demand profiles for commodity of interest
 
@@ -236,7 +248,7 @@ This example demonstrates the evaluation across two time periods
 #### Asset Parameters
 <!-- markdownlint-disable MD013 -->
 | Parameter | Notation | Value | Description |
-|-----------|----------|-------|-------------|
+| ----------- | ---------- | ------- | ------------- |
 | Primary output (Electricity) | \\( output\_{coeff}[c_{primary}] \\) | 1.0 MWh per unit activity | Main commodity produced |
 | By-product output (Waste heat) | \\( output\_{coeff}[c_{heat}] \\) | 0.5 MWh per unit activity | Co-product from generation |
 | Input (Natural gas) | \\( input\_{coeff}[c_{gas}] \\) | 2.5 MWh per unit activity | Fuel consumption |
@@ -249,14 +261,14 @@ All per-flow costs associated represented in the general formulas as \\( cost\_{
 #### Investment Parameters
 
 | Parameter | Notation | Value |
-|-----------|----------|-------|
+| ----------- | ---------- | ------- |
 | Annualised fixed cost | \\( AFC\_{opt,r} \\) | £1,000/MW |
 | Capacity | \\( cap \\) | 100 MW |
 
 #### Market Prices by Time Period
 
 | Commodity | Notation | \\(t_0\\) (Peak) | \\(t_1\\) (Off-peak) |
-|-----------|----------|-----------|---------------|
+| ----------- | ---------- | ----------- | --------------- |
 | Electricity | \\( \lambda\_{c_{primary},r,t} \\) | £90/MWh | £50/MWh |
 | Heat | \\( \lambda\_{c_{heat},r,t} \\) | £25/MWh | £15/MWh |
 | Natural gas | \\( \lambda\_{c_{gas},r,t} \\) | £35/MWh | £25/MWh |
