@@ -366,7 +366,6 @@ where
 ///   existing assets
 /// * `activity_keys_for_candidates` - Iterator over activity keys from optimisation solution for
 ///   candidate assets
-///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate marginal prices for
