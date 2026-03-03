@@ -99,7 +99,8 @@ impl AssetPool {
         decommissioned.extend(to_decommission);
     }
 
-    /// Mothball the specified assets if they are no longer in the active pool and put them back again.
+    /// Mothball the specified assets if they are no longer in the active pool and put them back
+    /// again.
     ///
     /// # Arguments
     ///
@@ -114,10 +115,12 @@ impl AssetPool {
         I: IntoIterator<Item = AssetRef>,
     {
         for mut asset in assets {
-            if match asset.state {
+            let in_pool = match asset.state {
                 AssetState::Commissioned { .. } => !self.assets.contains(&asset),
                 _ => panic!("Cannot mothball asset that has not been commissioned"),
-            } {
+            };
+
+            if in_pool {
                 // If not already set, we set the current year as the mothball year,
                 // i.e. the first one the asset was not used.
                 if asset.get_mothballed_year().is_none() {
