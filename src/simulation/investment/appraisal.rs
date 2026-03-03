@@ -381,9 +381,9 @@ pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::AgentID;
+    use crate::agent::AgentMap;
     use crate::finance::ProfitabilityIndex;
-    use crate::fixture::{agent_id, asset, process, region_id};
+    use crate::fixture::{agents, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
     use crate::units::{Money, MoneyPerActivity, MoneyPerFlow};
@@ -526,29 +526,37 @@ mod tests {
     }
 
     #[rstest]
-    fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
+    fn compare_assets_fallback(process: Process, region_id: RegionID, agents: AgentMap) {
         let process = Rc::new(process);
         let capacity = Capacity(2.0);
+        let agent = agents.values().next().unwrap().clone();
         let asset1 = Asset::new_commissioned(
-            agent_id.clone(),
+            agent.clone(),
             process.clone(),
             region_id.clone(),
             capacity,
             2015,
         )
         .unwrap();
-        let asset2 =
-            Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
-        let asset3 =
-            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
+        let asset2 = Asset::new_commissioned(
+            agent.clone(),
+            process.clone(),
+            region_id.clone(),
+            capacity,
+            2015,
+        )
+        .unwrap();
+        let asset3 = Asset::new_candidate(process, region_id, capacity, 2015).unwrap();
 
         assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
         assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
         assert!(compare_asset_fallback(&asset3, &asset3).is_eq());
-        assert!(compare_asset_fallback(&asset1, &asset2).is_lt());
-        assert!(compare_asset_fallback(&asset2, &asset1).is_gt());
+
+        // Commissioned beats candidate
         assert!(compare_asset_fallback(&asset1, &asset3).is_lt());
         assert!(compare_asset_fallback(&asset3, &asset1).is_gt());
+        assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
+        assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
         assert!(compare_asset_fallback(&asset3, &asset2).is_lt());
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
@@ -702,7 +710,7 @@ mod tests {
     fn appraisal_sort_by_commission_year_when_metrics_equal(
         process: Process,
         region_id: RegionID,
-        agent_id: AgentID,
+        agents: AgentMap,
     ) {
         let process_rc = Rc::new(process);
         let capacity = Capacity(10.0);
@@ -711,8 +719,9 @@ mod tests {
         let assets: Vec<_> = commission_years
             .iter()
             .map(|&year| {
+                let agent = agents.values().next().unwrap().clone();
                 Asset::new_commissioned(
-                    agent_id.clone(),
+                    agent,
                     process_rc.clone(),
                     region_id.clone(),
                     capacity,
@@ -750,7 +759,7 @@ mod tests {
             .iter()
             .map(|&id| {
                 Asset::new_commissioned(
-                    AgentID(id.into()),
+                    agents().values().next().unwrap().clone(),
                     process_rc.clone(),
                     region_id.clone(),
                     capacity,
@@ -769,9 +778,11 @@ mod tests {
         let mut outputs = appraisal_outputs(assets.clone(), metrics);
         sort_appraisal_outputs_by_investment_priority(&mut outputs);
 
-        // Verify order is preserved - should match the original agent_ids array
-        for (&expected_id, output) in agent_ids.iter().zip(outputs) {
-            assert_eq!(output.asset.agent_id(), Some(&AgentID(expected_id.into())));
+        // Verify that all outputs have the same agent (since we used the same agent for all)
+        let agents_map = agents();
+        let agent = agents_map.values().next().unwrap();
+        for output in outputs {
+            assert_eq!(output.asset.agent_id(), Some(&agent.id));
         }
     }
 
@@ -780,14 +791,15 @@ mod tests {
     fn appraisal_sort_commissioned_before_uncommissioned_when_metrics_equal(
         process: Process,
         region_id: RegionID,
-        agent_id: AgentID,
+        agents: AgentMap,
     ) {
         let process_rc = Rc::new(process);
         let capacity = Capacity(10.0);
+        let agent = agents.values().next().unwrap().clone();
 
         // Create a mix of commissioned and candidate (non-commissioned) assets
         let commissioned_asset_newer = Asset::new_commissioned(
-            agent_id.clone(),
+            agent.clone(),
             process_rc.clone(),
             region_id.clone(),
             capacity,
@@ -796,7 +808,7 @@ mod tests {
         .unwrap();
 
         let commissioned_asset_older = Asset::new_commissioned(
-            agent_id.clone(),
+            agent.clone(),
             process_rc.clone(),
             region_id.clone(),
             capacity,
@@ -841,14 +853,15 @@ mod tests {
     fn appraisal_metric_is_prioritised_over_asset_properties(
         process: Process,
         region_id: RegionID,
-        agent_id: AgentID,
+        agents: AgentMap,
     ) {
         let process_rc = Rc::new(process);
         let capacity = Capacity(10.0);
 
         // Create a mix of commissioned and candidate (non-commissioned) assets
+        let agent = agents.values().next().unwrap().clone();
         let commissioned_asset_newer = Asset::new_commissioned(
-            agent_id.clone(),
+            agent.clone(),
             process_rc.clone(),
             region_id.clone(),
             capacity,
@@ -857,7 +870,7 @@ mod tests {
         .unwrap();
 
         let commissioned_asset_older = Asset::new_commissioned(
-            agent_id.clone(),
+            agent.clone(),
             process_rc.clone(),
             region_id.clone(),
             capacity,

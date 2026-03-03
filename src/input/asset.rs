@@ -1,6 +1,6 @@
 //! Code for reading [`Asset`]s from a CSV file.
 use super::{input_err_msg, read_csv_optional};
-use crate::agent::AgentID;
+use crate::agent::AgentMap;
 use crate::asset::{Asset, AssetRef};
 use crate::id::IDCollection;
 use crate::process::ProcessMap;
@@ -33,7 +33,7 @@ struct AssetRaw {
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `agent_ids` - All possible agent IDs
+/// * `agents` - Map of agents
 /// * `processes` - The model's processes
 /// * `region_ids` - All possible region IDs
 ///
@@ -42,13 +42,13 @@ struct AssetRaw {
 /// A `Vec` of [`AssetRef`]s or an error.
 pub fn read_user_assets(
     model_dir: &Path,
-    agent_ids: &IndexSet<AgentID>,
+    agents: &AgentMap,
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
 ) -> Result<Vec<AssetRef>> {
     let file_path = model_dir.join(ASSETS_FILE_NAME);
     let assets_csv = read_csv_optional(&file_path)?;
-    read_assets_from_iter(assets_csv, agent_ids, processes, region_ids)
+    read_assets_from_iter(assets_csv, agents, processes, region_ids)
         .with_context(|| input_err_msg(&file_path))
 }
 
@@ -57,7 +57,7 @@ pub fn read_user_assets(
 /// # Arguments
 ///
 /// * `iter` - Iterator of `AssetRaw`s
-/// * `agent_ids` - All possible agent IDs
+/// * `agents` - Map of agents
 /// * `processes` - The model's processes
 /// * `region_ids` - All possible region IDs
 ///
@@ -66,7 +66,7 @@ pub fn read_user_assets(
 /// A [`Vec`] of [`Asset`]s or an error.
 fn read_assets_from_iter<I>(
     iter: I,
-    agent_ids: &IndexSet<AgentID>,
+    agents: &AgentMap,
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
 ) -> Result<Vec<AssetRef>>
@@ -74,7 +74,9 @@ where
     I: Iterator<Item = AssetRaw>,
 {
     iter.map(|asset| -> Result<_> {
-        let agent_id = agent_ids.get_id(&asset.agent_id)?;
+        let agent_id = agents.get_id(&asset.agent_id)?;
+        let agent = agents.get(agent_id)
+            .with_context(|| format!("Agent {} not found", &asset.agent_id))?;
         let process = processes
             .get(asset.process_id.as_str())
             .with_context(|| format!("Invalid process ID: {}", &asset.process_id))?;
@@ -124,7 +126,7 @@ where
         }
 
         let asset = Asset::new_future_with_max_decommission(
-            agent_id.clone(),
+            Rc::clone(agent),
             Rc::clone(process),
             region_id.clone(),
             asset.capacity,
@@ -139,23 +141,18 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{processes, region_ids};
+    use crate::fixture::{agents, processes, region_ids};
 
     use itertools::assert_equal;
     use rstest::{fixture, rstest};
     use std::iter;
-
-    #[fixture]
-    fn agent_ids() -> IndexSet<AgentID> {
-        IndexSet::from(["agent1".into()])
-    }
 
     #[rstest]
     #[case::max_decommission_year_provided(Some(2015))]
     #[case::max_decommission_year_not_provided(None)]
     fn read_assets_from_iter_valid(
         #[case] max_decommission_year: Option<u32>,
-        agent_ids: IndexSet<AgentID>,
+        agents: AgentMap,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
@@ -168,7 +165,7 @@ mod tests {
             max_decommission_year,
         };
         let asset_out = Asset::new_future_with_max_decommission(
-            "agent1".into(),
+            Rc::clone(agents.values().next().unwrap()),
             Rc::clone(processes.values().next().unwrap()),
             "GBR".into(),
             Capacity(1.0),
@@ -178,8 +175,7 @@ mod tests {
         .unwrap()
         .into();
         assert_equal(
-            read_assets_from_iter(iter::once(asset_in), &agent_ids, &processes, &region_ids)
-                .unwrap(),
+            read_assets_from_iter(iter::once(asset_in), &agents, &processes, &region_ids).unwrap(),
             iter::once(asset_out),
         );
     }
@@ -219,10 +215,10 @@ mod tests {
         })]
     fn read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
-        agent_ids: IndexSet<AgentID>,
+        agents: AgentMap,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
-        read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap_err();
+        read_assets_from_iter(iter::once(asset), &agents, &processes, &region_ids).unwrap_err();
     }
 }

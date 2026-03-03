@@ -273,6 +273,13 @@ fn select_assets_for_single_market(
             &agent.id, commodity_id, region_id
         );
 
+        let agent_rc = model
+            .agents
+            .values()
+            .find(|a| a.id == agent.id)
+            .unwrap()
+            .clone();
+
         // Get demand portion for this market for this agent in this year
         let demand_portion_for_market = get_demand_portion_for_market(
             &model.time_slice_info,
@@ -304,7 +311,7 @@ fn select_assets_for_single_market(
             opt_assets,
             investment_limits,
             commodity,
-            agent,
+            agent_rc.clone(),
             region_id,
             prices,
             demand_portion_for_market,
@@ -727,7 +734,7 @@ fn select_best_assets(
     mut opt_assets: Vec<AssetRef>,
     investment_limits: HashMap<AssetRef, AssetCapacity>,
     commodity: &Commodity,
-    agent: &Agent,
+    agent: Rc<Agent>,
     region_id: &RegionID,
     prices: &CommodityPrices,
     mut demand: DemandMap,
@@ -861,7 +868,7 @@ fn select_best_assets(
         if let AssetState::Candidate = asset.state() {
             asset
                 .make_mut()
-                .select_candidate_for_investment(agent.id.clone());
+                .select_candidate_for_investment(agent.clone());
         }
     }
 
@@ -919,9 +926,10 @@ fn update_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::AgentMap;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        agent_id, asset, process, process_activity_limits_map, process_flows_map,
+        agents, asset, process, process_activity_limits_map, process_flows_map,
         process_investment_constraints, process_parameter_map, region_id, svd_commodity,
         time_slice, time_slice_info, time_slice_info2,
     };
@@ -943,6 +951,7 @@ mod tests {
         time_slice_info: TimeSliceInfo,
         svd_commodity: Commodity,
         mut process: Process,
+        agents: AgentMap,
     ) {
         // Add flows for the process using the existing commodity fixture
         let commodity_rc = Rc::new(svd_commodity);
@@ -957,7 +966,7 @@ mod tests {
         process.flows = process_flows_map;
 
         // Create asset with the configured process
-        let asset = asset(process);
+        let asset = asset(process, agents);
 
         // Create demand map - demand of 10.0 for our time slice
         let demand = indexmap! { time_slice.clone() => Flow(10.0)};
@@ -976,6 +985,7 @@ mod tests {
         time_slice_info2: TimeSliceInfo,
         svd_commodity: Commodity,
         mut process: Process,
+        agents: AgentMap,
     ) {
         let (time_slice1, time_slice2) =
             time_slice_info2.time_slices.keys().collect_tuple().unwrap();
@@ -1000,7 +1010,7 @@ mod tests {
         process.activity_limits = limits_map;
 
         // Create asset with the configured process
-        let asset = asset(process);
+        let asset = asset(process, agents);
 
         // Create demand map with different demands for each time slice
         let demand = indexmap! {
@@ -1020,7 +1030,7 @@ mod tests {
     }
 
     #[rstest]
-    fn calculate_investment_limits_for_candidates_empty_list() {
+    fn calculate_investment_limits_for_candidates_empty_list(agents: AgentMap) {
         // Test with empty list of assets
         let opt_assets: Vec<AssetRef> = vec![];
         let commodity_portion = Dimensionless(1.0);
@@ -1034,21 +1044,17 @@ mod tests {
     fn calculate_investment_limits_for_candidates_commissioned_assets_filtered(
         process: Process,
         region_id: RegionID,
-        agent_id: AgentID,
+        agents: AgentMap,
     ) {
         // Create a mix of commissioned and candidate assets
         let process_rc = Rc::new(process);
         let capacity = Capacity(10.0);
 
         // Create commissioned asset - should be filtered out
-        let commissioned_asset = Asset::new_commissioned(
-            agent_id.clone(),
-            process_rc.clone(),
-            region_id.clone(),
-            capacity,
-            2015,
-        )
-        .unwrap();
+        let agent = agents.values().next().unwrap().clone();
+        let commissioned_asset =
+            Asset::new_commissioned(agent, process_rc.clone(), region_id.clone(), capacity, 2015)
+                .unwrap();
 
         // Create candidate asset - should be included
         let candidate_asset =

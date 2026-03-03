@@ -250,8 +250,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
         &region_ids,
         years,
     )?;
-    let agent_ids = agents.keys().cloned().collect();
-    let user_assets = read_user_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
+    let user_assets = read_user_assets(model_dir.as_ref(), &agents, &processes, &region_ids)?;
 
     // Build and validate commodity graphs for all regions and years
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);

@@ -188,12 +188,12 @@ pub fn get_svd_map(commodity: &Commodity) -> HashMap<CommodityID, &Commodity> {
 }
 
 #[fixture]
-pub fn asset(process: Process) -> Asset {
+pub fn asset(process: Process, agents: AgentMap) -> Asset {
     let region_id: RegionID = "GBR".into();
-    let agent_id = "agent1".into();
+    let agent = agents.values().next().unwrap().clone();
     let commission_year = 2015;
     Asset::new_future(
-        agent_id,
+        agent,
         process.into(),
         region_id,
         Capacity(2.0),
@@ -203,16 +203,10 @@ pub fn asset(process: Process) -> Asset {
 }
 
 #[fixture]
-pub fn asset_divisible(mut process: Process) -> Asset {
+pub fn asset_divisible(mut process: Process, agents: AgentMap) -> Asset {
     process.unit_size = Some(Capacity(4.0));
-    Asset::new_future(
-        "agent1".into(),
-        Rc::new(process),
-        "GBR".into(),
-        Capacity(11.0),
-        2010,
-    )
-    .unwrap()
+    let agent = agents.values().next().unwrap().clone();
+    Asset::new_future(agent, Rc::new(process), "GBR".into(), Capacity(11.0), 2010).unwrap()
 }
 
 #[fixture]
