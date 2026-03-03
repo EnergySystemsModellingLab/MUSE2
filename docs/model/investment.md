@@ -148,7 +148,7 @@ operational constraints (e.g., minimum load levels) and the balance level of the
   - A demand constraint, where output cannot exceed demand in the tranche, which adapts based on the
     commodity's balance level (time slice, season, annual).
 
-  - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
+  - Capacity is constrained up to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
 - **Decide on metric:** The type of metric used to compare profitability is dependent on the value of
@@ -167,16 +167,6 @@ operational constraints (e.g., minimum load levels) and the balance level of the
   \text{TAS} =
   \sum_t act_t \cdot \text{AC}_t^{\text{NPV}}
   \\]
-
-- **Metric deadlock fallback** If two or more investment options have equal metrics, the following
-  tie-breaking rules are applied in order:
-
-  1. Assets which are already commissioned are preferred over new candidate assets.
-
-  2. Newer (commissioned later) assets are preferred over older assets.
-
-  3. If there is still a tie, the first option in the data structure is selected,
-   which is non-deterministic. A warning is emitted when this occurs.
 
 #### Tool B: LCOX
 
@@ -209,17 +199,29 @@ For each asset option:
     each timeslice of the tranche, which adapts based on the commodity's balance level (time slice,
     season, annual).
 
-  - Capacity is constrained to \\( CapMaxBuild \\) for candidates, and to known capacity for
+  - Capacity is constrained up to \\( CapMaxBuild \\) for candidates, and to known capacity for
     existing assets.
 
   - VoLL variables are active to ensure a feasible solution alongside maximum operation of the
     asset.
 
-- **Calculate a Cost Index:** This is the total annualised cost divided by the annual output.
+- **Calculate a Cost Index Metric:** This is the total annualised cost divided by the annual output.
   \\[
   \text{Cost Index} = \frac{\text{AFC} \times \text{cap}_r + \sum_t act_t
    \times \text{AC}_t^{\text{LCOX}}}{\sum_t act_t}
   \\]
+
+#### Equal-Metric Fallback
+
+If two or more investment options from the same tool have equal metrics, the following tie-breaking
+rules are applied in order:
+
+1. Assets which are already commissioned are preferred over new candidate assets.
+
+2. Newer (commissioned later) assets are preferred over older assets.
+
+3. If there is still a tie, the first option in the data structure storing the metrics is selected,
+  which is non-deterministic. A warning is emitted when this occurs.
 
 ## Example: Gas Power Plant
 
