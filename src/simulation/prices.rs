@@ -180,7 +180,10 @@ impl CommodityPrices {
             // NB: Time slice fractions will sum to one
             let weight = time_slice_info.time_slices[time_slice_id] / Year(1.0);
             let key = (commodity_id.clone(), region_id.clone());
-            *weighted_prices.entry(key).or_default() += *price * weight;
+            weighted_prices
+                .entry(key)
+                .and_modify(|v| *v += *price * weight)
+                .or_insert_with(|| *price * weight);
         }
 
         weighted_prices
@@ -352,7 +355,7 @@ where
 ///
 /// Note: this should be similar to the "shadow price" strategy, which is also based on marginal
 /// costs of the most expensive producer, but may be more successful in cases where there are
-//  multiple SED/SVD outputs per asset.
+/// multiple SED/SVD outputs per asset.
 ///
 /// # Arguments
 ///

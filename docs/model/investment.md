@@ -3,10 +3,10 @@
 <!-- markdownlint-disable MD049 -->
 
 This section details the investment and asset retention decision process, which is applied within
-step 2 of the [overall MUSE2 workflow]. This process determines which new assets to build and
-which existing assets to retain to meet system needs over time. In the overall workflow, dispatch
-optimisation is used to identify *physical needs* by quantifying demand profiles for commodities of
-interest.
+step 2 of the [overall MUSE2 workflow][framework-overview]. This process determines which new assets
+to build and which existing assets to retain to meet system needs over time. In the overall
+workflow, dispatch optimisation is used to identify *physical needs* by quantifying demand profiles
+for commodities of interest.
 
 ## Commodity prices
 
@@ -23,8 +23,8 @@ the preceding MSY. When the `pricing_strategy` option is set to `scarcity_adjust
 shadow prices for each commodity adjusted to remove the impact of binding capacity constraints.
 
 Note: there is an option to iterate over each year so that investment decisions are based on
-equilibrium prices in the _current year_, in what's referred to as the "[ironing-out loop]".
-In this case, \\( \lambda\_{c,r,t} \\) will reflect prices from the previous iteration of the
+equilibrium prices in the _current year_, in what's referred to as the "[ironing-out loop][framework-overview]".
+In this case, \\( \lambda\_{c,r,t} \\) will reflect prices from previous iteration of the
 ironing-out loop.
 
 ## Candidate and existing asset data
@@ -391,6 +391,5 @@ The Cost Index is £508 per MWh of electricity produced.
  This metric is compared across all supply options to identify
  the lowest-cost solution for meeting demand.
 
-[overall MUSE2 workflow]: ./README.md#framework-overview
+[framework-overview]: https://energysystemsmodellinglab.github.io/MUSE2/model/index.html#framework-overview
 [Dispatch Optimisation Formulation]: ./dispatch_optimisation.md
-[ironing-out loop]: ./README.md#framework-overview

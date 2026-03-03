@@ -363,7 +363,7 @@ mod tests {
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity};
+    use crate::units::{Money, MoneyPerActivity, MoneyPerFlow};
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
     use std::rc::Rc;
@@ -551,7 +551,11 @@ mod tests {
             .map(|(asset, metric)| AppraisalOutput {
                 asset: AssetRef::from(asset),
                 capacity: AssetCapacity::Continuous(Capacity(10.0)),
-                coefficients: ObjectiveCoefficients::default(),
+                coefficients: ObjectiveCoefficients {
+                    capacity_coefficient: MoneyPerCapacity(0.0),
+                    activity_coefficients: IndexMap::new(),
+                    unmet_demand_coefficient: MoneyPerFlow(0.0),
+                },
                 activity: IndexMap::new(),
                 demand: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
@@ -877,7 +881,11 @@ mod tests {
             .map(|metric| AppraisalOutput {
                 asset: AssetRef::from(asset.clone()),
                 capacity: AssetCapacity::Continuous(Capacity(0.0)),
-                coefficients: ObjectiveCoefficients::default(),
+                coefficients: ObjectiveCoefficients {
+                    capacity_coefficient: MoneyPerCapacity(0.0),
+                    activity_coefficients: IndexMap::new(),
+                    unmet_demand_coefficient: MoneyPerFlow(0.0),
+                },
                 activity: IndexMap::new(),
                 demand: IndexMap::new(),
                 unmet_demand: IndexMap::new(),

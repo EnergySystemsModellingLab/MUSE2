@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 const ASSETS_FILE_NAME: &str = "assets.csv";
 
-#[derive(Default, Deserialize, PartialEq)]
+#[derive(Deserialize, PartialEq)]
 struct AssetRaw {
     process_id: String,
     region_id: String,

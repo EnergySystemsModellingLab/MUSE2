@@ -795,10 +795,11 @@ fn calculate_activity_coefficient(
     input_prices: Option<&CommodityPrices>,
 ) -> MoneyPerActivity {
     let opex = asset.get_operating_cost(year, time_slice);
-    let input_cost = input_prices
-        .map(|prices| asset.get_input_cost_from_prices(prices, time_slice))
-        .unwrap_or_default();
-    opex + input_cost
+    if let Some(prices) = input_prices {
+        opex + asset.get_input_cost_from_prices(prices, time_slice)
+    } else {
+        opex
+    }
 }
 
 /// Calculate the cost coefficient for a capacity variable (for flexible capacity assets only).
