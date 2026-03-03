@@ -691,6 +691,7 @@ mod tests {
         year: u32,
         time_slice_info: &TimeSliceInfo,
         variable_operating_cost: MoneyPerActivity,
+        fixed_operating_cost: MoneyPerCapacityPerYear,
         capital_cost: MoneyPerCapacity,
         lifetime: u32,
         discount_rate: Dimensionless,
@@ -701,7 +702,7 @@ mod tests {
         let mut process_parameter_map = HashMap::new();
         let proc_param = ProcessParameter {
             capital_cost,
-            fixed_operating_cost: MoneyPerCapacityPerYear(0.0),
+            fixed_operating_cost,
             variable_operating_cost,
             lifetime,
             discount_rate,
@@ -826,10 +827,11 @@ mod tests {
             &region_id,
             2015u32,
             &time_slice_info,
-            MoneyPerActivity(5.0), // variable operating cost
-            MoneyPerCapacity(0.0), // capital cost
-            5,                     // lifetime
-            Dimensionless(1.0),    // discount rate
+            MoneyPerActivity(5.0),        // variable operating cost
+            MoneyPerCapacityPerYear(0.0), // fixed operating cost
+            MoneyPerCapacity(0.0),        // capital cost
+            5,                            // lifetime
+            Dimensionless(1.0),           // discount rate
         );
 
         let asset =
@@ -901,10 +903,11 @@ mod tests {
             &region_id,
             2015u32,
             &time_slice_info,
-            MoneyPerActivity(5.0), // variable operating cost
-            MoneyPerCapacity(2.5), // capital cost per capacity so annualised=2.5
-            1,                     // lifetime so annualised = capital_cost
-            Dimensionless(0.0),    // discount rate
+            MoneyPerActivity(5.0),        // variable operating cost
+            MoneyPerCapacityPerYear(1.0), //  fixed operating cost
+            MoneyPerCapacity(1.5),        // capital cost per capacity so annualised=1.5
+            1,                            // lifetime so annualised = capital_cost
+            Dimensionless(0.0),           // discount rate
         );
 
         let asset =
