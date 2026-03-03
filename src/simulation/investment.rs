@@ -19,7 +19,8 @@ use std::fmt::Display;
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
 use appraisal::{
-    AppraisalOutput, appraise_investment, sort_appraisal_outputs_by_investment_priority,
+    AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
+    sort_appraisal_outputs_by_investment_priority,
 };
 
 /// A map of demand across time slices for a specific market
@@ -661,11 +662,7 @@ fn warn_on_equal_appraisal_outputs(
         return;
     }
 
-    // Count the number of identical (or nearly identical) appraisal outputs
-    let num_identical = outputs[1..]
-        .iter()
-        .take_while(|output| outputs[0].compare_metric(output).is_eq())
-        .count();
+    let num_identical = count_equal_and_best_appraisal_outputs(outputs);
 
     if num_identical > 0 {
         let asset_details = outputs[..=num_identical]

@@ -378,6 +378,18 @@ pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<
     });
 }
 
+/// Counts the number of top appraisal outputs in a sorted slice that are indistinguishable
+/// by both metric and fallback ordering.
+pub fn count_equal_and_best_appraisal_outputs(outputs: &[AppraisalOutput]) -> usize {
+    outputs[1..]
+        .iter()
+        .take_while(|output| {
+            output.compare_metric(&outputs[0]).is_eq()
+                && compare_asset_fallback(&output.asset, &outputs[0].asset).is_eq()
+        })
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
