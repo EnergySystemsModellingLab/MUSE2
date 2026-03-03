@@ -15,6 +15,7 @@ use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use std::rc::Rc;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -553,7 +554,7 @@ fn get_responsible_agents<'a, I>(
     year: u32,
 ) -> impl Iterator<Item = (&'a Agent, Dimensionless)>
 where
-    I: Iterator<Item = &'a Agent>,
+    I: Iterator<Item = &'a Rc<Agent>>,
 {
     agents.filter_map(move |agent| {
         if !agent.regions.contains(region_id) {
@@ -563,7 +564,7 @@ where
             .commodity_portions
             .get(&(commodity_id.clone(), year))?;
 
-        Some((agent, *portion))
+        Some((agent.as_ref(), *portion))
     })
 }
 

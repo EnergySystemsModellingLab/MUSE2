@@ -1,5 +1,4 @@
 //! Fixtures for tests
-
 use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
     DecisionRule,
@@ -327,7 +326,7 @@ pub fn processes(process: Process) -> ProcessMap {
 pub fn agents() -> AgentMap {
     iter::once((
         "agent1".into(),
-        Agent {
+        Rc::new(Agent {
             id: "agent1".into(),
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
@@ -335,7 +334,7 @@ pub fn agents() -> AgentMap {
             decision_rule: DecisionRule::Single,
             regions: IndexSet::new(),
             objectives: AgentObjectiveMap::new(),
-        },
+        }),
     ))
     .collect()
 }

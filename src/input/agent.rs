@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexSet;
 use serde::Deserialize;
 use std::path::Path;
+use std::rc::Rc;
 
 mod objective;
 use objective::read_agent_objectives;
@@ -67,7 +68,7 @@ pub fn read_agents(
         milestone_years,
     )?;
     for (id, agent) in &mut agents {
-        agent.commodity_portions = agent_commodities
+        Rc::make_mut(agent).commodity_portions = agent_commodities
             .remove(id)
             .with_context(|| format!("Missing commodity portions for agent {id}"))?;
     }
@@ -83,8 +84,9 @@ pub fn read_agents(
     )?;
 
     for (id, agent) in &mut agents {
-        agent.objectives = objectives.remove(id).unwrap();
-        agent.search_space = search_spaces.remove(id).unwrap();
+        let agent_mut = Rc::make_mut(agent);
+        agent_mut.objectives = objectives.remove(id).unwrap();
+        agent_mut.search_space = search_spaces.remove(id).unwrap();
     }
 
     Ok(agents)
@@ -149,7 +151,7 @@ where
         };
 
         ensure!(
-            agents.insert(agent.id.clone(), agent).is_none(),
+            agents.insert(agent.id.clone(), Rc::new(agent)).is_none(),
             "Duplicate agent ID"
         );
     }
@@ -183,7 +185,7 @@ mod tests {
             regions: IndexSet::from(["GBR".into()]),
             objectives: AgentObjectiveMap::new(),
         };
-        let expected = AgentMap::from_iter(iter::once(("agent".into(), agent_out)));
+        let expected = AgentMap::from_iter(iter::once(("agent".into(), Rc::new(agent_out))));
         let actual = read_agents_file_from_iter(iter::once(agent), &region_ids).unwrap();
         assert_eq!(actual, expected);
 
