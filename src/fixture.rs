@@ -204,6 +204,19 @@ pub fn asset(process: Process) -> Asset {
 }
 
 #[fixture]
+pub fn asset_divisible(mut process: Process) -> Asset {
+    process.unit_size = Some(Capacity(4.0));
+    Asset::new_future(
+        "agent1".into(),
+        Rc::new(process),
+        "GBR".into(),
+        Capacity(11.0),
+        2010,
+    )
+    .unwrap()
+}
+
+#[fixture]
 pub fn assets(asset: Asset) -> AssetPool {
     let year = asset.commission_year();
     let mut assets = AssetPool::new();
