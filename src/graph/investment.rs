@@ -135,7 +135,7 @@ fn compress_cycles(graph: &InvestmentGraph, commodities: &CommodityMap) -> Resul
             .flat_map(|s| s.iter_markets())
             .filter(|(cid, _)| {
                 matches!(
-                    commodities[cid].pricing_strategy.clone(),
+                    &commodities[cid].pricing_strategy,
                     PricingStrategy::MarginalCost | PricingStrategy::FullCost
                 )
             })
