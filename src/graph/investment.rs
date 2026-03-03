@@ -1,8 +1,9 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityMap, CommodityType};
+use crate::commodity::{CommodityMap, CommodityType, PricingStrategy};
 use crate::region::RegionID;
 use crate::simulation::investment::InvestmentSet;
+use anyhow::{Result, ensure};
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
 use log::warn;
@@ -41,14 +42,14 @@ fn solve_investment_order_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
     year: u32,
-) -> Vec<InvestmentSet> {
+) -> Result<Vec<InvestmentSet>> {
     // Initialise InvestmentGraph for this year from the set of original `CommodityGraph`s
     let mut investment_graph = init_investment_graph_for_year(graphs, year, commodities);
 
     // TODO: condense sibling commodities (commodities that share at least one producer)
 
     // Condense strongly connected components
-    investment_graph = compress_cycles(&investment_graph);
+    investment_graph = compress_cycles(&investment_graph, commodities)?;
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
@@ -56,7 +57,7 @@ fn solve_investment_order_for_year(
     let order = toposort(&investment_graph, None).unwrap();
 
     // Compute layers for investment
-    compute_layers(&investment_graph, &order)
+    Ok(compute_layers(&investment_graph, &order))
 }
 
 /// Initialise an `InvestmentGraph` for the given year from a set of `CommodityGraph`s
@@ -117,15 +118,39 @@ fn init_investment_graph_for_year(
 }
 
 /// Compresses cycles into `InvestmentSet::Cycle` nodes
-fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
+fn compress_cycles(graph: &InvestmentGraph, commodities: &CommodityMap) -> Result<InvestmentGraph> {
     // Detect strongly connected components
     let mut condensed_graph = condensation(graph.clone(), true);
 
     // Order nodes within each strongly connected component
     order_sccs(&mut condensed_graph, graph);
 
+    // Pre-scan SCCs for offending pricing strategies (FullCost / MarginalCost).
+    for node_weight in condensed_graph.node_weights() {
+        if node_weight.len() <= 1 {
+            continue;
+        }
+        let offenders: Vec<_> = node_weight
+            .iter()
+            .flat_map(|s| s.iter_markets())
+            .filter(|(cid, _)| {
+                matches!(
+                    commodities[cid].pricing_strategy.clone(),
+                    PricingStrategy::MarginalCost | PricingStrategy::FullCost
+                )
+            })
+            .map(|(cid, _)| cid.clone())
+            .collect();
+
+        ensure!(
+            offenders.is_empty(),
+            "Cannot use FullCost/MarginalCost pricing strategies for commodities with circular \
+            dependencies. Offending commodities: {offenders:?}"
+        );
+    }
+
     // Map to a new InvestmentGraph
-    condensed_graph.map(
+    let mapped = condensed_graph.map(
         // Map nodes to InvestmentSet
         // If only one member, keep as-is; if multiple members, create Cycle
         |_, node_weight| match node_weight.len() {
@@ -141,7 +166,9 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
         },
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
-    )
+    );
+
+    Ok(mapped)
 }
 
 /// Order the members of each strongly connected component using a mixed-integer linear program.
@@ -490,13 +517,13 @@ pub fn solve_investment_order_for_model(
     commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
     years: &[u32],
-) -> HashMap<u32, Vec<InvestmentSet>> {
+) -> Result<HashMap<u32, Vec<InvestmentSet>>> {
     let mut investment_orders = HashMap::new();
     for year in years {
-        let order = solve_investment_order_for_year(commodity_graphs, commodities, *year);
+        let order = solve_investment_order_for_year(commodity_graphs, commodities, *year)?;
         investment_orders.insert(*year, order);
     }
-    investment_orders
+    Ok(investment_orders)
 }
 
 #[cfg(test)]
@@ -568,7 +595,7 @@ mod tests {
         commodities.insert("C".into(), Rc::new(svd_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
-        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020).unwrap();
 
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all investment sets should be `Single`
@@ -596,7 +623,7 @@ mod tests {
         commodities.insert("B".into(), Rc::new(sed_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
-        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020).unwrap();
 
         // Should be a single `Cycle` investment set containing both commodities
         assert_eq!(result.len(), 1);
@@ -635,7 +662,7 @@ mod tests {
         commodities.insert("D".into(), Rc::new(svd_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
-        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020).unwrap();
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(result.len(), 3);
@@ -674,7 +701,7 @@ mod tests {
             (("GBR".into(), 2020), graph.clone()),
             (("FRA".into(), 2020), graph),
         ]);
-        let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
+        let result = solve_investment_order_for_year(&graphs, &commodities, 2020).unwrap();
 
         // Expected order: Should have three layers, each with two commodities (one per region)
         assert_eq!(result.len(), 3);

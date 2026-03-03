@@ -3,11 +3,10 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::simulation::investment::InvestmentSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 
@@ -38,7 +37,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
     // Iterate over investment sets in reverse order. Markets within the same set can be priced
     // simultaneously, since they are independent (apart from Cycle sets when using the "marginal"
-    // and "full" strategies, which we bail on below).
+    // and "full" strategies, which get flagged at the validation stage).
     for investment_set in investment_order.iter().rev() {
         // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
         // For now, commodities use a single strategy for all regions, but this may change in the future.
@@ -52,18 +51,6 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
                 .entry(&commodity.pricing_strategy)
                 .or_insert_with(HashSet::new)
                 .insert((commodity_id.clone(), region_id.clone()));
-        }
-
-        // Bail if the investment set is type Cycle and commodities have "marginal" or "full"
-        // pricing strategies, since we don't know how to handle this scenario.
-        if pricing_sets.contains_key(&PricingStrategy::MarginalCost)
-            || pricing_sets.contains_key(&PricingStrategy::FullCost)
-        {
-            ensure!(
-                !matches!(investment_set, InvestmentSet::Cycle(_)),
-                "Cannot calculate prices using the `marginal` and `full` pricing strategies \
-                for markets with cyclical commodity dependencies."
-            );
         }
 
         // Add prices for shadow-priced commodities
