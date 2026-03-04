@@ -42,6 +42,15 @@ impl<T> KeysWithOffset<T> {
     }
 }
 
+impl<T> Default for KeysWithOffset<T> {
+    fn default() -> Self {
+        Self {
+            offset: 0,
+            keys: Vec::default(),
+        }
+    }
+}
+
 /// Indicates the commodity ID and time slice selection covered by each commodity balance constraint
 pub type CommodityBalanceKeys = KeysWithOffset<(CommodityID, RegionID, TimeSliceSelection)>;
 
@@ -49,6 +58,7 @@ pub type CommodityBalanceKeys = KeysWithOffset<(CommodityID, RegionID, TimeSlice
 pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceSelection)>;
 
 /// The keys for different constraints
+#[derive(Default)]
 pub struct ConstraintKeys {
     /// Keys for commodity balance constraints
     pub commodity_balance_keys: CommodityBalanceKeys,
