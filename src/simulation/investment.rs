@@ -652,7 +652,7 @@ fn get_candidate_assets<'a>(
 }
 
 /// Print debug message if there are multiple equally good outputs
-fn warn_on_equal_appraisal_outputs(
+fn log_on_equal_appraisal_outputs(
     outputs: &[AppraisalOutput],
     agent_id: &AgentID,
     commodity_id: &CommodityID,
@@ -826,7 +826,7 @@ fn select_best_assets(
         }
 
         // Warn if there are multiple equally good assets
-        warn_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
+        log_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
 
         let best_output = outputs_for_opts.into_iter().next().unwrap();
 
