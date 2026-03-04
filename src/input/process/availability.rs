@@ -7,7 +7,6 @@ use crate::units::{Dimensionless, Year};
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
-use log::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -207,22 +206,6 @@ where
                 .with_context(|| {
                     format!("Error creating activity limits for process {process_id}")
                 })?;
-
-            let mut levels = Vec::new();
-            if availabilities.annual_limit.is_some() {
-                levels.push("annual");
-            }
-            if !availabilities.seasonal_limits.is_empty() {
-                levels.push("seasonal");
-            }
-            if !availabilities.time_slice_limits.is_empty() {
-                levels.push("time slice");
-            }
-            if levels.len() > 1 {
-                warn!(
-                    "{process_id} has limits at multiple levels ({region_id}, {year}): {levels:?}"
-                );
-            }
             inner_map.insert((region_id.clone(), year), Rc::new(availabilities));
         }
         map.insert(process_id.clone(), inner_map);
