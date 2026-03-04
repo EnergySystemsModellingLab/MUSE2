@@ -671,13 +671,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         );
 
         // Solve model
-        let mut model = problem.optimise(Sense::Minimise);
-
-        // **HACK**: Dump HiGHS output to console
-        model.set_option("log_to_console", true);
-        model.set_option("output_flag", true);
-
-        let solution = solve_optimal(model)?;
+        let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
 
         let solution = Solution {
             solution: solution.get_solution(),
