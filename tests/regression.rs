@@ -28,6 +28,7 @@ define_regression_test_with_patches!(simple_divisible);
 define_regression_test_with_patches!(simple_npv);
 define_regression_test_with_patches!(simple_marginal);
 define_regression_test_with_patches!(simple_full);
+define_regression_test_with_patches!(simple_ironing_out);
 
 // ------  END: regression tests  ------
 
