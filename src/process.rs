@@ -207,6 +207,18 @@ impl ActivityLimits {
             result.add_annual_limit(limit.clone())?;
         }
 
+        let range_ok = |r: &RangeInclusive<Dimensionless>| r.start() <= r.end();
+        if let Some(annual_limits) = &result.annual_limit {
+            assert!(range_ok(annual_limits), "bad annual limit");
+        }
+        assert!(
+            result.seasonal_limits.values().all(range_ok),
+            "bad seasonal limits"
+        );
+        assert!(
+            result.time_slice_limits.values().all(range_ok),
+            "bad timeslice limits"
+        );
         Ok(result)
     }
 

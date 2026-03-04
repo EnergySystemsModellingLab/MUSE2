@@ -34,6 +34,7 @@ impl ProcessAvailabilityRaw {
     fn to_bounds(&self, length: Year) -> Result<RangeInclusive<Dimensionless>> {
         // Parse availability_range string
         let availability_range = parse_availabilities_string(&self.limits)?;
+        assert!(availability_range.start() <= availability_range.end());
 
         // Convert to bounds based on fraction of the year covered
         let ts_frac = length / Year(1.0);
