@@ -263,7 +263,8 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
     )?;
 
     // Solve investment order for each region/year
-    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities, years);
+    let investment_order =
+        solve_investment_order_for_model(&commodity_graphs, &commodities, years)?;
 
     let model_path = model_dir
         .as_ref()

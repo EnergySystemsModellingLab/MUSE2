@@ -10,7 +10,7 @@ use crate::simulation::CommodityPrices;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerFlow,
+    MoneyPerCapacity, MoneyPerFlow, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -611,33 +611,35 @@ impl Asset {
         annual_capital_cost(capital_cost, lifetime, discount_rate)
     }
 
-    /// Get the annual capital cost per unit of activity for this asset
+    /// Get the annual fixed costs (AFC) per unit of activity for this asset
     ///
-    /// Total capital costs (cost per capacity * capacity) are shared equally over the year in
-    /// accordance with the annual activity.
-    pub fn get_annual_capital_cost_per_activity(
+    /// Total capital costs and fixed opex are shared equally over the year in accordance with the
+    /// annual activity.
+    pub fn get_annual_fixed_costs_per_activity(
         &self,
         annual_activity: Activity,
     ) -> MoneyPerActivity {
         let annual_capital_cost_per_capacity = self.get_annual_capital_cost_per_capacity();
-        let total_annual_capital_cost = annual_capital_cost_per_capacity * self.total_capacity();
+        let annual_fixed_opex = self.process_parameter.fixed_operating_cost * Year(1.0);
+        let total_annual_fixed_costs =
+            (annual_capital_cost_per_capacity + annual_fixed_opex) * self.total_capacity();
         assert!(
             annual_activity > Activity::EPSILON,
-            "Cannot calculate annual capital cost per activity for an asset with zero annual activity"
+            "Cannot calculate annual fixed costs per activity for an asset with zero annual activity"
         );
-        total_annual_capital_cost / annual_activity
+        total_annual_fixed_costs / annual_activity
     }
 
-    /// Get the annual capital cost per unit of output flow for this asset
+    /// Get the annual fixed costs (AFC) per unit of output flow for this asset
     ///
-    /// Total capital costs (cost per capacity * capacity) are shared equally across all output
-    /// flows in accordance with the annual activity and total output per unit of activity.
-    pub fn get_annual_capital_cost_per_flow(&self, annual_activity: Activity) -> MoneyPerFlow {
-        let annual_capital_cost_per_activity =
-            self.get_annual_capital_cost_per_activity(annual_activity);
+    /// Total capital costs and fixed opex are shared equally across all output flows in accordance
+    /// with the annual activity and total output per unit of activity.
+    pub fn get_annual_fixed_costs_per_flow(&self, annual_activity: Activity) -> MoneyPerFlow {
+        let annual_fixed_costs_per_activity =
+            self.get_annual_fixed_costs_per_activity(annual_activity);
         let total_output_per_activity = self.get_total_output_per_activity();
         assert!(total_output_per_activity > FlowPerActivity::EPSILON); // input checks should guarantee this
-        annual_capital_cost_per_activity / total_output_per_activity
+        annual_fixed_costs_per_activity / total_output_per_activity
     }
 
     /// Maximum activity for this asset
