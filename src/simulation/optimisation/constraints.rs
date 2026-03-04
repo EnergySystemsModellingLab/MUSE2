@@ -1,6 +1,6 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
-use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
+use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
@@ -227,41 +227,41 @@ where
 
     // Create constraints for each asset
     for asset in assets {
-        if let Some(&capacity_var) = capacity_vars.get(asset) {
-            // Asset with flexible capacity
-            for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
-                let mut upper_limit = limits.end().value();
-                let mut lower_limit = limits.start().value();
+        if let Some(&_capacity_var) = capacity_vars.get(asset) {
+            // // Asset with flexible capacity
+            // for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
+            //     let mut upper_limit = limits.end().value();
+            //     let mut lower_limit = limits.start().value();
 
-                // If the asset capacity is discrete, the capacity variable represents number of
-                // units, so we need to multiply the per-capacity limits by the unit size.
-                if let AssetCapacity::Discrete(_, unit_size) = asset.capacity() {
-                    upper_limit *= unit_size.value();
-                    lower_limit *= unit_size.value();
-                }
+            //     // If the asset capacity is discrete, the capacity variable represents number of
+            //     // units, so we need to multiply the per-capacity limits by the unit size.
+            //     if let AssetCapacity::Discrete(_, unit_size) = asset.capacity() {
+            //         upper_limit *= unit_size.value();
+            //         lower_limit *= unit_size.value();
+            //     }
 
-                // Collect capacity and activity terms
-                // We have a single capacity term, and activity terms for all time slices in the selection
-                let mut terms_upper = vec![(capacity_var, -upper_limit)];
-                let mut terms_lower = vec![(capacity_var, -lower_limit)];
-                for (time_slice, _) in ts_selection.iter(time_slice_info) {
-                    let var = variables.get_activity_var(asset, time_slice);
-                    terms_upper.push((var, 1.0));
-                    terms_lower.push((var, 1.0));
-                }
+            //     // Collect capacity and activity terms
+            //     // We have a single capacity term, and activity terms for all time slices in the selection
+            //     let mut terms_upper = vec![(_capacity_var, -upper_limit)];
+            //     let mut terms_lower = vec![(_capacity_var, -lower_limit)];
+            //     for (time_slice, _) in ts_selection.iter(time_slice_info) {
+            //         let var = variables.get_activity_var(asset, time_slice);
+            //         terms_upper.push((var, 1.0));
+            //         terms_lower.push((var, 1.0));
+            //     }
 
-                // Upper bound: sum(activity) - (capacity * upper_limit_per_capacity) ≤ 0
-                problem.add_row(..=0.0, &terms_upper);
+            //     // Upper bound: sum(activity) - (capacity * upper_limit_per_capacity) ≤ 0
+            //     problem.add_row(..=0.0, &terms_upper);
 
-                // Lower bound: sum(activity) - (capacity * lower_limit_per_capacity) ≥ 0
-                problem.add_row(0.0.., &terms_lower);
+            //     // Lower bound: sum(activity) - (capacity * lower_limit_per_capacity) ≥ 0
+            //     problem.add_row(0.0.., &terms_lower);
 
-                // Store keys for retrieving duals later.
-                // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
-                // use the activity duals for anything important when using flexible capacity assets.
-                keys.push((asset.clone(), ts_selection.clone()));
-                keys.push((asset.clone(), ts_selection.clone()));
-            }
+            //     // Store keys for retrieving duals later.
+            //     // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
+            //     // use the activity duals for anything important when using flexible capacity assets.
+            //     keys.push((asset.clone(), ts_selection.clone()));
+            //     keys.push((asset.clone(), ts_selection.clone()));
+            // }
         } else {
             // Fixed-capacity asset: simple absolute activity limits.
             for (ts_selection, limits) in asset.iter_activity_limits() {
