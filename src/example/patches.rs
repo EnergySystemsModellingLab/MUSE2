@@ -5,7 +5,7 @@ use crate::patch::FilePatch;
 use anyhow::{Context, Result};
 use std::{collections::BTreeMap, sync::LazyLock};
 
-/// Map of patches keyed by name, with the file patches and and optional TOML patch
+/// Map of patches keyed by name, with the file patches and an optional TOML patch
 type PatchMap = BTreeMap<&'static str, (Vec<FilePatch>, Option<String>)>;
 
 /// The patches, keyed by name
