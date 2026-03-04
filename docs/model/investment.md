@@ -75,7 +75,7 @@ providing investment and dynamic decommissioning decisions.
 
 #### Coefficients of activity
 
-- Calculate net revenue per unit of activity \\(AC_{t}^{NPV} \\) (Tool A):
+- Calculate net revenue per unit of activity \\(AC\_{t}^{NPV} \\) (Tool A):
   \\[
     \begin{aligned}
           AC\_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
@@ -86,16 +86,16 @@ providing investment and dynamic decommissioning decisions.
     \end{aligned}
   \\]
   \\(\varepsilon \approx 1\times 10^{-14}\\) is added to
-  each \\(AC_{t}^{NPV} \\) to allow assets which are breakeven (or very close to breakeven) to be
+  each \\(AC\_{t}^{NPV} \\) to allow assets which are breakeven (or very close to breakeven) to be
   dispatched.
 
-- Calculate cost per unit of activity \\( AC_{t}^{LCOX} \\) (Tool B). Note that the commodity
-  of interest (primary output \\( c_{primary} \\)) is excluded from the price term:
+- Calculate cost per unit of activity \\( AC\_{t}^{LCOX} \\) (Tool B). Note that the commodity
+  of interest (primary output \\( c\_{primary} \\)) is excluded from the price term:
   \\[
     \begin{aligned}
           AC\_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
             &+ \text{SPCF}\_{t} \\\\
-            &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
+            &- \sum\_{c \neq c\_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
             [c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
     \end{aligned}
