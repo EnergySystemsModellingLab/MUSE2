@@ -41,26 +41,37 @@ fn get_all_patches() -> PatchMap {
         (
             // The simple example with electricity priced using marginal costs
             "simple_marginal",
-            vec![FilePatch::new("commodities.csv").with_replacement(&[
-                "id,description,type,time_slice_level,pricing_strategy,units",
-                "GASPRD,Gas produced,sed,season,shadow,PJ",
-                "GASNAT,Natural gas,sed,season,shadow,PJ",
-                "ELCTRI,Electricity,sed,daynight,marginal,PJ",
-                "RSHEAT,Residential heating,svd,daynight,shadow,PJ",
-                "CO2EMT,CO2 emitted,oth,annual,unpriced,ktCO2",
-            ])],
+            (
+                vec![FilePatch::new("commodities.csv").with_replacement(&[
+                    "id,description,type,time_slice_level,pricing_strategy,units",
+                    "GASPRD,Gas produced,sed,season,shadow,PJ",
+                    "GASNAT,Natural gas,sed,season,shadow,PJ",
+                    "ELCTRI,Electricity,sed,daynight,marginal,PJ",
+                    "RSHEAT,Residential heating,svd,daynight,shadow,PJ",
+                    "CO2EMT,CO2 emitted,oth,annual,unpriced,ktCO2",
+                ])],
+                None,
+            ),
         ),
         (
             // The simple example with gas commodities priced using full costs
             "simple_full",
-            vec![FilePatch::new("commodities.csv").with_replacement(&[
-                "id,description,type,time_slice_level,pricing_strategy,units",
-                "GASPRD,Gas produced,sed,season,full,PJ",
-                "GASNAT,Natural gas,sed,season,full,PJ",
-                "ELCTRI,Electricity,sed,daynight,shadow,PJ",
-                "RSHEAT,Residential heating,svd,daynight,shadow,PJ",
-                "CO2EMT,CO2 emitted,oth,annual,unpriced,ktCO2",
-            ])],
+            (
+                vec![FilePatch::new("commodities.csv").with_replacement(&[
+                    "id,description,type,time_slice_level,pricing_strategy,units",
+                    "GASPRD,Gas produced,sed,season,full,PJ",
+                    "GASNAT,Natural gas,sed,season,full,PJ",
+                    "ELCTRI,Electricity,sed,daynight,shadow,PJ",
+                    "RSHEAT,Residential heating,svd,daynight,shadow,PJ",
+                    "CO2EMT,CO2 emitted,oth,annual,unpriced,ktCO2",
+                ])],
+                None,
+            ),
+        ),
+        // The simple example with the ironing-out loop turned on
+        (
+            "simple_ironing_out",
+            (vec![], Some("max_ironing_out_iterations = 10".to_string())),
         ),
     ]
     .into_iter()
