@@ -102,11 +102,11 @@ impl Process {
 #[derive(PartialEq, Debug, Clone)]
 pub struct ActivityLimits {
     /// Optional annual limit
-    annual_limit: Option<RangeInclusive<Dimensionless>>,
+    pub annual_limit: Option<RangeInclusive<Dimensionless>>,
     /// Optional limits for each season
-    seasonal_limits: IndexMap<Season, RangeInclusive<Dimensionless>>,
+    pub seasonal_limits: IndexMap<Season, RangeInclusive<Dimensionless>>,
     /// Limits for each time slice (mandatory for all time slices)
-    time_slice_limits: IndexMap<TimeSliceID, RangeInclusive<Dimensionless>>,
+    pub time_slice_limits: IndexMap<TimeSliceID, RangeInclusive<Dimensionless>>,
 }
 
 impl ActivityLimits {
