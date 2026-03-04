@@ -66,10 +66,10 @@ providing investment and dynamic decommissioning decisions.
 - Annualised fixed costs per unit of capacity (\\( AFC_{opt,r} \\)): For new candidates, this is
   their annualised CAPEX plus FOM. For existing assets, the relevant fixed cost is its FOM.
 
-- Calculate the specific process and commodity flow costs (SPCF):
+- Calculate the specific process and commodity flow costs (\\(\text{SPCF}\_{t})\\):
 
   \\[
-    \text{SPCF} = \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
+    \text{SPCF}\_{t} = \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
             cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big)
   \\]
 
@@ -78,8 +78,8 @@ providing investment and dynamic decommissioning decisions.
 - Calculate net revenue per unit of activity \\(AC_{t}^{NPV} \\) (Tool A):
   \\[
     \begin{aligned}
-          AC_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
-            &- \text{SPCF} \\\\
+          AC\_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
+            &- \text{SPCF}\_{t} \\\\
             &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
     \end{aligned}
@@ -89,8 +89,8 @@ providing investment and dynamic decommissioning decisions.
   of interest (primary output \\( c_{primary} \\)) is excluded from the price term:
   \\[
     \begin{aligned}
-          AC_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
-            &+ \text{SPCF} \\\\
+          AC\_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
+            &+ \text{SPCF}\_{t} \\\\
             &- \sum\_{c \neq c_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
             [c] \Big)
               \cdot \lambda\_{c,r,t} \\\\
@@ -232,7 +232,7 @@ rules are applied in order:
 1. Assets which are already commissioned are preferred over new candidate assets.
 2. Newer (commissioned later) assets are preferred over older assets.
 3. If there is still a tie, the first option in the data structure storing the metrics is selected,
-   which is an arbitrary choice. A warning is emitted when this occurs.
+   which is an arbitrary choice. A `debug` level log message is emitted in this case.
 
 ## Example: Gas Power Plant
 
