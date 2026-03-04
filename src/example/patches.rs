@@ -38,6 +38,11 @@ fn get_all_patches() -> PatchMap {
                 None,
             ),
         ),
+        // The simple example with the ironing-out loop turned on
+        (
+            "simple_ironing_out",
+            (vec![], Some("max_ironing_out_iterations = 10".to_string())),
+        ),
     ]
     .into_iter()
     .collect()
