@@ -31,7 +31,7 @@ properties:
   max_ironing_out_iterations:
     type: integer
     description: The maximum number of iterations to run the "ironing out" step of agent investment for
-    default: 10
+    default: 1
   price_tolerance:
     type: number
     description: The relative tolerance for price convergence in the ironing out loop
