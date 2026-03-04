@@ -144,8 +144,9 @@ operational constraints (e.g., minimum load levels) and the balance level of the
 
 - **Optimise capacity and dispatch to maximise annualised profit:** Solve a small optimisation
   sub-problem to maximise the asset's surplus, subject to its operational rules and the specific
-  demand tranche it is being asked to serve. \\(\varepsilon \approx 1\times 10^{-14}\\) is added to each
-  \\(AC_{t}^{NPV} \\) to allow assets which are breakeven (or very close to breakeven) to be dispatched.
+  demand tranche it is being asked to serve. \\(\varepsilon \approx 1\times 10^{-14}\\) is added to
+  each \\(AC_{t}^{NPV} \\) to allow assets which are breakeven (or very close to breakeven) to be
+  dispatched.
 
   \\[
     maximise \Big\\{\sum_t act_t (AC\_{t}^{NPV} + \varepsilon)
@@ -164,8 +165,8 @@ operational constraints (e.g., minimum load levels) and the balance level of the
     existing assets.
 
 - **Decide on metric:** The type of metric used to compare profitability is dependent on the value of
-  \\(\text{AFC}\\). If \\(\text{AFC} = 0\\), this is always preferred over options with
-  \\(\text{AFC} > 0\\) so the latter are discarded as investment options.
+  \\(\text{AFC}\\). If \\(\text{AFC} = 0\\) within the tolerance provided by the `float_cmp` crate,
+  the associated investment option is always prioritised over options with \\(\text{AFC} > 0\\).
 
 - **If \\(\text{AFC} > 0\\), Use the profitability index \\(\text{PI}\\) metric:** This is the total
  annualised surplus divided by the annualised fixed cost.
