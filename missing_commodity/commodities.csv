@@ -1,0 +1,8 @@
+id,description,type,time_slice_level,pricing_strategy,units
+GASPRD,Gas produced,sed,season,marginal,PJ
+GASNAT,Natural gas,sed,season,marginal,PJ
+BIOPRD,Biomass produced,sed,season,marginal,PJ
+BIOPEL,Biomass pellets,sed,season,marginal,PJ
+ELCTRI,Electricity,sed,daynight,marginal,PJ
+RSHEAT,Residential heating,svd,daynight,marginal,PJ
+CO2EMT,CO2 emitted,oth,annual,,ktCO2
