@@ -2,6 +2,7 @@
 #
 # A script to generate documentation for previous releases of MUSE2.
 
+import os
 import shutil
 import subprocess as sp
 import sys
@@ -38,6 +39,7 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
         sp.run(("git", "-C", str(repo_path), "am", str(patch_path)), check=True)
 
     # Build docs
+    os.symlink(REPO_ROOT / "target", repo_path / "target")
     sp.run(("just", f"{repo_path!s}/build-docs"), capture_output=True, check=True)
 
     # Move to output directory
