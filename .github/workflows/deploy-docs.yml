@@ -1,7 +1,8 @@
 name: Build and publish docs
 on:
   push:
-    branches: [main]
+    # **HACK**
+    branches: [main, versioned-docs]
   workflow_dispatch:
 
 permissions:
