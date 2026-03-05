@@ -24,6 +24,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
       - uses: ./.github/actions/generate-docs
+        with:
+          build: all_with_old
       - name: Setup pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
