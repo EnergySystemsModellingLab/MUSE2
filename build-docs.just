@@ -1,8 +1,11 @@
 # Make rustdoc warnings fatal
 export RUSTDOCFLAGS := "-D warnings"
 
-# Build all documentation
-all: cli-help file-format examples book api
+# Build all documentation, except old docs
+all: cli-help file-format examples versions book api
+
+# Build all documentation, including old docs
+all_with_old: all old
 
 # Build book
 book:
@@ -33,3 +36,15 @@ file-format *ARGS:
 examples:
     @echo Building docs for examples
     @uv run docs/generate_example_docs.py
+
+# Build TOC for old versions
+versions:
+    @echo Building TOC for old versions of documentation
+    @uv run docs/generate_versions_docs.py
+
+# Build documentation for previous releases
+old:
+    @# Clean output dir
+    @rm -rf book/release
+
+    @uv run docs/build_old_docs.py
