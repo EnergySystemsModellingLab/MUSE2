@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-tags: true
       - uses: ./.github/actions/generate-docs
         with:
           build: all_with_old
