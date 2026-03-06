@@ -2,6 +2,7 @@
 #
 # A script to generate documentation for previous releases of MUSE2.
 
+import os
 import shutil
 import subprocess as sp
 import sys
@@ -19,6 +20,9 @@ def clone_repo_to(dest: Path):
     """Clone this repo somewhere else."""
     print("Making a copy of repo")
     sp.run(("git", "clone", REPO_ROOT, dest), check=True, capture_output=True)
+
+    # Add a symlink to cargo cache dir
+    os.symlink(REPO_ROOT / "target", dest / "target")
 
 
 def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
