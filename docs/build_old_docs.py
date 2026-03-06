@@ -25,6 +25,13 @@ def clone_repo_to(dest: Path):
     os.symlink(REPO_ROOT / "target", dest / "target")
 
 
+def apply_patches_for_release(release: str, repo_path: Path) -> None:
+    """Apply patches (if any) for the given release."""
+    patches_dir = DOCS_DIR / "release" / "patches" / release
+    for patch_path in sorted(patches_dir.glob("*.patch")):
+        sp.run(("git", "-C", str(repo_path), "am", str(patch_path)), check=True)
+
+
 def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
     """Build documentation for a given release."""
     print(f"Building docs for {release}")
@@ -36,10 +43,8 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
         capture_output=True,
     )
 
-    # Apply patch, if there is one
-    patch_path = DOCS_DIR / "release" / "patches" / f"{release}.patch"
-    if patch_path.exists():
-        sp.run(("git", "-C", str(repo_path), "am", str(patch_path)), check=True)
+    # Apply patches, if any
+    apply_patches_for_release(release, repo_path)
 
     # Build docs
     sp.run(("just", f"{repo_path!s}/build-docs"), check=True)
