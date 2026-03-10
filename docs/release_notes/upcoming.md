@@ -31,6 +31,8 @@ ready to be released, carry out the following steps:
 - Allow for adding both a `prod` and `cons` levy to a commodity ([#969])
 - Availability limits can now be provided at multiple levels for a process ([#1018])
 - Pricing strategy can now vary by commodity ([#1021])
+- `marginal` and `full` commodity pricing strategies no longer require enabling
+  `please_give_me_broken_results`
 
 ## Experimental features
 

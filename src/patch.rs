@@ -120,6 +120,8 @@ pub struct FilePatch {
     filename: String,
     /// The header row (optional). If `None`, the header is not checked against base files.
     header_row: Option<Vec<String>>,
+    /// Full replacement content for this file (optional)
+    replacement_content: Option<String>,
     /// Rows to delete (each row is a vector of fields)
     to_delete: CSVTable,
     /// Rows to add (each row is a vector of fields)
@@ -132,6 +134,7 @@ impl FilePatch {
         FilePatch {
             filename: filename.into(),
             header_row: None,
+            replacement_content: None,
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
         }
@@ -146,6 +149,16 @@ impl FilePatch {
         let s = header.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.header_row = Some(v);
+        self
+    }
+
+    /// Set full replacement content for this file.
+    pub fn with_replacement(mut self, content: impl Into<String>) -> Self {
+        assert!(
+            self.replacement_content.is_none(),
+            "Replacement content already set for this FilePatch",
+        );
+        self.replacement_content = Some(content.into());
         self
     }
 
@@ -167,6 +180,10 @@ impl FilePatch {
 
     /// Apply this patch to a base model and return the modified CSV as a string.
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
+        if let Some(content) = &self.replacement_content {
+            return Ok(content.clone());
+        }
+
         // Read the base file to string
         let base_path = base_model_dir.join(&self.filename);
         ensure!(
@@ -232,7 +249,6 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
             header_row_vec.join(", ")
         );
     }
-
     // Read all rows from the base, preserving order and checking for duplicates
     let mut base_rows: CSVTable = CSVTable::new();
     for result in reader.records() {
@@ -275,6 +291,16 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         ensure!(
             base_rows.insert(add_row.clone()),
             "Addition already present in base file: {add_row:?}"
+        );
+    }
+
+    // Check all rows match base header length
+    let expected_len = base_header_vec.len();
+    for row in &base_rows {
+        ensure!(
+            row.len() == expected_len,
+            "Row has {} columns but header has {expected_len}: {row:?}",
+            row.len(),
         );
     }
 
@@ -377,6 +403,20 @@ mod tests {
         let assets_content = std::fs::read_to_string(assets_path).unwrap();
         assert!(!assets_content.contains("GASDRV,GBR,A0_GEX,4002.26,2020"));
         assert!(assets_content.contains("GASDRV,GBR,A0_GEX,4003.26,2020"));
+    }
+
+    #[test]
+    fn file_patch_with_replacement() {
+        let replacement = "col1,col2\nnew1,new2\n";
+
+        let model_dir = ModelPatch::from_example("simple")
+            .with_file_patch(FilePatch::new("assets.csv").with_replacement(replacement))
+            .build_to_tempdir()
+            .unwrap();
+
+        let assets_path = model_dir.path().join("assets.csv");
+        let assets_content = std::fs::read_to_string(assets_path).unwrap();
+        assert_eq!(assets_content, replacement);
     }
 
     #[test]

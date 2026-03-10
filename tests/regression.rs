@@ -1,10 +1,9 @@
 //! Common code for running regression tests.
-use anyhow::Result;
+use csv::{ReaderBuilder, StringRecord, Trim};
 use float_cmp::approx_eq;
 use itertools::Itertools;
 use std::env;
-use std::fs::{File, read_dir};
-use std::io::{BufRead, BufReader};
+use std::fs::read_dir;
 use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
 
@@ -26,6 +25,8 @@ define_regression_test!(circularity);
 // Patched examples
 define_regression_test_with_patches!(simple_divisible);
 define_regression_test_with_patches!(simple_npv);
+define_regression_test_with_patches!(simple_marginal);
+define_regression_test_with_patches!(simple_full);
 
 // ------  END: regression tests  ------
 
@@ -87,38 +88,69 @@ fn compare_lines(
     file_name: &str,
     errors: &mut Vec<String>,
 ) {
-    let lines1 = read_lines(&output_dir1.join(file_name));
-    let lines2 = read_lines(&output_dir2.join(file_name));
+    let path1 = output_dir1.join(file_name);
+    let path2 = output_dir2.join(file_name);
+    let (header1, mut rows1) = read_csv_records(&path1);
+    let (header2, mut rows2) = read_csv_records(&path2);
+
+    if header1 != header2 {
+        errors.push(format!(
+            "{file_name}: Different CSV headers: '{}' vs '{}'",
+            header1.iter().join(","),
+            header2.iter().join(","),
+        ));
+    }
+
+    rows1.sort_by_key(row_key);
+    rows2.sort_by_key(row_key);
 
     // Check for different number of lines
-    if lines1.len() != lines2.len() {
+    if rows1.len() != rows2.len() {
         errors.push(format!(
             "{}: Different number of lines: {} vs {}",
             file_name,
-            lines1.len(),
-            lines2.len()
+            rows1.len() + 1,
+            rows2.len() + 1
         ));
     }
 
     // Compare each line
-    for (num, (line1, line2)) in lines1.into_iter().zip(lines2).enumerate() {
-        if !compare_line(num, &line1, &line2, file_name, errors) {
+    for (num, (row1, row2)) in rows1.into_iter().zip(rows2).enumerate() {
+        if !compare_row(num + 1, &row1, &row2, file_name, errors) {
             errors.push(format!(
-                "{file_name}: line {num}:\n    + \"{line1}\"\n    - \"{line2}\""
+                "{file_name}: line {}:\n    + \"{}\"\n    - \"{}\"",
+                num + 1,
+                row1.iter().join(","),
+                row2.iter().join(",")
             ));
         }
     }
 }
 
-fn compare_line(
+fn read_csv_records(path: &Path) -> (StringRecord, Vec<StringRecord>) {
+    let mut reader = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_path(path)
+        .unwrap();
+    let header = reader.headers().unwrap().clone();
+    let rows = reader.records().map(|record| record.unwrap()).collect_vec();
+
+    (header, rows)
+}
+
+fn row_key(row: &StringRecord) -> String {
+    row.iter().join("\u{1F}")
+}
+
+fn compare_row(
     num: usize,
-    line1: &str,
-    line2: &str,
+    row1: &StringRecord,
+    row2: &StringRecord,
     file_name: &str,
     errors: &mut Vec<String>,
 ) -> bool {
-    let fields1 = line1.split(',').collect_vec();
-    let fields2 = line2.split(',').collect_vec();
+    let fields1 = row1.iter().collect_vec();
+    let fields2 = row2.iter().collect_vec();
     if fields1.len() != fields2.len() {
         errors.push(format!(
             "{}: line {}: Different number of fields: {} vs {}",
@@ -170,13 +202,4 @@ fn get_csv_file_names(dir_path: &Path) -> Vec<String> {
 
     file_names.sort();
     file_names
-}
-
-// Read all lines from a file into a `Vec`
-fn read_lines(path: &Path) -> Vec<String> {
-    let file1 = File::open(path).unwrap();
-    BufReader::new(file1)
-        .lines()
-        .map_while(Result::ok)
-        .collect()
 }

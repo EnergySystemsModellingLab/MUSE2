@@ -164,18 +164,13 @@ fn validate_commodity(commodity: &Commodity) -> Result<()> {
         }
     }
 
-    // Gatekeep alternative pricing options
-    if !matches!(
-        commodity.pricing_strategy,
-        PricingStrategy::Shadow | PricingStrategy::Unpriced
-    ) {
+    // Gatekeep scarcity-adjusted pricing option
+    if commodity.pricing_strategy == PricingStrategy::ScarcityAdjusted {
         ensure!(
             broken_model_options_allowed(),
-            "Price strategies other than 'shadow' and 'unpriced' are currently experimental. \
+            "The 'scarcity' pricing strategy is currently experimental. \
             To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
         );
-    }
-    if commodity.pricing_strategy == PricingStrategy::ScarcityAdjusted {
         warn!(
             "The pricing strategy for {} is set to 'scarcity'. Commodity prices may be \
             incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677",
