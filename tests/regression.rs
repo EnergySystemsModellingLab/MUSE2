@@ -95,18 +95,18 @@ fn compare_lines(
     // Check for different number of lines
     if lines1.len() != lines2.len() {
         errors.push(format!(
-            "{}: Different number of lines: {} vs {}",
-            file_name,
+            "{file_name}: Different number of lines: {} vs {}",
             lines1.len(),
             lines2.len()
         ));
     }
 
     // Compare each line
-    for (num, (line1, line2)) in lines1.into_iter().zip(lines2).enumerate() {
-        if !compare_line(num, &line1, &line2, file_name, errors) {
+    for (idx, (line1, line2)) in lines1.into_iter().zip(lines2).enumerate() {
+        let line_num = idx + 1; // (1-based) line number
+        if !compare_line(line_num, &line1, &line2, file_name, errors) {
             errors.push(format!(
-                "{file_name}: line {num}:\n    + \"{line1}\"\n    - \"{line2}\""
+                "{file_name}: line {line_num}:\n    + \"{line1}\"\n    - \"{line2}\""
             ));
         }
     }
