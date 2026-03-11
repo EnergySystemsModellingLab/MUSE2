@@ -143,6 +143,10 @@ impl FilePatch {
     /// Set the header row for this patch (header should be a comma-joined string, e.g. "a,b,c").
     pub fn with_header(mut self, header: impl Into<String>) -> Self {
         assert!(
+            self.replacement_content.is_none(),
+            "Cannot set header when replacement content is set for this FilePatch",
+        );
+        assert!(
             self.header_row.is_none(),
             "Header already set for this FilePatch",
         );
@@ -155,6 +159,14 @@ impl FilePatch {
     /// Set full replacement content for this file.
     pub fn with_replacement(mut self, content: impl Into<String>) -> Self {
         assert!(
+            self.header_row.is_none(),
+            "Cannot set replacement content when header is set for this FilePatch",
+        );
+        assert!(
+            self.to_delete.is_empty() && self.to_add.is_empty(),
+            "Cannot set replacement content when additions/deletions are set for this FilePatch",
+        );
+        assert!(
             self.replacement_content.is_none(),
             "Replacement content already set for this FilePatch",
         );
@@ -164,6 +176,10 @@ impl FilePatch {
 
     /// Add a row to the patch (row should be a comma-joined string, e.g. "a,b,c").
     pub fn with_addition(mut self, row: impl Into<String>) -> Self {
+        assert!(
+            self.replacement_content.is_none(),
+            "Cannot add rows when replacement content is set for this FilePatch",
+        );
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.to_add.insert(v);
@@ -172,6 +188,10 @@ impl FilePatch {
 
     /// Mark a row for deletion from the base (row should be a comma-joined string, e.g. "a,b,c").
     pub fn with_deletion(mut self, row: impl Into<String>) -> Self {
+        assert!(
+            self.replacement_content.is_none(),
+            "Cannot delete rows when replacement content is set for this FilePatch",
+        );
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.to_delete.insert(v);
@@ -417,6 +437,34 @@ mod tests {
         let assets_path = model_dir.path().join("assets.csv");
         let assets_content = std::fs::read_to_string(assets_path).unwrap();
         assert_eq!(assets_content, replacement);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot set replacement content when header is set for this FilePatch"
+    )]
+    fn file_patch_replacement_after_header_panics() {
+        let _ = FilePatch::new("assets.csv")
+            .with_header("col1,col2")
+            .with_replacement("col1,col2\na,b\n");
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot set replacement content when additions/deletions are set for this FilePatch"
+    )]
+    fn file_patch_replacement_after_addition_panics() {
+        let _ = FilePatch::new("assets.csv")
+            .with_addition("a,b")
+            .with_replacement("col1,col2\na,b\n");
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot add rows when replacement content is set for this FilePatch")]
+    fn file_patch_addition_after_replacement_panics() {
+        let _ = FilePatch::new("assets.csv")
+            .with_replacement("col1,col2\na,b\n")
+            .with_addition("c,d");
     }
 
     #[test]
