@@ -477,7 +477,7 @@ mod tests {
 
         assert_error!(
             model_patch.build_to_tempdir(),
-            "Error applying patch to file: not_a_real_file.csv"
+            "Base file for patching does not exist: examples/simple/not_a_real_file.csv"
         );
     }
 
