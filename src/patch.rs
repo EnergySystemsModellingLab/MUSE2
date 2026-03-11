@@ -200,17 +200,20 @@ impl FilePatch {
 
     /// Apply this patch to a base model and return the modified CSV as a string.
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
-        if let Some(content) = &self.replacement_content {
-            return Ok(content.clone());
-        }
-
-        // Read the base file to string
+        // Read and validate the base file path
         let base_path = base_model_dir.join(&self.filename);
         ensure!(
             base_path.exists() && base_path.is_file(),
             "Base file for patching does not exist: {}",
             base_path.display()
         );
+
+        // nothing further to do if this patch is a full replacement
+        if let Some(content) = &self.replacement_content {
+            return Ok(content.clone());
+        }
+
+        // Read the base file to string
         let base = fs::read_to_string(&base_path)?;
 
         // Apply the patch
@@ -465,6 +468,17 @@ mod tests {
         let _ = FilePatch::new("assets.csv")
             .with_replacement("col1,col2\na,b\n")
             .with_addition("c,d");
+    }
+
+    #[test]
+    fn file_patch_with_replacement_missing_base_file_fails() {
+        let model_patch = ModelPatch::from_example("simple")
+            .with_file_patch(FilePatch::new("not_a_real_file.csv").with_replacement("x,y\n1,2\n"));
+
+        assert_error!(
+            model_patch.build_to_tempdir(),
+            "Error applying patch to file: not_a_real_file.csv"
+        );
     }
 
     #[test]
