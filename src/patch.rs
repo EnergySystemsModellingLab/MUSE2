@@ -156,8 +156,12 @@ impl FilePatch {
         self
     }
 
-    /// Set full replacement content for this file.
-    pub fn with_replacement(mut self, content: impl Into<String>) -> Self {
+    /// Set full replacement content for this file from a slice of lines.
+    ///
+    /// Each line is joined with newlines, and a trailing newline is added.
+    /// All lines must have the same number of columns (commas).
+    /// Example: `with_replacement(&["header1,header2", "value1,value2"])`
+    pub fn with_replacement(mut self, lines: &[&str]) -> Self {
         assert!(
             self.header_row.is_none(),
             "Cannot set replacement content when header is set for this FilePatch",
@@ -170,7 +174,21 @@ impl FilePatch {
             self.replacement_content.is_none(),
             "Replacement content already set for this FilePatch",
         );
-        self.replacement_content = Some(content.into());
+
+        // Validate that all lines have the same number of columns
+        if !lines.is_empty() {
+            let first_col_count = lines[0].matches(',').count() + 1;
+            for (idx, line) in lines.iter().enumerate() {
+                let col_count = line.matches(',').count() + 1;
+                assert_eq!(
+                    col_count, first_col_count,
+                    "Line {idx} has {col_count} columns but line 0 has {first_col_count}: {line:?}"
+                );
+            }
+        }
+
+        let content = lines.join("\n") + "\n";
+        self.replacement_content = Some(content);
         self
     }
 
@@ -208,7 +226,8 @@ impl FilePatch {
             base_path.display()
         );
 
-        // nothing further to do if this patch is a full replacement
+        // If this patch is a full replacement, validate the base file exists
+        // (checked above) and return the replacement content
         if let Some(content) = &self.replacement_content {
             return Ok(content.clone());
         }
@@ -430,16 +449,18 @@ mod tests {
 
     #[test]
     fn file_patch_with_replacement() {
-        let replacement = "col1,col2\nnew1,new2\n";
+        let expected = "col1,col2\nnew1,new2\n";
 
         let model_dir = ModelPatch::from_example("simple")
-            .with_file_patch(FilePatch::new("assets.csv").with_replacement(replacement))
+            .with_file_patch(
+                FilePatch::new("assets.csv").with_replacement(&["col1,col2", "new1,new2"]),
+            )
             .build_to_tempdir()
             .unwrap();
 
         let assets_path = model_dir.path().join("assets.csv");
         let assets_content = std::fs::read_to_string(assets_path).unwrap();
-        assert_eq!(assets_content, replacement);
+        assert_eq!(assets_content, expected);
     }
 
     #[test]
@@ -449,7 +470,7 @@ mod tests {
     fn file_patch_replacement_after_header_panics() {
         let _ = FilePatch::new("assets.csv")
             .with_header("col1,col2")
-            .with_replacement("col1,col2\na,b\n");
+            .with_replacement(&["col1,col2", "a,b"]);
     }
 
     #[test]
@@ -459,26 +480,33 @@ mod tests {
     fn file_patch_replacement_after_addition_panics() {
         let _ = FilePatch::new("assets.csv")
             .with_addition("a,b")
-            .with_replacement("col1,col2\na,b\n");
+            .with_replacement(&["col1,col2", "a,b"]);
     }
 
     #[test]
     #[should_panic(expected = "Cannot add rows when replacement content is set for this FilePatch")]
     fn file_patch_addition_after_replacement_panics() {
         let _ = FilePatch::new("assets.csv")
-            .with_replacement("col1,col2\na,b\n")
+            .with_replacement(&["col1,col2", "a,b"])
             .with_addition("c,d");
     }
 
     #[test]
     fn file_patch_with_replacement_missing_base_file_fails() {
-        let model_patch = ModelPatch::from_example("simple")
-            .with_file_patch(FilePatch::new("not_a_real_file.csv").with_replacement("x,y\n1,2\n"));
+        let model_patch = ModelPatch::from_example("simple").with_file_patch(
+            FilePatch::new("not_a_real_file.csv").with_replacement(&["x,y", "1,2"]),
+        );
 
         assert_error!(
             model_patch.build_to_tempdir(),
             "Base file for patching does not exist: examples/simple/not_a_real_file.csv"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "Line 1 has 2 columns but line 0 has 3")]
+    fn file_patch_replacement_column_count_mismatch_panics() {
+        let _ = FilePatch::new("test.csv").with_replacement(&["col1,col2,col3", "a,b"]);
     }
 
     #[test]
