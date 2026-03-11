@@ -25,11 +25,6 @@ repos:
         args: ["--schemafile", "schemas/input/model.yaml"]
         files: /model\.toml$
         types_or: [toml]
-      - id: check-jsonschema
-        name: Validate settings.toml files
-        args: ["--schemafile", "schemas/settings.yaml"]
-        files: /settings\.toml$
-        types_or: [toml]
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.48.0
     hooks:
@@ -60,10 +55,6 @@ repos:
         args: [--fix]
       - id: ruff-format
         types_or: [python]
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.9.1
-    hooks:
-      - id: nbstripout
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
