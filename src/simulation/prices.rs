@@ -887,6 +887,45 @@ mod tests {
         assert!((p - expected).abs() < MoneyPerFlow::EPSILON);
     }
 
+    #[test]
+    fn group_accum_empty_returns_none() {
+        assert!(GroupAccum::default().solve().is_none());
+    }
+
+    #[test]
+    fn group_accum_returns_none_when_both_denominators_zero() {
+        let mut accum = GroupAccum::default();
+        accum.add(MoneyPerFlow(10.0), Activity(0.0), Activity(0.0));
+        assert!(accum.solve().is_none());
+    }
+
+    #[test]
+    fn group_accum_uses_activity_weight() {
+        let mut accum = GroupAccum::default();
+        // Two entries: cost 10 with activity 1, cost 20 with activity 3 → weighted avg = 17.5
+        accum.add(MoneyPerFlow(10.0), Activity(1.0), Activity(1.0));
+        accum.add(MoneyPerFlow(20.0), Activity(3.0), Activity(3.0));
+        let result = accum.solve().unwrap();
+        assert!((result - MoneyPerFlow(17.5)).abs() < MoneyPerFlow::EPSILON);
+    }
+
+    #[test]
+    fn group_accum_single_entry_returns_same_cost() {
+        let mut accum = GroupAccum::default();
+        accum.add(MoneyPerFlow(42.0), Activity(5.0), Activity(5.0));
+        assert_eq!(accum.solve().unwrap(), MoneyPerFlow(42.0));
+    }
+
+    #[test]
+    fn group_accum_falls_back_to_activity_limit_when_no_activity() {
+        let mut accum = GroupAccum::default();
+        // Zero activity, but non-zero activity limits → should use backup weights
+        accum.add(MoneyPerFlow(10.0), Activity(0.0), Activity(1.0));
+        accum.add(MoneyPerFlow(20.0), Activity(0.0), Activity(3.0));
+        let result = accum.solve().unwrap();
+        assert!((result - MoneyPerFlow(17.5)).abs() < MoneyPerFlow::EPSILON);
+    }
+
     #[rstest]
     #[case(MoneyPerFlow(100.0), MoneyPerFlow(100.0), Dimensionless(0.0), true)] // exactly equal
     #[case(MoneyPerFlow(100.0), MoneyPerFlow(105.0), Dimensionless(0.1), true)] // within tolerance
