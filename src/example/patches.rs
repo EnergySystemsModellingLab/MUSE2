@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use std::{collections::BTreeMap, sync::LazyLock};
 
 /// Map of patches keyed by name, with the file patches and an optional TOML patch
-type PatchMap = BTreeMap<&'static str, (Vec<FilePatch>, Option<String>)>;
+type PatchMap = BTreeMap<&'static str, (Vec<FilePatch>, Option<&'static str>)>;
 
 /// The patches, keyed by name
 static PATCHES: LazyLock<PatchMap> = LazyLock::new(get_all_patches);
@@ -71,7 +71,7 @@ fn get_all_patches() -> PatchMap {
         // The simple example with the ironing-out loop turned on
         (
             "simple_ironing_out",
-            (vec![], Some("max_ironing_out_iterations = 10".to_string())),
+            (vec![], Some("max_ironing_out_iterations = 10")),
         ),
     ]
     .into_iter()
@@ -84,7 +84,7 @@ pub fn get_patch_names() -> impl Iterator<Item = &'static str> {
 }
 
 /// Get patches for the named patched example
-pub fn get_patches(name: &str) -> Result<&'static (Vec<FilePatch>, Option<String>)> {
+pub fn get_patches(name: &str) -> Result<&'static (Vec<FilePatch>, Option<&'static str>)> {
     PATCHES
         .get(name)
         .with_context(|| format!("Patched example '{name}' not found"))
