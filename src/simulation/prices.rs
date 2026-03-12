@@ -374,6 +374,22 @@ impl GroupAccum {
     }
 }
 
+/// Expand a map of per-group prices to individual time slices.
+fn expand_groups_to_prices(
+    group_prices: &HashMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
+    time_slice_info: &TimeSliceInfo,
+    out: &mut HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+) {
+    for ((commodity_id, region_id, group), &group_price) in group_prices {
+        for (ts, _) in group.iter(time_slice_info) {
+            out.insert(
+                (commodity_id.clone(), region_id.clone(), ts.clone()),
+                group_price,
+            );
+        }
+    }
+}
+
 /// Calculate marginal cost prices for a set of commodities.
 ///
 /// This pricing strategy aims to incorporate the marginal cost of commodity production into the price.
@@ -492,14 +508,7 @@ where
 
     // Expand each group to individual time slices
     let mut prices: HashMap<_, MoneyPerFlow> = HashMap::new();
-    for ((commodity_id, region_id, group), group_price) in &group_prices {
-        for (ts, _) in group.iter(time_slice_info) {
-            prices.insert(
-                (commodity_id.clone(), region_id.clone(), ts.clone()),
-                *group_price,
-            );
-        }
-    }
+    expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
     // Candidate assets: weight marginal costs by activity limits (i.e. assume full utilisation)
     let mut cand_accum: HashMap<_, GroupAccum> = HashMap::new();
@@ -552,14 +561,7 @@ where
     }
 
     // Expand candidate groups to individual time slices
-    for ((commodity_id, region_id, group), group_price) in &cand_group_prices {
-        for (ts, _) in group.iter(time_slice_info) {
-            prices.insert(
-                (commodity_id.clone(), region_id.clone(), ts.clone()),
-                *group_price,
-            );
-        }
-    }
+    expand_groups_to_prices(&cand_group_prices, time_slice_info, &mut prices);
 
     prices
 }
@@ -722,14 +724,7 @@ where
 
     // Expand each group to individual time slices
     let mut prices: HashMap<_, MoneyPerFlow> = HashMap::new();
-    for ((commodity_id, region_id, group), group_price) in &group_prices {
-        for (ts, _) in group.iter(time_slice_info) {
-            prices.insert(
-                (commodity_id.clone(), region_id.clone(), ts.clone()),
-                *group_price,
-            );
-        }
-    }
+    expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
     // Candidate assets: weight marginal costs by activity limits (i.e. assume full utilisation)
     let mut cand_accum: HashMap<_, GroupAccum> = HashMap::new();
@@ -798,14 +793,7 @@ where
     }
 
     // Expand candidate groups to individual time slices
-    for ((commodity_id, region_id, group), group_price) in &cand_group_prices {
-        for (ts, _) in group.iter(time_slice_info) {
-            prices.insert(
-                (commodity_id.clone(), region_id.clone(), ts.clone()),
-                *group_price,
-            );
-        }
-    }
+    expand_groups_to_prices(&cand_group_prices, time_slice_info, &mut prices);
 
     prices
 }
