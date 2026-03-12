@@ -1,5 +1,9 @@
 name: Generate documentation
 description: Generate all documentation
+inputs:
+  build:
+    description: Just subcommand for `build-docs` to run
+    default: all
 
 runs:
   using: composite
@@ -18,4 +22,4 @@ runs:
         enable-cache: true
     - name: Build documentation
       shell: bash
-      run: just build-docs
+      run: just build-docs::${{ inputs.build }}

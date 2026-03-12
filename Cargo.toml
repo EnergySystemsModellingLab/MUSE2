@@ -19,8 +19,8 @@ float-cmp = "0.10.0"
 itertools = "0.14.0"
 serde = {version = "1.0.228", features = ["derive", "rc"]}
 serde_string_enum = "0.2.1"
-tempfile = "3.26.0"
-toml = "1.0.4"
+tempfile = "3.27.0"
+toml = "1.0.6"
 unicase = "2.9.0"
 fern = {version = "0.7.1", features = ["chrono", "colored"]}
 chrono = "0.4"
@@ -40,7 +40,7 @@ edit = "0.1.5"
 erased-serde = "0.4.10"
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
+assert_cmd = "2.2.0"
 map-macro = "0.3.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
 yaml-rust2 = {version = "0.11.0", default-features = false}
