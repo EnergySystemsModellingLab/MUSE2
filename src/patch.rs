@@ -497,10 +497,15 @@ mod tests {
             FilePatch::new("not_a_real_file.csv").with_replacement(&["x,y", "1,2"]),
         );
 
-        assert_error!(
-            model_patch.build_to_tempdir(),
-            "Base file for patching does not exist: examples/simple/not_a_real_file.csv"
+        let expected = format!(
+            "Base file for patching does not exist: {}",
+            std::path::PathBuf::from("examples")
+                .join("simple")
+                .join("not_a_real_file.csv")
+                .display()
         );
+
+        assert_error!(model_patch.build_to_tempdir(), expected);
     }
 
     #[test]
