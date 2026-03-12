@@ -1,6 +1,6 @@
 //! Code for calculating commodity prices used by the simulation.
 use crate::asset::AssetRef;
-use crate::commodity::{CommodityID, PricingStrategy};
+use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
@@ -78,11 +78,13 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         // Add prices for marginal cost commodities
         if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
             let marginal_cost_prices = calculate_marginal_cost_prices(
-                solution.iter_activity_keys_for_existing(),
+                solution.iter_activity_for_existing(),
                 solution.iter_activity_keys_for_candidates(),
                 &result,
                 year,
                 marginal_set,
+                &model.commodities,
+                &model.time_slice_info,
             );
             result.extend(marginal_cost_prices);
         }
@@ -92,12 +94,14 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             let annual_activities =
                 calculate_annual_activities(solution.iter_activity_for_existing());
             let full_cost_prices = calculate_full_cost_prices(
-                solution.iter_activity_keys_for_existing(),
+                solution.iter_activity_for_existing(),
                 solution.iter_activity_keys_for_candidates(),
                 &annual_activities,
                 &result,
                 year,
                 fullcost_set,
+                &model.commodities,
+                &model.time_slice_info,
             );
             result.extend(full_cost_prices);
         }
@@ -322,6 +326,45 @@ where
     scarcity_prices
 }
 
+/// Helper struct for accumulating weighted marginal costs for a group of (asset, commodity, region,
+/// time_slice_selection) tuples when calculating marginal cost or full cost prices.
+struct GroupAccum {
+    weighted_cost_numerator: MoneyPerFlow,
+    weighted_cost_denominator: Dimensionless,
+    backup_numerator: MoneyPerFlow,
+    backup_denominator: Dimensionless,
+}
+
+impl Default for GroupAccum {
+    fn default() -> Self {
+        Self {
+            weighted_cost_numerator: MoneyPerFlow(0.0),
+            weighted_cost_denominator: Dimensionless(0.0),
+            backup_numerator: MoneyPerFlow(0.0),
+            backup_denominator: Dimensionless(0.0),
+        }
+    }
+}
+
+impl GroupAccum {
+    fn add(&mut self, marginal_cost: MoneyPerFlow, activity: Activity, activity_limit: Activity) {
+        self.weighted_cost_numerator += marginal_cost * Dimensionless(activity.value());
+        self.weighted_cost_denominator += Dimensionless(activity.value());
+        self.backup_numerator += marginal_cost * Dimensionless(activity_limit.value());
+        self.backup_denominator += Dimensionless(activity_limit.value());
+    }
+
+    fn solve(&self) -> Option<MoneyPerFlow> {
+        if self.weighted_cost_denominator > Dimensionless::EPSILON {
+            Some(self.weighted_cost_numerator / self.weighted_cost_denominator)
+        } else if self.backup_denominator > Dimensionless::EPSILON {
+            Some(self.backup_numerator / self.backup_denominator)
+        } else {
+            None
+        }
+    }
+}
+
 /// Calculate marginal cost prices for a set of commodities.
 ///
 /// This pricing strategy aims to incorporate the marginal cost of commodity production into the price.
@@ -356,94 +399,152 @@ where
 /// utilisation (i.e. the single candidate asset that would be most competitive if a small amount of
 /// demand was added).
 ///
-/// Note: this should be similar to the "shadow price" strategy, which is also based on marginal
-/// costs of the most expensive producer, but may be more successful in cases where there are
-/// multiple SED/SVD outputs per asset.
-///
 /// # Arguments
 ///
-/// * `activity_keys_for_existing` - Iterator over activity keys from optimisation solution for
-///   existing assets
-/// * `activity_keys_for_candidates` - Iterator over activity keys from optimisation solution for
-///   candidate assets
+/// * `activity_for_existing` - Iterator over `(asset, time_slice, activity)` from optimisation
+///   solution for existing assets
+/// * `activity_keys_for_candidates` - Iterator over `(asset, time_slice)` for candidate assets
 /// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate marginal prices for
+/// * `commodities` - Map of all commodities (used to look up each commodity's `time_slice_level`)
+/// * `time_slice_info` - Time slice information (used to expand groups to individual time slices)
 ///
 /// # Returns
 ///
 /// A map of marginal cost prices for the specified markets in all time slices
 fn calculate_marginal_cost_prices<'a, I, J>(
-    activity_keys_for_existing: I,
+    activity_for_existing: I,
     activity_keys_for_candidates: J,
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
+    commodities: &CommodityMap,
+    time_slice_info: &TimeSliceInfo,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
-
-    // Start by looking at existing assets
-    // Calculate highest marginal cost for each commodity/region/time slice
-    // Keep track of keys with prices - missing keys will be handled by candidates later
-    let mut priced_by_existing = HashSet::new();
-    for (asset, time_slice) in activity_keys_for_existing {
+    // For each (asset, commodity, region, group), accumulate marginal costs weighted by
+    let mut existing_accum: HashMap<_, GroupAccum> = HashMap::new();
+    for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
+        let activity_limit = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
+            .end();
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
             upstream_prices,
             year,
             time_slice,
-            |commodity_id: &CommodityID| {
-                markets_to_price.contains(&(commodity_id.clone(), region_id.clone()))
-            },
+            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
         ) {
-            // Update the highest cost for this commodity/region/time slice
-            let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-            prices
-                .entry(key.clone())
-                .and_modify(|c| *c = c.max(marginal_cost))
-                .or_insert(marginal_cost);
-            priced_by_existing.insert(key);
+            let group = commodities[&commodity_id]
+                .time_slice_level
+                .containing_selection(time_slice);
+            let key = (
+                asset.clone(),
+                commodity_id.clone(),
+                region_id.clone(),
+                group,
+            );
+            let accum = existing_accum.entry(key).or_default();
+            accum.add(marginal_cost, activity, activity_limit);
         }
     }
 
-    // Next, look at candidate assets for any markets not covered by existing assets
-    // For these, we take the _lowest_ marginal cost
-    for (asset, time_slice) in activity_keys_for_candidates {
-        let region_id = asset.region_id();
+    // Compute per-group weighted-average marginal cost per asset, then take the max across assets
+    let mut group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut priced_groups: HashSet<_> = HashSet::new();
 
-        // Only consider markets not already priced by existing assets
-        let should_process = |cid: &CommodityID| {
-            markets_to_price.contains(&(cid.clone(), region_id.clone()))
-                && !priced_by_existing.contains(&(
-                    cid.clone(),
-                    region_id.clone(),
-                    time_slice.clone(),
-                ))
+    for ((_, commodity_id, region_id, group), accum) in &existing_accum {
+        // Use actual activity weights if any activity occurred in this group; otherwise fall back
+        // to max potential activity weights
+        let Some(avg_cost) = accum.solve() else {
+            continue;
         };
 
-        // Iterate over all the SED/SVD marginal costs for markets we need prices for
+        group_prices
+            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
+            .and_modify(|c| *c = c.max(avg_cost))
+            .or_insert(avg_cost);
+        priced_groups.insert((commodity_id.clone(), region_id.clone(), group.clone()));
+    }
+
+    // Expand each group to individual time slices
+    let mut prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    for ((commodity_id, region_id, group), group_price) in &group_prices {
+        for (ts, _) in group.iter(time_slice_info) {
+            prices.insert(
+                (commodity_id.clone(), region_id.clone(), ts.clone()),
+                *group_price,
+            );
+        }
+    }
+
+    // Candidate assets: use max potential activity weights, take the min across assets
+    // (price from the most cost-effective candidate)
+    let mut cand_accum: HashMap<_, (MoneyPerFlow, Dimensionless)> = HashMap::new();
+    for (asset, time_slice) in activity_keys_for_candidates {
+        let region_id = asset.region_id();
+        let activity_limit = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
+            .end();
+
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
             upstream_prices,
             year,
             time_slice,
-            |cid: &CommodityID| should_process(cid),
+            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
         ) {
-            // Update the _lowest_ cost for this commodity/region/time slice
-            let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-            prices
-                .entry(key.clone())
-                .and_modify(|c| *c = c.min(marginal_cost))
-                .or_insert(marginal_cost);
+            let group = commodities[&commodity_id]
+                .time_slice_level
+                .containing_selection(time_slice);
+
+            // Skip groups already covered by existing assets
+            if priced_groups.contains(&(commodity_id.clone(), region_id.clone(), group.clone())) {
+                continue;
+            }
+
+            let key = (
+                asset.clone(),
+                commodity_id.clone(),
+                region_id.clone(),
+                group,
+            );
+            let (cost_sum, weight_sum) = cand_accum
+                .entry(key)
+                .or_insert((MoneyPerFlow(0.0), Dimensionless(0.0)));
+            *cost_sum += marginal_cost * Dimensionless(activity_limit.value());
+            *weight_sum += Dimensionless(activity_limit.value());
         }
     }
 
-    // Return the calculated marginal prices
+    // Compute per-group weighted average per candidate, then take the min across candidates
+    let mut cand_group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    for ((_, commodity_id, region_id, group), (cost_sum, weight_sum)) in &cand_accum {
+        if *weight_sum < Dimensionless::EPSILON {
+            continue;
+        }
+        let avg_cost = *cost_sum / *weight_sum;
+        cand_group_prices
+            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
+            .and_modify(|c| *c = c.min(avg_cost))
+            .or_insert(avg_cost);
+    }
+
+    // Expand candidate groups to individual time slices
+    for ((commodity_id, region_id, group), group_price) in &cand_group_prices {
+        for (ts, _) in group.iter(time_slice_info) {
+            prices.insert(
+                (commodity_id.clone(), region_id.clone(), ts.clone()),
+                *group_price,
+            );
+        }
+    }
+
     prices
 }
 
@@ -506,39 +607,37 @@ where
 ///
 /// # Arguments
 ///
-/// * `activity_keys_for_existing` - Iterator over activity keys from optimisation solution for
-///   existing assets
-/// * `activity_keys_for_candidates` - Iterator over activity keys from optimisation solution for
-///   candidate assets
+/// * `activity_for_existing` - Iterator over `(asset, time_slice, activity)` from optimisation
+///   solution for existing assets
+/// * `activity_keys_for_candidates` - Iterator over `(asset, time_slice)` for candidate assets
 /// * `annual_activities` - Map of annual activities for each asset computed by
 ///   `calculate_annual_activities`. This only needs to include existing assets.
 /// * `upstream_prices` - Prices for commodities upstream of the ones we are calculating prices for
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
+/// * `commodities` - Map of all commodities (used to look up each commodity's `time_slice_level`)
+/// * `time_slice_info` - Time slice information (used to expand groups to individual time slices)
 ///
 /// # Returns
 ///
 /// A map of full cost prices for the specified markets in all time slices
 fn calculate_full_cost_prices<'a, I, J>(
-    activity_keys_for_existing: I,
+    activity_for_existing: I,
     activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
+    commodities: &CommodityMap,
+    time_slice_info: &TimeSliceInfo,
 ) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
+    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
-
-    // Start by looking at existing assets
-    // Calculate highest full cost for each commodity/region/time slice
-    // Keep track of keys with prices - missing keys will be handled by candidates later
-    let mut annual_fixed_costs_cache = HashMap::new();
-    let mut priced_by_existing = HashSet::new();
-    for (asset, time_slice) in activity_keys_for_existing {
+    // For each (asset, commodity, region, group), accumulate marginal costs weighted by
+    let mut existing_accum: HashMap<_, GroupAccum> = HashMap::new();
+    for (asset, time_slice, activity) in activity_for_existing {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
 
@@ -548,18 +647,9 @@ where
             continue;
         }
 
-        // Only proceed if the asset produces at least one commodity we need prices for
-        if !asset
-            .iter_output_flows()
-            .any(|flow| markets_to_price.contains(&(flow.commodity.id.clone(), region_id.clone())))
-        {
-            continue;
-        }
-
-        // Calculate/cache annual fixed costs for this asset
-        let annual_fixed_costs_per_flow = *annual_fixed_costs_cache
-            .entry(asset.clone())
-            .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activity));
+        let activity_limit = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
+            .end();
 
         // Iterate over all the SED/SVD marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
@@ -568,45 +658,103 @@ where
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
         ) {
-            // Add annual fixed costs per flow to marginal cost to get full cost
-            let marginal_cost = marginal_cost + annual_fixed_costs_per_flow;
-
-            // Update the highest cost for this commodity/region/time slice
-            let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-            prices
-                .entry(key.clone())
-                .and_modify(|c| *c = c.max(marginal_cost))
-                .or_insert(marginal_cost);
-            priced_by_existing.insert(key);
+            let group = commodities[&commodity_id]
+                .time_slice_level
+                .containing_selection(time_slice);
+            let key = (
+                asset.clone(),
+                commodity_id.clone(),
+                region_id.clone(),
+                group,
+            );
+            let accum = existing_accum.entry(key).or_default();
+            accum.add(marginal_cost, activity, activity_limit);
         }
     }
 
-    // Next, look at candidate assets for any markets not covered by existing assets
-    // For these we assume full utilisation, and take the _lowest_ full cost
-    for (asset, time_slice) in activity_keys_for_candidates {
-        let region_id = asset.region_id();
+    // Compute per-group weighted-average marginal cost per asset, add fixed costs, then take max
+    let mut group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut priced_groups: HashSet<_> = HashSet::new();
+    let mut existing_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
 
-        // Only consider markets not already priced by existing assets
-        let should_process = |cid: &CommodityID| {
-            markets_to_price.contains(&(cid.clone(), region_id.clone()))
-                && !priced_by_existing.contains(&(
-                    cid.clone(),
-                    region_id.clone(),
-                    time_slice.clone(),
-                ))
+    for ((asset, commodity_id, region_id, group), accum) in &existing_accum {
+        // Use actual activity weights if any activity occurred in this group; otherwise fall back
+        // to max potential activity weights
+        let Some(avg_mc) = accum.solve() else {
+            continue;
         };
 
-        // Only proceed if the asset produces at least one commodity we need prices for
-        if !asset
-            .iter_output_flows()
-            .any(|flow| should_process(&flow.commodity.id))
-        {
+        let annual_fixed_costs_per_flow = *existing_fixed_costs_cache
+            .entry(asset.clone())
+            .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activities[asset]));
+
+        let full_cost = avg_mc + annual_fixed_costs_per_flow;
+        group_prices
+            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
+            .and_modify(|c| *c = c.max(full_cost))
+            .or_insert(full_cost);
+        priced_groups.insert((commodity_id.clone(), region_id.clone(), group.clone()));
+    }
+
+    // Expand each group to individual time slices
+    let mut prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    for ((commodity_id, region_id, group), group_price) in &group_prices {
+        for (ts, _) in group.iter(time_slice_info) {
+            prices.insert(
+                (commodity_id.clone(), region_id.clone(), ts.clone()),
+                *group_price,
+            );
+        }
+    }
+
+    // Candidate assets: assume full dispatch, use limit weights, take the min across candidates
+    let mut cand_accum: HashMap<_, (MoneyPerFlow, Dimensionless)> = HashMap::new();
+    for (asset, time_slice) in activity_keys_for_candidates {
+        let region_id = asset.region_id();
+        let activity_limit = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
+            .end();
+
+        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
+            upstream_prices,
+            year,
+            time_slice,
+            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
+        ) {
+            let group = commodities[&commodity_id]
+                .time_slice_level
+                .containing_selection(time_slice);
+
+            // Skip groups already covered by existing assets
+            if priced_groups.contains(&(commodity_id.clone(), region_id.clone(), group.clone())) {
+                continue;
+            }
+
+            let key = (
+                asset.clone(),
+                commodity_id.clone(),
+                region_id.clone(),
+                group,
+            );
+            let (cost_sum, weight_sum) = cand_accum
+                .entry(key)
+                .or_insert((MoneyPerFlow(0.0), Dimensionless(0.0)));
+            *cost_sum += marginal_cost * Dimensionless(activity_limit.value());
+            *weight_sum += Dimensionless(activity_limit.value());
+        }
+    }
+
+    // Compute per-group weighted average, add fixed costs, take the min across candidates
+    let mut cand_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut cand_group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    for ((asset, commodity_id, region_id, group), (cost_sum, weight_sum)) in &cand_accum {
+        if *weight_sum < Dimensionless::EPSILON {
             continue;
         }
+        let avg_mc = *cost_sum / *weight_sum;
 
-        // Calculate/cache annual fixed cost per flow for this asset assuming full dispatch
-        // (bound by the activity limits of the asset)
-        let annual_fixed_costs_per_flow = *annual_fixed_costs_cache
+        // For candidates, assume full annual dispatch
+        let annual_fixed_costs_per_flow = *cand_fixed_costs_cache
             .entry(asset.clone())
             .or_insert_with(|| {
                 asset.get_annual_fixed_costs_per_flow(
@@ -616,26 +764,23 @@ where
                 )
             });
 
-        // Iterate over all the SED/SVD marginal costs for markets we need prices for
-        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            upstream_prices,
-            year,
-            time_slice,
-            |cid: &CommodityID| should_process(cid),
-        ) {
-            // Add annual fixed costs per flow to marginal cost to get full cost
-            let full_cost = marginal_cost + annual_fixed_costs_per_flow;
+        let full_cost = avg_mc + annual_fixed_costs_per_flow;
+        cand_group_prices
+            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
+            .and_modify(|c| *c = c.min(full_cost))
+            .or_insert(full_cost);
+    }
 
-            // Update the _lowest_ cost for this commodity/region/time slice
-            let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-            prices
-                .entry(key)
-                .and_modify(|c| *c = c.min(full_cost))
-                .or_insert(full_cost);
+    // Expand candidate groups to individual time slices
+    for ((commodity_id, region_id, group), group_price) in &cand_group_prices {
+        for (ts, _) in group.iter(time_slice_info) {
+            prices.insert(
+                (commodity_id.clone(), region_id.clone(), ts.clone()),
+                *group_price,
+            );
         }
     }
 
-    // Return the calculated full cost prices
     prices
 }
 
@@ -644,7 +789,7 @@ mod tests {
     use super::*;
     use crate::asset::Asset;
     use crate::asset::AssetRef;
-    use crate::commodity::{Commodity, CommodityID};
+    use crate::commodity::{Commodity, CommodityID, CommodityMap};
     use crate::fixture::{
         commodity_id, other_commodity, region_id, sed_commodity, time_slice, time_slice_info,
     };
@@ -830,7 +975,11 @@ mod tests {
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
 
-        let existing = vec![(&asset_ref, &time_slice)];
+        let mut commodities = CommodityMap::new();
+        commodities.insert(b.id.clone(), Rc::new(b.clone()));
+        commodities.insert(c.id.clone(), Rc::new(c.clone()));
+
+        let existing = vec![(&asset_ref, &time_slice, Activity(1.0))];
         let candidates = Vec::new();
 
         let prices = calculate_marginal_cost_prices(
@@ -839,6 +988,8 @@ mod tests {
             &shadow_prices,
             2015u32,
             &markets,
+            &commodities,
+            &time_slice_info,
         );
 
         assert_price_approx(
@@ -906,7 +1057,11 @@ mod tests {
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
 
-        let existing = vec![(&asset_ref, &time_slice)];
+        let mut commodities = CommodityMap::new();
+        commodities.insert(b.id.clone(), Rc::new(b.clone()));
+        commodities.insert(c.id.clone(), Rc::new(c.clone()));
+
+        let existing = vec![(&asset_ref, &time_slice, Activity(2.0))];
         let candidates = Vec::new();
 
         let mut annual_activities = HashMap::new();
@@ -919,6 +1074,8 @@ mod tests {
             &shadow_prices,
             2015u32,
             &markets,
+            &commodities,
+            &time_slice_info,
         );
 
         assert_price_approx(&prices, &b.id, &region_id, &time_slice, MoneyPerFlow(5.0));
