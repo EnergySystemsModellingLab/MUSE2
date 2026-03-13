@@ -25,8 +25,8 @@ milestone_year,commodity_id,region_id,time_slice,price
 2025,electricity,R1,all-year.evening,15.26529810765
 2025,gas,R1,all-year.night,2.55
 2025,gas,R1,all-year.morning,2.55
-2025,gas,R1,all-year.afternoon,2.55
-2025,gas,R1,all-year.early-peak,2.55
+2025,gas,R1,all-year.afternoon,2.5500000000000007
+2025,gas,R1,all-year.early-peak,2.5500000000000007
 2025,gas,R1,all-year.late-peak,2.55
 2025,gas,R1,all-year.evening,2.55
 2025,heat,R1,all-year.night,6.10611924306
