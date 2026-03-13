@@ -215,7 +215,7 @@ milestone_year,commodity_id,region_id,time_slice,price
 2045,heat,R2,all-year.early-peak,2.9579999999999997
 2045,heat,R2,all-year.late-peak,2.9579999999999997
 2045,heat,R2,all-year.evening,2.9579999999999997
-2050,gas,R2,all-year.night,2.55
+2050,gas,R2,all-year.night,2.5500000000000003
 2050,gas,R2,all-year.morning,2.55
 2050,gas,R2,all-year.afternoon,2.55
 2050,gas,R2,all-year.early-peak,2.55
@@ -233,12 +233,6 @@ milestone_year,commodity_id,region_id,time_slice,price
 2050,electricity,R2,all-year.early-peak,4.2585
 2050,electricity,R2,all-year.late-peak,4.2585
 2050,electricity,R2,all-year.evening,4.2585
-2050,gas,R2,all-year.night,2.5500000000000003
-2050,gas,R2,all-year.morning,2.55
-2050,gas,R2,all-year.afternoon,2.55
-2050,gas,R2,all-year.early-peak,2.55
-2050,gas,R2,all-year.late-peak,2.55
-2050,gas,R2,all-year.evening,2.55
 2050,heat,R1,all-year.night,-0.0
 2050,heat,R1,all-year.morning,-0.0
 2050,heat,R1,all-year.afternoon,-0.0
