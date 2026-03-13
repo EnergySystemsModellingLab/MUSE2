@@ -263,6 +263,14 @@ impl Solution<'_> {
             .map(|((asset, time_slice), &value)| (asset, time_slice, Activity(value)))
     }
 
+    /// Iterate over the keys for activity for each existing asset
+    pub fn iter_activity_keys_for_existing(
+        &self,
+    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
+        self.iter_activity_for_existing()
+            .map(|(asset, time_slice, _activity)| (asset, time_slice))
+    }
+
     /// Activity for each candidate asset
     pub fn iter_activity_for_candidates(
         &self,

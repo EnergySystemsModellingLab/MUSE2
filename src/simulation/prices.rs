@@ -91,9 +91,12 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
         // Add prices for full cost commodities
         if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
+            let annual_activities =
+                calculate_annual_activities(solution.iter_activity_for_existing());
             let full_cost_prices = calculate_full_cost_prices(
                 solution.iter_activity_for_existing(),
                 solution.iter_activity_keys_for_candidates(),
+                &annual_activities,
                 &result,
                 year,
                 fullcost_set,
@@ -423,7 +426,7 @@ fn expand_groups_to_prices(
 ///
 /// For commodities with seasonal/annual time slice levels, marginal costs are weighted by
 /// activity (or the maximum potential activity for candidates) to get a time slice-weighted average
-/// marginal cost for each asset, before taking the max across assets. Consequently, the price of
+/// marginal cost for each asset, before taking the max across assets. Consequentially, the price of
 /// these commodities is flat within each season/year.
 ///
 /// # Arguments
@@ -622,7 +625,7 @@ where
 ///
 /// For commodities with seasonal/annual time slice levels, costs are weighted by activity (or the
 /// maximum potential activity for candidates) to get a time slice-weighted average cost for each
-/// asset, before taking the max across assets. Consequently, the price of these commodities is
+/// asset, before taking the max across assets. Consequentially, the price of these commodities is
 /// flat within each season/year.
 ///
 /// # Arguments
@@ -639,10 +642,10 @@ where
 /// # Returns
 ///
 /// A map of full cost prices for the specified markets in all time slices
-#[allow(clippy::too_many_lines)]
 fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
+    annual_activities: &HashMap<AssetRef, Activity>,
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
@@ -653,18 +656,16 @@ where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    // We need annual activities for existing assets to calculate capital costs per flow
-    let activity_for_existing: Vec<_> = activity_for_existing.collect();
-    let annual_activities = calculate_annual_activities(activity_for_existing.iter().copied());
-
     // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
-    // commodities, marginal costs are weighted by activity
+    // commodities, marginal costs are weighted by activity (or the activity limit for assets with
+    // no activity)
     let mut existing_accum: HashMap<_, GroupAccum> = HashMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
 
-        // If annual activity is zero, we can't calculate a capital cost per flow, so skip
+        // If annual activity is zero, we can't calculate a capital cost per flow, so skip this
+        // asset.
         if annual_activity < Activity::EPSILON {
             continue;
         }
@@ -1114,9 +1115,13 @@ mod tests {
         let existing = vec![(&asset_ref, &time_slice, Activity(2.0))];
         let candidates = Vec::new();
 
+        let mut annual_activities = HashMap::new();
+        annual_activities.insert(asset_ref.clone(), Activity(2.0));
+
         let prices = calculate_full_cost_prices(
             existing.into_iter(),
             candidates.into_iter(),
+            &annual_activities,
             &shadow_prices,
             2015u32,
             &markets,
