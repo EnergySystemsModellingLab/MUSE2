@@ -32,6 +32,9 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Set up empty prices map
     let mut result = CommodityPrices::default();
 
+    // Lazily computed only if at least one FullCost market is encountered.
+    let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
+
     // Get investment order for the year - prices will be calculated in the reverse of this order
     let investment_order = &model.investment_order[&year];
 
@@ -91,12 +94,13 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
         // Add prices for full cost commodities
         if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
-            let annual_activities =
-                calculate_annual_activities(solution.iter_activity_for_existing());
+            let annual_activities = annual_activities.get_or_insert_with(|| {
+                calculate_annual_activities(solution.iter_activity_for_existing())
+            });
             let full_cost_prices = calculate_full_cost_prices(
                 solution.iter_activity_for_existing(),
                 solution.iter_activity_keys_for_candidates(),
-                &annual_activities,
+                annual_activities,
                 &result,
                 year,
                 fullcost_set,
@@ -426,7 +430,7 @@ fn expand_groups_to_prices(
 ///
 /// For commodities with seasonal/annual time slice levels, marginal costs are weighted by
 /// activity (or the maximum potential activity for candidates) to get a time slice-weighted average
-/// marginal cost for each asset, before taking the max across assets. Consequentially, the price of
+/// marginal cost for each asset, before taking the max across assets. Consequently, the price of
 /// these commodities is flat within each season/year.
 ///
 /// # Arguments
@@ -625,7 +629,7 @@ where
 ///
 /// For commodities with seasonal/annual time slice levels, costs are weighted by activity (or the
 /// maximum potential activity for candidates) to get a time slice-weighted average cost for each
-/// asset, before taking the max across assets. Consequentially, the price of these commodities is
+/// asset, before taking the max across assets. Consequently, the price of these commodities is
 /// flat within each season/year.
 ///
 /// # Arguments
@@ -642,6 +646,7 @@ where
 /// # Returns
 ///
 /// A map of full cost prices for the specified markets in all time slices
+#[allow(clippy::too_many_arguments)]
 fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
