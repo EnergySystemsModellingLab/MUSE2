@@ -677,6 +677,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         model.set_option("simplex_max_concurrency", 1);
         model.set_option("solver", "simplex");
         model.set_option("presolve", "on");
+        model.set_option("mip_heuristic_run_rins", false);
+        model.set_option("mip_heuristic_run_rens", false);
 
         // Solve model
         let solution = solve_optimal(model)?;
