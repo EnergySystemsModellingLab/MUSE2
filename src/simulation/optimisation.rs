@@ -654,18 +654,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.year,
         );
 
-        let mut model = problem.optimise(Sense::Minimise);
-
-        model.set_option("random_seed", 42);
-        model.set_option("parallel", "off");
-        model.set_option("simplex_max_concurrency", 1);
-        model.set_option("solver", "simplex");
-        model.set_option("presolve", "on");
-        model.set_option("mip_heuristic_run_rins", false);
-        model.set_option("mip_heuristic_run_rens", false);
-
         // Solve model
-        let solution = solve_optimal(model)?;
+        let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
 
         let solution = Solution {
             solution: solution.get_solution(),
