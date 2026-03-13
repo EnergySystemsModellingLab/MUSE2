@@ -31,7 +31,7 @@ repos:
         files: /settings\.toml$
         types_or: [toml]
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.48.0
+    rev: v0.47.0
     hooks:
       - id: markdownlint-fix
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -53,7 +53,7 @@ repos:
       - id: clippy
         args: ["--all-targets", "--", "-D", "warnings"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.5
+    rev: v0.15.4
     hooks:
       - id: ruff-check
         types_or: [python]
@@ -65,12 +65,12 @@ repos:
     hooks:
       - id: nbstripout
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.2
+    rev: v2.4.1
     hooks:
       - id: codespell
         args: [--ignore-words, .codespell_ignore.txt]
         exclude: \.svg$
-  - repo: https://github.com/EnergySystemsModellingLab/cffconvert
-    rev: 2.1.0
+  - repo: https://github.com/citation-file-format/cffconvert
+    rev: b6045d78aac9e02b039703b030588d54d53262ac
     hooks:
       - id: validate-cff

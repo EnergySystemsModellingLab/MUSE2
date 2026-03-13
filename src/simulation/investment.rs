@@ -19,8 +19,7 @@ use std::fmt::Display;
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
 use appraisal::{
-    AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
-    sort_appraisal_outputs_by_investment_priority,
+    AppraisalOutput, appraise_investment, sort_appraisal_outputs_by_investment_priority,
 };
 
 /// A map of demand across time slices for a specific market
@@ -652,7 +651,7 @@ fn get_candidate_assets<'a>(
 }
 
 /// Print debug message if there are multiple equally good outputs
-fn log_on_equal_appraisal_outputs(
+fn warn_on_equal_appraisal_outputs(
     outputs: &[AppraisalOutput],
     agent_id: &AgentID,
     commodity_id: &CommodityID,
@@ -662,7 +661,11 @@ fn log_on_equal_appraisal_outputs(
         return;
     }
 
-    let num_identical = count_equal_and_best_appraisal_outputs(outputs);
+    // Count the number of identical (or nearly identical) appraisal outputs
+    let num_identical = outputs[1..]
+        .iter()
+        .take_while(|output| outputs[0].compare_metric(output).is_eq())
+        .count();
 
     if num_identical > 0 {
         let asset_details = outputs[..=num_identical]
@@ -826,7 +829,7 @@ fn select_best_assets(
         }
 
         // Warn if there are multiple equally good assets
-        log_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
+        warn_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
 
         let best_output = outputs_for_opts.into_iter().next().unwrap();
 
