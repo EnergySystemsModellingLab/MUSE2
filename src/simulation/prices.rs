@@ -274,12 +274,12 @@ fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
     shadow_prices: &CommodityPrices,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
 {
     // Calculate highest activity dual for each commodity/region/time slice
-    let mut highest_duals = HashMap::new();
+    let mut highest_duals = IndexMap::new();
     for (asset, time_slice, dual) in activity_duals {
         let region_id = asset.region_id();
 
@@ -305,7 +305,7 @@ where
     }
 
     // Add this to the shadow price for each commodity/region/time slice
-    let mut scarcity_prices = HashMap::new();
+    let mut scarcity_prices = IndexMap::new();
     for ((commodity, region, time_slice), highest_dual) in &highest_duals {
         // There should always be a shadow price for commodities we are considering here, so it
         // should be safe to unwrap
@@ -379,12 +379,12 @@ fn calculate_marginal_cost_prices<'a, I, J>(
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
+    let mut prices: IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = IndexMap::new();
 
     // Start by looking at existing assets
     // Calculate highest marginal cost for each commodity/region/time slice
@@ -526,12 +526,12 @@ fn calculate_full_cost_prices<'a, I, J>(
     upstream_prices: &CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    let mut prices: HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = HashMap::new();
+    let mut prices: IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> = IndexMap::new();
 
     // Start by looking at existing assets
     // Calculate highest full cost for each commodity/region/time slice
@@ -719,7 +719,7 @@ mod tests {
     }
 
     fn assert_price_approx(
-        prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+        prices: &IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
         commodity: &CommodityID,
         region: &RegionID,
         time_slice: &TimeSliceID,

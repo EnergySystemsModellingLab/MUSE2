@@ -120,6 +120,8 @@ pub struct FilePatch {
     filename: String,
     /// The header row (optional). If `None`, the header is not checked against base files.
     header_row: Option<Vec<String>>,
+    /// Full replacement content for this file (optional)
+    replacement_content: Option<String>,
     /// Rows to delete (each row is a vector of fields)
     to_delete: CSVTable,
     /// Rows to add (each row is a vector of fields)
@@ -132,6 +134,7 @@ impl FilePatch {
         FilePatch {
             filename: filename.into(),
             header_row: None,
+            replacement_content: None,
             to_delete: IndexSet::new(),
             to_add: IndexSet::new(),
         }
@@ -139,6 +142,10 @@ impl FilePatch {
 
     /// Set the header row for this patch (header should be a comma-joined string, e.g. "a,b,c").
     pub fn with_header(mut self, header: impl Into<String>) -> Self {
+        assert!(
+            self.replacement_content.is_none(),
+            "Cannot set header when replacement content is set for this FilePatch",
+        );
         assert!(
             self.header_row.is_none(),
             "Header already set for this FilePatch",
@@ -149,8 +156,48 @@ impl FilePatch {
         self
     }
 
+    /// Set full replacement content for this file from a slice of lines.
+    ///
+    /// Each line is joined with newlines, and a trailing newline is added.
+    /// All lines must have the same number of columns (commas).
+    /// Example: `with_replacement(&["header1,header2", "value1,value2"])`
+    pub fn with_replacement(mut self, lines: &[&str]) -> Self {
+        assert!(
+            self.header_row.is_none(),
+            "Cannot set replacement content when header is set for this FilePatch",
+        );
+        assert!(
+            self.to_delete.is_empty() && self.to_add.is_empty(),
+            "Cannot set replacement content when additions/deletions are set for this FilePatch",
+        );
+        assert!(
+            self.replacement_content.is_none(),
+            "Replacement content already set for this FilePatch",
+        );
+
+        // Validate that all lines have the same number of columns
+        if !lines.is_empty() {
+            let first_col_count = lines[0].matches(',').count() + 1;
+            for (idx, line) in lines.iter().enumerate() {
+                let col_count = line.matches(',').count() + 1;
+                assert_eq!(
+                    col_count, first_col_count,
+                    "Line {idx} has {col_count} columns but line 0 has {first_col_count}: {line:?}"
+                );
+            }
+        }
+
+        let content = lines.join("\n") + "\n";
+        self.replacement_content = Some(content);
+        self
+    }
+
     /// Add a row to the patch (row should be a comma-joined string, e.g. "a,b,c").
     pub fn with_addition(mut self, row: impl Into<String>) -> Self {
+        assert!(
+            self.replacement_content.is_none(),
+            "Cannot add rows when replacement content is set for this FilePatch",
+        );
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.to_add.insert(v);
@@ -159,6 +206,10 @@ impl FilePatch {
 
     /// Mark a row for deletion from the base (row should be a comma-joined string, e.g. "a,b,c").
     pub fn with_deletion(mut self, row: impl Into<String>) -> Self {
+        assert!(
+            self.replacement_content.is_none(),
+            "Cannot delete rows when replacement content is set for this FilePatch",
+        );
         let s = row.into();
         let v = s.split(',').map(|s| s.trim().to_string()).collect();
         self.to_delete.insert(v);
@@ -167,13 +218,21 @@ impl FilePatch {
 
     /// Apply this patch to a base model and return the modified CSV as a string.
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
-        // Read the base file to string
+        // Read and validate the base file path
         let base_path = base_model_dir.join(&self.filename);
         ensure!(
             base_path.exists() && base_path.is_file(),
             "Base file for patching does not exist: {}",
             base_path.display()
         );
+
+        // If this patch is a full replacement, validate the base file exists
+        // (checked above) and return the replacement content
+        if let Some(content) = &self.replacement_content {
+            return Ok(content.clone());
+        }
+
+        // Read the base file to string
         let base = fs::read_to_string(&base_path)?;
 
         // Apply the patch
@@ -232,7 +291,6 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
             header_row_vec.join(", ")
         );
     }
-
     // Read all rows from the base, preserving order and checking for duplicates
     let mut base_rows: CSVTable = CSVTable::new();
     for result in reader.records() {
@@ -275,6 +333,16 @@ fn modify_base_with_patch(base: &str, patch: &FilePatch) -> Result<String> {
         ensure!(
             base_rows.insert(add_row.clone()),
             "Addition already present in base file: {add_row:?}"
+        );
+    }
+
+    // Check all rows match base header length
+    let expected_len = base_header_vec.len();
+    for row in &base_rows {
+        ensure!(
+            row.len() == expected_len,
+            "Row has {} columns but header has {expected_len}: {row:?}",
+            row.len(),
         );
     }
 
@@ -377,6 +445,73 @@ mod tests {
         let assets_content = std::fs::read_to_string(assets_path).unwrap();
         assert!(!assets_content.contains("GASDRV,GBR,A0_GEX,4002.26,2020"));
         assert!(assets_content.contains("GASDRV,GBR,A0_GEX,4003.26,2020"));
+    }
+
+    #[test]
+    fn file_patch_with_replacement() {
+        let expected = "col1,col2\nnew1,new2\n";
+
+        let model_dir = ModelPatch::from_example("simple")
+            .with_file_patch(
+                FilePatch::new("assets.csv").with_replacement(&["col1,col2", "new1,new2"]),
+            )
+            .build_to_tempdir()
+            .unwrap();
+
+        let assets_path = model_dir.path().join("assets.csv");
+        let assets_content = std::fs::read_to_string(assets_path).unwrap();
+        assert_eq!(assets_content, expected);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot set replacement content when header is set for this FilePatch"
+    )]
+    fn file_patch_replacement_after_header_panics() {
+        let _ = FilePatch::new("assets.csv")
+            .with_header("col1,col2")
+            .with_replacement(&["col1,col2", "a,b"]);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot set replacement content when additions/deletions are set for this FilePatch"
+    )]
+    fn file_patch_replacement_after_addition_panics() {
+        let _ = FilePatch::new("assets.csv")
+            .with_addition("a,b")
+            .with_replacement(&["col1,col2", "a,b"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot add rows when replacement content is set for this FilePatch")]
+    fn file_patch_addition_after_replacement_panics() {
+        let _ = FilePatch::new("assets.csv")
+            .with_replacement(&["col1,col2", "a,b"])
+            .with_addition("c,d");
+    }
+
+    #[test]
+    fn file_patch_with_replacement_missing_base_file_fails() {
+        let model_patch = ModelPatch::from_example("simple").with_file_patch(
+            FilePatch::new("not_a_real_file.csv").with_replacement(&["x,y", "1,2"]),
+        );
+
+        let expected = format!(
+            "Base file for patching does not exist: {}",
+            std::path::PathBuf::from("examples")
+                .join("simple")
+                .join("not_a_real_file.csv")
+                .display()
+        );
+
+        assert_error!(model_patch.build_to_tempdir(), expected);
+    }
+
+    #[test]
+    #[should_panic(expected = "Line 1 has 2 columns but line 0 has 3")]
+    fn file_patch_replacement_column_count_mismatch_panics() {
+        let _ = FilePatch::new("test.csv").with_replacement(&["col1,col2,col3", "a,b"]);
     }
 
     #[test]
