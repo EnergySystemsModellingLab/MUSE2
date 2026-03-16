@@ -100,7 +100,7 @@ fn handle_example_extract_command(name: &str, dest: Option<&Path>, patch: bool) 
 /// If `patch` is `true`, then the corresponding patched example will be extracted.
 fn extract_example(name: &str, patch: bool, dest: &Path) -> Result<()> {
     if patch {
-        let patches = get_patches(name)?;
+        let (file_patches, toml_patch) = get_patches(name)?;
 
         // NB: All patched models are based on `simple`, for now
         let example = Example::from_name("simple").unwrap();
@@ -114,10 +114,12 @@ fn extract_example(name: &str, patch: bool, dest: &Path) -> Result<()> {
 
         // Patch example and put contents in dest
         fs::create_dir(dest).context("Could not create output directory")?;
-        ModelPatch::new(example_path)
-            .with_file_patches(patches.to_owned())
-            .build(dest)
-            .context("Failed to patch example")
+        let mut model_patch =
+            ModelPatch::new(example_path).with_file_patches(file_patches.to_owned());
+        if let Some(toml_patch) = toml_patch.as_ref() {
+            model_patch = model_patch.with_toml_patch(toml_patch);
+        }
+        model_patch.build(dest).context("Failed to patch example")
     } else {
         // Otherwise it's just a regular example
         let example = Example::from_name(name)?;

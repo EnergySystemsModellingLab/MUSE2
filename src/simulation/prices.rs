@@ -282,12 +282,12 @@ fn calculate_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
     shadow_prices: &CommodityPrices,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
 {
     // Calculate highest activity dual for each commodity/region/time slice
-    let mut highest_duals = HashMap::new();
+    let mut highest_duals = IndexMap::new();
     for (asset, time_slice, dual) in activity_duals {
         let region_id = asset.region_id();
 
@@ -313,7 +313,7 @@ where
     }
 
     // Add this to the shadow price for each commodity/region/time slice
-    let mut scarcity_prices = HashMap::new();
+    let mut scarcity_prices = IndexMap::new();
     for ((commodity, region, time_slice), highest_dual) in &highest_duals {
         // There should always be a shadow price for commodities we are considering here, so it
         // should be safe to unwrap
@@ -380,9 +380,9 @@ impl GroupAccum {
 
 /// Expand a map of per-group prices to individual time slices.
 fn expand_groups_to_prices(
-    group_prices: &HashMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
+    group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
     time_slice_info: &TimeSliceInfo,
-    out: &mut HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+    out: &mut IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
 ) {
     for ((commodity_id, region_id, group), &group_price) in group_prices {
         for (ts, _) in group.iter(time_slice_info) {
@@ -455,7 +455,7 @@ fn calculate_marginal_cost_prices<'a, I, J>(
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
@@ -494,7 +494,7 @@ where
     }
 
     // Compute per-group weighted-average marginal cost per asset, then take the max across assets
-    let mut group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     let mut priced_groups: HashSet<_> = HashSet::new();
     for ((_, commodity_id, region_id, group), accum) in &existing_accum {
         // Solve the weighted average marginal cost for this group
@@ -511,7 +511,7 @@ where
     }
 
     // Expand each group to individual time slices
-    let mut prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
     // Candidate assets: weight marginal costs by activity limits (i.e. assume full utilisation)
@@ -553,7 +553,7 @@ where
 
     // Compute per-group weighted average per candidate, then take the min across candidates
     // (i.e. the single most competitive candidate if a small amount of demand was added)
-    let mut cand_group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut cand_group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     for ((_, commodity_id, region_id, group), accum) in &cand_accum {
         let Some(avg_cost) = accum.solve() else {
             continue;
@@ -656,7 +656,7 @@ fn calculate_full_cost_prices<'a, I, J>(
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
@@ -702,7 +702,7 @@ where
     }
 
     // Compute per-group weighted-average marginal cost per asset, add fixed costs, then take max
-    let mut group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     let mut priced_groups: HashSet<_> = HashSet::new();
     let mut existing_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
     for ((asset, commodity_id, region_id, group), accum) in &existing_accum {
@@ -726,7 +726,7 @@ where
     }
 
     // Expand each group to individual time slices
-    let mut prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
     // Candidate assets: weight marginal costs by activity limits (i.e. assume full utilisation)
@@ -768,7 +768,7 @@ where
 
     // Compute per-group weighted average, add fixed costs, take the min across candidates
     let mut cand_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
-    let mut cand_group_prices: HashMap<_, MoneyPerFlow> = HashMap::new();
+    let mut cand_group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     for ((asset, commodity_id, region_id, group), accum) in &cand_accum {
         // Solve the weighted average marginal cost for this group
         let Some(avg_mc) = accum.solve() else {
@@ -881,7 +881,7 @@ mod tests {
     }
 
     fn assert_price_approx(
-        prices: &HashMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
+        prices: &IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
         commodity: &CommodityID,
         region: &RegionID,
         time_slice: &TimeSliceID,
