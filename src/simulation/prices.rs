@@ -3,15 +3,82 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::simulation::accumulator::{
-    WeightedAverageAccumulator, WeightedAverageBackupAccumulator,
-};
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
 use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
+
+/// Weighted average accumulator for `MoneyPerFlow`.
+#[derive(Clone, Copy, Debug)]
+struct WeightedAverageAccumulator {
+    numerator: MoneyPerFlow,
+    denominator: Dimensionless,
+}
+
+impl Default for WeightedAverageAccumulator {
+    fn default() -> Self {
+        Self {
+            numerator: MoneyPerFlow(0.0),
+            denominator: Dimensionless(0.0),
+        }
+    }
+}
+
+impl WeightedAverageAccumulator {
+    /// Add a weighted value.
+    fn add(&mut self, value: MoneyPerFlow, weight: Dimensionless) {
+        self.numerator += value * weight;
+        self.denominator += weight;
+    }
+
+    /// Solve the weighted average.
+    fn finalise(&self) -> Option<MoneyPerFlow> {
+        (self.denominator > Dimensionless::EPSILON).then(|| self.numerator / self.denominator)
+    }
+}
+
+/// Weighted average accumulator with a backup weighting path for `MoneyPerFlow`.
+#[derive(Clone, Copy, Debug)]
+struct WeightedAverageBackupAccumulator {
+    primary_numerator: MoneyPerFlow,
+    primary_denominator: Dimensionless,
+    backup_numerator: MoneyPerFlow,
+    backup_denominator: Dimensionless,
+}
+
+impl Default for WeightedAverageBackupAccumulator {
+    fn default() -> Self {
+        Self {
+            primary_numerator: MoneyPerFlow(0.0),
+            primary_denominator: Dimensionless(0.0),
+            backup_numerator: MoneyPerFlow(0.0),
+            backup_denominator: Dimensionless(0.0),
+        }
+    }
+}
+
+impl WeightedAverageBackupAccumulator {
+    /// Add a weighted value with a backup weight.
+    fn add(&mut self, value: MoneyPerFlow, weight: Dimensionless, backup_weight: Dimensionless) {
+        self.primary_numerator += value * weight;
+        self.primary_denominator += weight;
+        self.backup_numerator += value * backup_weight;
+        self.backup_denominator += backup_weight;
+    }
+
+    /// Solve the weighted average, falling back to backup weights if needed.
+    fn finalise(&self) -> Option<MoneyPerFlow> {
+        if self.primary_denominator > Dimensionless::EPSILON {
+            Some(self.primary_numerator / self.primary_denominator)
+        } else if self.backup_denominator > Dimensionless::EPSILON {
+            Some(self.backup_numerator / self.backup_denominator)
+        } else {
+            None
+        }
+    }
+}
 
 /// Calculate commodity prices.
 ///
@@ -337,16 +404,18 @@ where
 fn expand_groups_to_prices(
     group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
     time_slice_info: &TimeSliceInfo,
-    out: &mut IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
-) {
-    for ((commodity_id, region_id, group), &group_price) in group_prices {
-        for (ts, _) in group.iter(time_slice_info) {
-            out.insert(
-                (commodity_id.clone(), region_id.clone(), ts.clone()),
-                group_price,
-            );
-        }
-    }
+) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
+    group_prices
+        .iter()
+        .flat_map(|((commodity_id, region_id, group), &group_price)| {
+            group.iter(time_slice_info).map(move |(ts, _)| {
+                (
+                    (commodity_id.clone(), region_id.clone(), ts.clone()),
+                    group_price,
+                )
+            })
+        })
+        .collect()
 }
 
 /// Calculate marginal cost prices for a set of commodities.
@@ -415,10 +484,9 @@ where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
-    // commodities, marginal costs are weighted by activity (or the activity limit for assets with
-    // no activity)
-    let mut existing_accum: IndexMap<_, WeightedAverageBackupAccumulator<MoneyPerFlow>> =
+    // For each (commodity, region, group), accumulate per-asset marginal costs.
+    // For seasonal/annual commodities, these marginal costs are weighted by activity.
+    let mut existing_accum: IndexMap<_, IndexMap<_, WeightedAverageBackupAccumulator>> =
         IndexMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
@@ -440,45 +508,33 @@ where
                 .time_slice_level
                 .containing_selection(time_slice);
 
-            // Insert the marginal cost into the accumulator for this group
-            let key = (
-                asset.clone(),
-                commodity_id.clone(),
-                region_id.clone(),
-                group,
-            );
-            let accum = existing_accum.entry(key).or_default();
-            accum.add(
-                marginal_cost,
-                Dimensionless(activity.value()),
-                Dimensionless(activity_limit.value()),
-            );
+            existing_accum
+                .entry((commodity_id.clone(), region_id.clone(), group))
+                .or_default()
+                .entry(asset.clone())
+                .or_default()
+                .add(
+                    marginal_cost,
+                    Dimensionless(activity.value()),
+                    Dimensionless(activity_limit.value()),
+                );
         }
     }
 
-    // Compute per-group weighted-average marginal cost per asset, then take the max across assets
-    let mut group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
-    let mut priced_groups: HashSet<_> = HashSet::new();
-    for ((_, commodity_id, region_id, group), accum) in &existing_accum {
-        // Solve the weighted average marginal cost for this group
-        let Some(avg_cost) = accum.finalise() else {
-            continue;
-        };
-
-        // Take the max across assets for each group
-        group_prices
-            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
-            .and_modify(|c| *c = c.max(avg_cost))
-            .or_insert(avg_cost);
-        priced_groups.insert((commodity_id.clone(), region_id.clone(), group.clone()));
-    }
-
-    // Expand each group to individual time slices
-    let mut prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
-    expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
+    // For each group, finalise per-asset weighted averages then reduce to the max across assets
+    let group_prices: IndexMap<_, MoneyPerFlow> = existing_accum
+        .into_iter()
+        .filter_map(|(key, per_asset)| {
+            per_asset
+                .into_values()
+                .filter_map(|inner| inner.finalise())
+                .reduce(|current, value| current.max(value))
+                .map(|v| (key, v))
+        })
+        .collect();
 
     // Candidate assets (assume full utilisation)
-    let mut cand_accum: IndexMap<_, WeightedAverageAccumulator<MoneyPerFlow>> = IndexMap::new();
+    let mut cand_accum: IndexMap<_, IndexMap<_, WeightedAverageAccumulator>> = IndexMap::new();
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
@@ -499,38 +555,37 @@ where
                 .containing_selection(time_slice);
 
             // Skip groups already covered by existing assets
-            if priced_groups.contains(&(commodity_id.clone(), region_id.clone(), group.clone())) {
+            if group_prices.contains_key(&(commodity_id.clone(), region_id.clone(), group.clone()))
+            {
                 continue;
             }
 
-            let key = (
-                asset.clone(),
-                commodity_id.clone(),
-                region_id.clone(),
-                group,
-            );
-            let accum = cand_accum.entry(key).or_default();
-            accum.add(marginal_cost, Dimensionless(activity_limit.value()));
+            cand_accum
+                .entry((commodity_id.clone(), region_id.clone(), group))
+                .or_default()
+                .entry(asset.clone())
+                .or_default()
+                .add(marginal_cost, Dimensionless(activity_limit.value()));
         }
     }
 
-    // Compute per-group weighted average per candidate, then take the min across candidates
-    // (i.e. the single most competitive candidate if a small amount of demand was added)
-    let mut cand_group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
-    for ((_, commodity_id, region_id, group), accum) in &cand_accum {
-        let Some(avg_cost) = accum.finalise() else {
-            continue;
-        };
-        cand_group_prices
-            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
-            .and_modify(|c| *c = c.min(avg_cost))
-            .or_insert(avg_cost);
-    }
+    // For each group, finalise per-candidate weighted averages then reduce to the min across candidates
+    let cand_group_prices: IndexMap<_, MoneyPerFlow> = cand_accum
+        .into_iter()
+        .filter_map(|(key, per_candidate)| {
+            per_candidate
+                .into_values()
+                .filter_map(|inner| inner.finalise())
+                .reduce(|current, value| current.min(value))
+                .map(|v| (key, v))
+        })
+        .collect();
 
-    // Expand candidate groups to individual time slices
-    expand_groups_to_prices(&cand_group_prices, time_slice_info, &mut prices);
+    // Merge existing and candidate group prices, then expand to individual time slices
+    let mut all_group_prices = group_prices;
+    all_group_prices.extend(cand_group_prices);
 
-    prices
+    expand_groups_to_prices(&all_group_prices, time_slice_info)
 }
 
 /// Calculate annual activities for each asset by summing across all time slices
@@ -624,10 +679,9 @@ where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
-    // commodities, marginal costs are weighted by activity (or the activity limit for assets with
-    // no activity)
-    let mut existing_accum: IndexMap<_, WeightedAverageBackupAccumulator<MoneyPerFlow>> =
+    // For each (commodity, region, group), accumulate per-asset marginal costs.
+    // For seasonal/annual commodities, these marginal costs are weighted by activity.
+    let mut existing_accum: IndexMap<_, IndexMap<_, WeightedAverageBackupAccumulator>> =
         IndexMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let annual_activity = annual_activities[asset];
@@ -651,54 +705,52 @@ where
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
         ) {
+            // Get the group according to the commodity's time slice level
             let group = commodities[&commodity_id]
                 .time_slice_level
                 .containing_selection(time_slice);
-            let key = (
-                asset.clone(),
-                commodity_id.clone(),
-                region_id.clone(),
-                group,
-            );
-            let accum = existing_accum.entry(key).or_default();
-            accum.add(
-                marginal_cost,
-                Dimensionless(activity.value()),
-                Dimensionless(activity_limit.value()),
-            );
+
+            existing_accum
+                .entry((commodity_id.clone(), region_id.clone(), group))
+                .or_default()
+                .entry(asset.clone())
+                .or_default()
+                .add(
+                    marginal_cost,
+                    Dimensionless(activity.value()),
+                    Dimensionless(activity_limit.value()),
+                );
         }
     }
 
-    // Compute per-group weighted-average marginal cost per asset, add fixed costs, then take max
-    let mut group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
-    let mut priced_groups: HashSet<_> = HashSet::new();
-    let mut existing_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
-    for ((asset, commodity_id, region_id, group), accum) in &existing_accum {
-        // Solve the weighted average marginal cost for this group
-        let Some(avg_mc) = accum.finalise() else {
-            continue;
-        };
-
-        // Add fixed costs to get the full cost.
-        let annual_fixed_costs_per_flow = *existing_fixed_costs_cache
-            .entry(asset.clone())
-            .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activities[asset]));
-        let full_cost = avg_mc + annual_fixed_costs_per_flow;
-
-        // Take the max across assets for each group
-        group_prices
-            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
-            .and_modify(|c| *c = c.max(full_cost))
-            .or_insert(full_cost);
-        priced_groups.insert((commodity_id.clone(), region_id.clone(), group.clone()));
+    // Compute per-asset annual fixed costs for existing assets.
+    let mut existing_fixed_costs: HashMap<AssetRef, MoneyPerFlow> = HashMap::new();
+    for per_asset in existing_accum.values() {
+        for asset in per_asset.keys() {
+            existing_fixed_costs
+                .entry(asset.clone())
+                .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activities[asset]));
+        }
     }
 
-    // Expand each group to individual time slices
-    let mut prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
-    expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
+    // For each group, finalise per-asset weighted averages, add fixed costs, then reduce to max.
+    let group_prices: IndexMap<_, MoneyPerFlow> = existing_accum
+        .into_iter()
+        .filter_map(|(key, per_asset)| {
+            per_asset
+                .into_iter()
+                .filter_map(|(asset, inner)| {
+                    let avg_mc = inner.finalise()?;
+                    let annual_fixed_costs_per_flow = existing_fixed_costs[&asset];
+                    Some(avg_mc + annual_fixed_costs_per_flow)
+                })
+                .reduce(|current, value| current.max(value))
+                .map(|v| (key, v))
+        })
+        .collect();
 
     // Candidate assets (assume full utilisation)
-    let mut cand_accum: IndexMap<_, WeightedAverageAccumulator<MoneyPerFlow>> = IndexMap::new();
+    let mut cand_accum: IndexMap<_, IndexMap<_, WeightedAverageAccumulator>> = IndexMap::new();
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
@@ -719,54 +771,55 @@ where
                 .containing_selection(time_slice);
 
             // Skip groups already covered by existing assets
-            if priced_groups.contains(&(commodity_id.clone(), region_id.clone(), group.clone())) {
+            if group_prices.contains_key(&(commodity_id.clone(), region_id.clone(), group.clone()))
+            {
                 continue;
             }
 
-            let key = (
-                asset.clone(),
-                commodity_id.clone(),
-                region_id.clone(),
-                group,
-            );
-            let accum = cand_accum.entry(key).or_default();
-            accum.add(marginal_cost, Dimensionless(activity_limit.value()));
+            cand_accum
+                .entry((commodity_id.clone(), region_id.clone(), group))
+                .or_default()
+                .entry(asset.clone())
+                .or_default()
+                .add(marginal_cost, Dimensionless(activity_limit.value()));
         }
     }
 
-    // Compute per-group weighted average, add fixed costs, take the min across candidates
-    let mut cand_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
-    let mut cand_group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
-    for ((asset, commodity_id, region_id, group), accum) in &cand_accum {
-        // Solve the weighted average marginal cost for this group
-        let Some(avg_mc) = accum.finalise() else {
-            continue;
-        };
-
-        // Add fixed costs to get the full cost. For candidates we assume full utilisation
-        let annual_fixed_costs_per_flow = *cand_fixed_costs_cache
-            .entry(asset.clone())
-            .or_insert_with(|| {
+    // Compute per-asset annual fixed costs for candidate assets at full utilisation.
+    let mut cand_fixed_costs: HashMap<AssetRef, MoneyPerFlow> = HashMap::new();
+    for per_candidate in cand_accum.values() {
+        for asset in per_candidate.keys() {
+            cand_fixed_costs.entry(asset.clone()).or_insert_with(|| {
                 asset.get_annual_fixed_costs_per_flow(
                     *asset
                         .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
                         .end(),
                 )
             });
-        let full_cost = avg_mc + annual_fixed_costs_per_flow;
-
-        // Take the min across candidates for each group (i.e. the single most competitive candidate
-        // if a small amount of demand was added)
-        cand_group_prices
-            .entry((commodity_id.clone(), region_id.clone(), group.clone()))
-            .and_modify(|c| *c = c.min(full_cost))
-            .or_insert(full_cost);
+        }
     }
 
-    // Expand candidate groups to individual time slices
-    expand_groups_to_prices(&cand_group_prices, time_slice_info, &mut prices);
+    // For each group, finalise per-candidate weighted averages, add fixed costs, then reduce to min.
+    let cand_group_prices: IndexMap<_, MoneyPerFlow> = cand_accum
+        .into_iter()
+        .filter_map(|(key, per_candidate)| {
+            per_candidate
+                .into_iter()
+                .filter_map(|(asset, inner)| {
+                    let avg_mc = inner.finalise()?;
+                    let annual_fixed_costs_per_flow = cand_fixed_costs[&asset];
+                    Some(avg_mc + annual_fixed_costs_per_flow)
+                })
+                .reduce(|current, value| current.min(value))
+                .map(|v| (key, v))
+        })
+        .collect();
 
-    prices
+    // Merge existing and candidate group prices, then expand to individual time slices
+    let mut all_group_prices = group_prices;
+    all_group_prices.extend(cand_group_prices);
+
+    expand_groups_to_prices(&all_group_prices, time_slice_info)
 }
 
 #[cfg(test)]
