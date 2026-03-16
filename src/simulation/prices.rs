@@ -463,7 +463,7 @@ where
     // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
     // commodities, marginal costs are weighted by activity (or the activity limit for assets with
     // no activity)
-    let mut existing_accum: HashMap<_, GroupAccum> = HashMap::new();
+    let mut existing_accum: IndexMap<_, GroupAccum> = IndexMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
 
@@ -514,12 +514,12 @@ where
     let mut prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
-    // Candidate assets: weight marginal costs by activity limits (i.e. assume full utilisation)
-    let mut cand_accum: HashMap<_, GroupAccum> = HashMap::new();
+    // Candidate assets (assume full utilisation)
+    let mut cand_accum: IndexMap<_, GroupAccum> = IndexMap::new();
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
-        // Get activity limits: used as a to weight marginal costs for seasonal/annual commodities
+        // Get activity limits: used to weight marginal costs for seasonal/annual commodities
         let activity_limit = *asset
             .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
             .end();
@@ -664,7 +664,7 @@ where
     // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
     // commodities, marginal costs are weighted by activity (or the activity limit for assets with
     // no activity)
-    let mut existing_accum: HashMap<_, GroupAccum> = HashMap::new();
+    let mut existing_accum: IndexMap<_, GroupAccum> = IndexMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
@@ -729,12 +729,12 @@ where
     let mut prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
-    // Candidate assets: weight marginal costs by activity limits (i.e. assume full utilisation)
-    let mut cand_accum: HashMap<_, GroupAccum> = HashMap::new();
+    // Candidate assets (assume full utilisation)
+    let mut cand_accum: IndexMap<_, GroupAccum> = IndexMap::new();
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
-        // Get activity limits: used as a to weight marginal costs for seasonal/annual commodities
+        // Get activity limits: used to weight marginal costs for seasonal/annual commodities
         let activity_limit = *asset
             .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
             .end();
