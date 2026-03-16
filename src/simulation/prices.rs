@@ -3,6 +3,9 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
+use crate::simulation::accumulator::{
+    WeightedAverageAccumulator, WeightedAverageBackupAccumulator,
+};
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
@@ -330,54 +333,6 @@ where
     scarcity_prices
 }
 
-/// Helper struct for accumulating weighted marginal costs for a group of (asset, commodity, region,
-/// time slice selection) tuples when calculating marginal cost or full cost prices.
-///
-/// For seasonal/annual commodities, marginal costs are weighted by activity (or the activity limit
-/// for assets with no activity) to get a time slice-weighted average marginal cost for the group.
-struct GroupAccum {
-    // Sum of (marginal cost * activity) across all tuples in the group
-    weighted_cost_numerator: MoneyPerFlow,
-    // Sum of activity across all tuples in the group
-    weighted_cost_denominator: Dimensionless,
-    // Backup numerator and denominator for the case where there's no activity across the group
-    backup_numerator: MoneyPerFlow,
-    backup_denominator: Dimensionless,
-}
-
-impl Default for GroupAccum {
-    fn default() -> Self {
-        Self {
-            weighted_cost_numerator: MoneyPerFlow(0.0),
-            weighted_cost_denominator: Dimensionless(0.0),
-            backup_numerator: MoneyPerFlow(0.0),
-            backup_denominator: Dimensionless(0.0),
-        }
-    }
-}
-
-impl GroupAccum {
-    /// Add a marginal cost to the accumulator
-    fn add(&mut self, marginal_cost: MoneyPerFlow, activity: Activity, activity_limit: Activity) {
-        self.weighted_cost_numerator += marginal_cost * Dimensionless(activity.value());
-        self.weighted_cost_denominator += Dimensionless(activity.value());
-        self.backup_numerator += marginal_cost * Dimensionless(activity_limit.value());
-        self.backup_denominator += Dimensionless(activity_limit.value());
-    }
-
-    /// Solve the weighted average marginal cost for the group, using the backup weights (activity
-    /// limits) if there's no activity across the group. If both denominators are zero, return None.
-    fn solve(&self) -> Option<MoneyPerFlow> {
-        if self.weighted_cost_denominator > Dimensionless::EPSILON {
-            Some(self.weighted_cost_numerator / self.weighted_cost_denominator)
-        } else if self.backup_denominator > Dimensionless::EPSILON {
-            Some(self.backup_numerator / self.backup_denominator)
-        } else {
-            None
-        }
-    }
-}
-
 /// Expand a map of per-group prices to individual time slices.
 fn expand_groups_to_prices(
     group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
@@ -463,7 +418,8 @@ where
     // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
     // commodities, marginal costs are weighted by activity (or the activity limit for assets with
     // no activity)
-    let mut existing_accum: IndexMap<_, GroupAccum> = IndexMap::new();
+    let mut existing_accum: IndexMap<_, WeightedAverageBackupAccumulator<MoneyPerFlow>> =
+        IndexMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
 
@@ -479,9 +435,12 @@ where
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
         ) {
+            // Get the group according to the commodity's time slice level
             let group = commodities[&commodity_id]
                 .time_slice_level
                 .containing_selection(time_slice);
+
+            // Insert the marginal cost into the accumulator for this group
             let key = (
                 asset.clone(),
                 commodity_id.clone(),
@@ -489,7 +448,11 @@ where
                 group,
             );
             let accum = existing_accum.entry(key).or_default();
-            accum.add(marginal_cost, activity, activity_limit);
+            accum.add(
+                marginal_cost,
+                Dimensionless(activity.value()),
+                Dimensionless(activity_limit.value()),
+            );
         }
     }
 
@@ -498,7 +461,7 @@ where
     let mut priced_groups: HashSet<_> = HashSet::new();
     for ((_, commodity_id, region_id, group), accum) in &existing_accum {
         // Solve the weighted average marginal cost for this group
-        let Some(avg_cost) = accum.solve() else {
+        let Some(avg_cost) = accum.finalise() else {
             continue;
         };
 
@@ -515,7 +478,7 @@ where
     expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
     // Candidate assets (assume full utilisation)
-    let mut cand_accum: IndexMap<_, GroupAccum> = IndexMap::new();
+    let mut cand_accum: IndexMap<_, WeightedAverageAccumulator<MoneyPerFlow>> = IndexMap::new();
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
@@ -547,7 +510,7 @@ where
                 group,
             );
             let accum = cand_accum.entry(key).or_default();
-            accum.add(marginal_cost, Activity(0.0), activity_limit);
+            accum.add(marginal_cost, Dimensionless(activity_limit.value()));
         }
     }
 
@@ -555,7 +518,7 @@ where
     // (i.e. the single most competitive candidate if a small amount of demand was added)
     let mut cand_group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     for ((_, commodity_id, region_id, group), accum) in &cand_accum {
-        let Some(avg_cost) = accum.solve() else {
+        let Some(avg_cost) = accum.finalise() else {
             continue;
         };
         cand_group_prices
@@ -646,7 +609,7 @@ where
 /// # Returns
 ///
 /// A map of full cost prices for the specified markets in all time slices
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn calculate_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
@@ -664,7 +627,8 @@ where
     // For each (asset, commodity, region, group), accumulate marginal costs. For seasonal/annual
     // commodities, marginal costs are weighted by activity (or the activity limit for assets with
     // no activity)
-    let mut existing_accum: IndexMap<_, GroupAccum> = IndexMap::new();
+    let mut existing_accum: IndexMap<_, WeightedAverageBackupAccumulator<MoneyPerFlow>> =
+        IndexMap::new();
     for (asset, time_slice, activity) in activity_for_existing {
         let annual_activity = annual_activities[asset];
         let region_id = asset.region_id();
@@ -697,7 +661,11 @@ where
                 group,
             );
             let accum = existing_accum.entry(key).or_default();
-            accum.add(marginal_cost, activity, activity_limit);
+            accum.add(
+                marginal_cost,
+                Dimensionless(activity.value()),
+                Dimensionless(activity_limit.value()),
+            );
         }
     }
 
@@ -707,7 +675,7 @@ where
     let mut existing_fixed_costs_cache: HashMap<_, MoneyPerFlow> = HashMap::new();
     for ((asset, commodity_id, region_id, group), accum) in &existing_accum {
         // Solve the weighted average marginal cost for this group
-        let Some(avg_mc) = accum.solve() else {
+        let Some(avg_mc) = accum.finalise() else {
             continue;
         };
 
@@ -730,7 +698,7 @@ where
     expand_groups_to_prices(&group_prices, time_slice_info, &mut prices);
 
     // Candidate assets (assume full utilisation)
-    let mut cand_accum: IndexMap<_, GroupAccum> = IndexMap::new();
+    let mut cand_accum: IndexMap<_, WeightedAverageAccumulator<MoneyPerFlow>> = IndexMap::new();
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
@@ -762,7 +730,7 @@ where
                 group,
             );
             let accum = cand_accum.entry(key).or_default();
-            accum.add(marginal_cost, Activity(0.0), activity_limit);
+            accum.add(marginal_cost, Dimensionless(activity_limit.value()));
         }
     }
 
@@ -771,7 +739,7 @@ where
     let mut cand_group_prices: IndexMap<_, MoneyPerFlow> = IndexMap::new();
     for ((asset, commodity_id, region_id, group), accum) in &cand_accum {
         // Solve the weighted average marginal cost for this group
-        let Some(avg_mc) = accum.solve() else {
+        let Some(avg_mc) = accum.finalise() else {
             continue;
         };
 
@@ -889,45 +857,6 @@ mod tests {
     ) {
         let p = prices[&(commodity.clone(), region.clone(), time_slice.clone())];
         assert!((p - expected).abs() < MoneyPerFlow::EPSILON);
-    }
-
-    #[test]
-    fn group_accum_empty_returns_none() {
-        assert!(GroupAccum::default().solve().is_none());
-    }
-
-    #[test]
-    fn group_accum_returns_none_when_both_denominators_zero() {
-        let mut accum = GroupAccum::default();
-        accum.add(MoneyPerFlow(10.0), Activity(0.0), Activity(0.0));
-        assert!(accum.solve().is_none());
-    }
-
-    #[test]
-    fn group_accum_uses_activity_weight() {
-        let mut accum = GroupAccum::default();
-        // Two entries: cost 10 with activity 1, cost 20 with activity 3 → weighted avg = 17.5
-        accum.add(MoneyPerFlow(10.0), Activity(1.0), Activity(1.0));
-        accum.add(MoneyPerFlow(20.0), Activity(3.0), Activity(3.0));
-        let result = accum.solve().unwrap();
-        assert!((result - MoneyPerFlow(17.5)).abs() < MoneyPerFlow::EPSILON);
-    }
-
-    #[test]
-    fn group_accum_single_entry_returns_same_cost() {
-        let mut accum = GroupAccum::default();
-        accum.add(MoneyPerFlow(42.0), Activity(5.0), Activity(5.0));
-        assert_eq!(accum.solve().unwrap(), MoneyPerFlow(42.0));
-    }
-
-    #[test]
-    fn group_accum_falls_back_to_activity_limit_when_no_activity() {
-        let mut accum = GroupAccum::default();
-        // Zero activity, but non-zero activity limits → should use backup weights
-        accum.add(MoneyPerFlow(10.0), Activity(0.0), Activity(1.0));
-        accum.add(MoneyPerFlow(20.0), Activity(0.0), Activity(3.0));
-        let result = accum.solve().unwrap();
-        assert!((result - MoneyPerFlow(17.5)).abs() < MoneyPerFlow::EPSILON);
     }
 
     #[rstest]
