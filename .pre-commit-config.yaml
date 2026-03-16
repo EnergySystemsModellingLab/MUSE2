@@ -53,7 +53,7 @@ repos:
       - id: clippy
         args: ["--all-targets", "--", "-D", "warnings"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.5
+    rev: v0.15.6
     hooks:
       - id: ruff-check
         types_or: [python]
