@@ -13,6 +13,23 @@ pub enum AssetCapacity {
     Discrete(u32, Capacity),
 }
 
+impl AssetCapacity {
+    /// Return the smaller of `self` or `other`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the comparison is not meaningful. This happens if either `AssetCapacity` contains
+    /// a NaN value, one is discrete and the other continuous or if both are discrete and the unit
+    /// size differs.
+    pub fn min(self, other: AssetCapacity) -> AssetCapacity {
+        match self.partial_cmp(&other) {
+            None => panic!("Comparing invalid AssetCapacity values ({self:?} and {other:?})"),
+            Some(Ordering::Greater) => other,
+            _ => self,
+        }
+    }
+}
+
 impl Add for AssetCapacity {
     type Output = Self;
 
@@ -49,23 +66,15 @@ impl Sub for AssetCapacity {
     }
 }
 
-impl Eq for AssetCapacity {}
-
 impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for AssetCapacity {
-    fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.total_cmp(b),
+            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.partial_cmp(b),
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(*size1, *size2);
-                units1.cmp(units2)
+                // NB: Also returns `None` if either is NaN
+                (*size1 == *size2).then(|| units1.cmp(units2))
             }
-            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {other:?})"),
+            _ => None,
         }
     }
 }
