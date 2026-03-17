@@ -119,8 +119,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     let investment_order = &model.investment_order[&year];
 
     // Iterate over investment sets in reverse order. Markets within the same set can be priced
-    // simultaneously, since they are independent (apart from Cycle sets when using full/marginal
-    // cost pricing strategies, which get flagged at the validation stage).
+    // simultaneously, since they are independent (apart from Cycle sets when using cost-based
+    // pricing strategies, which get flagged at the validation stage).
     for investment_set in investment_order.iter().rev() {
         // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
         // For now, commodities use a single strategy for all regions, but this may change in the future.
@@ -749,7 +749,7 @@ where
         let region_id = asset.region_id();
 
         // Get activity limits: used to weight marginal costs for seasonal/annual commodities
-        let output_limit = *asset
+        let activity_limit = *asset
             .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
             .end();
 
@@ -784,7 +784,7 @@ where
                 .or_default()
                 .entry(asset.clone())
                 .or_default()
-                .add(marginal_cost, Dimensionless(output_limit.value()));
+                .add(marginal_cost, Dimensionless(activity_limit.value()));
         }
     }
 
