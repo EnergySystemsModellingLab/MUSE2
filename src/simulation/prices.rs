@@ -680,16 +680,22 @@ where
 {
     // Accumulator map to collect marginal costs from existing assets. Collects a weighted average
     // for each (commodity, region, ts selection), across all contributing assets, weighted
-    // according to output. The granularity of the selection depends on the time slice level of the
-    // commodity (i.e. individual, season, year).
+    // according to output (with a backup weight based on potential output if there is zero
+    // activity across the selection). The granularity of the selection depends on the time slice
+    // level of the commodity (i.e. individual, season, year).
     let mut existing_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        WeightedAverageAccumulator,
+        WeightedAverageBackupAccumulator,
     > = IndexMap::new();
 
     // Iterate over existing assets and their activities
     for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
+
+        // Get activity limits: used to calculate backup potential-output weights.
+        let activity_limit = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
+            .end();
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
@@ -709,8 +715,10 @@ where
                 .expect("Commodity should be an output flow for this asset")
                 .coeff;
             let output_weight = Dimensionless((activity * output_coeff).value());
+            let backup_output_weight = Dimensionless((activity_limit * output_coeff).value());
 
-            // Accumulate marginal cost for this group, weighted by output
+            // Accumulate marginal cost for this group, weighted by output with a backup
+            // potential-output weight.
             existing_accum
                 .entry((
                     commodity_id.clone(),
@@ -718,7 +726,7 @@ where
                     time_slice_selection,
                 ))
                 .or_default()
-                .add(marginal_cost, output_weight);
+                .add(marginal_cost, output_weight, backup_output_weight);
         }
     }
 
@@ -1050,7 +1058,7 @@ where
 ///
 /// Candidate assets are treated the same way as in `calculate_full_cost_prices` (i.e. take the min
 /// across candidate assets).
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn calculate_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
@@ -1067,11 +1075,12 @@ where
 {
     // Accumulator map to collect full costs from existing assets. Collects a weighted average
     // for each (commodity, region, ts selection), across all contributing assets, weighted
-    // according to output. The granularity of the selection depends on the time slice level of the
-    // commodity (i.e. individual, season, year).
+    // according to output (with a backup weight based on potential output if there is zero
+    // activity across the selection). The granularity of the selection depends on the time slice
+    // level of the commodity (i.e. individual, season, year).
     let mut existing_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        WeightedAverageAccumulator,
+        WeightedAverageBackupAccumulator,
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset, to avoid recalculating
@@ -1087,6 +1096,11 @@ where
         if annual_activity < Activity::EPSILON {
             continue;
         }
+
+        // Get activity limits: used to calculate backup potential-output weights.
+        let activity_limit = *asset
+            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
+            .end();
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
@@ -1106,17 +1120,23 @@ where
                 .expect("Commodity should be an output flow for this asset")
                 .coeff;
             let output_weight = Dimensionless((activity * output_coeff).value());
+            let backup_output_weight = Dimensionless((activity_limit * output_coeff).value());
 
             // Get/calculate fixed costs per flow for this asset
             let annual_fixed_costs_per_flow = annual_fixed_costs
                 .entry(asset.clone())
                 .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activity));
 
-            // Accumulate full costs (marginal cost + fixed cost per flow), weighted by activity
+            // Accumulate full costs (marginal cost + fixed cost per flow), weighted by output
+            // with a backup potential-output weight.
             existing_accum
                 .entry((commodity_id.clone(), region_id.clone(), ts_selection))
                 .or_default()
-                .add(marginal_cost + *annual_fixed_costs_per_flow, output_weight);
+                .add(
+                    marginal_cost + *annual_fixed_costs_per_flow,
+                    output_weight,
+                    backup_output_weight,
+                );
         }
     }
 
