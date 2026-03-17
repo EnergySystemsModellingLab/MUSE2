@@ -663,7 +663,8 @@ where
 /// Similar to `calculate_marginal_cost_prices`, but takes a weighted average across assets
 /// according to output rather than taking the max.
 ///
-/// Candidate assets are treated the same way (i.e. take the min across candidate assets).
+/// Candidate assets are treated the same way as in `calculate_marginal_cost_prices` (i.e. take the
+/// min across candidate assets).
 fn calculate_marginal_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
@@ -1047,7 +1048,8 @@ where
 /// Similar to `calculate_full_cost_prices`, but takes a weighted average across assets
 /// according to output rather than taking the max.
 ///
-/// Candidate assets are treated the same way (i.e. take the min across candidate assets).
+/// Candidate assets are treated the same way as in `calculate_full_cost_prices` (i.e. take the min
+/// across candidate assets).
 #[allow(clippy::too_many_arguments)]
 fn calculate_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,

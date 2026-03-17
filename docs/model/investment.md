@@ -17,9 +17,9 @@ decisions as being based on recent, known economic conditions while responding t
 commodity demands. A core assumption is that all commodities, except specific user-identified SVD
 commodities, have reliable \\( \lambda\_{c,r,t} \\) values for these economic evaluations.
 
-When `pricing_strategy` is `shadow_prices`, these are the shadow prices for each commodity
+When `pricing_strategy` is `shadow`, these are the shadow prices for each commodity
 \\( c \\), in each region \\( r \\), for each time slice \\( t \\), taken from the final dispatch of
-the preceding MSY. When the `pricing_strategy` option is set to `scarcity_adjusted`, these are the
+the preceding MSY. When the `pricing_strategy` option is set to `scarcity`, these are the
 shadow prices for each commodity adjusted to remove the impact of binding capacity constraints.
 
 Note: there is an option to iterate over each year so that investment decisions are based on
