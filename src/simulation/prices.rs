@@ -44,49 +44,26 @@ impl WeightedAverageAccumulator {
 }
 
 /// Weighted average accumulator with a backup weighting path for `MoneyPerFlow` prices.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct WeightedAverageBackupAccumulator {
-    /// The numerator of the primary weighted average, i.e. the sum of value * weight across all entries.
-    primary_numerator: MoneyPerFlow,
-    /// The denominator of the primary weighted average, i.e. the sum of weights across all entries.
-    primary_denominator: Dimensionless,
-    /// The numerator of the backup weighted average, i.e. the sum of value * weight across all entries.
-    backup_numerator: MoneyPerFlow,
-    /// The denominator of the backup weighted average, i.e. the sum of weights across all entries.
-    backup_denominator: Dimensionless,
-}
-
-impl Default for WeightedAverageBackupAccumulator {
-    fn default() -> Self {
-        Self {
-            primary_numerator: MoneyPerFlow(0.0),
-            primary_denominator: Dimensionless(0.0),
-            backup_numerator: MoneyPerFlow(0.0),
-            backup_denominator: Dimensionless(0.0),
-        }
-    }
+    /// Primary weighted average path.
+    primary: WeightedAverageAccumulator,
+    /// Backup weighted average path.
+    backup: WeightedAverageAccumulator,
 }
 
 impl WeightedAverageBackupAccumulator {
     /// Add a weighted value to the accumulator with a backup weight.
     fn add(&mut self, value: MoneyPerFlow, weight: Dimensionless, backup_weight: Dimensionless) {
-        self.primary_numerator += value * weight;
-        self.primary_denominator += weight;
-        self.backup_numerator += value * backup_weight;
-        self.backup_denominator += backup_weight;
+        self.primary.add(value, weight);
+        self.backup.add(value, backup_weight);
     }
 
     /// Solve the weighted average, falling back to backup weights if needed.
     ///
     /// Returns `None` if both denominators are zero (or close to zero).
     fn finalise(&self) -> Option<MoneyPerFlow> {
-        if self.primary_denominator > Dimensionless::EPSILON {
-            Some(self.primary_numerator / self.primary_denominator)
-        } else if self.backup_denominator > Dimensionless::EPSILON {
-            Some(self.backup_numerator / self.backup_denominator)
-        } else {
-            None
-        }
+        self.primary.finalise().or_else(|| self.backup.finalise())
     }
 }
 
