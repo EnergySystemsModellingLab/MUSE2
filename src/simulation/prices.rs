@@ -119,8 +119,8 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     let investment_order = &model.investment_order[&year];
 
     // Iterate over investment sets in reverse order. Markets within the same set can be priced
-    // simultaneously, since they are independent (apart from Cycle sets when using the "marginal"
-    // and "full" strategies, which get flagged at the validation stage).
+    // simultaneously, since they are independent (apart from Cycle sets when using full/marginal
+    // cost pricing strategies, which get flagged at the validation stage).
     for investment_set in investment_order.iter().rev() {
         // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
         // For now, commodities use a single strategy for all regions, but this may change in the future.
@@ -172,6 +172,20 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             result.extend(marginal_cost_prices);
         }
 
+        // Add prices for marginal average commodities
+        if let Some(marginal_avg_set) = pricing_sets.get(&PricingStrategy::MarginalCostAverage) {
+            let marginal_avg_prices = calculate_marginal_cost_average_prices(
+                solution.iter_activity_for_existing(),
+                solution.iter_activity_keys_for_candidates(),
+                &result,
+                year,
+                marginal_avg_set,
+                &model.commodities,
+                &model.time_slice_info,
+            );
+            result.extend(marginal_avg_prices);
+        }
+
         // Add prices for full cost commodities
         if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
             let annual_activities = annual_activities.get_or_insert_with(|| {
@@ -188,6 +202,24 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
                 &model.time_slice_info,
             );
             result.extend(full_cost_prices);
+        }
+
+        // Add prices for full average commodities
+        if let Some(full_avg_set) = pricing_sets.get(&PricingStrategy::FullCostAverage) {
+            let annual_activities = annual_activities.get_or_insert_with(|| {
+                calculate_annual_activities(solution.iter_activity_for_existing())
+            });
+            let full_avg_prices = calculate_full_cost_average_prices(
+                solution.iter_activity_for_existing(),
+                solution.iter_activity_keys_for_candidates(),
+                annual_activities,
+                &result,
+                year,
+                full_avg_set,
+                &model.commodities,
+                &model.time_slice_info,
+            );
+            result.extend(full_avg_prices);
         }
     }
 
