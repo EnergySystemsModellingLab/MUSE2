@@ -209,7 +209,8 @@ impl CommodityPrices {
         price: MoneyPerFlow,
     ) {
         let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-        self.0.insert(key, price);
+        let existing = self.0.insert(key.clone(), price).is_some();
+        assert!(!existing, "Key {key:?} already exists in the map");
     }
 
     /// Extend the prices map, panic if any key already exists
@@ -417,17 +418,21 @@ fn expand_selection_prices(
     group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
     time_slice_info: &TimeSliceInfo,
 ) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
-    group_prices
-        .iter()
-        .flat_map(|((commodity_id, region_id, group), &group_price)| {
-            group.iter(time_slice_info).map(move |(ts, _)| {
-                (
-                    (commodity_id.clone(), region_id.clone(), ts.clone()),
-                    group_price,
-                )
-            })
-        })
-        .collect()
+    let mut prices = IndexMap::new();
+
+    for ((commodity_id, region_id, selection), &selection_price) in group_prices {
+        for (time_slice_id, _) in selection.iter(time_slice_info) {
+            let key = (
+                commodity_id.clone(),
+                region_id.clone(),
+                time_slice_id.clone(),
+            );
+            let existing = prices.insert(key.clone(), selection_price).is_some();
+            assert!(!existing, "Key {key:?} already exists in the map");
+        }
+    }
+
+    prices
 }
 
 /// Calculate marginal cost prices for a set of commodities.
