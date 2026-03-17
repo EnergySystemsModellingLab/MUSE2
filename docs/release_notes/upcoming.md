@@ -54,6 +54,8 @@ ready to be released, carry out the following steps:
 - Users can now set demand to zero in `demand.csv` ([#871])
 - Fix: sign for levies of type `net` was wrong for inputs ([#969])
 - Fix `--overwrite` option for `save-graphs` command ([#1001])
+- Fix broken `Eq`/`Ord` consistency for `AssetCapacity`: equality is now aligned with
+  `total_cmp` ordering ([#1158])
 
 [#767]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/767
 [#868]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/868
@@ -72,3 +74,4 @@ ready to be released, carry out the following steps:
 [#1021]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1021
 [#1022]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1022
 [#1030]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1030
+[#1158]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1158

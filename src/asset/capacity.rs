@@ -4,13 +4,19 @@ use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
 /// Capacity of an asset, which may be continuous or a discrete number of indivisible units
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AssetCapacity {
     /// Continuous capacity
     Continuous(Capacity),
     /// Discrete capacity represented by a number of indivisible units
     /// Stores: (number of units, unit size)
     Discrete(u32, Capacity),
+}
+
+impl PartialEq for AssetCapacity {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
 }
 
 impl Add for AssetCapacity {
@@ -212,5 +218,42 @@ mod tests {
         let orig = AssetCapacity::Discrete(start_units, unit_size);
         let got = orig.apply_limit_factor(factor);
         assert_eq!(got, AssetCapacity::Discrete(expected_units, unit_size));
+    }
+
+    /// `PartialEq` must be consistent with `Ord`: two values are equal iff `cmp` returns
+    /// `Ordering::Equal`.
+    #[rstest]
+    #[case::continuous_equal(
+        AssetCapacity::Continuous(Capacity(1.0)),
+        AssetCapacity::Continuous(Capacity(1.0)),
+        true
+    )]
+    #[case::continuous_positive_zero_vs_negative_zero(
+        AssetCapacity::Continuous(Capacity(0.0)),
+        AssetCapacity::Continuous(Capacity(-0.0)),
+        false
+    )]
+    #[case::continuous_unequal(
+        AssetCapacity::Continuous(Capacity(1.0)),
+        AssetCapacity::Continuous(Capacity(2.0)),
+        false
+    )]
+    #[case::discrete_equal(
+        AssetCapacity::Discrete(3, Capacity(4.0)),
+        AssetCapacity::Discrete(3, Capacity(4.0)),
+        true
+    )]
+    #[case::discrete_unequal(
+        AssetCapacity::Discrete(2, Capacity(4.0)),
+        AssetCapacity::Discrete(3, Capacity(4.0)),
+        false
+    )]
+    fn eq_consistent_with_ord(
+        #[case] a: AssetCapacity,
+        #[case] b: AssetCapacity,
+        #[case] expected_eq: bool,
+    ) {
+        assert_eq!(a == b, expected_eq);
+        assert_eq!(a.cmp(&b) == Ordering::Equal, expected_eq);
     }
 }
