@@ -664,8 +664,6 @@ where
 /// according to output rather than taking the max.
 ///
 /// Candidate assets are treated the same way (i.e. take the min across candidate assets).
-///
-/// TODO: existing assets should weight by OUTPUT rather than activity
 fn calculate_marginal_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
@@ -704,6 +702,13 @@ where
                 .time_slice_level
                 .containing_selection(time_slice);
 
+            // Marginal costs will be weighted by output (activity * coefficient)
+            let output_coeff = asset
+                .get_flow(&commodity_id)
+                .expect("Commodity should be an output flow for this asset")
+                .coeff;
+            let output_weight = Dimensionless((activity * output_coeff).value());
+
             // Accumulate marginal cost for this group, weighted by output
             existing_accum
                 .entry((
@@ -712,7 +717,7 @@ where
                     time_slice_selection,
                 ))
                 .or_default()
-                .add(marginal_cost, Dimensionless(activity.value()));
+                .add(marginal_cost, output_weight);
         }
     }
 
@@ -1043,8 +1048,6 @@ where
 /// according to output rather than taking the max.
 ///
 /// Candidate assets are treated the same way (i.e. take the min across candidate assets).
-///
-/// TODO: existing assets should weight by OUTPUT rather than activity
 #[allow(clippy::too_many_arguments)]
 fn calculate_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
@@ -1095,19 +1098,23 @@ where
                 .time_slice_level
                 .containing_selection(time_slice);
 
+            // Full costs will be weighted by output (activity * coefficient)
+            let output_coeff = asset
+                .get_flow(&commodity_id)
+                .expect("Commodity should be an output flow for this asset")
+                .coeff;
+            let output_weight = Dimensionless((activity * output_coeff).value());
+
             // Get/calculate fixed costs per flow for this asset
             let annual_fixed_costs_per_flow = annual_fixed_costs
                 .entry(asset.clone())
                 .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activity));
 
-            // Accumulate full costs (marginal cost and fixed cost per flow), weighted by activity
+            // Accumulate full costs (marginal cost + fixed cost per flow), weighted by activity
             existing_accum
                 .entry((commodity_id.clone(), region_id.clone(), ts_selection))
                 .or_default()
-                .add(
-                    marginal_cost + *annual_fixed_costs_per_flow,
-                    Dimensionless(activity.value()),
-                );
+                .add(marginal_cost + *annual_fixed_costs_per_flow, output_weight);
         }
     }
 
