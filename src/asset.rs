@@ -1100,6 +1100,41 @@ impl AssetRef {
             f(Some(&self), child);
         }
     }
+
+    /// Get an [`AssetRef`] representing a subset of this parent's children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this asset is not a parent asset or `num_units` is zero or exceeds the total
+    /// capacity of this asset.
+    pub fn make_partial_parent(&self, num_units: u32) -> Self {
+        assert!(
+            self.is_parent(),
+            "Cannot make a partial parent from a non-parent asset"
+        );
+        assert!(
+            num_units > 0,
+            "Cannot make a partial parent with zero units"
+        );
+
+        let (max_num_units, unit_size) = match self.capacity() {
+            AssetCapacity::Discrete(max_num_units, unit_size) => (max_num_units, unit_size),
+            // We know asset capacity type is discrete as this is a parent asset
+            AssetCapacity::Continuous(_) => unreachable!(),
+        };
+        match num_units.cmp(&max_num_units) {
+            // Make a new Asset with fewer units
+            Ordering::Less => Self::from(Asset {
+                capacity: Cell::new(AssetCapacity::Discrete(num_units, unit_size)),
+                ..Asset::clone(self)
+            }),
+            // Same number of units as self
+            Ordering::Equal => self.clone(),
+            Ordering::Greater => {
+                panic!("Cannot make a partial parent with more units than original")
+            }
+        }
+    }
 }
 
 impl From<Rc<Asset>> for AssetRef {
