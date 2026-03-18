@@ -1,6 +1,7 @@
 //! Code for calculating commodity prices used by the simulation.
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
+use crate::input::try_insert;
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
@@ -175,7 +176,9 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 pub struct CommodityPrices(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
 impl CommodityPrices {
-    /// Insert a price for the given commodity, region and time slice
+    /// Insert a price for the given commodity, region and time slice.
+    ///
+    /// Panics if a price for the given key already exists.
     pub fn insert(
         &mut self,
         commodity_id: &CommodityID,
@@ -184,8 +187,7 @@ impl CommodityPrices {
         price: MoneyPerFlow,
     ) {
         let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-        let existing = self.0.insert(key.clone(), price).is_some();
-        assert!(!existing, "Key {key:?} already exists in the map");
+        try_insert(&mut self.0, &key, price).unwrap();
     }
 
     /// Extend the prices map, panic if any key already exists
@@ -194,13 +196,14 @@ impl CommodityPrices {
         T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
     {
         for (key, price) in iter {
-            let existing = self.0.insert(key.clone(), price).is_some();
-            assert!(!existing, "Key {key:?} already exists in the map");
+            try_insert(&mut self.0, &key, price).unwrap();
         }
     }
 
     /// Extend this map by applying each selection-level price to all time slices
     /// contained in that selection.
+    ///
+    /// Panics if any individual commodity/region/time slice key already exists in the map.
     fn extend_selection_prices(
         &mut self,
         group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
