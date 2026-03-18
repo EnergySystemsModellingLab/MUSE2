@@ -199,6 +199,20 @@ impl CommodityPrices {
         }
     }
 
+    /// Extend this map by applying each selection-level price to all time slices
+    /// contained in that selection.
+    fn extend_selection_prices(
+        &mut self,
+        group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
+        time_slice_info: &TimeSliceInfo,
+    ) {
+        for ((commodity_id, region_id, selection), &selection_price) in group_prices {
+            for (time_slice_id, _) in selection.iter(time_slice_info) {
+                self.insert(commodity_id, region_id, time_slice_id, selection_price);
+            }
+        }
+    }
+
     /// Iterate over the map.
     ///
     /// # Returns
@@ -374,20 +388,6 @@ fn add_scarcity_adjusted_prices<'a, I>(
         // this is correct according to Adam
         let scarcity_price = shadow_price + MoneyPerFlow(highest_dual.value());
         existing_prices.insert(commodity, region, time_slice, scarcity_price);
-    }
-}
-
-/// Extend an existing commodity/region/time-slice price map by applying each
-/// selection-level price to all time slices within that selection.
-fn extend_selection_prices(
-    prices: &mut CommodityPrices,
-    group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
-    time_slice_info: &TimeSliceInfo,
-) {
-    for ((commodity_id, region_id, selection), &selection_price) in group_prices {
-        for (time_slice_id, _) in selection.iter(time_slice_info) {
-            prices.insert(commodity_id, region_id, time_slice_id, selection_price);
-        }
     }
 }
 
@@ -572,7 +572,7 @@ fn add_marginal_cost_prices<'a, I, J>(
     all_group_prices.extend(cand_group_prices);
 
     // Expand selection-level prices to individual time slices and add to the main prices map
-    extend_selection_prices(existing_prices, &all_group_prices, time_slice_info);
+    existing_prices.extend_selection_prices(&all_group_prices, time_slice_info);
 }
 
 /// Calculate annual activities for each asset by summing across all time slices
@@ -809,7 +809,7 @@ fn add_full_cost_prices<'a, I, J>(
     all_group_prices.extend(cand_group_prices);
 
     // Expand selection-level prices to individual time slices and add to the main prices map
-    extend_selection_prices(existing_prices, &all_group_prices, time_slice_info);
+    existing_prices.extend_selection_prices(&all_group_prices, time_slice_info);
 }
 
 #[cfg(test)]
