@@ -151,16 +151,15 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
         // Add prices for marginal average commodities
         if let Some(marginal_avg_set) = pricing_sets.get(&PricingStrategy::MarginalCostAverage) {
-            let marginal_avg_prices = calculate_marginal_cost_average_prices(
+            add_marginal_cost_average_prices(
                 solution.iter_activity_for_existing(),
                 solution.iter_activity_keys_for_candidates(),
-                &result,
+                &mut result,
                 year,
                 marginal_avg_set,
                 &model.commodities,
                 &model.time_slice_info,
             );
-            result.extend(marginal_avg_prices);
         }
 
         // Add prices for full cost commodities
@@ -185,17 +184,16 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             let annual_activities = annual_activities.get_or_insert_with(|| {
                 calculate_annual_activities(solution.iter_activity_for_existing())
             });
-            let full_avg_prices = calculate_full_cost_average_prices(
+            add_full_cost_average_prices(
                 solution.iter_activity_for_existing(),
                 solution.iter_activity_keys_for_candidates(),
                 annual_activities,
-                &result,
+                &mut result,
                 year,
                 full_avg_set,
                 &model.commodities,
                 &model.time_slice_info,
             );
-            result.extend(full_avg_prices);
         }
     }
 
@@ -611,23 +609,22 @@ fn add_marginal_cost_prices<'a, I, J>(
 }
 
 /// Calculate marginal cost prices for a set of commodities using a load-weighted average across
-/// assets.
+/// assets and add to an existing prices map.
 ///
 /// Similar to `calculate_marginal_cost_prices`, but takes a weighted average across assets
 /// according to output rather than taking the max.
 ///
 /// Candidate assets are treated the same way as in `calculate_marginal_cost_prices` (i.e. take the
 /// min across candidate assets).
-fn calculate_marginal_cost_average_prices<'a, I, J>(
+fn add_marginal_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
-    upstream_prices: &CommodityPrices,
+    existing_prices: &mut CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
-where
+) where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
@@ -652,7 +649,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            upstream_prices,
+            existing_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -708,7 +705,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            upstream_prices,
+            existing_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -742,22 +739,20 @@ where
     }
 
     // For each group, finalise per-candidate weighted averages then reduce to the min across candidates
-    let cand_group_prices: IndexMap<_, MoneyPerFlow> = cand_accum
-        .into_iter()
-        .filter_map(|(key, per_candidate)| {
-            per_candidate
-                .into_values()
-                .filter_map(|inner| inner.finalise())
-                .reduce(|current, value| current.min(value))
-                .map(|v| (key, v))
-        })
-        .collect();
+    let cand_group_prices = cand_accum.into_iter().filter_map(|(key, per_candidate)| {
+        per_candidate
+            .into_values()
+            .filter_map(WeightedAverageAccumulator::finalise)
+            .reduce(|current, value| current.min(value))
+            .map(|v| (key, v))
+    });
 
-    // Merge existing and candidate group prices, then expand to individual time slices
+    // Merge existing and candidate group prices
     let mut all_group_prices = group_prices;
     all_group_prices.extend(cand_group_prices);
 
-    expand_selection_prices(&all_group_prices, time_slice_info)
+    // Expand selection-level prices to individual time slices and add to the main prices map
+    existing_prices.extend_selection_prices(&all_group_prices, time_slice_info);
 }
 
 /// Calculate annual activities for each asset by summing across all time slices
@@ -998,7 +993,7 @@ fn add_full_cost_prices<'a, I, J>(
 }
 
 /// Calculate full cost prices for a set of commodities using a load-weighted average across
-/// assets.
+/// assets and add to an existing prices map.
 ///
 /// Similar to `calculate_full_cost_prices`, but takes a weighted average across assets
 /// according to output rather than taking the max.
@@ -1006,17 +1001,16 @@ fn add_full_cost_prices<'a, I, J>(
 /// Candidate assets are treated the same way as in `calculate_full_cost_prices` (i.e. take the min
 /// across candidate assets).
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-fn calculate_full_cost_average_prices<'a, I, J>(
+fn add_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
-    upstream_prices: &CommodityPrices,
+    existing_prices: &mut CommodityPrices,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
-) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>
-where
+) where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
@@ -1051,7 +1045,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            upstream_prices,
+            existing_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -1112,7 +1106,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            upstream_prices,
+            existing_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -1155,22 +1149,20 @@ where
     }
 
     // For each group, finalise per-candidate weighted averages then reduce to the min across candidates
-    let cand_group_prices: IndexMap<_, MoneyPerFlow> = cand_accum
-        .into_iter()
-        .filter_map(|(key, per_candidate)| {
-            per_candidate
-                .into_values()
-                .filter_map(|inner| inner.finalise())
-                .reduce(|current, value| current.min(value))
-                .map(|v| (key, v))
-        })
-        .collect();
+    let cand_group_prices = cand_accum.into_iter().filter_map(|(key, per_candidate)| {
+        per_candidate
+            .into_values()
+            .filter_map(WeightedAverageAccumulator::finalise)
+            .reduce(|current, value| current.min(value))
+            .map(|v| (key, v))
+    });
 
-    // Merge existing and candidate group prices, then expand to individual time slices
+    // Merge existing and candidate group prices
     let mut all_group_prices = group_prices;
     all_group_prices.extend(cand_group_prices);
 
-    expand_selection_prices(&all_group_prices, time_slice_info)
+    // Expand selection-level prices to individual time slices and add to the main prices map
+    existing_prices.extend_selection_prices(&all_group_prices, time_slice_info);
 }
 
 #[cfg(test)]
