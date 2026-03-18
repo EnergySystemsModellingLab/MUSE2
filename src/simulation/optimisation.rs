@@ -17,9 +17,9 @@ use crate::units::{
 use anyhow::{Result, bail, ensure};
 use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
-use itertools::{Itertools, chain, iproduct};
+use itertools::{chain, iproduct};
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -434,15 +434,30 @@ fn filter_input_prices(
 ///
 /// Child assets are converted to their parents and non-divisible assets are returned as is. Each
 /// parent asset is returned only once.
-fn get_parent_or_self(assets: &[AssetRef]) -> impl Iterator<Item = AssetRef> {
-    let mut parents = HashSet::new();
-    assets
-        .iter()
-        .filter_map(move |asset| match asset.parent() {
-            Some(parent) => parents.insert(parent.clone()).then_some(parent),
-            None => Some(asset),
-        })
-        .cloned()
+///
+/// If only a subset of a parent's children are present in `assets`, a new parent asset representing
+/// a portion of the total capacity will be created. This will have the same hash as the original
+/// parent.
+fn get_parent_or_self(assets: &[AssetRef]) -> Vec<AssetRef> {
+    let mut child_counts: IndexMap<&AssetRef, u32> = IndexMap::new();
+    let mut out = Vec::new();
+
+    for asset in assets {
+        if let Some(parent) = asset.parent() {
+            // For child assets, keep count of number of children per parent
+            *child_counts.entry(parent).or_default() += 1;
+        } else {
+            // Non-divisible assets can be returned as is
+            out.push(asset.clone());
+        }
+    }
+
+    for (parent, child_count) in child_counts {
+        // Convert to an object representing the appropriate portion of the parent's capacity
+        out.push(parent.make_partial_parent(child_count));
+    }
+
+    out
 }
 
 /// Provides the interface for running the dispatch optimisation.
@@ -621,7 +636,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         allow_unmet_demand: bool,
         input_prices: Option<&CommodityPrices>,
     ) -> Result<Solution<'model>, ModelError> {
-        let parent_assets = get_parent_or_self(self.existing_assets).collect_vec();
+        let parent_assets = get_parent_or_self(self.existing_assets);
 
         // Set up problem
         let mut problem = Problem::default();
