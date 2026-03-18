@@ -487,25 +487,28 @@ fn add_marginal_cost_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate marginal cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_marginal_prices(
+    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_prices(
         activity_for_existing,
         markets_to_price,
         existing_prices,
         year,
         commodities,
+        &PricingStrategy::MarginalCost,
+        None::<&HashMap<AssetRef, Activity>>,
     )
     .collect();
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
 
     // Calculate marginal cost prices from candidate assets, skipping any groups already covered by
     // existing assets
-    let cand_group_prices = calculate_candidate_asset_marginal_prices(
+    let cand_group_prices = calculate_candidate_asset_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
         &priced_groups,
         year,
         commodities,
+        &PricingStrategy::MarginalCost,
     );
 
     // Merge existing and candidate group prices
@@ -515,21 +518,38 @@ fn add_marginal_cost_prices<'a, I, J>(
     existing_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
-/// Calculate marginal cost prices using existing assets, taking a weighted average across time
-/// slices for seasonal/annual commodities, and taking the max across assets for each
-/// commodity/region/selection.
-fn calculate_existing_asset_marginal_prices<'a, I>(
+/// Calculate prices using existing assets, taking a weighted average across time slices for
+/// seasonal/annual commodities, and taking the max across assets for each commodity/region/selection.
+///
+/// # Arguments
+///
+/// * `activity_for_existing` - Iterator over (asset, time slice, activity) tuples for existing assets
+/// * `markets_to_price` - Set of (commodity, region) pairs to price
+/// * `existing_prices` - Current commodity prices (used for marginal cost filtering)
+/// * `year` - Year for which prices are being calculated
+/// * `commodities` - Commodity map
+/// * `pricing_strategy` - Pricing strategy (determines whether to include fixed costs)
+/// * `annual_activities` - Optional annual activities (required for full cost pricing)
+fn calculate_existing_asset_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     existing_prices: &CommodityPrices,
     year: u32,
     commodities: &CommodityMap,
-) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)>
+    pricing_strategy: &PricingStrategy,
+    annual_activities: Option<&HashMap<AssetRef, Activity>>,
+) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)> + 'a
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
-    // Accumulator map to collect marginal costs from existing assets. For each (commodity, region,
-    // ts selection), this maps each asset to a weighted average of the marginal costs for that
+    // Validate supported strategies, and require annual activities for FullCost pricing.
+    assert!(matches!(
+        (pricing_strategy, annual_activities),
+        (PricingStrategy::MarginalCost, _) | (PricingStrategy::FullCost, Some(_))
+    ),);
+
+    // Accumulator map to collect costs from existing assets. For each (commodity, region,
+    // ts selection), this maps each asset to a weighted average of the costs for that
     // commodity across all time slices in the selection, weighted by activity (using activity
     // limits as a backup weight if there is zero activity across the selection). The granularity of
     // the selection depends on the time slice level of the commodity (i.e. individual, season, year).
@@ -538,9 +558,20 @@ where
         IndexMap<AssetRef, WeightedAverageBackupAccumulator>,
     > = IndexMap::new();
 
+    // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
+    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+
     // Iterate over existing assets and their activities
     for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
+
+        // When using full cost pricing, skip assets with zero activity across the year, since
+        // we cannot calculate a fixed cost per flow.
+        let annual_activity = matches!(pricing_strategy, PricingStrategy::FullCost)
+            .then(|| annual_activities.unwrap()[asset]);
+        if annual_activity.is_some_and(|annual_activity| annual_activity < Activity::EPSILON) {
+            continue;
+        }
 
         // Get activity limits: used as a backup weight if no activity across the group
         let activity_limit = *asset
@@ -559,15 +590,28 @@ where
                 .time_slice_level
                 .containing_selection(time_slice);
 
-            // Accumulate marginal cost for this asset, weighted by activity (using the activity
-            // limit as a backup weight)
+            // Calculate total cost (marginal + fixed if applicable)
+            let total_cost = match pricing_strategy {
+                PricingStrategy::FullCost => {
+                    let annual_fixed_costs_per_flow =
+                        annual_fixed_costs.entry(asset.clone()).or_insert_with(|| {
+                            asset.get_annual_fixed_costs_per_flow(annual_activity.unwrap())
+                        });
+                    marginal_cost + *annual_fixed_costs_per_flow
+                }
+                PricingStrategy::MarginalCost => marginal_cost,
+                _ => unreachable!(),
+            };
+
+            // Accumulate cost for this asset, weighted by activity (using the activity limit
+            // as a backup weight)
             existing_accum
                 .entry((commodity_id.clone(), region_id.clone(), ts_selection))
                 .or_default()
                 .entry(asset.clone())
                 .or_default()
                 .add(
-                    marginal_cost,
+                    total_cost,
                     Dimensionless(activity.value()),
                     Dimensionless(activity_limit.value()),
                 );
@@ -584,21 +628,31 @@ where
     })
 }
 
-/// Calculate marginal cost prices using candidate assets, taking a weighted average across time
+/// Calculate candidate-asset prices (marginal or full), taking a weighted average across time
 /// slices for seasonal/annual commodities, and taking the min across assets for each
 /// commodity/region/selection. Only groups not already covered by existing assets are considered.
-fn calculate_candidate_asset_marginal_prices<'a, I>(
+fn calculate_candidate_asset_prices<'a, I>(
     activity_keys_for_candidates: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     existing_prices: &CommodityPrices,
     priced_groups: &HashSet<(CommodityID, RegionID, TimeSliceSelection)>,
     year: u32,
     commodities: &CommodityMap,
+    pricing_strategy: &PricingStrategy,
 ) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)>
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
-    // Accumulator map to collect marginal costs from candidate assets. Similar to existing_accum,
+    // Validate the supported strategy values.
+    assert!(matches!(
+        pricing_strategy,
+        PricingStrategy::MarginalCost | PricingStrategy::FullCost
+    ));
+
+    // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
+    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+
+    // Accumulator map to collect costs from candidate assets. Similar to existing_accum,
     // but costs are weighted according to activity limits (i.e. assuming full utilisation).
     let mut cand_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
@@ -635,13 +689,30 @@ where
                 continue;
             }
 
-            // Accumulate marginal cost for this candidate asset, weighted by the activity limit
+            // Calculate total cost (marginal + fixed if applicable)
+            let total_cost = match pricing_strategy {
+                PricingStrategy::FullCost => {
+                    let annual_fixed_costs_per_flow =
+                        annual_fixed_costs.entry(asset.clone()).or_insert_with(|| {
+                            asset.get_annual_fixed_costs_per_flow(
+                                *asset
+                                    .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
+                                    .end(),
+                            )
+                        });
+                    marginal_cost + *annual_fixed_costs_per_flow
+                }
+                PricingStrategy::MarginalCost => marginal_cost,
+                _ => unreachable!(),
+            };
+
+            // Accumulate cost for this candidate asset, weighted by the activity limit
             cand_accum
                 .entry((commodity_id.clone(), region_id.clone(), ts_selection))
                 .or_default()
                 .entry(asset.clone())
                 .or_default()
-                .add(marginal_cost, Dimensionless(activity_limit.value()));
+                .add(total_cost, Dimensionless(activity_limit.value()));
         }
     }
 
@@ -676,24 +747,28 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate marginal cost prices from existing assets
-    let mut group_prices = calculate_existing_asset_marginal_average_prices(
+    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_average_prices(
         activity_for_existing,
         markets_to_price,
         existing_prices,
         year,
         commodities,
-    );
+        &PricingStrategy::MarginalCost,
+        None::<&HashMap<AssetRef, Activity>>,
+    )
+    .collect();
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
 
     // Calculate marginal cost prices from candidate assets, skipping any groups already covered by
     // existing assets
-    let cand_group_prices = calculate_candidate_asset_marginal_prices(
+    let cand_group_prices = calculate_candidate_asset_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
         &priced_groups,
         year,
         commodities,
+        &PricingStrategy::MarginalCost,
     );
 
     // Merge existing and candidate group prices
@@ -703,20 +778,30 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     existing_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
-/// Calculate marginal cost prices for existing assets using a weighted average across time slices
-/// for seasonal/annual commodities, and a weighted average across assets according to output (with
-/// a backup weight based on potential output if there is zero activity across the selection).
-fn calculate_existing_asset_marginal_average_prices<'a, I>(
+/// Calculate average prices for existing assets using a weighted average across time slices for
+/// seasonal/annual commodities, and a weighted average across assets according to output (with a
+/// backup weight based on potential output if there is zero activity across the selection).
+///
+/// `FullCost` adds annual fixed costs per flow and skips assets with zero annual activity.
+fn calculate_existing_asset_average_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     existing_prices: &CommodityPrices,
     year: u32,
     commodities: &CommodityMap,
-) -> IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>
+    pricing_strategy: &PricingStrategy,
+    annual_activities: Option<&HashMap<AssetRef, Activity>>,
+) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)> + 'a
 where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
-    // Accumulator map to collect marginal costs from existing assets. Collects a weighted average
+    // Validate supported strategies, and require annual activities for FullCost pricing.
+    assert!(matches!(
+        (pricing_strategy, annual_activities),
+        (PricingStrategy::MarginalCost, _) | (PricingStrategy::FullCost, Some(_))
+    ));
+
+    // Accumulator map to collect costs from existing assets. Collects a weighted average
     // for each (commodity, region, ts selection), across all contributing assets, weighted
     // according to output (with a backup weight based on potential output if there is zero
     // activity across the selection). The granularity of the selection depends on the time slice
@@ -726,9 +811,20 @@ where
         WeightedAverageBackupAccumulator,
     > = IndexMap::new();
 
+    // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
+    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+
     // Iterate over existing assets and their activities
     for (asset, time_slice, activity) in activity_for_existing {
         let region_id = asset.region_id();
+
+        // When using full cost pricing, skip assets with zero annual activity, since we cannot
+        // calculate a fixed cost per flow.
+        let annual_activity = matches!(pricing_strategy, PricingStrategy::FullCost)
+            .then(|| annual_activities.unwrap()[asset]);
+        if annual_activity.is_some_and(|annual_activity| annual_activity < Activity::EPSILON) {
+            continue;
+        }
 
         // Get activity limits: used to calculate backup potential-output weights.
         let activity_limit = *asset
@@ -747,7 +843,20 @@ where
                 .time_slice_level
                 .containing_selection(time_slice);
 
-            // Marginal costs will be weighted by output (activity * coefficient)
+            // Calculate total cost (marginal + fixed if applicable)
+            let total_cost = match pricing_strategy {
+                PricingStrategy::FullCost => {
+                    let annual_fixed_costs_per_flow =
+                        annual_fixed_costs.entry(asset.clone()).or_insert_with(|| {
+                            asset.get_annual_fixed_costs_per_flow(annual_activity.unwrap())
+                        });
+                    marginal_cost + *annual_fixed_costs_per_flow
+                }
+                PricingStrategy::MarginalCost => marginal_cost,
+                _ => unreachable!(),
+            };
+
+            // Costs will be weighted by output (activity * coefficient)
             let output_coeff = asset
                 .get_flow(&commodity_id)
                 .expect("Commodity should be an output flow for this asset")
@@ -755,7 +864,7 @@ where
             let output_weight = Dimensionless((activity * output_coeff).value());
             let backup_output_weight = Dimensionless((activity_limit * output_coeff).value());
 
-            // Accumulate marginal cost for this group, weighted by output with a backup
+            // Accumulate cost for this group, weighted by output with a backup
             // potential-output weight.
             existing_accum
                 .entry((
@@ -764,7 +873,7 @@ where
                     time_slice_selection,
                 ))
                 .or_default()
-                .add(marginal_cost, output_weight, backup_output_weight);
+                .add(total_cost, output_weight, backup_output_weight);
         }
     }
 
@@ -772,7 +881,6 @@ where
     existing_accum
         .into_iter()
         .filter_map(|(key, accum)| accum.finalise().map(|v| (key, v)))
-        .collect()
 }
 
 /// Calculate annual activities for each asset by summing across all time slices
@@ -848,7 +956,7 @@ where
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
 /// * `commodities` - Map of all commodities (used to look up each commodity's `time_slice_level`)
 /// * `time_slice_info` - Time slice information (used to expand groups to individual time slices)
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 fn add_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
@@ -863,26 +971,28 @@ fn add_full_cost_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate full cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_full_prices(
+    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_prices(
         activity_for_existing,
-        annual_activities,
         markets_to_price,
         existing_prices,
         year,
         commodities,
+        &PricingStrategy::FullCost,
+        Some(annual_activities),
     )
     .collect();
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
 
     // Calculate full cost prices from candidate assets, skipping any groups already covered by
     // existing assets
-    let cand_group_prices = calculate_candidate_asset_full_prices(
+    let cand_group_prices = calculate_candidate_asset_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
         &priced_groups,
         year,
         commodities,
+        &PricingStrategy::FullCost,
     );
 
     // Merge existing and candidate group prices
@@ -890,178 +1000,6 @@ fn add_full_cost_prices<'a, I, J>(
 
     // Expand selection-level prices to individual time slices and add to the main prices map
     existing_prices.extend_selection_prices(&group_prices, time_slice_info);
-}
-
-/// Calculate full cost prices using existing assets, taking a weighted average across time
-/// slices for seasonal/annual commodities, and taking the max across assets for each
-/// commodity/region/selection.
-fn calculate_existing_asset_full_prices<'a, I>(
-    activity_for_existing: I,
-    annual_activities: &HashMap<AssetRef, Activity>,
-    markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
-    year: u32,
-    commodities: &CommodityMap,
-) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)>
-where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-{
-    // Accumulator map to collect full costs from existing assets. For each (commodity, region,
-    // ts selection), this maps each asset to a weighted average of the full costs for that
-    // commodity across all time slices in the selection, weighted by activity (using activity
-    // limits as a backup weight if there is zero activity across the selection). The granularity of
-    // the selection depends on the time slice level of the commodity (i.e. individual, season, year).
-    let mut existing_accum: IndexMap<
-        (CommodityID, RegionID, TimeSliceSelection),
-        IndexMap<AssetRef, WeightedAverageBackupAccumulator>,
-    > = IndexMap::new();
-
-    // Cache of annual fixed costs per flow for each asset, to avoid recalculating
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
-
-    // Iterate over existing assets and their activities
-    for (asset, time_slice, activity) in activity_for_existing {
-        let annual_activity = annual_activities[asset];
-        let region_id = asset.region_id();
-
-        // If annual activity is zero, we can't calculate a capital cost per flow, so skip this
-        // asset.
-        if annual_activity < Activity::EPSILON {
-            continue;
-        }
-
-        // Get activity limits: used as a backup weight if no activity across the group
-        let activity_limit = *asset
-            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
-            .end();
-
-        // Iterate over the marginal costs for commodities we need prices for
-        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            existing_prices,
-            year,
-            time_slice,
-            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
-        ) {
-            // Get the time slice selection according to the commodity's time slice level
-            let ts_selection = commodities[&commodity_id]
-                .time_slice_level
-                .containing_selection(time_slice);
-
-            // Get/calculate fixed costs per flow for this asset
-            let annual_fixed_costs_per_flow = annual_fixed_costs
-                .entry(asset.clone())
-                .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activity));
-
-            // Accumulate full cost for this asset, weighted by activity (using the activity limit
-            // as a backup weight)
-            existing_accum
-                .entry((commodity_id.clone(), region_id.clone(), ts_selection))
-                .or_default()
-                .entry(asset.clone())
-                .or_default()
-                .add(
-                    marginal_cost + *annual_fixed_costs_per_flow,
-                    Dimensionless(activity.value()),
-                    Dimensionless(activity_limit.value()),
-                );
-        }
-    }
-
-    // For each group, finalise per-asset weighted averages then reduce to the max across assets
-    existing_accum.into_iter().filter_map(|(key, per_asset)| {
-        per_asset
-            .into_values()
-            .filter_map(WeightedAverageBackupAccumulator::finalise)
-            .reduce(|current, value| current.max(value))
-            .map(|v| (key, v))
-    })
-}
-
-/// Calculate full cost prices using candidate assets, taking a weighted average across time slices
-/// for seasonal/annual commodities, and taking the min across assets for each
-/// commodity/region/selection. Only groups not already covered by existing assets are considered.
-fn calculate_candidate_asset_full_prices<'a, I>(
-    activity_keys_for_candidates: I,
-    markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
-    priced_groups: &HashSet<(CommodityID, RegionID, TimeSliceSelection)>,
-    year: u32,
-    commodities: &CommodityMap,
-) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)>
-where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
-{
-    // Cache of annual fixed costs per flow for each asset, to avoid recalculating
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
-
-    // Accumulator map to collect full costs from candidate assets. Similar to existing_accum, but
-    // costs are weighted according to activity limits (i.e. assuming full utilisation).
-    let mut cand_accum: IndexMap<
-        (CommodityID, RegionID, TimeSliceSelection),
-        IndexMap<AssetRef, WeightedAverageAccumulator>,
-    > = IndexMap::new();
-
-    // Iterate over candidate assets (assuming full utilization)
-    for (asset, time_slice) in activity_keys_for_candidates {
-        let region_id = asset.region_id();
-
-        // Get activity limits: used to weight marginal costs for seasonal/annual commodities
-        let activity_limit = *asset
-            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
-            .end();
-
-        // Iterate over the marginal costs for commodities we need prices for
-        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            existing_prices,
-            year,
-            time_slice,
-            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
-        ) {
-            // Get the time slice selection according to the commodity's time slice level
-            let ts_selection = commodities[&commodity_id]
-                .time_slice_level
-                .containing_selection(time_slice);
-
-            // Skip groups already covered by existing assets
-            if priced_groups.contains(&(
-                commodity_id.clone(),
-                region_id.clone(),
-                ts_selection.clone(),
-            )) {
-                continue;
-            }
-
-            // Get/calculate fixed costs per flow for this asset (assume full utilisation)
-            let annual_fixed_costs_per_flow =
-                annual_fixed_costs.entry(asset.clone()).or_insert_with(|| {
-                    asset.get_annual_fixed_costs_per_flow(
-                        *asset
-                            .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
-                            .end(),
-                    )
-                });
-
-            // Accumulate full cost for this candidate asset, weighted by the activity limit
-            cand_accum
-                .entry((commodity_id.clone(), region_id.clone(), ts_selection))
-                .or_default()
-                .entry(asset.clone())
-                .or_default()
-                .add(
-                    marginal_cost + *annual_fixed_costs_per_flow,
-                    Dimensionless(activity_limit.value()),
-                );
-        }
-    }
-
-    // For each group, finalise per-candidate weighted averages then reduce to the min across candidates
-    cand_accum.into_iter().filter_map(|(key, per_candidate)| {
-        per_candidate
-            .into_values()
-            .filter_map(WeightedAverageAccumulator::finalise)
-            .reduce(|current, value| current.min(value))
-            .map(|v| (key, v))
-    })
 }
 
 /// Calculate full cost prices for a set of commodities using a load-weighted average across
@@ -1072,7 +1010,7 @@ where
 ///
 /// Candidate assets are treated the same way as in `calculate_full_cost_prices` (i.e. take the min
 /// across candidate assets).
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 fn add_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
@@ -1087,25 +1025,27 @@ fn add_full_cost_average_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate full cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_full_average_prices(
+    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_average_prices(
         activity_for_existing,
-        annual_activities,
         markets_to_price,
         existing_prices,
         year,
         commodities,
+        &PricingStrategy::FullCost,
+        Some(annual_activities),
     )
     .collect();
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
 
     // Calculate full cost prices from candidate assets, skipping any groups already covered by existing assets
-    let cand_group_prices = calculate_candidate_asset_full_prices(
+    let cand_group_prices = calculate_candidate_asset_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
         &priced_groups,
         year,
         commodities,
+        &PricingStrategy::FullCost,
     );
 
     // Merge existing and candidate group prices
@@ -1113,93 +1053,6 @@ fn add_full_cost_average_prices<'a, I, J>(
 
     // Expand selection-level prices to individual time slices and add to the main prices map
     existing_prices.extend_selection_prices(&group_prices, time_slice_info);
-}
-
-/// Calculate full cost prices for existing assets using a weighted average across time slices for
-/// seasonal/annual commodities, and a weighted average across assets according to output (with a
-/// backup weight based on potential output if there is zero activity across the selection).
-fn calculate_existing_asset_full_average_prices<'a, I>(
-    activity_for_existing: I,
-    annual_activities: &HashMap<AssetRef, Activity>,
-    markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
-    year: u32,
-    commodities: &CommodityMap,
-) -> impl Iterator<Item = ((CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow)>
-where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-{
-    // Accumulator map to collect full costs from existing assets. Collects a weighted average
-    // for each (commodity, region, ts selection), across all contributing assets, weighted
-    // according to output (with a backup weight based on potential output if there is zero
-    // activity across the selection). The granularity of the selection depends on the time slice
-    // level of the commodity (i.e. individual, season, year).
-    let mut existing_accum: IndexMap<
-        (CommodityID, RegionID, TimeSliceSelection),
-        WeightedAverageBackupAccumulator,
-    > = IndexMap::new();
-
-    // Cache of annual fixed costs per flow for each asset, to avoid recalculating
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
-
-    // Iterate over existing assets and their activities
-    for (asset, time_slice, activity) in activity_for_existing {
-        let annual_activity = annual_activities[asset];
-        let region_id = asset.region_id();
-
-        // If annual activity is zero, we can't calculate a capital cost per flow, so skip this
-        // asset.
-        if annual_activity < Activity::EPSILON {
-            continue;
-        }
-
-        // Get activity limits: used to calculate backup potential-output weights.
-        let activity_limit = *asset
-            .get_activity_limits_for_selection(&TimeSliceSelection::Single(time_slice.clone()))
-            .end();
-
-        // Iterate over the marginal costs for commodities we need prices for
-        for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            existing_prices,
-            year,
-            time_slice,
-            |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
-        ) {
-            // Get the time slice selection according to the commodity's time slice level
-            let ts_selection = commodities[&commodity_id]
-                .time_slice_level
-                .containing_selection(time_slice);
-
-            // Full costs will be weighted by output (activity * coefficient)
-            let output_coeff = asset
-                .get_flow(&commodity_id)
-                .expect("Commodity should be an output flow for this asset")
-                .coeff;
-            let output_weight = Dimensionless((activity * output_coeff).value());
-            let backup_output_weight = Dimensionless((activity_limit * output_coeff).value());
-
-            // Get/calculate fixed costs per flow for this asset
-            let annual_fixed_costs_per_flow = annual_fixed_costs
-                .entry(asset.clone())
-                .or_insert_with(|| asset.get_annual_fixed_costs_per_flow(annual_activity));
-
-            // Accumulate full costs (marginal cost + fixed cost per flow), weighted by output
-            // with a backup potential-output weight.
-            existing_accum
-                .entry((commodity_id.clone(), region_id.clone(), ts_selection))
-                .or_default()
-                .add(
-                    marginal_cost + *annual_fixed_costs_per_flow,
-                    output_weight,
-                    backup_output_weight,
-                );
-        }
-    }
-
-    // For each group, finalise weighted averages
-    existing_accum
-        .into_iter()
-        .filter_map(|(key, accum)| accum.finalise().map(|v| (key, v)))
 }
 
 #[cfg(test)]
