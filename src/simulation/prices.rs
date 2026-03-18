@@ -38,7 +38,7 @@ impl WeightedAverageAccumulator {
     /// Solve the weighted average.
     ///
     /// Returns `None` if the denominator is zero (or close to zero)
-    fn finalise(&self) -> Option<MoneyPerFlow> {
+    fn finalise(self) -> Option<MoneyPerFlow> {
         (self.denominator > Dimensionless::EPSILON).then(|| self.numerator / self.denominator)
     }
 }
@@ -62,7 +62,7 @@ impl WeightedAverageBackupAccumulator {
     /// Solve the weighted average, falling back to backup weights if needed.
     ///
     /// Returns `None` if both denominators are zero (or close to zero).
-    fn finalise(&self) -> Option<MoneyPerFlow> {
+    fn finalise(self) -> Option<MoneyPerFlow> {
         self.primary.finalise().or_else(|| self.backup.finalise())
     }
 }
@@ -388,15 +388,13 @@ where
     scarcity_prices
 }
 
-/// Expand a map of prices for commodity/region/time slice selections to a map of prices for
-/// commodity/region/time slices by applying the same price to all time slices within each
-/// selection.
-fn expand_selection_prices(
+/// Extend an existing commodity/region/time-slice price map by applying each
+/// selection-level price to all time slices within that selection.
+fn extend_selection_prices(
+    prices: &mut IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>,
     group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
     time_slice_info: &TimeSliceInfo,
-) -> IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow> {
-    let mut prices = IndexMap::new();
-
+) {
     for ((commodity_id, region_id, selection), &selection_price) in group_prices {
         for (time_slice_id, _) in selection.iter(time_slice_info) {
             let key = (
@@ -408,8 +406,6 @@ fn expand_selection_prices(
             assert!(!existing, "Key {key:?} already exists in the map");
         }
     }
-
-    prices
 }
 
 /// Calculate marginal cost prices for a set of commodities.
@@ -530,7 +526,7 @@ where
         .filter_map(|(key, per_asset)| {
             per_asset
                 .into_values()
-                .filter_map(|inner| inner.finalise())
+                .filter_map(WeightedAverageBackupAccumulator::finalise)
                 .reduce(|current, value| current.max(value))
                 .map(|v| (key, v))
         })
@@ -584,22 +580,21 @@ where
     }
 
     // For each group, finalise per-candidate weighted averages then take the min across candidates
-    let cand_group_prices: IndexMap<_, MoneyPerFlow> = cand_accum
-        .into_iter()
-        .filter_map(|(key, per_candidate)| {
-            per_candidate
-                .into_values()
-                .filter_map(|inner| inner.finalise())
-                .reduce(|current, value| current.min(value))
-                .map(|v| (key, v))
-        })
-        .collect();
+    let cand_group_prices = cand_accum.into_iter().filter_map(|(key, per_candidate)| {
+        per_candidate
+            .into_values()
+            .filter_map(WeightedAverageAccumulator::finalise)
+            .reduce(|current, value| current.min(value))
+            .map(|v| (key, v))
+    });
 
     // Merge existing and candidate group prices, then expand to individual time slices
     let mut all_group_prices = group_prices;
     all_group_prices.extend(cand_group_prices);
 
-    expand_selection_prices(&all_group_prices, time_slice_info)
+    let mut prices = IndexMap::new();
+    extend_selection_prices(&mut prices, &all_group_prices, time_slice_info);
+    prices
 }
 
 /// Calculate annual activities for each asset by summing across all time slices
@@ -760,7 +755,7 @@ where
         .filter_map(|(key, per_asset)| {
             per_asset
                 .into_values()
-                .filter_map(|inner| inner.finalise())
+                .filter_map(WeightedAverageBackupAccumulator::finalise)
                 .reduce(|current, value| current.max(value))
                 .map(|v| (key, v))
         })
@@ -827,22 +822,21 @@ where
     }
 
     // For each group, finalise per-candidate weighted averages then reduce to the min across candidates
-    let cand_group_prices: IndexMap<_, MoneyPerFlow> = cand_accum
-        .into_iter()
-        .filter_map(|(key, per_candidate)| {
-            per_candidate
-                .into_values()
-                .filter_map(|inner| inner.finalise())
-                .reduce(|current, value| current.min(value))
-                .map(|v| (key, v))
-        })
-        .collect();
+    let cand_group_prices = cand_accum.into_iter().filter_map(|(key, per_candidate)| {
+        per_candidate
+            .into_values()
+            .filter_map(WeightedAverageAccumulator::finalise)
+            .reduce(|current, value| current.min(value))
+            .map(|v| (key, v))
+    });
 
     // Merge existing and candidate group prices, then expand to individual time slices
     let mut all_group_prices = group_prices;
     all_group_prices.extend(cand_group_prices);
 
-    expand_selection_prices(&all_group_prices, time_slice_info)
+    let mut prices = IndexMap::new();
+    extend_selection_prices(&mut prices, &all_group_prices, time_slice_info);
+    prices
 }
 
 #[cfg(test)]
@@ -862,6 +856,7 @@ mod tests {
         Activity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
         MoneyPerCapacityPerYear, MoneyPerFlow,
     };
+    use float_cmp::assert_approx_eq;
     use indexmap::{IndexMap, IndexSet};
     use rstest::rstest;
     use std::collections::{HashMap, HashSet};
@@ -1157,7 +1152,7 @@ mod tests {
         accum.add(MoneyPerFlow(200.0), Dimensionless(2.0));
         // (100*1 + 200*2) / (1+2) = 500/3 ≈ 166.667
         let result = accum.finalise().unwrap();
-        assert!((result - MoneyPerFlow(500.0 / 3.0)).abs() < MoneyPerFlow::EPSILON);
+        assert_approx_eq!(MoneyPerFlow, result, MoneyPerFlow(500.0 / 3.0));
     }
 
     #[test]
