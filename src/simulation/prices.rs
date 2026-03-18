@@ -745,7 +745,7 @@ fn add_full_cost_prices<'a, I, J>(
         IndexMap<AssetRef, WeightedAverageAccumulator>,
     > = IndexMap::new();
 
-    // Iterate over candidate assets (assuming full utilization)
+    // Iterate over candidate assets (assuming full utilisation)
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
 
