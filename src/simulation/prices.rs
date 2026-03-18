@@ -645,7 +645,7 @@ where
 /// * `activity_for_existing` - Iterator over `(asset, time_slice, activity)` from optimisation
 ///   solution for existing assets
 /// * `activity_keys_for_candidates` - Iterator over `(asset, time_slice)` for candidate assets
-/// * `existing_prices` - Existing prices to use as inputs and extend. This is expected to include p
+/// * `existing_prices` - Existing prices to use as inputs and extend. This is expected to include
 ///   prices from all markets upstream of the markets we are calculating for.
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
