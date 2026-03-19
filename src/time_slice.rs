@@ -206,6 +206,17 @@ pub enum TimeSliceLevel {
     Annual,
 }
 
+impl TimeSliceLevel {
+    /// Get the [`TimeSliceSelection`] containing the given [`TimeSliceID`] at this level.
+    pub fn containing_selection(&self, ts: &TimeSliceID) -> TimeSliceSelection {
+        match self {
+            Self::Annual => TimeSliceSelection::Annual,
+            Self::Season => TimeSliceSelection::Season(ts.season.clone()),
+            Self::DayNight => TimeSliceSelection::Single(ts.clone()),
+        }
+    }
+}
+
 /// Information about the time slices in the simulation, including names and durations
 #[derive(PartialEq, Debug)]
 pub struct TimeSliceInfo {
