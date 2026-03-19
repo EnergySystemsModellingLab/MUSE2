@@ -165,7 +165,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         // Add prices for full cost commodities
         if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
             let annual_activities = annual_activities.get_or_insert_with(|| {
-                calculate_annual_activities(solution.iter_activity_for_existing())
+                iter_annual_activities(solution.iter_activity_for_existing())
             });
             add_full_cost_prices(
                 solution.iter_activity_for_existing(),
@@ -182,7 +182,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         // Add prices for full average commodities
         if let Some(full_avg_set) = pricing_sets.get(&PricingStrategy::FullCostAverage) {
             let annual_activities = annual_activities.get_or_insert_with(|| {
-                calculate_annual_activities(solution.iter_activity_for_existing())
+                iter_annual_activities(solution.iter_activity_for_existing())
             });
             add_full_cost_average_prices(
                 solution.iter_activity_for_existing(),
@@ -487,7 +487,7 @@ fn add_marginal_cost_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate marginal cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_prices(
+    let mut group_prices: IndexMap<_, _> = iter_existing_asset_max_prices(
         activity_for_existing,
         markets_to_price,
         existing_prices,
@@ -501,7 +501,7 @@ fn add_marginal_cost_prices<'a, I, J>(
 
     // Calculate marginal cost prices from candidate assets, skipping any groups already covered by
     // existing assets
-    let cand_group_prices = calculate_candidate_asset_prices(
+    let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
@@ -518,19 +518,29 @@ fn add_marginal_cost_prices<'a, I, J>(
     existing_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
-/// Calculate prices using existing assets, taking a weighted average across time slices for
-/// seasonal/annual commodities, and taking the max across assets for each commodity/region/selection.
+/// Calculate prices as the maximum cost across existing assets, using either a marginal cost or
+/// full cost strategy (depending on `pricing_strategy`). Prices are given for each commodity in
+/// the granularity of the commodity's time slice level. For seasonal/annual commodities, this
+/// involves taking a weighted average across time slices for each asset according to activity
+/// (with a backup weight based on potential activity if there is zero activity across the
+/// selection, and omitting prices in the extreme case of zero potential activity).
 ///
 /// # Arguments
 ///
 /// * `activity_for_existing` - Iterator over (asset, time slice, activity) tuples for existing assets
-/// * `markets_to_price` - Set of (commodity, region) pairs to price
-/// * `existing_prices` - Current commodity prices (used for marginal cost filtering)
+/// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
+/// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
 /// * `year` - Year for which prices are being calculated
 /// * `commodities` - Commodity map
-/// * `pricing_strategy` - Pricing strategy (determines whether to include fixed costs)
+/// * `pricing_strategy` - Pricing strategy, either `MarginalCost` or `FullCost`
 /// * `annual_activities` - Optional annual activities (required for full cost pricing)
-fn calculate_existing_asset_prices<'a, I>(
+///
+/// # Returns
+///
+/// An iterator of ((commodity, region, time slice selection), price) tuples for the calculated
+/// prices. This will include all (commodity, region) combinations in `markets_to_price` for
+/// time slice selections where a price could be determined.
+fn iter_existing_asset_max_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     existing_prices: &CommodityPrices,
@@ -628,10 +638,32 @@ where
     })
 }
 
-/// Calculate candidate-asset prices (marginal or full), taking a weighted average across time
-/// slices for seasonal/annual commodities, and taking the min across assets for each
-/// commodity/region/selection. Only groups not already covered by existing assets are considered.
-fn calculate_candidate_asset_prices<'a, I>(
+/// Calculate prices as the minimum cost across candidate assets, using either a marginal cost or
+/// full cost strategy (depending on `pricing_strategy`). Prices are given for each commodity in
+/// the granularity of the commodity's time slice level. For seasonal/annual commodities, this
+/// involves taking a weighted average across time slices for each asset according to potential
+/// activity (i.e. the upper activity limit), omitting prices in the extreme case of zero potential
+/// activity (Note: this should NOT happen as validation should ensure there is at least one
+/// candidate that can provide a price in each timeslice for which a price could be required).
+/// Costs for candidates are calculated assuming full utilisation.
+///
+/// # Arguments
+///
+/// * `activity_keys_for_candidates` - Iterator over (asset, time slice) tuples for candidate assets
+/// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
+/// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
+/// * `priced_groups` - Set of (commodity, region, time slice selection) groups that have already
+///   been prices using existing assets, so should be skipped when looking at candidates
+/// * `year` - Year for which prices are being calculated
+/// * `commodities` - Commodity map
+/// * `pricing_strategy` - Pricing strategy, either `MarginalCost` or `FullCost`
+///
+/// # Returns
+///
+/// An iterator of ((commodity, region, time slice selection), price) tuples for the calculated
+/// prices. This will include all (commodity, region) combinations in `markets_to_price` for
+/// time slice selections not covered by `priced_groups`, and for which a price could be determined
+fn iter_candidate_asset_min_prices<'a, I>(
     activity_keys_for_candidates: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     existing_prices: &CommodityPrices,
@@ -747,7 +779,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate marginal cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_average_prices(
+    let mut group_prices: IndexMap<_, _> = iter_existing_asset_average_prices(
         activity_for_existing,
         markets_to_price,
         existing_prices,
@@ -761,7 +793,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
 
     // Calculate marginal cost prices from candidate assets, skipping any groups already covered by
     // existing assets
-    let cand_group_prices = calculate_candidate_asset_prices(
+    let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
@@ -778,12 +810,29 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     existing_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
-/// Calculate average prices for existing assets using a weighted average across time slices for
-/// seasonal/annual commodities, and a weighted average across assets according to output (with a
-/// backup weight based on potential output if there is zero activity across the selection).
+/// Calculate prices as the load-weighted average cost across existing assets, using either a
+/// marginal cost or full cost strategy (depending on `pricing_strategy`). Prices are given for each
+/// commodity in the granularity of the commodity's time slice level. For seasonal/annual
+/// commodities, this involves taking a weighted average across time slices for each asset according
+/// to activity (with a backup weight based on potential activity if there is zero activity across
+/// the selection, and omitting prices in the extreme case of zero potential activity).
 ///
-/// `FullCost` adds annual fixed costs per flow and skips assets with zero annual activity.
-fn calculate_existing_asset_average_prices<'a, I>(
+/// # Arguments
+///
+/// * `activity_for_existing` - Iterator over (asset, time slice, activity) tuples for existing assets
+/// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
+/// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
+/// * `year` - Year for which prices are being calculated
+/// * `commodities` - Commodity map
+/// * `pricing_strategy` - Pricing strategy, either `MarginalCost` or `FullCost`
+/// * `annual_activities` - Optional annual activities (required for full cost pricing)
+///
+/// # Returns
+///
+/// An iterator of ((commodity, region, time slice selection), price) tuples for the calculated
+/// prices. This will include all (commodity, region) combinations in `markets_to_price` for
+/// time slice selections where a price could be determined.
+fn iter_existing_asset_average_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     existing_prices: &CommodityPrices,
@@ -883,8 +932,8 @@ where
         .filter_map(|(key, accum)| accum.finalise().map(|v| (key, v)))
 }
 
-/// Calculate annual activities for each asset by summing across all time slices
-fn calculate_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
+/// Iterate over annual activities for each asset by summing across all time slices
+fn iter_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
 where
     I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
@@ -971,7 +1020,7 @@ fn add_full_cost_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate full cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_prices(
+    let mut group_prices: IndexMap<_, _> = iter_existing_asset_max_prices(
         activity_for_existing,
         markets_to_price,
         existing_prices,
@@ -985,7 +1034,7 @@ fn add_full_cost_prices<'a, I, J>(
 
     // Calculate full cost prices from candidate assets, skipping any groups already covered by
     // existing assets
-    let cand_group_prices = calculate_candidate_asset_prices(
+    let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
@@ -1025,7 +1074,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID)>,
 {
     // Calculate full cost prices from existing assets
-    let mut group_prices: IndexMap<_, _> = calculate_existing_asset_average_prices(
+    let mut group_prices: IndexMap<_, _> = iter_existing_asset_average_prices(
         activity_for_existing,
         markets_to_price,
         existing_prices,
@@ -1038,7 +1087,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
 
     // Calculate full cost prices from candidate assets, skipping any groups already covered by existing assets
-    let cand_group_prices = calculate_candidate_asset_prices(
+    let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
         existing_prices,
