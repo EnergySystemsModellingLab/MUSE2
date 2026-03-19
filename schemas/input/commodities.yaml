@@ -30,15 +30,13 @@ fields:
   - name: pricing_strategy
     type: string
     enum:
-      [
-        shadow,
-        marginal,
-        marginal_average,
-        full,
-        full_average,
-        scarcity,
-        unpriced,
-      ]
+      - shadow
+      - marginal
+      - marginal_average
+      - full
+      - full_average
+      - scarcity
+      - unpriced
     description: The pricing strategy for this commodity
     notes: |
       Optional. If specified, must be one of `shadow` (priced using shadow prices from supply-demand
