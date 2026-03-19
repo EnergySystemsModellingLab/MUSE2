@@ -165,7 +165,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         // Add prices for full cost commodities
         if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
             let annual_activities = annual_activities.get_or_insert_with(|| {
-                iter_annual_activities(solution.iter_activity_for_existing())
+                calculate_annual_activities(solution.iter_activity_for_existing())
             });
             add_full_cost_prices(
                 solution.iter_activity_for_existing(),
@@ -182,7 +182,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
         // Add prices for full average commodities
         if let Some(full_avg_set) = pricing_sets.get(&PricingStrategy::FullCostAverage) {
             let annual_activities = annual_activities.get_or_insert_with(|| {
-                iter_annual_activities(solution.iter_activity_for_existing())
+                calculate_annual_activities(solution.iter_activity_for_existing())
             });
             add_full_cost_average_prices(
                 solution.iter_activity_for_existing(),
@@ -932,8 +932,8 @@ where
         .filter_map(|(key, accum)| accum.finalise().map(|v| (key, v)))
 }
 
-/// Iterate over annual activities for each asset by summing across all time slices
-fn iter_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
+/// Calculate annual activities for each asset by summing across all time slices
+fn calculate_annual_activities<'a, I>(activities: I) -> HashMap<AssetRef, Activity>
 where
     I: IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
