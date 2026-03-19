@@ -1025,7 +1025,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset, to avoid recalculating
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+    let mut annual_fixed_costs = HashMap::new();
 
     // Iterate over existing assets and their activities
     for (asset, time_slice, activity) in activity_for_existing {
