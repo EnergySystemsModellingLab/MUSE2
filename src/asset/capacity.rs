@@ -222,4 +222,111 @@ mod tests {
         let got = orig.apply_limit_factor(factor);
         assert_eq!(got, AssetCapacity::Discrete(expected_units, unit_size));
     }
+
+    #[rstest]
+    #[case::less(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(6.0)),
+        Some(Ordering::Less)
+    )]
+    #[case::equal(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(4.0)),
+        Some(Ordering::Equal)
+    )]
+    #[case::greater(
+        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::Continuous(Capacity(4.0)),
+        Some(Ordering::Greater)
+    )]
+    fn partial_cmp_continuous(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+        #[case] expected: Option<Ordering>,
+    ) {
+        assert_eq!(left.partial_cmp(&right), expected);
+        assert_eq!(left == right, expected == Some(Ordering::Equal));
+    }
+
+    #[rstest]
+    #[case::less(
+        AssetCapacity::Discrete(2, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        Some(Ordering::Less)
+    )]
+    #[case::equal(
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        Some(Ordering::Equal)
+    )]
+    #[case::greater(
+        AssetCapacity::Discrete(5, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        Some(Ordering::Greater)
+    )]
+    fn partial_cmp_discrete_with_matching_unit_size(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+        #[case] expected: Option<Ordering>,
+    ) {
+        assert_eq!(left.partial_cmp(&right), expected);
+        assert_eq!(left == right, expected == Some(Ordering::Equal));
+    }
+
+    #[rstest]
+    #[case::mixed_types(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Discrete(4, Capacity(1.0))
+    )]
+    #[case::different_unit_sizes(
+        AssetCapacity::Discrete(4, Capacity(1.0)),
+        AssetCapacity::Discrete(4, Capacity(2.0))
+    )]
+    #[case::nan_continuous(
+        AssetCapacity::Continuous(Capacity(f64::NAN)),
+        AssetCapacity::Continuous(Capacity(4.0))
+    )]
+    fn partial_cmp_returns_none_for_invalid_comparisons(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+    ) {
+        assert_eq!(left.partial_cmp(&right), None);
+        assert!(left != right);
+    }
+
+    #[rstest]
+    #[case::continuous(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::Continuous(Capacity(4.0))
+    )]
+    #[case::discrete(
+        AssetCapacity::Discrete(2, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        AssetCapacity::Discrete(2, Capacity(3.0))
+    )]
+    fn min_returns_smaller_capacity(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+        #[case] expected: AssetCapacity,
+    ) {
+        assert_eq!(left.min(right), expected);
+    }
+
+    #[rstest]
+    #[case::mixed_types(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Discrete(4, Capacity(1.0))
+    )]
+    #[case::different_unit_sizes(
+        AssetCapacity::Discrete(4, Capacity(1.0)),
+        AssetCapacity::Discrete(4, Capacity(2.0))
+    )]
+    #[should_panic(expected = "Comparing invalid AssetCapacity values")]
+    fn min_panics_for_invalid_comparisons(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+    ) {
+        let _ = left.min(right);
+    }
 }
