@@ -20,7 +20,7 @@ pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
 use appraisal::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
-    sort_appraisal_outputs_by_investment_priority,
+    sort_and_filter_appraisal_outputs,
 };
 
 /// A map of demand across time slices for a specific market
@@ -796,16 +796,11 @@ fn select_best_assets(
             &demand,
         )?;
 
-        sort_appraisal_outputs_by_investment_priority(&mut outputs_for_opts);
+        // Sort by investment priority and discord non-feasible options
+        sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
-        // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
+        // Check if there are any remaining options. If not, we cannot meet demand, so have to bail
         // out.
-        //
-        // This may happen if:
-        // - the asset has zero activity limits for all time slices with
-        // demand.
-        // - known issue with the NPV objective
-        // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
         if outputs_for_opts.is_empty() {
             let remaining_demands: Vec<_> = demand
                 .iter()
