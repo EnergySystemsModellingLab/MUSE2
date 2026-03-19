@@ -441,7 +441,7 @@ fn add_scarcity_adjusted_prices<'a, I>(
 /// - Variable operating cost: 5 per unit activity
 /// - Production levy on C: 3 per unit flow
 /// - Production levy on D: 4 per unit flow
-/// - Shadow price of A: 1 per unit flow
+/// - Price of A: 1 per unit flow
 ///
 /// Then:
 /// - Generic activity cost per activity = (1 + 5 + 4) = 10
@@ -969,7 +969,7 @@ where
 /// - Variable operating cost: 5 per unit activity
 /// - Production levy on C: 3 per unit flow
 /// - Production levy on D: 4 per unit flow
-/// - Shadow price of A: 1 per unit flow
+/// - Price of A: 1 per unit flow
 ///
 /// If capacity is 4 and annual activity is 2:
 /// - Annual capital + fixed operating cost per activity = (2.5 * 4) / 2 = 5
@@ -1290,7 +1290,7 @@ mod tests {
             Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2015u32)
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
-        let shadow_prices =
+        let existing_prices =
             CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
         let mut markets = HashSet::new();
         markets.insert((b.id.clone(), region_id.clone()));
@@ -1303,7 +1303,7 @@ mod tests {
         let existing = vec![(&asset_ref, &time_slice, Activity(1.0))];
         let candidates = Vec::new();
 
-        let mut prices = shadow_prices.clone();
+        let mut prices = existing_prices.clone();
         add_marginal_cost_prices(
             existing.into_iter(),
             candidates.into_iter(),
@@ -1373,7 +1373,7 @@ mod tests {
             Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(4.0), 2015u32)
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
-        let shadow_prices =
+        let existing_prices =
             CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
         let mut markets = HashSet::new();
         markets.insert((b.id.clone(), region_id.clone()));
@@ -1389,7 +1389,7 @@ mod tests {
         let mut annual_activities = HashMap::new();
         annual_activities.insert(asset_ref.clone(), Activity(2.0));
 
-        let mut prices = shadow_prices.clone();
+        let mut prices = existing_prices.clone();
         add_full_cost_prices(
             existing.into_iter(),
             candidates.into_iter(),
