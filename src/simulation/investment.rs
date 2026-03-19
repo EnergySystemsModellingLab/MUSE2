@@ -801,11 +801,8 @@ fn select_best_assets(
         // Check if all options have zero capacity. If so, we cannot meet demand, so have to bail
         // out.
         //
-        // This may happen if:
-        // - the asset has zero activity limits for all time slices with
+        // This may happen if the asset has zero activity limits for all time slices with
         // demand.
-        // - known issue with the NPV objective
-        // (see https://github.com/EnergySystemsModellingLab/MUSE2/issues/716).
         if outputs_for_opts.is_empty() {
             let remaining_demands: Vec<_> = demand
                 .iter()
