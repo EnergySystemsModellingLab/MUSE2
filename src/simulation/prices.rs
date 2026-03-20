@@ -556,7 +556,7 @@ where
     assert!(matches!(
         (pricing_strategy, annual_activities),
         (PricingStrategy::MarginalCost, _) | (PricingStrategy::FullCost, Some(_))
-    ),);
+    ));
 
     // Accumulator map to collect costs from existing assets. For each (commodity, region,
     // ts selection), this maps each asset to a weighted average of the costs for that
@@ -653,7 +653,7 @@ where
 /// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
 /// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
 /// * `priced_groups` - Set of (commodity, region, time slice selection) groups that have already
-///   been prices using existing assets, so should be skipped when looking at candidates
+///   been priced using existing assets, so should be skipped when looking at candidates
 /// * `year` - Year for which prices are being calculated
 /// * `commodities` - Commodity map
 /// * `pricing_strategy` - Pricing strategy, either `MarginalCost` or `FullCost`
@@ -684,6 +684,9 @@ where
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
     let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
 
+    // Cache of annual activity limits for each asset (only used for Full cost pricing)
+    let mut annual_activity_limits: HashMap<_, _> = HashMap::new();
+
     // Accumulator map to collect costs from candidate assets. Similar to existing_accum,
     // but costs are weighted according to activity limits (i.e. assuming full utilisation).
     let mut cand_accum: IndexMap<
@@ -694,6 +697,22 @@ where
     // Iterate over candidate assets (assuming full utilisation)
     for (asset, time_slice) in activity_keys_for_candidates {
         let region_id = asset.region_id();
+
+        // When using full cost pricing, skip assets with a zero upper limit on annual activity,
+        // since we cannot calculate a fixed cost per flow.
+        let annual_activity_limit =
+            matches!(pricing_strategy, PricingStrategy::FullCost).then(|| {
+                *annual_activity_limits
+                    .entry(asset.clone())
+                    .or_insert_with(|| {
+                        *asset
+                            .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
+                            .end()
+                    })
+            });
+        if annual_activity_limit.is_some_and(|limit| limit < Activity::EPSILON) {
+            continue;
+        }
 
         // Get activity limits: used to weight marginal costs for seasonal/annual commodities
         let activity_limit = *asset
@@ -724,13 +743,11 @@ where
             // Calculate total cost (marginal + fixed if applicable)
             let total_cost = match pricing_strategy {
                 PricingStrategy::FullCost => {
+                    // Get fixed costs assuming full utilisation (i.e. using the activity limit)
+                    // Input-stage validation should ensure that this limit is never zero
                     let annual_fixed_costs_per_flow =
                         annual_fixed_costs.entry(asset.clone()).or_insert_with(|| {
-                            asset.get_annual_fixed_costs_per_flow(
-                                *asset
-                                    .get_activity_limits_for_selection(&TimeSliceSelection::Annual)
-                                    .end(),
-                            )
+                            asset.get_annual_fixed_costs_per_flow(annual_activity_limit.unwrap())
                         });
                     marginal_cost + *annual_fixed_costs_per_flow
                 }
