@@ -1100,6 +1100,41 @@ impl AssetRef {
             f(Some(&self), child);
         }
     }
+
+    /// Get an [`AssetRef`] representing a subset of this parent's children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this asset is not a parent asset or `num_units` is zero or exceeds the total
+    /// capacity of this asset.
+    pub fn make_partial_parent(&self, num_units: u32) -> Self {
+        assert!(
+            self.is_parent(),
+            "Cannot make a partial parent from a non-parent asset"
+        );
+        assert!(
+            num_units > 0,
+            "Cannot make a partial parent with zero units"
+        );
+
+        let (max_num_units, unit_size) = match self.capacity() {
+            AssetCapacity::Discrete(max_num_units, unit_size) => (max_num_units, unit_size),
+            // We know asset capacity type is discrete as this is a parent asset
+            AssetCapacity::Continuous(_) => unreachable!(),
+        };
+        match num_units.cmp(&max_num_units) {
+            // Make a new Asset with fewer units
+            Ordering::Less => Self::from(Asset {
+                capacity: Cell::new(AssetCapacity::Discrete(num_units, unit_size)),
+                ..Asset::clone(self)
+            }),
+            // Same number of units as self
+            Ordering::Equal => self.clone(),
+            Ordering::Greater => {
+                panic!("Cannot make a partial parent with more units than original")
+            }
+        }
+    }
 }
 
 impl From<Rc<Asset>> for AssetRef {
@@ -1427,6 +1462,64 @@ mod tests {
             count += 1;
         });
         assert_eq!(count, 1);
+    }
+
+    #[fixture]
+    fn parent_asset(asset_divisible: Asset) -> AssetRef {
+        let asset = AssetRef::from(asset_divisible);
+        let mut parent = None;
+
+        asset.into_for_each_child(&mut 0, |maybe_parent, _| {
+            if parent.is_none() {
+                parent = maybe_parent.cloned();
+            }
+        });
+
+        parent.expect("Divisible asset should create a parent")
+    }
+
+    #[rstest]
+    #[case::subset_of_children(2, false)]
+    #[case::all_children(3, true)]
+    fn make_partial_parent(
+        parent_asset: AssetRef,
+        #[case] num_units: u32,
+        #[case] expect_same_asset: bool,
+    ) {
+        let parent = parent_asset;
+        assert!(parent.is_parent());
+
+        let partial_parent = parent.make_partial_parent(num_units);
+
+        assert!(partial_parent.is_parent());
+        assert_eq!(
+            partial_parent.capacity(),
+            AssetCapacity::Discrete(num_units, Capacity(4.0))
+        );
+        assert_eq!(partial_parent.num_children(), Some(num_units));
+        assert_eq!(partial_parent.group_id(), parent.group_id());
+        assert_eq!(partial_parent.agent_id(), parent.agent_id());
+        assert_eq!(Rc::ptr_eq(&partial_parent.0, &parent.0), expect_same_asset);
+        assert_eq!(parent.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Cannot make a partial parent from a non-parent asset")]
+    fn make_partial_parent_panics_for_non_parent_asset(asset_divisible: Asset) {
+        let asset = AssetRef::from(asset_divisible);
+        asset.make_partial_parent(1);
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Cannot make a partial parent with zero units")]
+    fn make_partial_parent_panics_for_zero_units(parent_asset: AssetRef) {
+        parent_asset.make_partial_parent(0);
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Cannot make a partial parent with more units than original")]
+    fn make_partial_parent_panics_for_too_many_units(parent_asset: AssetRef) {
+        parent_asset.make_partial_parent(4);
     }
 
     #[rstest]

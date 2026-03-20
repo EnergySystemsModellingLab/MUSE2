@@ -30,15 +30,13 @@ fields:
   - name: pricing_strategy
     type: string
     enum:
-      [
-        shadow,
-        marginal,
-        marginal_average,
-        full,
-        full_average,
-        scarcity,
-        unpriced,
-      ]
+      - shadow
+      - marginal
+      - marginal_average
+      - full
+      - full_average
+      - scarcity
+      - unpriced
     description: The pricing strategy for this commodity
     notes: |
       Optional. If specified, must be one of `shadow` (priced using shadow prices from supply-demand
@@ -49,8 +47,8 @@ fields:
       production across assets), `scarcity` (priced adjusted for scarcity), or `unpriced` (not
       priced at all).
 
-      For `svd` and `sed` commodities, this must be one of `shadow`, `marginal`,
-      `marginal_average`, `full` or `full_average`. For `oth` commodities, this must be
+      For `svd` and `sed` commodities, it must be one of `shadow`, `marginal`,
+      `marginal_average`, `full` or `full_average`. For `oth` commodities, it *must* be
       `unpriced`.
 
       If unspecified, the commodity will use the default pricing strategy according to the commodity

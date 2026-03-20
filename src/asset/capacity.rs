@@ -13,6 +13,23 @@ pub enum AssetCapacity {
     Discrete(u32, Capacity),
 }
 
+impl AssetCapacity {
+    /// Return the smaller of `self` or `other`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the comparison is not meaningful. This happens if either `AssetCapacity` contains
+    /// a NaN value, one is discrete and the other continuous or if both are discrete and the unit
+    /// size differs.
+    pub fn min(self, other: AssetCapacity) -> AssetCapacity {
+        match self.partial_cmp(&other) {
+            None => panic!("Comparing invalid AssetCapacity values ({self:?} and {other:?})"),
+            Some(Ordering::Greater) => other,
+            _ => self,
+        }
+    }
+}
+
 impl Add for AssetCapacity {
     type Output = Self;
 
@@ -49,23 +66,15 @@ impl Sub for AssetCapacity {
     }
 }
 
-impl Eq for AssetCapacity {}
-
 impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for AssetCapacity {
-    fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.total_cmp(b),
+            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.partial_cmp(b),
             (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(*size1, *size2);
-                units1.cmp(units2)
+                // NB: Also returns `None` if either is NaN
+                (*size1 == *size2).then(|| units1.cmp(units2))
             }
-            _ => panic!("Cannot compare different types of AssetCapacity ({self:?} and {other:?})"),
+            _ => None,
         }
     }
 }
@@ -212,5 +221,112 @@ mod tests {
         let orig = AssetCapacity::Discrete(start_units, unit_size);
         let got = orig.apply_limit_factor(factor);
         assert_eq!(got, AssetCapacity::Discrete(expected_units, unit_size));
+    }
+
+    #[rstest]
+    #[case::less(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(6.0)),
+        Some(Ordering::Less)
+    )]
+    #[case::equal(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(4.0)),
+        Some(Ordering::Equal)
+    )]
+    #[case::greater(
+        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::Continuous(Capacity(4.0)),
+        Some(Ordering::Greater)
+    )]
+    fn partial_cmp_continuous(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+        #[case] expected: Option<Ordering>,
+    ) {
+        assert_eq!(left.partial_cmp(&right), expected);
+        assert_eq!(left == right, expected == Some(Ordering::Equal));
+    }
+
+    #[rstest]
+    #[case::less(
+        AssetCapacity::Discrete(2, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        Some(Ordering::Less)
+    )]
+    #[case::equal(
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        Some(Ordering::Equal)
+    )]
+    #[case::greater(
+        AssetCapacity::Discrete(5, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        Some(Ordering::Greater)
+    )]
+    fn partial_cmp_discrete_with_matching_unit_size(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+        #[case] expected: Option<Ordering>,
+    ) {
+        assert_eq!(left.partial_cmp(&right), expected);
+        assert_eq!(left == right, expected == Some(Ordering::Equal));
+    }
+
+    #[rstest]
+    #[case::mixed_types(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Discrete(4, Capacity(1.0))
+    )]
+    #[case::different_unit_sizes(
+        AssetCapacity::Discrete(4, Capacity(1.0)),
+        AssetCapacity::Discrete(4, Capacity(2.0))
+    )]
+    #[case::nan_continuous(
+        AssetCapacity::Continuous(Capacity(f64::NAN)),
+        AssetCapacity::Continuous(Capacity(4.0))
+    )]
+    fn partial_cmp_returns_none_for_invalid_comparisons(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+    ) {
+        assert_eq!(left.partial_cmp(&right), None);
+        assert!(left != right);
+    }
+
+    #[rstest]
+    #[case::continuous(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::Continuous(Capacity(4.0))
+    )]
+    #[case::discrete(
+        AssetCapacity::Discrete(2, Capacity(3.0)),
+        AssetCapacity::Discrete(4, Capacity(3.0)),
+        AssetCapacity::Discrete(2, Capacity(3.0))
+    )]
+    fn min_returns_smaller_capacity(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+        #[case] expected: AssetCapacity,
+    ) {
+        assert_eq!(left.min(right), expected);
+    }
+
+    #[rstest]
+    #[case::mixed_types(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Discrete(4, Capacity(1.0))
+    )]
+    #[case::different_unit_sizes(
+        AssetCapacity::Discrete(4, Capacity(1.0)),
+        AssetCapacity::Discrete(4, Capacity(2.0))
+    )]
+    #[should_panic(expected = "Comparing invalid AssetCapacity values")]
+    fn min_panics_for_invalid_comparisons(
+        #[case] left: AssetCapacity,
+        #[case] right: AssetCapacity,
+    ) {
+        let _ = left.min(right);
     }
 }

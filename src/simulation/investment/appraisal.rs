@@ -358,18 +358,18 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
         .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
-/// Sort appraisal outputs by their investment priority.
+/// Sort appraisal outputs by their investment priority and exclude non-feasible options.
 ///
-/// Primarily this is decided by their appraisal metric.
-/// When appraisal metrics are equal, a tie-breaker fallback is used. Commissioned assets
-/// are preferred over uncommissioned assets, and newer assets are preferred over older
-/// ones. The function does not guarantee that all ties will be resolved.
+/// Investment priority is primarily decided by appraisal metric. When appraisal metrics are equal,
+/// a tie-breaker fallback is used. Commissioned assets are preferred over uncommissioned assets,
+/// and newer assets are preferred over older ones. The function does not guarantee that all ties
+/// will be resolved.
 ///
-/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which
-/// excludes entries with invalid metrics (e.g. `None`) as well as zero capacity. This
-/// avoids meaningless or `NaN` appraisal metrics that could cause the program to panic,
-/// so the length of the returned vector may be less than the input.
-pub fn sort_appraisal_outputs_by_investment_priority(outputs_for_opts: &mut Vec<AppraisalOutput>) {
+/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which excludes entries
+/// with invalid metrics (e.g. `None`) as well as zero capacity. This avoids meaningless or `NaN`
+/// appraisal metrics that could cause the program to panic, so the length of the returned vector
+/// may be less than the input.
+pub fn sort_and_filter_appraisal_outputs(outputs_for_opts: &mut Vec<AppraisalOutput>) {
     outputs_for_opts.retain(AppraisalOutput::is_valid);
     outputs_for_opts.sort_by(|output1, output2| match output1.compare_metric(output2) {
         // If equal, we fall back on comparing asset properties
@@ -626,7 +626,7 @@ mod tests {
 
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         assert_approx_eq!(f64, outputs[0].metric.as_ref().unwrap().value(), 3.0); // Best (lowest)
         assert_approx_eq!(f64, outputs[1].metric.as_ref().unwrap().value(), 5.0);
@@ -653,7 +653,7 @@ mod tests {
 
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // Higher profitability index is better, so should be sorted: 3.0, 2.0, 1.5
         assert_approx_eq!(f64, outputs[0].metric.as_ref().unwrap().value(), 3.0); // Best (highest PI)
@@ -685,7 +685,7 @@ mod tests {
 
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // Zero AFC should be first despite lower absolute surplus value
         assert_approx_eq!(f64, outputs[0].metric.as_ref().unwrap().value(), 50.0); // Zero AFC (uses surplus)
@@ -709,7 +709,7 @@ mod tests {
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         // This should panic when trying to compare different metric types
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
     }
 
     /// Test that when metrics are equal, commissioned assets are sorted by commission year (newer first)
@@ -745,7 +745,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // Should be sorted by commission year, newest first: 2020, 2015, 2010
         assert_eq!(outputs[0].asset.commission_year(), 2020);
@@ -782,7 +782,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets.clone(), metrics);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // Verify order is preserved - should match the original agent_ids array
         for (&expected_id, output) in agent_ids.iter().zip(outputs) {
@@ -838,7 +838,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // Commissioned assets should be prioritised first
         assert!(outputs[0].asset.is_commissioned());
@@ -901,7 +901,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // non-commissioned asset prioritised because it has a slightly better metric
         assert_approx_eq!(
@@ -934,7 +934,7 @@ mod tests {
             })
             .collect();
 
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // All zero capacity outputs should be filtered out
         assert_eq!(outputs.len(), 0);
@@ -953,7 +953,7 @@ mod tests {
         };
         let mut outputs = vec![output];
 
-        sort_appraisal_outputs_by_investment_priority(&mut outputs);
+        sort_and_filter_appraisal_outputs(&mut outputs);
 
         // The invalid output should have been filtered out
         assert_eq!(outputs.len(), 0);
