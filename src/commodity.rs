@@ -102,9 +102,15 @@ pub enum PricingStrategy {
     /// Use marginal cost of highest-cost active asset producing the commodity
     #[serde(rename = "marginal")]
     MarginalCost,
+    /// Use load-weighted average marginal cost across active assets producing the commodity
+    #[serde(rename = "marginal_average")]
+    MarginalCostAverage,
     /// Use full cost of highest-cost active asset producing the commodity
     #[serde(rename = "full")]
     FullCost,
+    /// Use load-weighted average full cost across active assets producing the commodity
+    #[serde(rename = "full_average")]
+    FullCostAverage,
     /// Commodities that should not have prices calculated
     #[serde(rename = "unpriced")]
     Unpriced,

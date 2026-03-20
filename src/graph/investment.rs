@@ -125,7 +125,7 @@ fn compress_cycles(graph: &InvestmentGraph, commodities: &CommodityMap) -> Resul
     // Order nodes within each strongly connected component
     order_sccs(&mut condensed_graph, graph);
 
-    // Pre-scan SCCs for offending pricing strategies (FullCost / MarginalCost).
+    // Pre-scan SCCs for offending pricing strategies.
     for node_weight in condensed_graph.node_weights() {
         if node_weight.len() <= 1 {
             continue;
@@ -136,7 +136,10 @@ fn compress_cycles(graph: &InvestmentGraph, commodities: &CommodityMap) -> Resul
             .filter(|(cid, _)| {
                 matches!(
                     &commodities[cid].pricing_strategy,
-                    PricingStrategy::MarginalCost | PricingStrategy::FullCost
+                    PricingStrategy::MarginalCost
+                        | PricingStrategy::MarginalCostAverage
+                        | PricingStrategy::FullCost
+                        | PricingStrategy::FullCostAverage
                 )
             })
             .map(|(cid, _)| cid.clone())
@@ -144,8 +147,8 @@ fn compress_cycles(graph: &InvestmentGraph, commodities: &CommodityMap) -> Resul
 
         ensure!(
             offenders.is_empty(),
-            "Cannot use FullCost/MarginalCost pricing strategies for commodities with circular \
-            dependencies. Offending commodities: {offenders:?}"
+            "Cannot use marginal, marginal_average, full or full_average pricing strategies for \
+            commodities with circular dependencies. Offending commodities: {offenders:?}"
         );
     }
 

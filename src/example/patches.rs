@@ -68,6 +68,36 @@ fn get_all_patches() -> PatchMap {
                 None,
             ),
         ),
+        (
+            // The simple example with electricity priced using average marginal costs
+            "simple_marginal_average",
+            (
+                vec![FilePatch::new("commodities.csv").with_replacement(&[
+                    "id,description,type,time_slice_level,pricing_strategy,units",
+                    "GASPRD,Gas produced,sed,season,shadow,PJ",
+                    "GASNAT,Natural gas,sed,season,shadow,PJ",
+                    "ELCTRI,Electricity,sed,daynight,marginal_average,PJ",
+                    "RSHEAT,Residential heating,svd,daynight,shadow,PJ",
+                    "CO2EMT,CO2 emitted,oth,annual,unpriced,ktCO2",
+                ])],
+                None,
+            ),
+        ),
+        (
+            // The simple example with gas commodities priced using average full costs
+            "simple_full_average",
+            (
+                vec![FilePatch::new("commodities.csv").with_replacement(&[
+                    "id,description,type,time_slice_level,pricing_strategy,units",
+                    "GASPRD,Gas produced,sed,season,full_average,PJ",
+                    "GASNAT,Natural gas,sed,season,full_average,PJ",
+                    "ELCTRI,Electricity,sed,daynight,shadow,PJ",
+                    "RSHEAT,Residential heating,svd,daynight,shadow,PJ",
+                    "CO2EMT,CO2 emitted,oth,annual,unpriced,ktCO2",
+                ])],
+                None,
+            ),
+        ),
         // The simple example with the ironing-out loop turned on
         (
             "simple_ironing_out",
