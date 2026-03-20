@@ -611,10 +611,10 @@ fn add_marginal_cost_prices<'a, I, J>(
 /// Calculate marginal cost prices for a set of commodities using a load-weighted average across
 /// assets and add to an existing prices map.
 ///
-/// Similar to `calculate_marginal_cost_prices`, but takes a weighted average across assets
+/// Similar to `add_marginal_cost_prices`, but takes a weighted average across assets
 /// according to output rather than taking the max.
 ///
-/// Candidate assets are treated the same way as in `calculate_marginal_cost_prices` (i.e. take the
+/// Candidate assets are treated the same way as in `add_marginal_cost_prices` (i.e. take the
 /// min across candidate assets).
 fn add_marginal_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
@@ -995,10 +995,10 @@ fn add_full_cost_prices<'a, I, J>(
 /// Calculate full cost prices for a set of commodities using a load-weighted average across
 /// assets and add to an existing prices map.
 ///
-/// Similar to `calculate_full_cost_prices`, but takes a weighted average across assets
+/// Similar to `add_full_cost_prices`, but takes a weighted average across assets
 /// according to output rather than taking the max.
 ///
-/// Candidate assets are treated the same way as in `calculate_full_cost_prices` (i.e. take the min
+/// Candidate assets are treated the same way as in `add_full_cost_prices` (i.e. take the min
 /// across candidate assets).
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn add_full_cost_average_prices<'a, I, J>(
