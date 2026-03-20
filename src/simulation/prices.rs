@@ -6,32 +6,37 @@ use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
-use crate::units::{Activity, Dimensionless, MoneyPerActivity, MoneyPerFlow, Year};
+use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
 use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 
 /// Weighted average accumulator for `MoneyPerFlow` prices.
 #[derive(Clone, Copy, Debug)]
-struct WeightedAverageAccumulator {
+struct WeightedAverageAccumulator<W: UnitType> {
     /// The numerator of the weighted average, i.e. the sum of value * weight across all entries.
     numerator: MoneyPerFlow,
     /// The denominator of the weighted average, i.e. the sum of weights across all entries.
     denominator: Dimensionless,
+    /// Marker to bind this accumulator to the configured weight unit type.
+    _weight_type: PhantomData<W>,
 }
 
-impl Default for WeightedAverageAccumulator {
+impl<W: UnitType> Default for WeightedAverageAccumulator<W> {
     fn default() -> Self {
         Self {
             numerator: MoneyPerFlow(0.0),
             denominator: Dimensionless(0.0),
+            _weight_type: PhantomData,
         }
     }
 }
 
-impl WeightedAverageAccumulator {
+impl<W: UnitType> WeightedAverageAccumulator<W> {
     /// Add a weighted value to the accumulator.
-    fn add(&mut self, value: MoneyPerFlow, weight: Dimensionless) {
+    fn add(&mut self, value: MoneyPerFlow, weight: W) {
+        let weight = Dimensionless(weight.value());
         self.numerator += value * weight;
         self.denominator += weight;
     }
@@ -45,17 +50,26 @@ impl WeightedAverageAccumulator {
 }
 
 /// Weighted average accumulator with a backup weighting path for `MoneyPerFlow` prices.
-#[derive(Clone, Copy, Debug, Default)]
-struct WeightedAverageBackupAccumulator {
+#[derive(Clone, Copy, Debug)]
+struct WeightedAverageBackupAccumulator<W: UnitType> {
     /// Primary weighted average path.
-    primary: WeightedAverageAccumulator,
+    primary: WeightedAverageAccumulator<W>,
     /// Backup weighted average path.
-    backup: WeightedAverageAccumulator,
+    backup: WeightedAverageAccumulator<W>,
 }
 
-impl WeightedAverageBackupAccumulator {
+impl<W: UnitType> Default for WeightedAverageBackupAccumulator<W> {
+    fn default() -> Self {
+        Self {
+            primary: WeightedAverageAccumulator::<W>::default(),
+            backup: WeightedAverageAccumulator::<W>::default(),
+        }
+    }
+}
+
+impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
     /// Add a weighted value to the accumulator with a backup weight.
-    fn add(&mut self, value: MoneyPerFlow, weight: Dimensionless, backup_weight: Dimensionless) {
+    fn add(&mut self, value: MoneyPerFlow, weight: W, backup_weight: W) {
         self.primary.add(value, weight);
         self.backup.add(value, backup_weight);
     }
@@ -565,7 +579,7 @@ where
     // the selection depends on the time slice level of the commodity (i.e. individual, season, year).
     let mut existing_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        IndexMap<AssetRef, WeightedAverageBackupAccumulator>,
+        IndexMap<AssetRef, WeightedAverageBackupAccumulator<Activity>>,
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
@@ -620,11 +634,7 @@ where
                 .or_default()
                 .entry(asset.clone())
                 .or_default()
-                .add(
-                    total_cost,
-                    Dimensionless(activity.value()),
-                    Dimensionless(activity_limit.value()),
-                );
+                .add(total_cost, activity, activity_limit);
         }
     }
 
@@ -691,7 +701,7 @@ where
     // but costs are weighted according to activity limits (i.e. assuming full utilisation).
     let mut cand_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        IndexMap<AssetRef, WeightedAverageAccumulator>,
+        IndexMap<AssetRef, WeightedAverageAccumulator<Activity>>,
     > = IndexMap::new();
 
     // Iterate over candidate assets (assuming full utilisation)
@@ -761,7 +771,7 @@ where
                 .or_default()
                 .entry(asset.clone())
                 .or_default()
-                .add(total_cost, Dimensionless(activity_limit.value()));
+                .add(total_cost, activity_limit);
         }
     }
 
@@ -874,7 +884,7 @@ where
     // level of the commodity (i.e. individual, season, year).
     let mut existing_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        WeightedAverageBackupAccumulator,
+        WeightedAverageBackupAccumulator<Flow>,
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
@@ -927,8 +937,8 @@ where
                 .get_flow(&commodity_id)
                 .expect("Commodity should be an output flow for this asset")
                 .coeff;
-            let output_weight = Dimensionless((activity * output_coeff).value());
-            let backup_output_weight = Dimensionless((activity_limit * output_coeff).value());
+            let output_weight = activity * output_coeff;
+            let backup_output_weight = activity_limit * output_coeff;
 
             // Accumulate cost for this group, weighted by output with a backup
             // potential-output weight.
@@ -1424,14 +1434,14 @@ mod tests {
 
     #[test]
     fn weighted_average_accumulator_single_value() {
-        let mut accum = WeightedAverageAccumulator::default();
+        let mut accum = WeightedAverageAccumulator::<Dimensionless>::default();
         accum.add(MoneyPerFlow(100.0), Dimensionless(1.0));
         assert_eq!(accum.finalise(), Some(MoneyPerFlow(100.0)));
     }
 
     #[test]
     fn weighted_average_accumulator_different_weights() {
-        let mut accum = WeightedAverageAccumulator::default();
+        let mut accum = WeightedAverageAccumulator::<Dimensionless>::default();
         accum.add(MoneyPerFlow(100.0), Dimensionless(1.0));
         accum.add(MoneyPerFlow(200.0), Dimensionless(2.0));
         // (100*1 + 200*2) / (1+2) = 500/3 ≈ 166.667
@@ -1441,13 +1451,13 @@ mod tests {
 
     #[test]
     fn weighted_average_accumulator_zero_weight() {
-        let accum = WeightedAverageAccumulator::default();
+        let accum = WeightedAverageAccumulator::<Dimensionless>::default();
         assert_eq!(accum.finalise(), None);
     }
 
     #[test]
     fn weighted_average_backup_accumulator_primary_preferred() {
-        let mut accum = WeightedAverageBackupAccumulator::default();
+        let mut accum = WeightedAverageBackupAccumulator::<Dimensionless>::default();
         accum.add(MoneyPerFlow(100.0), Dimensionless(3.0), Dimensionless(1.0));
         accum.add(MoneyPerFlow(200.0), Dimensionless(1.0), Dimensionless(1.0));
         // Primary is non-zero, use it: (100*3 + 200*1) / (3+1) = 125
@@ -1457,7 +1467,7 @@ mod tests {
 
     #[test]
     fn weighted_average_backup_accumulator_fallback() {
-        let mut accum = WeightedAverageBackupAccumulator::default();
+        let mut accum = WeightedAverageBackupAccumulator::<Dimensionless>::default();
         accum.add(MoneyPerFlow(100.0), Dimensionless(0.0), Dimensionless(2.0));
         accum.add(MoneyPerFlow(200.0), Dimensionless(0.0), Dimensionless(2.0));
         // Primary is zero, fallback to backup: (100*2 + 200*2) / (2+2) = 150
@@ -1466,7 +1476,7 @@ mod tests {
 
     #[test]
     fn weighted_average_backup_accumulator_both_zero() {
-        let accum = WeightedAverageBackupAccumulator::default();
+        let accum = WeightedAverageBackupAccumulator::<Dimensionless>::default();
         assert_eq!(accum.finalise(), None);
     }
 }
