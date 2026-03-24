@@ -290,7 +290,7 @@ impl ActivityLimits {
         let lower = *ts_limit.start();
         let mut upper = *ts_limit.end();
 
-        // If there's a seasonal/annual limit, we must cap the timeslice limit to ensure that it
+        // If there's a seasonal/annual limit, we must cap the time slice limit to ensure that it
         // doesn't exceed the upper bound of the season/year
         if let Some(seasonal_limit) = self.seasonal_limits.get(&time_slice.season) {
             upper = upper.min(*seasonal_limit.end());
@@ -356,7 +356,7 @@ impl ActivityLimits {
 
     /// Iterate over all limits
     ///
-    /// This first iterates over all individual timeslice limits, followed by seasonal limits (if
+    /// This first iterates over all individual time slice limits, followed by seasonal limits (if
     /// any), and finally the annual limit (if any).
     pub fn iter_limits(
         &self,
@@ -1030,10 +1030,10 @@ mod tests {
     fn new_with_full_availability(time_slice_info2: TimeSliceInfo) {
         let limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
 
-        // Each timeslice from the info should be present in the limits
+        // Each time slice from the info should be present in the limits
         for (ts_id, ts_len) in time_slice_info2.iter() {
             let l = limits.get_limit_for_time_slice(ts_id);
-            // Lower bound should be zero and upper bound equal to timeslice length
+            // Lower bound should be zero and upper bound equal to time slice length
             assert_eq!(*l.start(), Dimensionless(0.0));
             assert_eq!(*l.end(), Dimensionless(ts_len.value()));
         }
@@ -1048,7 +1048,7 @@ mod tests {
     fn new_from_limits_with_seasonal_limit_applied(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
-        // Set a seasonal upper limit that is stricter than the sum of timeslices
+        // Set a seasonal upper limit that is stricter than the sum of time slices
         limits.insert(
             TimeSliceSelection::Season("winter".into()),
             Dimensionless(0.0)..=Dimensionless(0.01),
@@ -1056,7 +1056,7 @@ mod tests {
 
         let result = ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap();
 
-        // Each timeslice upper bound should be capped by the seasonal upper bound (0.01)
+        // Each time slice upper bound should be capped by the seasonal upper bound (0.01)
         for (ts_id, _ts_len) in time_slice_info2.iter() {
             let ts_limit = result.get_limit_for_time_slice(ts_id);
             assert_eq!(*ts_limit.end(), Dimensionless(0.01));
@@ -1071,7 +1071,7 @@ mod tests {
     fn new_from_limits_with_annual_limit_applied(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
-        // Set an annual upper limit that is stricter than the sum of timeslices
+        // Set an annual upper limit that is stricter than the sum of time slices
         limits.insert(
             TimeSliceSelection::Annual,
             Dimensionless(0.0)..=Dimensionless(0.01),
@@ -1079,7 +1079,7 @@ mod tests {
 
         let result = ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap();
 
-        // Each timeslice upper bound should be capped by the annual upper bound (0.01)
+        // Each time slice upper bound should be capped by the annual upper bound (0.01)
         for (ts_id, _ts_len) in time_slice_info2.iter() {
             let ts_limit = result.get_limit_for_time_slice(ts_id);
             assert_eq!(*ts_limit.end(), Dimensionless(0.01));
@@ -1098,7 +1098,7 @@ mod tests {
     fn new_from_limits_missing_timeslices_error(time_slice_info2: TimeSliceInfo) {
         let mut limits = HashMap::new();
 
-        // Add a single timeslice limit but do not provide limits for all timeslices
+        // Add a single time slice limit but do not provide limits for all time slices
         let first_ts = time_slice_info2.iter().next().unwrap().0.clone();
         limits.insert(
             TimeSliceSelection::Single(first_ts),

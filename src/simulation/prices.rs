@@ -508,7 +508,7 @@ fn add_marginal_cost_prices<'a, I, J>(
         year,
         commodities,
         &PricingStrategy::MarginalCost,
-        None::<&HashMap<AssetRef, Activity>>,
+        /*annual_activities=*/ None,
     )
     .collect();
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
@@ -567,10 +567,17 @@ where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     // Validate supported strategies, and require annual activities for FullCost pricing.
-    assert!(matches!(
-        (pricing_strategy, annual_activities),
-        (PricingStrategy::MarginalCost, _) | (PricingStrategy::FullCost, Some(_))
-    ));
+    match pricing_strategy {
+        PricingStrategy::MarginalCost => assert!(
+            annual_activities.is_none(),
+            "Cannot provide annual_activities with marginal pricing strategy"
+        ),
+        PricingStrategy::FullCost => assert!(
+            annual_activities.is_some(),
+            "annual_activities must be provided for full pricing strategy"
+        ),
+        _ => panic!("Invalid pricing strategy"),
+    }
 
     // Accumulator map to collect costs from existing assets. For each (commodity, region,
     // ts selection), this maps each asset to a weighted average of the costs for that
@@ -583,7 +590,7 @@ where
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+    let mut annual_fixed_costs = HashMap::new();
 
     // Iterate over existing assets and their activities
     for (asset, time_slice, activity) in activity_for_existing {
@@ -591,8 +598,7 @@ where
 
         // When using full cost pricing, skip assets with zero activity across the year, since
         // we cannot calculate a fixed cost per flow.
-        let annual_activity = matches!(pricing_strategy, PricingStrategy::FullCost)
-            .then(|| annual_activities.unwrap()[asset]);
+        let annual_activity = annual_activities.map(|activities| activities[asset]);
         if annual_activity.is_some_and(|annual_activity| annual_activity < Activity::EPSILON) {
             continue;
         }
@@ -654,7 +660,7 @@ where
 /// involves taking a weighted average across time slices for each asset according to potential
 /// activity (i.e. the upper activity limit), omitting prices in the extreme case of zero potential
 /// activity (Note: this should NOT happen as validation should ensure there is at least one
-/// candidate that can provide a price in each timeslice for which a price could be required).
+/// candidate that can provide a price in each time slice for which a price could be required).
 /// Costs for candidates are calculated assuming full utilisation.
 ///
 /// # Arguments
@@ -692,10 +698,10 @@ where
     ));
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+    let mut annual_fixed_costs = HashMap::new();
 
     // Cache of annual activity limits for each asset (only used for Full cost pricing)
-    let mut annual_activity_limits: HashMap<_, _> = HashMap::new();
+    let mut annual_activity_limits = HashMap::new();
 
     // Accumulator map to collect costs from candidate assets. Similar to existing_accum,
     // but costs are weighted according to activity limits (i.e. assuming full utilisation).
@@ -813,7 +819,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
         year,
         commodities,
         &PricingStrategy::MarginalCost,
-        None::<&HashMap<AssetRef, Activity>>,
+        /*annual_activities=*/ None,
     )
     .collect();
     let priced_groups: HashSet<_> = group_prices.keys().cloned().collect();
@@ -872,10 +878,17 @@ where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 {
     // Validate supported strategies, and require annual activities for FullCost pricing.
-    assert!(matches!(
-        (pricing_strategy, annual_activities),
-        (PricingStrategy::MarginalCost, _) | (PricingStrategy::FullCost, Some(_))
-    ));
+    match pricing_strategy {
+        PricingStrategy::MarginalCost => assert!(
+            annual_activities.is_none(),
+            "Cannot provide annual_activities with marginal pricing strategy"
+        ),
+        PricingStrategy::FullCost => assert!(
+            annual_activities.is_some(),
+            "annual_activities must be provided for full pricing strategy"
+        ),
+        _ => panic!("Invalid pricing strategy"),
+    }
 
     // Accumulator map to collect costs from existing assets. Collects a weighted average
     // for each (commodity, region, ts selection), across all contributing assets, weighted
@@ -888,7 +901,7 @@ where
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
-    let mut annual_fixed_costs: HashMap<_, _> = HashMap::new();
+    let mut annual_fixed_costs = HashMap::new();
 
     // Iterate over existing assets and their activities
     for (asset, time_slice, activity) in activity_for_existing {
@@ -896,8 +909,7 @@ where
 
         // When using full cost pricing, skip assets with zero annual activity, since we cannot
         // calculate a fixed cost per flow.
-        let annual_activity = matches!(pricing_strategy, PricingStrategy::FullCost)
-            .then(|| annual_activities.unwrap()[asset]);
+        let annual_activity = annual_activities.map(|activities| activities[asset]);
         if annual_activity.is_some_and(|annual_activity| annual_activity < Activity::EPSILON) {
             continue;
         }
