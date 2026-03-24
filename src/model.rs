@@ -10,7 +10,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub mod parameters;
-pub use parameters::{ALLOW_BROKEN_OPTION_NAME, ModelParameters, broken_model_options_allowed};
+pub use parameters::{
+    ALLOW_DANGEROUS_OPTION_NAME, ModelParameters, dangerous_model_options_enabled,
+};
 
 /// Model definition
 pub struct Model {

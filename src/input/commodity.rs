@@ -5,7 +5,7 @@ use crate::commodity::{
     BalanceType, Commodity, CommodityID, CommodityLevyMap, CommodityMap, CommodityType, DemandMap,
     PricingStrategy,
 };
-use crate::model::{ALLOW_BROKEN_OPTION_NAME, broken_model_options_allowed};
+use crate::model::{ALLOW_DANGEROUS_OPTION_NAME, dangerous_model_options_enabled};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel};
 use anyhow::{Context, Ok, Result, ensure};
@@ -167,9 +167,9 @@ fn validate_commodity(commodity: &Commodity) -> Result<()> {
     // Gatekeep scarcity-adjusted pricing option
     if commodity.pricing_strategy == PricingStrategy::ScarcityAdjusted {
         ensure!(
-            broken_model_options_allowed(),
+            dangerous_model_options_enabled(),
             "The 'scarcity' pricing strategy is currently experimental. \
-            To run anyway, set the {ALLOW_BROKEN_OPTION_NAME} option to true."
+            To run anyway, set the {ALLOW_DANGEROUS_OPTION_NAME} option to true."
         );
         warn!(
             "The pricing strategy for {} is set to 'scarcity'. Commodity prices may be \

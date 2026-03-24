@@ -49,7 +49,9 @@ properties:
   please_give_me_broken_results:
     type: boolean
     description: |
-      Allows other options that are known to be broken to be used. Please don't ever enable this.
+      Allows other options that are potentially dangerous to be used, such as experimental features and parameters that are known to have correctness bugs. This option should only ever be enabled by developers.
+
+      Never enable this for experiments that you care about, particularly if you intend to publish the results.
   remaining_demand_absolute_tolerance:
     type: number
     description: |
