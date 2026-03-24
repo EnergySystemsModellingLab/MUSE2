@@ -1,8 +1,8 @@
 //! Read and validate model parameters from `model.toml`.
 //!
-//! This module defines the `ModelParameters` struct and helpers for loading and
-//! validating the `model.toml` configuration used by the model. Validation
-//! functions ensure sensible numeric ranges and invariants for runtime use.
+//! This module defines the `ModelParameters` struct and helpers for loading and validating the
+//! `model.toml` configuration used by the model. Validation functions ensure sensible numeric
+//! ranges and invariants for runtime use.
 use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
@@ -16,42 +16,42 @@ use std::sync::OnceLock;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
 
-/// The key in `model.toml` which enables known-broken model options.
+/// The key in `model.toml` which enables potentially dangerous model options.
 ///
-/// If this option is present and true, the model will permit certain
-/// experimental or unsafe behaviours that are normally disallowed.
-pub const ALLOW_BROKEN_OPTION_NAME: &str = "please_give_me_broken_results";
+/// If this option is present and true, the model will permit certain experimental or unsafe
+/// behaviours that are normally disallowed.
+pub const ALLOW_DANGEROUS_OPTION_NAME: &str = "please_give_me_broken_results";
 
-/// Global flag indicating whether broken model options have been enabled.
+/// Global flag indicating whether potentially dangerous model options have been enabled.
 ///
-/// This is stored in a `OnceLock` and must be set exactly once during
-/// startup (see `set_broken_model_options_flag`).
-static BROKEN_OPTIONS_ALLOWED: OnceLock<bool> = OnceLock::new();
+/// This is stored in a `OnceLock` and must be set exactly once during startup (see
+/// [`set_dangerous_model_options_flag`]).
+static DANGEROUS_OPTIONS_ENABLED: OnceLock<bool> = OnceLock::new();
 
-/// Return whether broken model options were enabled by the loaded config.
+/// Whether potentially dangerous model options were enabled by the loaded config.
 ///
 /// # Panics
 ///
 /// Panics if the global flag has not been set yet (the flag should be set by
-/// `ModelParameters::from_path` during program initialization).
-pub fn broken_model_options_allowed() -> bool {
-    *BROKEN_OPTIONS_ALLOWED
+/// [`ModelParameters::from_path`] during program initialisation).
+pub fn dangerous_model_options_enabled() -> bool {
+    *DANGEROUS_OPTIONS_ENABLED
         .get()
-        .expect("Broken options flag not set")
+        .expect("Dangerous options flag not set")
 }
 
-/// Set the global flag indicating whether broken model options are allowed.
+/// Set the global flag indicating whether potentially dangerous model options are enabled.
 ///
 /// Can only be called once; subsequent calls will panic (except in tests, where it can be called
 /// multiple times so long as the value is the same).
-fn set_broken_model_options_flag(allowed: bool) {
-    let result = BROKEN_OPTIONS_ALLOWED.set(allowed);
+fn set_dangerous_model_options_flag(enabled: bool) {
+    let result = DANGEROUS_OPTIONS_ENABLED.set(enabled);
     if result.is_err() {
         if cfg!(test) {
             // Sanity check
-            assert_eq!(allowed, broken_model_options_allowed());
+            assert_eq!(enabled, dangerous_model_options_enabled());
         } else {
-            panic!("Attempted to set BROKEN_OPTIONS_ALLOWED twice");
+            panic!("Attempted to set DANGEROUS_OPTIONS_ENABLED twice");
         }
     }
 }
@@ -89,9 +89,9 @@ define_param_default!(default_mothball_years, u32, 0);
 pub struct ModelParameters {
     /// Milestone years
     pub milestone_years: Vec<u32>,
-    /// Allow known-broken options to be enabled.
+    /// Allow potentially dangerous options to be enabled.
     #[serde(default, rename = "please_give_me_broken_results")] // Can't use constant here :-(
-    pub allow_broken_options: bool,
+    pub allow_dangerous_options: bool,
     /// The (small) value of capacity given to candidate assets.
     ///
     /// Don't change unless you know what you're doing.
@@ -169,7 +169,7 @@ fn check_price_tolerance(value: Dimensionless) -> Result<()> {
 }
 
 fn check_remaining_demand_absolute_tolerance(
-    allow_broken_options: bool,
+    dangerous_options_enabled: bool,
     value: Flow,
 ) -> Result<()> {
     ensure!(
@@ -178,12 +178,12 @@ fn check_remaining_demand_absolute_tolerance(
     );
 
     let default_value = default_remaining_demand_absolute_tolerance();
-    if !allow_broken_options {
+    if !dangerous_options_enabled {
         ensure!(
             value == default_value,
-            "Setting a remaining_demand_absolute_tolerance different from the default value of {:e} \
-             is potentially dangerous, set please_give_me_broken_results to true \
-             if you want to allow this.",
+            "Setting a remaining_demand_absolute_tolerance different from the default value of \
+            {:e} is potentially dangerous, set {ALLOW_DANGEROUS_OPTION_NAME} to true if you want \
+            to allow this.",
             default_value.0
         );
     }
@@ -215,7 +215,7 @@ impl ModelParameters {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
         let model_params: ModelParameters = read_toml(&file_path)?;
 
-        set_broken_model_options_flag(model_params.allow_broken_options);
+        set_dangerous_model_options_flag(model_params.allow_dangerous_options);
 
         model_params
             .validate()
@@ -226,9 +226,9 @@ impl ModelParameters {
 
     /// Validate parameters after reading in file
     fn validate(&self) -> Result<()> {
-        if self.allow_broken_options {
+        if self.allow_dangerous_options {
             warn!(
-                "!!! You've enabled the {ALLOW_BROKEN_OPTION_NAME} option. !!!\n\
+                "!!! You've enabled the {ALLOW_DANGEROUS_OPTION_NAME} option. !!!\n\
                 I see you like to live dangerously 😈. This option should ONLY be used by \
                 developers as it can cause peculiar behaviour that breaks things. NEVER enable it \
                 for results you actually care about or want to publish. You have been warned!"
@@ -258,7 +258,7 @@ impl ModelParameters {
 
         // remaining_demand_absolute_tolerance
         check_remaining_demand_absolute_tolerance(
-            self.allow_broken_options,
+            self.allow_dangerous_options,
             self.remaining_demand_absolute_tolerance,
         )?;
 
@@ -390,12 +390,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case(true, 0.0, true)] // Valid minimum value broken options allowed
-    #[case(true, 1e-10, true)] // Valid value with broken options allowed
-    #[case(true, 1e-15, true)] // Valid value with broken options allowed
-    #[case(false, 1e-12, true)] // Valid value same as default, no broken options needed
-    #[case(true, 1.0, true)] // Valid larger value with broken options allowed
-    #[case(true, f64::MAX, true)] // Valid maximum finite value with broken options allowed
+    #[case(true, 0.0, true)] // Valid minimum value dangerous options allowed
+    #[case(true, 1e-10, true)] // Valid value with dangerous options allowed
+    #[case(true, 1e-15, true)] // Valid value with dangerous options allowed
+    #[case(false, 1e-12, true)] // Valid value same as default, no dangerous options needed
+    #[case(true, 1.0, true)] // Valid larger value with dangerous options allowed
+    #[case(true, f64::MAX, true)] // Valid maximum finite value with dangerous options allowed
     #[case(true, -1e-10, false)] // Invalid: negative value
     #[case(true, f64::INFINITY, false)] // Invalid: positive infinity
     #[case(true, f64::NEG_INFINITY, false)] // Invalid: negative infinity
@@ -405,12 +405,12 @@ mod tests {
     #[case(false, f64::NEG_INFINITY, false)] // Invalid: negative infinity
     #[case(false, f64::NAN, false)] // Invalid: NaN
     fn check_remaining_demand_absolute_tolerance_works(
-        #[case] allow_broken_options: bool,
+        #[case] allow_dangerous_options: bool,
         #[case] value: f64,
         #[case] expected_valid: bool,
     ) {
         let flow = Flow::new(value);
-        let result = check_remaining_demand_absolute_tolerance(allow_broken_options, flow);
+        let result = check_remaining_demand_absolute_tolerance(allow_dangerous_options, flow);
 
         assert_validation_result(
             result,
@@ -425,7 +425,7 @@ mod tests {
     #[case(1e-10)] // Larger than default (1e-12)
     #[case(1.0)] // Well above default
     #[case(f64::MAX)] // Maximum finite value
-    fn check_remaining_demand_absolute_tolerance_requires_broken_options_if_non_default(
+    fn check_remaining_demand_absolute_tolerance_requires_dangerous_options_if_non_default(
         #[case] value: f64,
     ) {
         let flow = Flow::new(value);
@@ -434,9 +434,9 @@ mod tests {
             result,
             false,
             value,
-            "Setting a remaining_demand_absolute_tolerance different from the default value \
-             of 1e-12 is potentially dangerous, set \
-             please_give_me_broken_results to true if you want to allow this.",
+            "Setting a remaining_demand_absolute_tolerance different from the default value of \
+            1e-12 is potentially dangerous, set please_give_me_broken_results to true if you want \
+            to allow this.",
         );
     }
 
