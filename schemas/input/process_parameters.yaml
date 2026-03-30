@@ -4,7 +4,7 @@ description: |
 
 notes:
   - For each process, entries must be provided which cover every combination of milestone year and
-    region in which the process operates.
+    region in which the process can be commissioned.
 
 fields:
   - name: process_id
@@ -16,7 +16,7 @@ fields:
     notes: |
       One or more region IDs, separated by semicolons or the string `all`. Must be regions in which
       the process operates.
-  - name: years
+  - name: commission_years
     type: string
     description: The milestone year(s) to which this entry applies
     notes:

@@ -5,7 +5,7 @@ description: |
 notes:
   - Commodity flows can vary by region and year.
   - For each process, there must be entries covering all the years and regions in which the process
-    operates.
+    can be commissioned.
 
 fields:
   - name: process_id
@@ -20,7 +20,7 @@ fields:
     notes: |
       One or more region IDs, separated by semicolons or the string `all`. Must be regions in which
       the process operates.
-  - name: years
+  - name: commission_years
     type: string
     description: The year(s) to which this entry applies
     notes:
