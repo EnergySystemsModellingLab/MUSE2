@@ -7,7 +7,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.37.0
+    rev: 0.37.1
     hooks:
       - id: check-dependabot
       - id: check-github-actions
@@ -53,7 +53,7 @@ repos:
       - id: clippy
         args: ["--all-targets", "--", "-D", "warnings"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.7
+    rev: v0.15.8
     hooks:
       - id: ruff-check
         types_or: [python]
