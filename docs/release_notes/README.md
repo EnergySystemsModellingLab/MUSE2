@@ -7,5 +7,6 @@ To download the latest release for your platform, please see our [GitHub release
 To see the list of changes for the current, in-progress version of MUSE2, [see here](./upcoming.md).
 
 - [MUSE2 v2.0.0 (October 14, 2025)](./v2.0.0.md)
+- [MUSE2 v2.1.0 (March 31, 2026)](./v2.1.0.md)
 
 [GitHub releases page]: https://github.com/EnergySystemsModellingLab/MUSE2/releases

@@ -77,7 +77,7 @@ the simulation (which should finish very quickly).
 The first few lines should look something like:
 
 ```txt
-[12:24:20 INFO muse2::cli] Starting MUSE2 v2.0.0
+[12:24:20 INFO muse2::cli] Starting MUSE2 v2.1.0
 [12:24:20 INFO muse2::cli] Loaded model from new_model/
 [12:24:20 INFO muse2::cli] Output folder: muse2_results/new_model
 ...

@@ -19,7 +19,7 @@ fields:
     type: string
     description: The region(s) to which this entry applies
     notes: One or more region IDs, separated by semicolons or the string `all`
-  - name: years
+  - name: commission_years
     type: string
     description: The milestone year(s) to which this entry applies
     notes:
