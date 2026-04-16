@@ -24,6 +24,12 @@ It is the successor to [MUSE], which is written in Python. It was developed foll
 MUSE to address a range of legacy issues that are challenging to address via upgrades to the
 existing MUSE framework, and to implement the framework in the high-performance Rust language.
 
+This work was supported via the Climate Compatible Growth (CCG) programme and the EPSRC-funded
+HI-ACT project ([EP/X038823/2][HI-ACT grant]). CCG is funded by UK Aid from the UK government.
+However, the views expressed herein do not necessarily reflect the UK government's official
+policies.
+
+[HI-ACT grant]: https://gtr.ukri.org/projects?ref=EP%2FX038823%2F2
 [MUSE]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 <!-- ANCHOR_END: overview -->
 
