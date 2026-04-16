@@ -166,12 +166,18 @@ struct CommodityPriceRow {
     price: MoneyPerFlow,
 }
 
-/// Represents the activity in a row of the activity CSV file
+/// Represents the activity in a row of the activity CSV file.
+///
+/// Dispatch can run at the parent-asset level (and also include candidates),
+/// neither of which has a per-instance `asset_id`, so we also record the
+/// `AssetGroupID` from `AssetRef::group_id()`. That gives a reader a stable
+/// key to distinguish rows that share `asset_id = None`. See #1243.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct ActivityRow {
     milestone_year: u32,
     run_description: String,
     asset_id: Option<AssetID>,
+    group_id: Option<AssetGroupID>,
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
@@ -356,6 +362,7 @@ impl DebugDataWriter {
                 milestone_year,
                 run_description: self.with_context(run_description),
                 asset_id: asset.id(),
+                group_id: asset.group_id(),
                 process_id: asset.process_id().clone(),
                 region_id: asset.region_id().clone(),
                 time_slice: time_slice.clone(),
@@ -874,6 +881,7 @@ mod tests {
             milestone_year,
             run_description,
             asset_id: asset.id(),
+            group_id: asset.group_id(),
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice,
@@ -918,6 +926,7 @@ mod tests {
             milestone_year,
             run_description,
             asset_id: asset.id(),
+            group_id: asset.group_id(),
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice,
