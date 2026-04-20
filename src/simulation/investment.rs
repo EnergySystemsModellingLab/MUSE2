@@ -409,7 +409,7 @@ fn select_assets_for_cycle(
                 model.parameters.capacity_margin,
             )
             .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment",),
+                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment"),
                 writer,
             )
             .with_context(|| {
