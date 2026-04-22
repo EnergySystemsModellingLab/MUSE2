@@ -13,3 +13,15 @@ ready to be released, carry out the following steps:
   version
 
 -->
+
+## New features
+
+<!-- TODO -->
+
+## Breaking changes
+
+<!-- TODO -->
+
+## Bug fixes
+
+<!-- TODO -->
