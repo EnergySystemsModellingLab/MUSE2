@@ -24,4 +24,6 @@ ready to be released, carry out the following steps:
 
 ## Bug fixes
 
-<!-- TODO -->
+- Fix misleading warning message for assets decommissioned before simulation start ([#1259])
+
+[#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
