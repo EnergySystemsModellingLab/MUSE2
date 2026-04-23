@@ -28,6 +28,9 @@ pub const ALLOW_DANGEROUS_OPTION_NAME: &str = "please_give_me_broken_results";
 /// [`set_dangerous_model_options_flag`]).
 static DANGEROUS_OPTIONS_ENABLED: OnceLock<bool> = OnceLock::new();
 
+/// The default value for the `remaining_demand_absolute_tolerance` parameter
+const DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE: Flow = Flow(1e-12);
+
 /// Whether potentially dangerous model options were enabled by the loaded config.
 ///
 /// # Panics
@@ -56,82 +59,74 @@ fn set_dangerous_model_options_flag(enabled: bool) {
     }
 }
 
-macro_rules! define_unit_param_default {
-    ($name:ident, $type: ty, $value: expr) => {
-        fn $name() -> $type {
-            <$type>::new($value)
-        }
-    };
-}
-
-macro_rules! define_param_default {
-    ($name:ident, $type: ty, $value: expr) => {
-        fn $name() -> $type {
-            $value
-        }
-    };
-}
-
-define_unit_param_default!(default_candidate_asset_capacity, Capacity, 0.0001);
-define_unit_param_default!(default_capacity_limit_factor, Dimensionless, 0.1);
-define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
-define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
-define_unit_param_default!(default_remaining_demand_absolute_tolerance, Flow, 1e-12);
-define_unit_param_default!(default_capacity_margin, Dimensionless, 0.2);
-define_param_default!(default_max_ironing_out_iterations, u32, 1);
-define_param_default!(default_mothball_years, u32, 0);
-
 /// Model parameters as defined in the `model.toml` file.
 ///
 /// NOTE: If you add or change a field in this struct, you must also update the schema in
 /// `schemas/input/model.yaml`.
 #[derive(Debug, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct ModelParameters {
     /// Milestone years
     pub milestone_years: Vec<u32>,
     /// Allow potentially dangerous options to be enabled.
-    #[serde(default, rename = "please_give_me_broken_results")] // Can't use constant here :-(
+    #[serde(rename = "please_give_me_broken_results")] // Can't use constant here :-(
     pub allow_dangerous_options: bool,
     /// The (small) value of capacity given to candidate assets.
     ///
     /// Don't change unless you know what you're doing.
-    #[serde(default = "default_candidate_asset_capacity")]
     pub candidate_asset_capacity: Capacity,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
-    #[serde(default = "default_capacity_limit_factor")]
     #[serde(deserialize_with = "deserialise_proportion_nonzero")]
     pub capacity_limit_factor: Dimensionless,
     /// The cost applied to unmet demand.
     ///
     /// Currently this only applies to the LCOX appraisal.
-    #[serde(default = "default_value_of_lost_load")]
     pub value_of_lost_load: MoneyPerFlow,
     /// The maximum number of iterations to run the "ironing out" step of agent investment for
-    #[serde(default = "default_max_ironing_out_iterations")]
     pub max_ironing_out_iterations: u32,
     /// The relative tolerance for price convergence in the ironing out loop
-    #[serde(default = "default_price_tolerance")]
     pub price_tolerance: Dimensionless,
     /// Slack applied during cycle balancing, allowing newly selected assets to flex their capacity
     /// by this proportion.
     ///
     /// Existing assets remain fixed; this gives newly selected assets the wiggle-room to absorb
     /// small demand changes before we would otherwise need to break for re-investment.
-    #[serde(default = "default_capacity_margin")]
     pub capacity_margin: Dimensionless,
     /// Number of years an asset can remain unused before being decommissioned
-    #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
-    #[serde(default = "default_remaining_demand_absolute_tolerance")]
     pub remaining_demand_absolute_tolerance: Flow,
+}
+
+impl Default for ModelParameters {
+    fn default() -> Self {
+        Self {
+            // Required parameters.
+            // milestone_years cannot be empty and we validate this when loading model.toml files.
+            milestone_years: Vec::default(),
+
+            // Default values for optional parameters
+            allow_dangerous_options: false,
+            candidate_asset_capacity: Capacity(1e-4),
+            capacity_limit_factor: Dimensionless(0.1),
+            value_of_lost_load: MoneyPerFlow(1e9),
+            max_ironing_out_iterations: 1,
+            price_tolerance: Dimensionless(1e-6),
+            capacity_margin: Dimensionless(0.2),
+            mothball_years: 0,
+            remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+        }
+    }
 }
 
 /// Check that the `milestone_years` parameter is valid
 fn check_milestone_years(years: &[u32]) -> Result<()> {
-    ensure!(!years.is_empty(), "`milestone_years` is empty");
+    ensure!(
+        !years.is_empty(),
+        "`milestone_years` must be provided and non-empty"
+    );
 
     ensure!(
         is_sorted_and_unique(years),
@@ -177,14 +172,13 @@ fn check_remaining_demand_absolute_tolerance(
         "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero"
     );
 
-    let default_value = default_remaining_demand_absolute_tolerance();
     if !dangerous_options_enabled {
         ensure!(
-            value == default_value,
+            value == DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
             "Setting a remaining_demand_absolute_tolerance different from the default value of \
             {:e} is potentially dangerous, set {ALLOW_DANGEROUS_OPTION_NAME} to true if you want \
             to allow this.",
-            default_value.0
+            DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE.value()
         );
     }
 
