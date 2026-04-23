@@ -77,8 +77,8 @@ define_unit_param_default!(default_capacity_limit_factor, Dimensionless, 0.1);
 define_unit_param_default!(default_value_of_lost_load, MoneyPerFlow, 1e9);
 define_unit_param_default!(default_price_tolerance, Dimensionless, 1e-6);
 define_unit_param_default!(default_remaining_demand_absolute_tolerance, Flow, 1e-12);
+define_unit_param_default!(default_capacity_margin, Dimensionless, 0.2);
 define_param_default!(default_max_ironing_out_iterations, u32, 1);
-define_param_default!(default_capacity_margin, f64, 0.2);
 define_param_default!(default_mothball_years, u32, 0);
 
 /// Model parameters as defined in the `model.toml` file.
@@ -120,7 +120,7 @@ pub struct ModelParameters {
     /// Existing assets remain fixed; this gives newly selected assets the wiggle-room to absorb
     /// small demand changes before we would otherwise need to break for re-investment.
     #[serde(default = "default_capacity_margin")]
-    pub capacity_margin: f64,
+    pub capacity_margin: Dimensionless,
     /// Number of years an asset can remain unused before being decommissioned
     #[serde(default = "default_mothball_years")]
     pub mothball_years: u32,
@@ -192,9 +192,9 @@ fn check_remaining_demand_absolute_tolerance(
 }
 
 /// Check that the `capacity_margin` parameter is valid
-fn check_capacity_margin(value: f64) -> Result<()> {
+fn check_capacity_margin(value: Dimensionless) -> Result<()> {
     ensure!(
-        value.is_finite() && value >= 0.0,
+        value.is_finite() && value >= Dimensionless(0.0),
         "capacity_margin must be a finite number greater than or equal to zero"
     );
 
@@ -449,7 +449,7 @@ mod tests {
     #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
     #[case(f64::NAN, false)] // Invalid: NaN value
     fn check_capacity_margin_works(#[case] value: f64, #[case] expected_valid: bool) {
-        let result = check_capacity_margin(value);
+        let result = check_capacity_margin(Dimensionless(value));
 
         assert_validation_result(
             result,
