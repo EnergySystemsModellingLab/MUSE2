@@ -63,7 +63,7 @@ fn set_dangerous_model_options_flag(enabled: bool) {
 ///
 /// NOTE: If you add or change a field in this struct, you must also update the schema in
 /// `schemas/input/model.yaml`.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Deserialize)]
 #[serde(default)]
 pub struct ModelParameters {
     /// Milestone years
