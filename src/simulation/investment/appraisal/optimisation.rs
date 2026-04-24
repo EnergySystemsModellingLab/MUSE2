@@ -6,11 +6,13 @@ use super::constraints::{
 };
 use crate::asset::{AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
+use crate::model::Model;
 use crate::simulation::optimisation::ModelError;
+use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Capacity, Flow};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 
@@ -127,12 +129,12 @@ fn add_constraints(
 /// The optimisation will use continuous or integer capacity variables depending on whether the
 /// asset has a defined unit size.
 pub fn perform_optimisation(
+    model: &Model,
     asset: &AssetRef,
     max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
-    time_slice_info: &TimeSliceInfo,
     sense: Sense,
 ) -> Result<ResultsMap> {
     // Create problem and add variables
@@ -147,11 +149,14 @@ pub fn perform_optimisation(
         commodity,
         &variables,
         demand,
-        time_slice_info,
+        &model.time_slice_info,
     );
 
     // Solve model
-    let solution = solve_optimal(problem.optimise(sense))
+    let mut highs_model = problem.optimise(sense);
+    apply_highs_options_from_toml(&mut highs_model, &model.parameters.highs.appraisal_options)
+        .context("Failed to apply custom HiGHS options to appraisal optimisation")?;
+    let solution = solve_optimal(highs_model)
         .map_err(ModelError::into_anyhow)?
         .get_solution();
     let solution_values = solution.columns();
