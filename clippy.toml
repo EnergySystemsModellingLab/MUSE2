@@ -4,3 +4,5 @@
 # The AssetRef type uses Rc<Asset> internally for shared ownership, but the hash
 # implementation is carefully designed to be consistent regardless of interior mutability
 ignore-interior-mutability = ["muse2::asset::AssetRef"]
+# Things that should not be treated as identifiers. The ".." represents the default options.
+doc-valid-idents = ["HiGHS", ".."]

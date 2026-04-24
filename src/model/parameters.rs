@@ -13,6 +13,7 @@ use log::warn;
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::OnceLock;
+use toml::Table;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
 
@@ -98,6 +99,12 @@ pub struct ModelParameters {
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
     pub remaining_demand_absolute_tolerance: Flow,
+    /// Options for the HiGHS solver.
+    ///
+    /// For a full list of options, see [the HiGHS documentation].
+    ///
+    /// [the HiGHS documentation]: https://ergo-code.github.io/HiGHS/stable/options/definitions/
+    pub highs: HighsOptions,
 }
 
 impl Default for ModelParameters {
@@ -117,7 +124,44 @@ impl Default for ModelParameters {
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+            highs: HighsOptions::default(),
         }
+    }
+}
+
+/// Defines the TOML table holding the sub-tables to define HiGHS options
+#[derive(Default, Deserialize)]
+#[serde(default)]
+pub struct HighsOptions {
+    /// HiGHS options applied to both dispatch and appraisal
+    global_options: Table,
+    /// HiGHS options applied only to dispatch
+    pub dispatch_options: Table,
+    /// HiGHS options applied only to appraisal
+    pub appraisal_options: Table,
+}
+
+impl HighsOptions {
+    /// Copy the options specified in `global_options` to `dispatch_options` and `appraisal_options`
+    fn apply_global_options(&mut self) {
+        let append_global_opts_to = |opts: &mut Table| {
+            for (option, value) in &self.global_options {
+                opts.entry(option).or_insert(value.clone());
+            }
+        };
+
+        append_global_opts_to(&mut self.dispatch_options);
+        append_global_opts_to(&mut self.appraisal_options);
+
+        // Now that we're finished with global options we can discard
+        self.global_options.clear();
+    }
+
+    /// Check whether any options have been set
+    pub fn is_empty(&self) -> bool {
+        self.global_options.is_empty()
+            && self.dispatch_options.is_empty()
+            && self.appraisal_options.is_empty()
     }
 }
 
@@ -195,6 +239,20 @@ fn check_capacity_margin(value: Dimensionless) -> Result<()> {
     Ok(())
 }
 
+/// Check the custom HiGHS options are valid.
+///
+/// Note that we cannot know whether the options specified exist and are of the correct type until
+/// we attempt to use them. We could check for types that are never valid (e.g. an array), but as
+/// we're checking later anyway, we don't bother.
+fn check_highs_options(dangerous_options_enabled: bool, highs: &HighsOptions) -> Result<()> {
+    ensure!(
+        dangerous_options_enabled || highs.is_empty(),
+        "Cannot set custom HiGHS options without enabling {ALLOW_DANGEROUS_OPTION_NAME}"
+    );
+
+    Ok(())
+}
+
 impl ModelParameters {
     /// Read a model file from the specified directory.
     ///
@@ -207,13 +265,16 @@ impl ModelParameters {
     /// The model file contents as a [`ModelParameters`] struct or an error if the file is invalid
     pub fn from_path<P: AsRef<Path>>(model_dir: P) -> Result<ModelParameters> {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
-        let model_params: ModelParameters = read_toml(&file_path)?;
+        let mut model_params: ModelParameters = read_toml(&file_path)?;
 
         set_dangerous_model_options_flag(model_params.allow_dangerous_options);
 
         model_params
             .validate()
             .with_context(|| input_err_msg(file_path))?;
+
+        // Copy global options to other tables
+        model_params.highs.apply_global_options();
 
         Ok(model_params)
     }
@@ -255,6 +316,8 @@ impl ModelParameters {
             self.allow_dangerous_options,
             self.remaining_demand_absolute_tolerance,
         )?;
+
+        check_highs_options(self.allow_dangerous_options, &self.highs)?;
 
         Ok(())
     }

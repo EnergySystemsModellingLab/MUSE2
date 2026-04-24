@@ -14,10 +14,11 @@ use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerFlow, Year,
 };
-use anyhow::{Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
+use log::debug;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -408,6 +409,44 @@ impl fmt::Display for ModelError {
 
 impl Error for ModelError {}
 
+/// Apply the specified HiGHS options from a [`toml::Table`]
+pub fn apply_highs_options_from_toml(
+    model: &mut highs::Model,
+    options: &toml::Table,
+) -> Result<()> {
+    // Attempt to set an option, returning an error if it fails
+    macro_rules! try_set_opt {
+        ($option:expr, $value:expr) => {{
+            let option = $option.as_str();
+            let value = $value;
+
+            debug!("Setting HiGHS option \"{option}\" to \"{value}\"");
+            model
+                .try_set_option(option, value)
+                .map_err(|_| anyhow!("Invalid option name or value"))?;
+
+            Ok(())
+        }};
+    }
+
+    // Iterate through options, applying each in turn to the HiGHS model
+    for (option, value) in options {
+        match value {
+            toml::Value::String(value) => try_set_opt!(option, value.as_str()),
+            toml::Value::Integer(value) => match i32::try_from(*value) {
+                Ok(value) => try_set_opt!(option, value),
+                Err(_) => Err(anyhow!("Value out of range")),
+            },
+            toml::Value::Float(value) => try_set_opt!(option, *value),
+            toml::Value::Boolean(value) => try_set_opt!(option, *value),
+            _ => Err(anyhow!("HiGHS options cannot have this type")),
+        }
+        .with_context(|| format!("Failed to set option \"{option}\" to value \"{value}\""))?;
+    }
+
+    Ok(())
+}
+
 /// Try to solve the model, returning an error if the model is incoherent or result is non-optimal
 pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelError> {
     let solved = model
@@ -694,8 +733,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.year,
         );
 
-        // Solve model
-        let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
+        // Create model and apply any user-supplied HiGHS options to it
+        let mut model = problem.optimise(Sense::Minimise);
+        apply_highs_options_from_toml(&mut model, &self.model.parameters.highs.dispatch_options)
+            .context("Failed to apply custom HiGHS options to dispatch optimisation")?;
+        let solution = solve_optimal(model)?;
 
         let solution = Solution {
             solution: solution.get_solution(),
