@@ -59,5 +59,26 @@ properties:
       investment cycle. Changing the value of this parameter is potentially dangerous,
       so it requires setting `please_give_me_broken_results` to true.
     default: 1e-12
+  highs:
+    type: object
+    description: |
+      Used for setting custom HiGHS options. As this is unsafe, it requires setting
+      `please_give_me_broken_results` to true. For more information, see the relevant [section of
+      the developer documentation][highs-opts-docs].
+
+      [highs-opts-docs]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/custom_highs_options.html
+    properties:
+      global_options:
+        type: object
+        description: HiGHS options applied to all optimisations
+        properties: {}
+      dispatch_options:
+        type: object
+        description: HiGHS options applied only to dispatch optimisations
+        properties: {}
+      appraisal_options:
+        type: object
+        description: HiGHS options applied only to appraisal optimisations
+        properties: {}
 
 required: [milestone_years]

@@ -18,6 +18,7 @@
   - [Setting up your development environment](developer_guide/setup.md)
   - [Building and developing MUSE2](developer_guide/coding.md)
   - [Architecture and coding style](developer_guide/architecture_quickstart.md)
+  - [Applying custom HiGHS options](developer_guide/custom_highs_options.md)
   - [Developing the documentation](developer_guide/docs.md)
 - [API documentation](./api/muse2/README.md)
 - [Release notes](release_notes/README.md)
