@@ -6,6 +6,7 @@ use super::constraints::{
 };
 use crate::asset::{AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
+use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Capacity, Flow};
@@ -150,7 +151,9 @@ pub fn perform_optimisation(
     );
 
     // Solve model
-    let solution = solve_optimal(problem.optimise(sense))?.get_solution();
+    let solution = solve_optimal(problem.optimise(sense))
+        .map_err(ModelError::into_anyhow)?
+        .get_solution();
     let solution_values = solution.columns();
     Ok(ResultsMap {
         // If the asset has a defined unit size, the capacity variable represents number of units,

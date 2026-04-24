@@ -14,8 +14,8 @@ use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerFlow, Year,
 };
-use anyhow::{Result, bail, ensure};
-use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
+use anyhow::{Result, anyhow, bail, ensure};
+use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
@@ -371,23 +371,37 @@ impl Solution<'_> {
 }
 
 /// Defines the possible errors that can occur when running the solver
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ModelError {
-    /// The model definition is incoherent.
-    ///
-    /// Users should not be able to trigger this error.
-    Incoherent(HighsStatus),
     /// An optimal solution could not be found
     NonOptimal(HighsModelStatus),
+    /// Another error occurred
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for ModelError {
+    fn from(value: anyhow::Error) -> Self {
+        Self::Other(value)
+    }
+}
+
+impl ModelError {
+    /// Convert this error into an [`anyhow::Error`]
+    pub fn into_anyhow(self) -> anyhow::Error {
+        match self {
+            ModelError::NonOptimal(status) => anyhow!("Could not find optimal result: {status:?}"),
+            ModelError::Other(error) => error,
+        }
+    }
 }
 
 impl fmt::Display for ModelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ModelError::Incoherent(status) => write!(f, "Incoherent model: {status:?}"),
             ModelError::NonOptimal(status) => {
                 write!(f, "Could not find optimal result: {status:?}")
             }
+            ModelError::Other(error) => error.fmt(f),
         }
     }
 }
@@ -396,7 +410,9 @@ impl Error for ModelError {}
 
 /// Try to solve the model, returning an error if the model is incoherent or result is non-optimal
 pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelError> {
-    let solved = model.try_solve().map_err(ModelError::Incoherent)?;
+    let solved = model
+        .try_solve()
+        .map_err(|status| anyhow!("Incoherent model: {status:?}"))?;
 
     match solved.status() {
         HighsModelStatus::Optimal => Ok(solved),
@@ -603,9 +619,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     the supplied assets could not meet the required demand. Demand was not met \
                     for the following markets: {}",
                     format_items_with_cap(markets)
-                )
+                );
             }
-            Err(err) => Err(err)?,
+            Err(err) => Err(err.into_anyhow()),
         }
     }
 
