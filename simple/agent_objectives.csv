@@ -1,0 +1,5 @@
+agent_id,years,objective_type,decision_weight,decision_lexico_order
+A0_GEX,all,npv,,
+A0_GPR,all,npv,,
+A0_ELC,all,npv,,
+A0_RES,all,lcox,,

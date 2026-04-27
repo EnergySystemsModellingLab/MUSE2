@@ -1,0 +1,6 @@
+id,description,type,time_slice_level,pricing_strategy,units
+GASPRD,Gas produced,sed,season,full,PJ
+GASNAT,Natural gas,sed,season,full,PJ
+ELCTRI,Electricity,sed,daynight,full,PJ
+RSHEAT,Residential heating,svd,daynight,full,PJ
+CO2EMT,CO2 emitted,oth,annual,,ktCO2
