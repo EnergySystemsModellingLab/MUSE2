@@ -120,7 +120,7 @@ pub enum AssetState {
 }
 
 /// An asset controlled by an agent.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Asset {
     /// The status of the asset
     state: AssetState,
