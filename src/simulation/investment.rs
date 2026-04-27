@@ -752,6 +752,8 @@ fn select_best_assets(
             region_id
         );
 
+        dbg!(&remaining_candidate_capacity);
+
         // Since all assets with the same `group_id` are identical, we only need to appraise one
         // from each group.
         let mut seen_groups = HashSet::new();
