@@ -1035,7 +1035,11 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     Ok(())
 }
 
-/// A wrapper containing a reference-counted [`Asset`]
+/// A wrapper containing a reference-counted [`Asset`].
+///
+/// [`AssetRef`] implements equality, ordering, and hashing using an [`AssetID`], if available, but
+/// otherwise using a combination of other fields which should be unique at all the relevant points
+/// in the simulation.
 #[derive(Clone, Debug)]
 pub struct AssetRef(Rc<Asset>);
 
