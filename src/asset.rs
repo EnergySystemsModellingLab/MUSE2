@@ -1035,12 +1035,7 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     Ok(())
 }
 
-/// A wrapper around [`Asset`] for storing references in maps.
-///
-/// If the asset has been commissioned, then comparison and hashing is done based on the asset ID,
-/// otherwise a combination of other parameters is used.
-///
-/// [`Ord`] is implemented for [`AssetRef`], but it will panic for non-commissioned assets.
+/// A wrapper containing a reference-counted [`Asset`]
 #[derive(Clone, Debug)]
 pub struct AssetRef(Rc<Asset>);
 
@@ -1048,6 +1043,21 @@ impl AssetRef {
     /// Make a mutable reference to the underlying [`Asset`]
     pub fn make_mut(&mut self) -> &mut Asset {
         Rc::make_mut(&mut self.0)
+    }
+
+    /// Get a representation of this [`AssetRef`] that can be used for comparisons
+    fn get_asset_cmp(&self) -> AssetCmp<'_> {
+        if let Some(id) = self.id() {
+            AssetCmp::WithID(id)
+        } else {
+            AssetCmp::WithoutID((
+                self.process_id(),
+                self.region_id(),
+                self.commission_year,
+                self.agent_id(),
+                self.group_id(),
+            ))
+        }
     }
 
     /// Apply a function to each of this asset's children, consuming the asset in the process.
@@ -1163,46 +1173,17 @@ impl Deref for AssetRef {
     }
 }
 
+impl Eq for AssetRef {}
+
 impl PartialEq for AssetRef {
     fn eq(&self, other: &Self) -> bool {
-        // For assets to be considered equal, they must have the same process, region, commission
-        // year and state
-        Rc::ptr_eq(&self.0.process, &other.0.process)
-            && self.0.region_id == other.0.region_id
-            && self.0.commission_year == other.0.commission_year
-            && self.0.state == other.0.state
+        self.get_asset_cmp() == other.get_asset_cmp()
     }
 }
 
-impl Eq for AssetRef {}
-
-impl Hash for AssetRef {
-    /// Hash an asset according to its state:
-    /// - Commissioned assets are hashed based on their ID alone
-    /// - Selected assets are hashed based on `process_id`, `region_id`, `commission_year` and
-    ///   `agent_id`
-    /// - Candidate assets are hashed based on `process_id`, `region_id` and `commission_year`
-    /// - Parent assets are hashed based on `agent_id` and `group_id`
-    /// - Future and Decommissioned assets cannot currently be hashed
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.0.state {
-            AssetState::Commissioned { id, .. } => {
-                // Hashed based on their ID alone, since this is sufficient to uniquely identify the
-                // asset
-                id.hash(state);
-            }
-            AssetState::Candidate | AssetState::Selected { .. } | AssetState::Parent { .. } => {
-                self.0.process.id.hash(state);
-                self.0.region_id.hash(state);
-                self.0.commission_year.hash(state);
-                self.0.agent_id().hash(state);
-                self.0.group_id().hash(state);
-            }
-            state => {
-                // We don't need to hash other types of asset
-                panic!("Cannot hash {state} assets");
-            }
-        }
+impl Ord for AssetRef {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.get_asset_cmp().cmp(&other.get_asset_cmp())
     }
 }
 
@@ -1212,10 +1193,29 @@ impl PartialOrd for AssetRef {
     }
 }
 
-impl Ord for AssetRef {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.id().unwrap().cmp(&other.id().unwrap())
+impl Hash for AssetRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.get_asset_cmp().hash(state);
     }
+}
+
+/// A data structure representing the fields of an [`Asset`] that should be used for comparisons.
+///
+/// For assets that have an ID (i.e. have been commissioned at some point), we can compare based on
+/// the ID. Otherwise, we fall back on comparing other properties. The combination of these
+/// properties should be unique within the simulation (e.g. for assets being input into dispatch).
+#[derive(PartialEq, PartialOrd, Eq, Ord, Hash)]
+enum AssetCmp<'a> {
+    WithID(AssetID),
+    WithoutID(
+        (
+            &'a ProcessID,
+            &'a RegionID,
+            u32,
+            Option<&'a AgentID>,
+            Option<AssetGroupID>,
+        ),
+    ),
 }
 
 /// Additional methods for iterating over assets
