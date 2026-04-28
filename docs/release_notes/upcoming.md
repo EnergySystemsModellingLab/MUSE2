@@ -13,3 +13,17 @@ ready to be released, carry out the following steps:
   version
 
 -->
+
+## New features
+
+<!-- TODO -->
+
+## Breaking changes
+
+<!-- TODO -->
+
+## Bug fixes
+
+- Fix misleading warning message for assets decommissioned before simulation start ([#1259])
+
+[#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
