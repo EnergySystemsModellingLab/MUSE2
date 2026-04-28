@@ -784,7 +784,8 @@ fn select_best_assets(
                 objective_type,
                 &coefficients[asset],
                 &demand,
-            )?;
+            )
+            .context("Investment appraisal failed")?;
             outputs_for_opts.push(output);
         }
 
