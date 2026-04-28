@@ -470,7 +470,7 @@ pub struct DispatchRun<'model, 'run> {
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run CommodityPrices>,
     year: u32,
-    capacity_margin: f64,
+    capacity_margin: Dimensionless,
 }
 
 impl<'model, 'run> DispatchRun<'model, 'run> {
@@ -485,7 +485,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             markets_to_balance: &[],
             input_prices: None,
             year,
-            capacity_margin: 0.0,
+            capacity_margin: Dimensionless(0.0),
         }
     }
 
@@ -494,7 +494,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         self,
         flexible_capacity_assets: &'run [AssetRef],
         capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
-        capacity_margin: f64,
+        capacity_margin: Dimensionless,
     ) -> Self {
         Self {
             flexible_capacity_assets,
@@ -734,8 +734,10 @@ fn add_capacity_variables(
     variables: &mut CapacityVariableMap,
     assets: &[AssetRef],
     capacity_limits: Option<&HashMap<AssetRef, AssetCapacity>>,
-    capacity_margin: f64,
+    capacity_margin: Dimensionless,
 ) -> Range<usize> {
+    let capacity_margin = capacity_margin.value();
+
     // This line **must** come before we add more variables
     let start = problem.num_cols();
 
