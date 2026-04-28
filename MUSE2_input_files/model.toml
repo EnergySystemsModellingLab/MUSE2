@@ -1,1 +1,6 @@
 milestone_years = [2025, 2030, 2035, 2040]
+please_give_me_broken_results = true
+
+[highs.appraisal_options]
+output_flag = true
+log_to_console = true
