@@ -1,0 +1,4 @@
+commodity_id,regions,years,time_slice,balance_type,value
+coa,UK,all,annual,cons,3.8862857906175363
+diesel_pwr,UK,all,annual,cons,14.470012902360692
+nga,UK,all,annual,cons,9.720296597897708

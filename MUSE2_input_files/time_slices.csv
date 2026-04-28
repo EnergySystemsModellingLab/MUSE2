@@ -1,0 +1,17 @@
+season,time_of_day,fraction
+winter,night,0.0729166666666666
+winter,day,0.1041666666666666
+winter,evening_peak,0.03125
+winter,late_evening,0.0416666666666666
+spring,night,0.0729166666666666
+spring,day,0.1041666666666666
+spring,evening_peak,0.03125
+spring,late_evening,0.0416666666666666
+summer,night,0.0729166666666666
+summer,day,0.1041666666666666
+summer,evening_peak,0.03125
+summer,late_evening,0.0416666666666666
+autumn,night,0.0729166666666666
+autumn,day,0.1041666666666666
+autumn,evening_peak,0.03125
+autumn,late_evening,0.0416666666666666

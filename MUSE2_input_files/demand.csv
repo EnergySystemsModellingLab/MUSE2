@@ -1,0 +1,5 @@
+commodity_id,demand,region_id,year
+elec,1048.44571452,UK,2025
+elec,1048.44571452,UK,2030
+elec,1048.44571452,UK,2035
+elec,1048.44571452,UK,2040

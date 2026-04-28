@@ -1,0 +1,17 @@
+commodity_id,fraction,region_id,time_slice
+elec,0.06748415302321945,UK,winter.night
+elec,0.12718631697431762,UK,winter.day
+elec,0.04236346207946088,UK,winter.evening_peak
+elec,0.0451894074454824,UK,winter.late_evening
+elec,0.06171798960016668,UK,spring.night
+elec,0.1064212626372829,UK,spring.day
+elec,0.036245472186444604,UK,spring.evening_peak
+elec,0.042660471278181414,UK,spring.late_evening
+elec,0.055294812397342366,UK,summer.night
+elec,0.09223251598072232,UK,summer.day
+elec,0.031080756787634858,UK,summer.evening_peak
+elec,0.038855721150682435,UK,summer.late_evening
+elec,0.060391632500301815,UK,autumn.night
+elec,0.11170807300139839,UK,autumn.day
+elec,0.03856773670920851,UK,autumn.evening_peak
+elec,0.042600216248153314,UK,autumn.late_evening
