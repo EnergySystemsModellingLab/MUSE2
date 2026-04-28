@@ -86,7 +86,7 @@ natural_gas_ocgt,2000,2028,UK,power_agent,5.04576
 natural_gas_ocgt,2005,2031,UK,power_agent,2.964384
 natural_gas_ocgt,2018,2044,UK,power_agent,2.175984
 natural_gas_recip,1952,2035,UK,power_agent,3.78432
-nuclear_agr,1976,2028,UK,power_agent,30.43224
+nuclear_agr,1976,2028,UK,power_agent,300
 nuclear_agr,1983,2030,UK,power_agent,70.79831999999999
 nuclear_agr,1988,2033,UK,power_agent,76.94784000000001
 nuclear_pwr,1995,2037,UK,power_agent,37.780128000000005
