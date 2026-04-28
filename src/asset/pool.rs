@@ -35,8 +35,8 @@ impl AssetPool {
             // Ignore assets that have already been decommissioned
             if asset.max_decommission_year() <= year {
                 warn!(
-                    "User asset '{}' with commission year {} was decommissioned in {}, before \
-                    the start of the simulation",
+                    "User asset '{}' with commission year {} with maximum decommission year {} \
+                    was decommissioned before start of the simulation",
                     asset.process_id(),
                     asset.commission_year,
                     asset.max_decommission_year
