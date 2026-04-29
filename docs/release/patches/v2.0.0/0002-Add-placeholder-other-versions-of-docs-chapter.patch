@@ -1,0 +1,21 @@
+From e0638c6639a5ce322977cafdb4d06b656cd77cb7 Mon Sep 17 00:00:00 2001
+From: Alex Dewar <a.dewar@imperial.ac.uk>
+Date: Wed, 29 Apr 2026 14:43:12 +0100
+Subject: [PATCH] Add placeholder "other versions of docs" chapter
+
+This will redirect to the version in the main version of the docs when built.
+---
+ docs/SUMMARY.md | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/docs/SUMMARY.md b/docs/SUMMARY.md
+index 5a1d47bf..ab00b928 100644
+--- a/docs/SUMMARY.md
++++ b/docs/SUMMARY.md
+@@ -15,3 +15,4 @@
+   - [Model Diagrams](model/model_diagrams.md)
+ - [Glossary](glossary.md)
+ - [Developer Guide](developer_guide.md)
++- [Other versions of documentation](versions.md)
+--
+2.54.0
