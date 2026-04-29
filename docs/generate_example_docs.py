@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-# /// script
-# dependencies = [
-#     "jinja2",
-# ]
-# ///
 #
 # A script to generate documentation for the different examples from README.txt files.
 
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterator
+
 from jinja2 import Environment, FileSystemLoader
 
 DOCS_DIR = Path(__file__).parent
