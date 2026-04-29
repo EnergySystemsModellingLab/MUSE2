@@ -20,8 +20,10 @@
   - [Architecture and coding style](developer_guide/architecture_quickstart.md)
   - [Developing the documentation](developer_guide/docs.md)
 - [API documentation](./api/muse2/README.md)
+<!-- ANCHOR: release_notes -->
 - [Release notes](release_notes/README.md)
   - [MUSE2 v2.0.0 (October 14, 2025)](release_notes/v2.0.0.md)
   - [MUSE2 v2.1.0 (March 31, 2026)](release_notes/v2.1.0.md)
   - [Next unreleased version](release_notes/upcoming.md)
+<!-- ANCHOR_END: release_notes -->
 - [Other versions of documentation](versions.md)
