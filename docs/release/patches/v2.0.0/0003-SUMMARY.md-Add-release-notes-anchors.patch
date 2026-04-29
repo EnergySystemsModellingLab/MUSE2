@@ -1,0 +1,22 @@
+From 8d47c901fb3418a7e24ec3b37ba8e1c2300bcdf1 Mon Sep 17 00:00:00 2001
+From: Alex Dewar <a.dewar@imperial.ac.uk>
+Date: Wed, 29 Apr 2026 15:12:04 +0100
+Subject: [PATCH] SUMMARY.md: Add release notes anchors
+
+---
+ docs/SUMMARY.md | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/docs/SUMMARY.md b/docs/SUMMARY.md
+index ab00b928..eacb2987 100644
+--- a/docs/SUMMARY.md
++++ b/docs/SUMMARY.md
+@@ -15,4 +15,6 @@
+   - [Model Diagrams](model/model_diagrams.md)
+ - [Glossary](glossary.md)
+ - [Developer Guide](developer_guide.md)
++<!-- ANCHOR: release_notes -->
++<!-- ANCHOR_END: release_notes -->
+ - [Other versions of documentation](versions.md)
+--
+2.54.0
