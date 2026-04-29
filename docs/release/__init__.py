@@ -2,6 +2,7 @@
 
 import re
 import subprocess as sp
+from pathlib import Path
 
 
 def is_release_tag(tag: str) -> bool:
@@ -14,8 +15,10 @@ def is_release_tag(tag: str) -> bool:
 
 def get_releases() -> list[str]:
     """Get all release tags for this repo, sorted by semantic version."""
+
+    repo_path = Path(__file__).parent
     ret = sp.run(
-        ("git", "tag", "-l", "--sort=-version:refname"),
+        ("git", "-C", str(repo_path), "tag", "-l", "--sort=-version:refname"),
         capture_output=True,
         check=True,
         encoding="utf-8",
