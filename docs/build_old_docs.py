@@ -17,7 +17,7 @@ DOCS_DIR = REPO_ROOT / "docs"
 
 def clone_repo_to(dest: Path):
     """Clone this repo somewhere else."""
-    print("Making a copy of repo")
+    print(f"Making a copy of repo in {dest}")
     sp.run(("git", "clone", REPO_ROOT, dest), check=True, capture_output=True)
 
     # Add a symlink to cargo cache dir
