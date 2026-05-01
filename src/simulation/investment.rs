@@ -759,14 +759,22 @@ fn select_best_assets(
         // Appraise all options
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
-            // For candidates, determine the maximum capacity that can be invested in this round,
-            // according to the tranche size and remaining capacity limits.
+            // For candidates, determine the maximum capacity that can be invested in this round.
+            // This is whichever is the smallest of the tranche size (based on demand limiting
+            // capacity before investment), the remaining available capacity for the candidate and
+            // the demand limiting capacity recalculated based on demand unserved by the other
+            // selected assets.
             let max_capacity = (!asset.is_commissioned()).then(|| {
                 let tranche_capacity = asset
                     .capacity()
                     .apply_limit_factor(model.parameters.capacity_limit_factor);
+                let dlc = AssetCapacity::from_capacity(
+                    get_demand_limiting_capacity(&model.time_slice_info, asset, commodity, &demand),
+                    asset.unit_size(),
+                );
                 let remaining_capacity = remaining_candidate_capacity[asset];
-                tranche_capacity.min(remaining_capacity)
+
+                tranche_capacity.min(dlc).min(remaining_capacity)
             });
 
             // Skip any assets from groups we've already seen
