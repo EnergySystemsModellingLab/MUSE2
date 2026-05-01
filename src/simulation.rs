@@ -151,10 +151,6 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Prices for the next year
         prices = new_prices;
-
-        if year == 2021 {
-            break;
-        }
     }
 
     writer.flush()?;

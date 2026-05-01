@@ -11,7 +11,6 @@ use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
 use indexmap::IndexMap;
-use log::info;
 use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
@@ -342,13 +341,6 @@ pub fn appraise_investment(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    if let Some(cap) = max_capacity {
-        info!(
-            "MAX CAP FOR {}: {}",
-            asset.process_id(),
-            cap.total_capacity()
-        );
-    }
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,
         ObjectiveType::NetPresentValue => calculate_npv,
