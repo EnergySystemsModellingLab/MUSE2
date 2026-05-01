@@ -16,11 +16,10 @@ use indexmap::IndexMap;
 pub fn add_capacity_constraint(
     problem: &mut Problem,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     capacity_var: Variable,
 ) {
-    let capacity_limit = max_capacity.unwrap_or(asset.capacity());
-    let capacity_limit = match capacity_limit {
+    let capacity_limit = match max_capacity {
         AssetCapacity::Continuous(cap) => cap.value(),
         AssetCapacity::Discrete(units, _) => units as f64,
     };

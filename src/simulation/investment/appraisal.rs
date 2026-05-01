@@ -69,13 +69,14 @@ impl AppraisalOutput {
     /// Create a new `AppraisalOutput`
     fn new<T: MetricTrait>(
         asset: AssetRef,
+        capacity: AssetCapacity,
         results: ResultsMap,
         metric: Option<T>,
         coefficients: Rc<ObjectiveCoefficients>,
     ) -> Self {
         Self {
             asset,
-            capacity: results.capacity,
+            capacity,
             activity: results.activity,
             unmet_demand: results.unmet_demand,
             metric: metric.map(|m| Box::new(m) as Box<dyn MetricTrait>),
@@ -252,7 +253,7 @@ impl MetricTrait for NPVMetric {}
 fn calculate_lcox(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
@@ -276,6 +277,7 @@ fn calculate_lcox(
 
     Ok(AppraisalOutput::new(
         asset.clone(),
+        results.capacity,
         results,
         cost_index.map(LCOXMetric::new),
         coefficients.clone(),
@@ -290,7 +292,7 @@ fn calculate_lcox(
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
@@ -320,13 +322,14 @@ fn calculate_npv(
 
     Ok(AppraisalOutput::new(
         asset.clone(),
+        max_capacity,
         results,
         Some(NPVMetric::new(profitability_index)),
         coefficients.clone(),
     ))
 }
 
-/// Appraise the given investment with the specified objective type
+/// Appraise the given investment with the specified objective type.
 ///
 /// # Returns
 ///
@@ -341,6 +344,7 @@ pub fn appraise_investment(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
+    let max_capacity = max_capacity.unwrap_or(asset.capacity());
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,
         ObjectiveType::NetPresentValue => calculate_npv,

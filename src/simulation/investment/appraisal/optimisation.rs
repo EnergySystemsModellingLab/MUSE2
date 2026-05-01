@@ -95,7 +95,7 @@ pub struct ResultsMap {
 fn add_constraints(
     problem: &mut Problem,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     commodity: &Commodity,
     variables: &VariableMap,
     demand: &DemandMap,
@@ -127,7 +127,7 @@ fn add_constraints(
 /// asset has a defined unit size.
 pub fn perform_optimisation(
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
