@@ -252,7 +252,7 @@ impl MetricTrait for NPVMetric {}
 fn calculate_lcox(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
@@ -290,7 +290,7 @@ fn calculate_lcox(
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
+    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
@@ -326,7 +326,7 @@ fn calculate_npv(
     ))
 }
 
-/// Appraise the given investment with the specified objective type
+/// Appraise the given investment with the specified objective type.
 ///
 /// # Returns
 ///
@@ -341,6 +341,7 @@ pub fn appraise_investment(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
+    let max_capacity = max_capacity.unwrap_or(asset.capacity());
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,
         ObjectiveType::NetPresentValue => calculate_npv,
