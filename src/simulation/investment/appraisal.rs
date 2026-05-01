@@ -69,13 +69,14 @@ impl AppraisalOutput {
     /// Create a new `AppraisalOutput`
     fn new<T: MetricTrait>(
         asset: AssetRef,
+        capacity: AssetCapacity,
         results: ResultsMap,
         metric: Option<T>,
         coefficients: Rc<ObjectiveCoefficients>,
     ) -> Self {
         Self {
             asset,
-            capacity: results.capacity,
+            capacity,
             activity: results.activity,
             unmet_demand: results.unmet_demand,
             metric: metric.map(|m| Box::new(m) as Box<dyn MetricTrait>),
@@ -276,6 +277,7 @@ fn calculate_lcox(
 
     Ok(AppraisalOutput::new(
         asset.clone(),
+        results.capacity,
         results,
         cost_index.map(LCOXMetric::new),
         coefficients.clone(),
@@ -320,6 +322,7 @@ fn calculate_npv(
 
     Ok(AppraisalOutput::new(
         asset.clone(),
+        max_capacity,
         results,
         Some(NPVMetric::new(profitability_index)),
         coefficients.clone(),
