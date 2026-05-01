@@ -1,6 +1,6 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::{Agent, AgentID};
+use crate::agent::{Agent, AgentID, ObjectiveType};
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
@@ -12,7 +12,7 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
@@ -717,7 +717,7 @@ fn calculate_investment_limits_for_candidates(
 }
 
 /// Get the best assets for meeting demand for the given commodity
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
@@ -774,7 +774,24 @@ fn select_best_assets(
                 );
                 let remaining_capacity = remaining_candidate_capacity[asset];
 
-                tranche_capacity.min(dlc).min(remaining_capacity)
+                let mut cap = tranche_capacity.min(remaining_capacity);
+
+                if dlc < cap {
+                    cap = dlc;
+
+                    if objective_type != &ObjectiveType::NetPresentValue {
+                        warn!(
+                            "For asset {}, demand limiting capacity ({}) was smaller than \
+                            tranche capacity ({}) and total remaining capacity ({})",
+                            asset.process_id(),
+                            dlc,
+                            tranche_capacity,
+                            remaining_capacity
+                        );
+                    }
+                }
+
+                cap
             });
 
             // Skip any assets from groups we've already seen
