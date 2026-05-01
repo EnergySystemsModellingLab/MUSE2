@@ -1,6 +1,7 @@
 //! Represents the capacity of an asset
 use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
+use std::fmt;
 use std::ops::{Add, Sub};
 
 /// Capacity of an asset, which may be continuous or a discrete number of indivisible units
@@ -75,6 +76,17 @@ impl PartialOrd for AssetCapacity {
                 (*size1 == *size2).then(|| units1.cmp(units2))
             }
             _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AssetCapacity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetCapacity::Continuous(capacity) => write!(f, "{capacity}"),
+            AssetCapacity::Discrete(num_units, capacity) => {
+                write!(f, "{capacity} × {num_units} units")
+            }
         }
     }
 }
