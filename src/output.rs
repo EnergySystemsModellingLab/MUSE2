@@ -168,10 +168,11 @@ struct CommodityPriceRow {
 
 /// Represents the activity in a row of the activity CSV file
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct ActivityRow {
+struct DispatchRow{
     milestone_year: u32,
     run_description: String,
     asset_id: Option<AssetID>,
+    group_id: Option<AssetGroupID>,
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
@@ -290,7 +291,7 @@ impl DebugDataWriter {
         run_description: &str,
         solution: &Solution,
     ) -> Result<()> {
-        self.write_activity(
+        self.write_dispatch(
             milestone_year,
             run_description,
             solution.iter_activity(),
@@ -312,7 +313,7 @@ impl DebugDataWriter {
     }
 
     // Write activity to file
-    fn write_activity<'a, I, J, K>(
+    fn write_dispatch<'a, I, J, K>(
         &mut self,
         milestone_year: u32,
         run_description: &str,
@@ -352,10 +353,11 @@ impl DebugDataWriter {
                     (agent, ts, activity, activity_dual, column_dual)
                 })
         {
-            let row = ActivityRow {
+            let row = DispatchRow{
                 milestone_year,
                 run_description: self.with_context(run_description),
                 asset_id: asset.id(),
+                group_id: asset.group_id(),
                 process_id: asset.process_id().clone(),
                 region_id: asset.region_id().clone(),
                 time_slice: time_slice.clone(),
@@ -845,7 +847,7 @@ mod tests {
     }
 
     #[rstest]
-    fn write_activity(assets: AssetPool, time_slice: TimeSliceID) {
+    fn write_dispatch(assets: AssetPool, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let activity = Activity(100.5);
@@ -858,7 +860,7 @@ mod tests {
         {
             let mut writer = DebugDataWriter::create(dir.path()).unwrap();
             writer
-                .write_activity(
+                .write_dispatch(
                     milestone_year,
                     &run_description,
                     iter::once((asset, &time_slice, activity)),
@@ -870,10 +872,11 @@ mod tests {
         }
 
         // Read back and compare
-        let expected = ActivityRow {
+        let expected = DispatchRow{
             milestone_year,
             run_description,
             asset_id: asset.id(),
+            group_id: asset.group_id(),
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice,
@@ -881,7 +884,7 @@ mod tests {
             activity_dual: Some(activity_dual),
             column_dual: Some(column_dual),
         };
-        let records: Vec<ActivityRow> =
+        let records: Vec<DispatchRow> =
             csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
                 .unwrap()
                 .into_deserialize()
@@ -891,7 +894,7 @@ mod tests {
     }
 
     #[rstest]
-    fn write_activity_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
+    fn write_dispatch_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let activity = Activity(100.5);
@@ -902,7 +905,7 @@ mod tests {
         {
             let mut writer = DebugDataWriter::create(dir.path()).unwrap();
             writer
-                .write_activity(
+                .write_dispatch(
                     milestone_year,
                     &run_description,
                     iter::once((asset, &time_slice, activity)),
@@ -914,10 +917,11 @@ mod tests {
         }
 
         // Read back and compare
-        let expected = ActivityRow {
+        let expected = DispatchRow{
             milestone_year,
             run_description,
             asset_id: asset.id(),
+            group_id: asset.group_id(),
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice,
@@ -925,7 +929,7 @@ mod tests {
             activity_dual: None,
             column_dual: None,
         };
-        let records: Vec<ActivityRow> =
+        let records: Vec<DispatchRow> =
             csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
                 .unwrap()
                 .into_deserialize()
