@@ -168,7 +168,7 @@ struct CommodityPriceRow {
 
 /// Represents the activity in a row of the activity CSV file
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct DispatchRow{
+struct DispatchRow {
     milestone_year: u32,
     run_description: String,
     asset_id: Option<AssetID>,
@@ -353,7 +353,7 @@ impl DebugDataWriter {
                     (agent, ts, activity, activity_dual, column_dual)
                 })
         {
-            let row = DispatchRow{
+            let row = DispatchRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
                 asset_id: asset.id(),
@@ -872,7 +872,7 @@ mod tests {
         }
 
         // Read back and compare
-        let expected = DispatchRow{
+        let expected = DispatchRow {
             milestone_year,
             run_description,
             asset_id: asset.id(),
@@ -917,7 +917,7 @@ mod tests {
         }
 
         // Read back and compare
-        let expected = DispatchRow{
+        let expected = DispatchRow {
             milestone_year,
             run_description,
             asset_id: asset.id(),
