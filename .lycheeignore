@@ -14,3 +14,6 @@
 
 # Server often rejects connection (at least on GitHub runners)
 ^https://allcontributors.org
+
+# UKRI gateway tracker is unreliable
+^https://gtr.ukri.org
