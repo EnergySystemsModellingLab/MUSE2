@@ -340,8 +340,8 @@ impl Asset {
         let max_decommission_year =
             max_decommission_year.unwrap_or(commission_year + process_parameter.lifetime);
         ensure!(
-            max_decommission_year >= commission_year,
-            "Max decommission year must be after/same as commission year"
+            max_decommission_year > commission_year,
+            "Max decommission year must be greater than commission year"
         );
 
         Ok(Self {
