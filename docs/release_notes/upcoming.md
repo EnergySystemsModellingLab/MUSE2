@@ -16,7 +16,7 @@ ready to be released, carry out the following steps:
 
 ## New features
 
-<!-- TODO -->
+- Users can now optionally pass [custom options][highs-options] to the HiGHS solver [#1276]
 
 ## Breaking changes
 
@@ -26,4 +26,6 @@ ready to be released, carry out the following steps:
 
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
 
+[highs-options]: https://ergo-code.github.io/HiGHS/stable/options/definitions/
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
+[#1276]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1276
