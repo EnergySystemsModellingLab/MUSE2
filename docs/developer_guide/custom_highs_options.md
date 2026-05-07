@@ -13,6 +13,7 @@ You can set options to be applied to all optimisations, just dispatch or just ap
 Here is an example:
 
 ```toml
+please_give_me_broken_results = true
 milestone_years = [2020, 2030, 2040]
 
 # These options are applied to all optimisations
