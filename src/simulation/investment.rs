@@ -759,6 +759,13 @@ fn select_best_assets(
         // Appraise all options
         let mut outputs_for_opts = Vec::new();
         for asset in &opt_assets {
+            // Skip any assets from groups we've already seen
+            if let Some(group_id) = asset.group_id()
+                && !seen_groups.insert(group_id)
+            {
+                continue;
+            }
+
             // For candidates, determine the maximum capacity that can be invested in this round.
             // This is whichever is the smallest of the tranche size (based on demand limiting
             // capacity before investment), the remaining available capacity for the candidate and
@@ -776,13 +783,6 @@ fn select_best_assets(
 
                 tranche_capacity.min(dlc).min(remaining_capacity)
             });
-
-            // Skip any assets from groups we've already seen
-            if let Some(group_id) = asset.group_id()
-                && !seen_groups.insert(group_id)
-            {
-                continue;
-            }
 
             let output = appraise_investment(
                 model,
