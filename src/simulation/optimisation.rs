@@ -407,7 +407,14 @@ impl fmt::Display for ModelError {
     }
 }
 
-impl Error for ModelError {}
+impl Error for ModelError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ModelError::NonOptimal(_) => None,
+            ModelError::Other(error) => Some(error.as_ref()),
+        }
+    }
+}
 
 /// Apply the specified HiGHS options from a [`toml::Table`]
 pub fn apply_highs_options_from_toml(
