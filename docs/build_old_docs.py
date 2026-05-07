@@ -79,7 +79,10 @@ def patch_release_notes(release_path: Path, release_notes_toc: str) -> None:
 
         for line in lines:
             if RELEASE_NOTES_START_ANCHOR in line:
-                assert not found_start_anchor
+                if found_start_anchor:
+                    raise RuntimeError(
+                        "Multiple start anchors for release notes found in SUMMARY.md"
+                    )
                 found_start_anchor = True
                 new_summary += release_notes_toc
 
