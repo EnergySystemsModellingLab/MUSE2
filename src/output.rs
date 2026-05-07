@@ -166,7 +166,7 @@ struct CommodityPriceRow {
     price: MoneyPerFlow,
 }
 
-/// Represents the activity in a row of the activity CSV file
+/// Represents the activity in a row of the dispatch CSV file
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct DispatchRow{
     milestone_year: u32,
