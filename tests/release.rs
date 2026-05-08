@@ -57,7 +57,7 @@ fn release_notes_exist_and_linked() {
 }
 
 #[test]
-fn release_workflow_artifact_names_include_version() {
+fn release_workflow_includes_version_in_artifact_names() {
     let workflow = fs::read_to_string(".github/workflows/release.yml").unwrap();
     assert!(
         workflow.contains("muse2_${{ matrix.osname }}_${{ github.ref_name }}.${{ matrix.archive_ext }}"),
