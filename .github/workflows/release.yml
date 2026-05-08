@@ -18,7 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         archive_ext: [tar.gz]
-        archive_cmd: ["tar cf"]
+        archive_cmd: ["tar cfz"]
         include:
           - os: ubuntu-latest
             osname: linux
