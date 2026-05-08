@@ -46,7 +46,9 @@ def add_worktree_for_release(repo_path: Path, release: str) -> Path:
 
     # Add a symlink to cargo cache dir
     try:
-        os.symlink(REPO_ROOT / "target", release_path / "target")
+        os.symlink(
+            REPO_ROOT / "target", release_path / "target", target_is_directory=True
+        )
     except (NotImplementedError, OSError):
         # Only newer versions of Windows support symlinks and these require the user to have
         # additional privileges (or to be in developer mode)
