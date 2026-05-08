@@ -25,5 +25,6 @@ ready to be released, carry out the following steps:
 ## Bug fixes
 
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
+- Include the release version in release artifact filenames to make downloaded archives easier to identify
 
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259

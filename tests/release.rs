@@ -55,3 +55,12 @@ fn release_notes_exist_and_linked() {
     check_link_to_release_notes(Path::new("docs/SUMMARY.md"));
     check_link_to_release_notes(Path::new("docs/release_notes/README.md"));
 }
+
+#[test]
+fn release_workflow_artifact_names_include_version() {
+    let workflow = fs::read_to_string(".github/workflows/release.yml").unwrap();
+    assert!(
+        workflow.contains("muse2_${{ matrix.osname }}_${{ github.ref_name }}.${{ matrix.archive_ext }}"),
+        "Release workflow should include the release version (tag name) in artifact filenames"
+    );
+}

@@ -57,9 +57,9 @@ jobs:
         if: ${{ github.event_name == 'release' }}
         run: |
           cd muse2
-          ${{ matrix.archive_cmd }} ../muse2_${{ matrix.osname }}.${{ matrix.archive_ext }} *
+          ${{ matrix.archive_cmd }} ../muse2_${{ matrix.osname }}_${{ github.ref_name }}.${{ matrix.archive_ext }} *
       - name: Upload release artifacts
         if: ${{ github.event_name == 'release' }}
         uses: softprops/action-gh-release@v3
         with:
-          files: muse2_${{ matrix.osname }}.${{ matrix.archive_ext }}
+          files: muse2_${{ matrix.osname }}_${{ github.ref_name }}.${{ matrix.archive_ext }}
