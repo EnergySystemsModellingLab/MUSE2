@@ -10,8 +10,10 @@
 ^http://www.adobe.com
 
 # Often times out
+^https://doi.org
 ^https://iea-etsap.org
 ^https://www.contributor-covenant.org
+^https://zenodo.org
 
 # Server often rejects connection (at least on GitHub runners)
 ^https://allcontributors.org
