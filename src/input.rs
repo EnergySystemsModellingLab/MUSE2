@@ -30,7 +30,6 @@ use region::read_regions;
 mod time_slice;
 use time_slice::read_time_slice_info;
 mod range;
-#[allow(unused_imports)]
 use range::parse_range;
 #[allow(unused_imports)]
 use range::parse_range_with_defaults;

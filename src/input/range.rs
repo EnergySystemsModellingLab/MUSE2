@@ -21,7 +21,6 @@ fn partition<'a>(s: &'a str, delimiter: &str) -> Option<(&'a str, &'a str)> {
 /// Parse a range from an input string, using values in `limits` as defaults.
 ///
 /// See [`parse_range_with_defaults`].
-#[allow(dead_code)]
 pub fn parse_range<T>(s: &str, limits: RangeInclusive<T>) -> Result<RangeInclusive<T>>
 where
     T: FromStr + Copy + PartialOrd + Display,
