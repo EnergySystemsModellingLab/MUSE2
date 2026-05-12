@@ -28,7 +28,6 @@ pub fn partition<'a>(s: &'a str, delimiter: &str) -> Option<(&'a str, &'a str)> 
 /// - Range of values (e.g. 1990..2000)
 /// - Range with no upper limit (e.g. 1990..)
 /// - Range with no lower limit (e.g. ..2000)
-#[allow(dead_code)]
 pub fn parse_range<T>(s: &str, limits: RangeInclusive<T>) -> Result<RangeInclusive<T>>
 where
     T: FromStr + Copy + PartialOrd + Display,

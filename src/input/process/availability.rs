@@ -1,11 +1,11 @@
 //! Code for reading process availabilities from a CSV file.
-use super::super::{input_err_msg, read_csv_optional, try_insert};
+use super::super::{input_err_msg, parse_range, read_csv_optional, try_insert};
 use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
 use crate::year::parse_year_str;
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use itertools::iproduct;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -33,7 +33,8 @@ impl ProcessAvailabilityRaw {
     /// capacity.
     fn to_bounds(&self, length: Year) -> Result<RangeInclusive<Dimensionless>> {
         // Parse availability_range string
-        let availability_range = parse_availabilities_string(&self.limits)?;
+        let availability_range = parse_range(&self.limits, Dimensionless(0.0)..=Dimensionless(1.0))
+            .with_context(|| format!("Could not parse availabilities range: {}", &self.limits))?;
 
         // Convert to bounds based on fraction of the year covered
         let ts_frac = length / Year(1.0);
@@ -41,61 +42,6 @@ impl ProcessAvailabilityRaw {
         let end = *availability_range.end() * ts_frac;
         Ok(start..=end)
     }
-}
-
-/// Parse a string representing availability limits into a range.
-fn parse_availabilities_string(s: &str) -> Result<RangeInclusive<Dimensionless>> {
-    // Disallow empty string
-    ensure!(!s.trim().is_empty(), "Availability range cannot be empty");
-
-    // Require exactly one ".." separator so only forms lower..upper, lower.. or ..upper are allowed.
-    let parts: Vec<&str> = s.split("..").collect();
-    ensure!(
-        parts.len() == 2,
-        "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: {s}"
-    );
-    let left = parts[0].trim();
-    let right = parts[1].trim();
-
-    // Parse lower limit
-    let lower = if left.is_empty() {
-        Dimensionless(0.0)
-    } else {
-        Dimensionless(
-            left.parse::<f64>()
-                .ok()
-                .with_context(|| format!("Invalid lower availability limit: {left}"))?,
-        )
-    };
-
-    // Parse upper limit
-    let upper = if right.is_empty() {
-        Dimensionless(1.0)
-    } else {
-        Dimensionless(
-            right
-                .parse::<f64>()
-                .ok()
-                .with_context(|| format!("Invalid upper availability limit: {right}"))?,
-        )
-    };
-
-    // Validation checks
-    ensure!(
-        upper >= lower,
-        "Upper availability limit must be greater than or equal to lower limit. Invalid: {s}"
-    );
-    ensure!(
-        lower >= Dimensionless(0.0),
-        "Lower availability limit must be >= 0. Invalid: {s}"
-    );
-    ensure!(
-        upper <= Dimensionless(1.0),
-        "Upper availability limit must be <= 1. Invalid: {s}"
-    );
-
-    // Return range
-    Ok(lower..=upper)
 }
 
 /// Read the process availabilities CSV file.
@@ -216,7 +162,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::assert_error;
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
 
@@ -228,43 +173,6 @@ mod tests {
             time_slice: "day".into(),
             limits,
         }
-    }
-
-    #[rstest]
-    #[case("0.1..0.9", Dimensionless(0.1)..=Dimensionless(0.9))]
-    #[case("..0.9", Dimensionless(0.0)..=Dimensionless(0.9))] // Empty lower
-    #[case("0.1..", Dimensionless(0.1)..=Dimensionless(1.0))] // Empty upper
-    #[case("0.5..0.5", Dimensionless(0.5)..=Dimensionless(0.5))] // Equality
-    fn parse_availabilities_string_valid(
-        #[case] input: &str,
-        #[case] expected: RangeInclusive<Dimensionless>,
-    ) {
-        assert_eq!(parse_availabilities_string(input).unwrap(), expected);
-    }
-
-    #[rstest]
-    #[case("", "Availability range cannot be empty")]
-    #[case(
-        "0.6..0.5",
-        "Upper availability limit must be greater than or equal to lower limit. Invalid: 0.6..0.5"
-    )]
-    #[case(
-        "..0.1..0.9",
-        "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: ..0.1..0.9"
-    )]
-    #[case("0.1...0.9", "Invalid upper availability limit: .0.9")]
-    #[case(
-        "-0.1..0.5",
-        "Lower availability limit must be >= 0. Invalid: -0.1..0.5"
-    )]
-    #[case("0.1..1.5", "Upper availability limit must be <= 1. Invalid: 0.1..1.5")]
-    #[case("abc..0.5", "Invalid lower availability limit: abc")]
-    #[case(
-        "0.5",
-        "Availability range must be of the form 'lower..upper', 'lower..' or '..upper'. Invalid: 0.5"
-    )]
-    fn parse_availabilities_string_invalid(#[case] input: &str, #[case] error_msg: &str) {
-        assert_error!(parse_availabilities_string(input), error_msg);
     }
 
     #[rstest]
