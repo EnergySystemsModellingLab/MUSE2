@@ -1,16 +1,16 @@
 milestone_year,run_description,objective_value
-2020,final without candidates,4132.120065800383
+2020,final without candidates,4132.120065800382
 2020,final with candidates,4132.101429603424
-2030,ironing out iteration 0; post RSHEAT|GBR investment,5324.82265531636
-2030,ironing out iteration 0; post ELCTRI|GBR investment,4708.71265302254
-2030,ironing out iteration 0; post GASNAT|GBR investment,4708.712653022539
-2030,ironing out iteration 0; post GASPRD|GBR investment,4708.712653022539
-2030,ironing out iteration 0; final without candidates,4708.712653022539
-2030,ironing out iteration 0; final with candidates,4708.694016825579
-2030,final without candidates,4708.712653022538
-2030,final with candidates,4708.694016825577
-2040,ironing out iteration 0; post RSHEAT|GBR investment,6613.816363708183
-2040,ironing out iteration 0; post GASNAT|GBR investment,6613.816363708183
+2030,ironing out iteration 0; post RSHEAT|GBR investment,16037.957681905667
+2030,ironing out iteration 0; post ELCTRI|GBR investment,13995.098351601278
+2030,ironing out iteration 0; post GASNAT|GBR investment,10135.335994438628
+2030,ironing out iteration 0; post GASPRD|GBR investment,4300.463848127558
+2030,ironing out iteration 0; final without candidates,4300.463848127558
+2030,ironing out iteration 0; final with candidates,4300.461345493195
+2030,final without candidates,4300.463848127559
+2030,final with candidates,4300.461345493198
+2040,ironing out iteration 0; post RSHEAT|GBR investment,21277.77828240225
+2040,ironing out iteration 0; post GASNAT|GBR investment,15439.5583818698
 2040,ironing out iteration 0; post GASPRD|GBR investment,6613.816363708185
 2040,ironing out iteration 0; final without candidates,6613.816363708185
 2040,ironing out iteration 0; final with candidates,6613.815807254493
