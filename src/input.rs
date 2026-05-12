@@ -29,6 +29,13 @@ mod region;
 use region::read_regions;
 mod time_slice;
 use time_slice::read_time_slice_info;
+mod range;
+#[allow(unused_imports)]
+use range::parse_range;
+#[allow(unused_imports)]
+use range::parse_range_parts;
+#[allow(unused_imports)]
+use range::partition;
 
 /// A trait which provides a method to insert a key and value into a map
 pub trait Insert<K, V> {
