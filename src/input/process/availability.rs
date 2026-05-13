@@ -1,10 +1,10 @@
 //! Code for reading process availabilities from a CSV file.
 use super::super::{input_err_msg, parse_range, read_csv_optional, try_insert};
+use crate::input::parse_year_str;
 use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
-use crate::year::parse_year_str;
 use anyhow::{Context, Result};
 use itertools::iproduct;
 use serde::Deserialize;

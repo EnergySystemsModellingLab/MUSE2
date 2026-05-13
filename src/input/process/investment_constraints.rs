@@ -1,12 +1,12 @@
 //! Code for reading process investment constraints from a CSV file.
 use super::super::input_err_msg;
+use crate::input::parse_year_str;
 use crate::input::{read_csv_optional, try_insert};
 use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
 use crate::units::{CapacityPerYear, Year};
-use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
 use serde::Deserialize;

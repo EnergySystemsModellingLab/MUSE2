@@ -2,10 +2,10 @@
 use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::commodity::{BalanceType, CommodityID, CommodityLevyMap};
 use crate::id::IDCollection;
+use crate::input::parse_year_str;
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
 use crate::units::MoneyPerFlow;
-use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexSet;
 use log::warn;
