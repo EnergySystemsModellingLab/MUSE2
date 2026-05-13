@@ -20,8 +20,7 @@ ready to be released, carry out the following steps:
 
 ## Breaking changes
 
-- Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average"
-([#1281])
+- Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average" ([#1281])
 
 ## Bug fixes
 
