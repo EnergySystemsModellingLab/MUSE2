@@ -18,7 +18,6 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
-use log::debug;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -424,12 +423,8 @@ pub fn apply_highs_options_from_toml(
     // Attempt to set an option, returning an error if it fails
     macro_rules! try_set_opt {
         ($option:expr, $value:expr) => {{
-            let option = $option.as_str();
-            let value = $value;
-
-            debug!("Setting HiGHS option \"{option}\" to \"{value}\"");
             model
-                .try_set_option(option, value)
+                .try_set_option($option.as_str(), $value)
                 .map_err(|_| anyhow!("Invalid option name or value"))?;
 
             Ok(())

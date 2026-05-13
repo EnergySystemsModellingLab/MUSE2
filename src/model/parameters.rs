@@ -9,6 +9,7 @@ use crate::input::{
 };
 use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
+use itertools::Itertools;
 use log::warn;
 use serde::Deserialize;
 use std::path::Path;
@@ -157,6 +158,25 @@ impl HighsOptions {
         self.global_options.clear();
     }
 
+    /// Log custom HiGHS options set by user, if any
+    fn log_options(&self) {
+        fn log_highs_options(name: &str, options: &Table) {
+            if options.is_empty() {
+                return;
+            }
+
+            let options_str = options
+                .iter()
+                .format_with("\n  - ", |(opt, val), f| f(&format_args!("{opt} = {val}")))
+                .to_string();
+            warn!("Using custom HiGHS options for {name}:\n  - {options_str}");
+        }
+
+        log_highs_options("dispatch and appraisal", &self.global_options);
+        log_highs_options("dispatch only", &self.dispatch_options);
+        log_highs_options("appraisal only", &self.appraisal_options);
+    }
+
     /// Check whether any options have been set
     pub fn is_empty(&self) -> bool {
         self.global_options.is_empty()
@@ -272,6 +292,8 @@ impl ModelParameters {
         model_params
             .validate()
             .with_context(|| input_err_msg(file_path))?;
+
+        model_params.highs.log_options();
 
         // Copy global options to other tables
         model_params.highs.apply_global_options();
