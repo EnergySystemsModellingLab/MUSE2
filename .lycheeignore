@@ -4,14 +4,19 @@
 ^file://.+/MUSE2/docs/index\.html$
 
 # Some of these links give a 404, even though they're generated in the API docs. No idea why.
-^https://docs.rs/erased-serde/
+^https://docs\.rs/erased-serde/
 
 # Times out on GitHub runner
-^http://www.adobe.com
+^http://www\.adobe\.com/
 
 # Often times out
-^https://iea-etsap.org
-^https://www.contributor-covenant.org
+^https://doi\.org/
+^https://iea-etsap\.org/
+^https://www\.contributor-covenant\.org/
+^https://zenodo\.org/
 
 # Server often rejects connection (at least on GitHub runners)
-^https://allcontributors.org
+^https://allcontributors\.org/
+
+# UKRI gateway tracker is unreliable
+^https://gtr\.ukri\.org/
