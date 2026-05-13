@@ -118,7 +118,6 @@ pub fn create_output_directory(output_dir: &Path, allow_overwrite: bool) -> Resu
 }
 /// Copy input files from the model directory to a subdirectory of the output directory
 pub fn copy_input_files(model_dir: &Path, output_dir: &Path) -> Result<()> {
-
     let input_copy_dir = output_dir.join("input");
     fs::create_dir_all(&input_copy_dir).context("Could not create input copy directory")?;
 
@@ -126,7 +125,7 @@ pub fn copy_input_files(model_dir: &Path, output_dir: &Path) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
-            let file_name = path.file_name().unwrap(); 
+            let file_name = path.file_name().unwrap();
             let dest = input_copy_dir.join(file_name);
             fs::copy(&path, &dest)?;
             let mut permissions = fs::metadata(&dest)?.permissions();
