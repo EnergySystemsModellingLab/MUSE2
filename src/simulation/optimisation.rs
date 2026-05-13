@@ -14,8 +14,8 @@ use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerFlow, Year,
 };
-use anyhow::{Result, bail, ensure};
-use highs::{HighsModelStatus, HighsStatus, RowProblem as Problem, Sense};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
@@ -371,32 +371,89 @@ impl Solution<'_> {
 }
 
 /// Defines the possible errors that can occur when running the solver
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ModelError {
-    /// The model definition is incoherent.
-    ///
-    /// Users should not be able to trigger this error.
-    Incoherent(HighsStatus),
     /// An optimal solution could not be found
     NonOptimal(HighsModelStatus),
+    /// Another error occurred
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for ModelError {
+    fn from(value: anyhow::Error) -> Self {
+        Self::Other(value)
+    }
+}
+
+impl ModelError {
+    /// Convert this error into an [`anyhow::Error`]
+    pub fn into_anyhow(self) -> anyhow::Error {
+        match self {
+            ModelError::NonOptimal(status) => anyhow!("Could not find optimal result: {status:?}"),
+            ModelError::Other(error) => error,
+        }
+    }
 }
 
 impl fmt::Display for ModelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ModelError::Incoherent(status) => write!(f, "Incoherent model: {status:?}"),
             ModelError::NonOptimal(status) => {
                 write!(f, "Could not find optimal result: {status:?}")
             }
+            ModelError::Other(error) => error.fmt(f),
         }
     }
 }
 
-impl Error for ModelError {}
+impl Error for ModelError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ModelError::NonOptimal(_) => None,
+            ModelError::Other(error) => Some(error.as_ref()),
+        }
+    }
+}
+
+/// Apply the specified HiGHS options from a [`toml::Table`]
+pub fn apply_highs_options_from_toml(
+    model: &mut highs::Model,
+    options: &toml::Table,
+) -> Result<()> {
+    // Attempt to set an option, returning an error if it fails
+    macro_rules! try_set_opt {
+        ($option:expr, $value:expr) => {{
+            model
+                .try_set_option($option.as_str(), $value)
+                .map_err(|_| anyhow!("Invalid option name or value"))?;
+
+            Ok(())
+        }};
+    }
+
+    // Iterate through options, applying each in turn to the HiGHS model
+    for (option, value) in options {
+        match value {
+            toml::Value::String(value) => try_set_opt!(option, value.as_str()),
+            toml::Value::Integer(value) => match i32::try_from(*value) {
+                Ok(value) => try_set_opt!(option, value),
+                Err(_) => Err(anyhow!("Value out of range")),
+            },
+            toml::Value::Float(value) => try_set_opt!(option, *value),
+            toml::Value::Boolean(value) => try_set_opt!(option, *value),
+            _ => Err(anyhow!("HiGHS options cannot have this type")),
+        }
+        .with_context(|| format!("Failed to set option \"{option}\" to value \"{value}\""))?;
+    }
+
+    Ok(())
+}
 
 /// Try to solve the model, returning an error if the model is incoherent or result is non-optimal
 pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelError> {
-    let solved = model.try_solve().map_err(ModelError::Incoherent)?;
+    let solved = model
+        .try_solve()
+        .map_err(|status| anyhow!("Incoherent model: {status:?}"))?;
 
     match solved.status() {
         HighsModelStatus::Optimal => Ok(solved),
@@ -461,6 +518,7 @@ fn get_parent_or_self(assets: &[AssetRef]) -> Vec<AssetRef> {
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
 /// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
+#[must_use = "Must call run() method on DispatchRun struct"]
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
@@ -602,9 +660,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     the supplied assets could not meet the required demand. Demand was not met \
                     for the following markets: {}",
                     format_items_with_cap(markets)
-                )
+                );
             }
-            Err(err) => Err(err)?,
+            Err(err) => Err(err.into_anyhow()),
         }
     }
 
@@ -677,8 +735,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.year,
         );
 
-        // Solve model
-        let solution = solve_optimal(problem.optimise(Sense::Minimise))?;
+        // Create model and apply any user-supplied HiGHS options to it
+        let mut model = problem.optimise(Sense::Minimise);
+        apply_highs_options_from_toml(&mut model, &self.model.parameters.highs.dispatch_options)
+            .context("Failed to apply custom HiGHS options to dispatch optimisation")?;
+        let solution = solve_optimal(model)?;
 
         let solution = Solution {
             solution: solution.get_solution(),

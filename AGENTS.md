@@ -15,3 +15,5 @@ For Rust code:
 - Test function names should not be prefixed with `test_`
 - Prefer using parameterised tests (using `rstest`) over separate ones where testing similar
   functionality
+- While this crate is a library, no one is using it as a library, so don't warn about breaking
+  changes to the external API

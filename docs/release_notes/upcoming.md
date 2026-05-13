@@ -16,7 +16,7 @@ ready to be released, carry out the following steps:
 
 ## New features
 
-<!-- TODO -->
+- Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver [#1276]
 
 ## Breaking changes
 
@@ -26,5 +26,7 @@ ready to be released, carry out the following steps:
 
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
 
+[highs-opts-docs]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/custom_highs_options.html
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
 [#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
+[#1276]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1276

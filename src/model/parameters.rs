@@ -9,10 +9,12 @@ use crate::input::{
 };
 use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
+use itertools::Itertools;
 use log::warn;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::path::Path;
 use std::sync::OnceLock;
+use toml::Table;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
 
@@ -63,7 +65,7 @@ fn set_dangerous_model_options_flag(enabled: bool) {
 ///
 /// NOTE: If you add or change a field in this struct, you must also update the schema in
 /// `schemas/input/model.yaml`.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Deserialize)]
 #[serde(default)]
 pub struct ModelParameters {
     /// Milestone years
@@ -98,6 +100,12 @@ pub struct ModelParameters {
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
     pub remaining_demand_absolute_tolerance: Flow,
+    /// Options for the HiGHS solver.
+    ///
+    /// For a full list of options, see [the HiGHS documentation].
+    ///
+    /// [the HiGHS documentation]: https://ergo-code.github.io/HiGHS/stable/options/definitions/
+    pub highs: HighsOptions,
 }
 
 impl Default for ModelParameters {
@@ -117,7 +125,79 @@ impl Default for ModelParameters {
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+            highs: HighsOptions::default(),
         }
+    }
+}
+
+/// Defines the TOML table holding the sub-tables to define HiGHS options
+#[derive(Default)]
+pub struct HighsOptions {
+    /// HiGHS options applied to dispatch optimisation
+    pub dispatch_options: Table,
+    /// HiGHS options applied to appraisal optimisation
+    pub appraisal_options: Table,
+}
+
+impl<'de> Deserialize<'de> for HighsOptions {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        #[serde(default)]
+        #[allow(clippy::struct_field_names)]
+        struct RawHighsOptions {
+            global_options: Table,
+            dispatch_options: Table,
+            appraisal_options: Table,
+        }
+
+        let RawHighsOptions {
+            global_options,
+            mut dispatch_options,
+            mut appraisal_options,
+        } = RawHighsOptions::deserialize(deserializer)?;
+
+        let append_global_options = |options: &mut Table| {
+            for (option, value) in &global_options {
+                options
+                    .entry(option.clone())
+                    .or_insert_with(|| value.clone());
+            }
+        };
+        append_global_options(&mut dispatch_options);
+        append_global_options(&mut appraisal_options);
+
+        Ok(Self {
+            dispatch_options,
+            appraisal_options,
+        })
+    }
+}
+
+impl HighsOptions {
+    /// Log custom HiGHS options set by user, if any
+    fn log_options(&self) {
+        fn log_highs_options(name: &str, options: &Table) {
+            if options.is_empty() {
+                return;
+            }
+
+            let options_str = options
+                .iter()
+                .format_with("\n  - ", |(opt, val), f| f(&format_args!("{opt} = {val}")))
+                .to_string();
+            warn!("Using custom HiGHS options for {name}:\n  - {options_str}");
+        }
+
+        log_highs_options("dispatch", &self.dispatch_options);
+        log_highs_options("appraisal", &self.appraisal_options);
+    }
+
+    /// Check whether any options have been set
+    pub fn is_empty(&self) -> bool {
+        self.dispatch_options.is_empty() && self.appraisal_options.is_empty()
     }
 }
 
@@ -195,6 +275,20 @@ fn check_capacity_margin(value: Dimensionless) -> Result<()> {
     Ok(())
 }
 
+/// Check the custom HiGHS options are valid.
+///
+/// Note that we cannot know whether the options specified exist and are of the correct type until
+/// we attempt to use them. We could check for types that are never valid (e.g. an array), but as
+/// we're checking later anyway, we don't bother.
+fn check_highs_options(dangerous_options_enabled: bool, highs: &HighsOptions) -> Result<()> {
+    ensure!(
+        dangerous_options_enabled || highs.is_empty(),
+        "Cannot set custom HiGHS options without enabling {ALLOW_DANGEROUS_OPTION_NAME}"
+    );
+
+    Ok(())
+}
+
 impl ModelParameters {
     /// Read a model file from the specified directory.
     ///
@@ -214,6 +308,8 @@ impl ModelParameters {
         model_params
             .validate()
             .with_context(|| input_err_msg(file_path))?;
+
+        model_params.highs.log_options();
 
         Ok(model_params)
     }
@@ -255,6 +351,8 @@ impl ModelParameters {
             self.allow_dangerous_options,
             self.remaining_demand_absolute_tolerance,
         )?;
+
+        check_highs_options(self.allow_dangerous_options, &self.highs)?;
 
         Ok(())
     }
@@ -318,6 +416,105 @@ mod tests {
 
         let model_params = ModelParameters::from_path(dir.path()).unwrap();
         assert_eq!(model_params.milestone_years, [2020, 2100]);
+    }
+
+    #[test]
+    fn model_params_deserialisation_copies_highs_global_options() {
+        let model_params: ModelParameters = toml::from_str(
+            "
+            milestone_years = [2020, 2100]
+
+            [highs.global_options]
+            output_flag = true
+
+            [highs.dispatch_options]
+            log_to_console = false
+            ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            model_params.highs.dispatch_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            model_params.highs.dispatch_options["log_to_console"],
+            toml::Value::Boolean(false)
+        );
+        assert_eq!(
+            model_params.highs.appraisal_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn highs_options_deserialisation_copies_global_options() {
+        let highs: HighsOptions = toml::from_str(
+            "
+            [global_options]
+            output_flag = true
+            log_to_console = true
+
+            [dispatch_options]
+            primal_feasibility_tolerance = 1e-5
+
+            [appraisal_options]
+            optimality_tolerance = 1e-5
+            ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            highs.dispatch_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.dispatch_options["log_to_console"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["log_to_console"],
+            toml::Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn highs_options_deserialisation_preserves_specific_options() {
+        let highs: HighsOptions = toml::from_str(
+            "
+            [global_options]
+            output_flag = true
+            log_to_console = true
+
+            [dispatch_options]
+            output_flag = false
+
+            [appraisal_options]
+            log_to_console = false
+            ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            highs.dispatch_options["output_flag"],
+            toml::Value::Boolean(false)
+        );
+        assert_eq!(
+            highs.dispatch_options["log_to_console"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["log_to_console"],
+            toml::Value::Boolean(false)
+        );
     }
 
     #[rstest]

@@ -259,12 +259,12 @@ fn calculate_lcox(
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
+        model,
         asset,
         max_capacity,
         commodity,
         coefficients,
         demand,
-        &model.time_slice_info,
         highs::Sense::Minimise,
     )?;
 
@@ -298,12 +298,12 @@ fn calculate_npv(
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
+        model,
         asset,
         max_capacity,
         commodity,
         coefficients,
         demand,
-        &model.time_slice_info,
         highs::Sense::Maximise,
     )?;
 
