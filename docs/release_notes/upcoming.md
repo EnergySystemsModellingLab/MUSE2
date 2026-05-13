@@ -20,10 +20,12 @@ ready to be released, carry out the following steps:
 
 ## Breaking changes
 
-<!-- TODO -->
+- Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average"
+([#1281])
 
 ## Bug fixes
 
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
 
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
+[#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
