@@ -1,5 +1,5 @@
 //! Code for working with years.
-use crate::input::is_sorted_and_unique;
+use super::is_sorted_and_unique;
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 

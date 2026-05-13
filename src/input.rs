@@ -35,6 +35,8 @@ use range::parse_range;
 use range::parse_range_parts;
 #[allow(unused_imports)]
 use range::partition;
+mod year;
+use year::parse_year_str;
 
 /// A trait which provides a method to insert a key and value into a map
 pub trait Insert<K, V> {

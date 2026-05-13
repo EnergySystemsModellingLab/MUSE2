@@ -3,9 +3,9 @@ use super::super::{deserialise_proportion_nonzero, input_err_msg, read_csv, try_
 use crate::agent::{AgentCommodityPortionsMap, AgentID, AgentMap};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::id::IDCollection;
+use crate::input::parse_year_str;
 use crate::region::RegionID;
 use crate::units::Dimensionless;
-use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use float_cmp::approx_eq;
 use indexmap::IndexSet;

@@ -1,9 +1,9 @@
 //! Code for reading process parameters from a CSV file
 use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
+use crate::input::parse_year_str;
 use crate::process::{ProcessID, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::parse_region_str;
 use crate::units::{Dimensionless, MoneyPerActivity, MoneyPerCapacity, MoneyPerCapacityPerYear};
-use crate::year::parse_year_str;
 use ::log::warn;
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
