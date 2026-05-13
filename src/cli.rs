@@ -2,7 +2,7 @@
 use crate::graph::save_commodity_graphs_for_model;
 use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
-use crate::output::{create_output_directory, get_graphs_dir, get_output_dir};
+use crate::output::{create_output_directory, copy_input_files, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
 use ::log::{info, warn};
 use anyhow::{Context, Result};
@@ -151,6 +151,7 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
                 output_path.display()
             )
         })?;
+        copy_input_files(model_path, output_path)?;
 
     // Initialise program logger
     log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
