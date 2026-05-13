@@ -11,7 +11,7 @@ use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 use log::warn;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::path::Path;
 use std::sync::OnceLock;
 use toml::Table;
@@ -131,33 +131,52 @@ impl Default for ModelParameters {
 }
 
 /// Defines the TOML table holding the sub-tables to define HiGHS options
-#[derive(Default, Deserialize)]
-#[serde(default)]
+#[derive(Default)]
 pub struct HighsOptions {
-    /// HiGHS options applied to both dispatch and appraisal
-    global_options: Table,
-    /// HiGHS options applied only to dispatch
+    /// HiGHS options applied to dispatch optimisation
     pub dispatch_options: Table,
-    /// HiGHS options applied only to appraisal
+    /// HiGHS options applied to appraisal optimisation
     pub appraisal_options: Table,
 }
 
-impl HighsOptions {
-    /// Copy the options specified in `global_options` to `dispatch_options` and `appraisal_options`
-    fn apply_global_options(&mut self) {
-        let append_global_opts_to = |opts: &mut Table| {
-            for (option, value) in &self.global_options {
-                opts.entry(option).or_insert(value.clone());
+impl<'de> Deserialize<'de> for HighsOptions {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        #[serde(default)]
+        #[allow(clippy::struct_field_names)]
+        struct RawHighsOptions {
+            global_options: Table,
+            dispatch_options: Table,
+            appraisal_options: Table,
+        }
+
+        let RawHighsOptions {
+            global_options,
+            mut dispatch_options,
+            mut appraisal_options,
+        } = RawHighsOptions::deserialize(deserializer)?;
+
+        let append_global_options = |options: &mut Table| {
+            for (option, value) in &global_options {
+                options
+                    .entry(option.clone())
+                    .or_insert_with(|| value.clone());
             }
         };
+        append_global_options(&mut dispatch_options);
+        append_global_options(&mut appraisal_options);
 
-        append_global_opts_to(&mut self.dispatch_options);
-        append_global_opts_to(&mut self.appraisal_options);
-
-        // Now that we're finished with global options we can discard
-        self.global_options.clear();
+        Ok(Self {
+            dispatch_options,
+            appraisal_options,
+        })
     }
+}
 
+impl HighsOptions {
     /// Log custom HiGHS options set by user, if any
     fn log_options(&self) {
         fn log_highs_options(name: &str, options: &Table) {
@@ -172,16 +191,13 @@ impl HighsOptions {
             warn!("Using custom HiGHS options for {name}:\n  - {options_str}");
         }
 
-        log_highs_options("dispatch and appraisal", &self.global_options);
-        log_highs_options("dispatch only", &self.dispatch_options);
-        log_highs_options("appraisal only", &self.appraisal_options);
+        log_highs_options("dispatch", &self.dispatch_options);
+        log_highs_options("appraisal", &self.appraisal_options);
     }
 
     /// Check whether any options have been set
     pub fn is_empty(&self) -> bool {
-        self.global_options.is_empty()
-            && self.dispatch_options.is_empty()
-            && self.appraisal_options.is_empty()
+        self.dispatch_options.is_empty() && self.appraisal_options.is_empty()
     }
 }
 
@@ -285,7 +301,7 @@ impl ModelParameters {
     /// The model file contents as a [`ModelParameters`] struct or an error if the file is invalid
     pub fn from_path<P: AsRef<Path>>(model_dir: P) -> Result<ModelParameters> {
         let file_path = model_dir.as_ref().join(MODEL_PARAMETERS_FILE_NAME);
-        let mut model_params: ModelParameters = read_toml(&file_path)?;
+        let model_params: ModelParameters = read_toml(&file_path)?;
 
         set_dangerous_model_options_flag(model_params.allow_dangerous_options);
 
@@ -294,9 +310,6 @@ impl ModelParameters {
             .with_context(|| input_err_msg(file_path))?;
 
         model_params.highs.log_options();
-
-        // Copy global options to other tables
-        model_params.highs.apply_global_options();
 
         Ok(model_params)
     }
@@ -403,6 +416,105 @@ mod tests {
 
         let model_params = ModelParameters::from_path(dir.path()).unwrap();
         assert_eq!(model_params.milestone_years, [2020, 2100]);
+    }
+
+    #[test]
+    fn model_params_deserialisation_copies_highs_global_options() {
+        let model_params: ModelParameters = toml::from_str(
+            "
+            milestone_years = [2020, 2100]
+
+            [highs.global_options]
+            output_flag = true
+
+            [highs.dispatch_options]
+            log_to_console = false
+            ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            model_params.highs.dispatch_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            model_params.highs.dispatch_options["log_to_console"],
+            toml::Value::Boolean(false)
+        );
+        assert_eq!(
+            model_params.highs.appraisal_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn highs_options_deserialisation_copies_global_options() {
+        let highs: HighsOptions = toml::from_str(
+            "
+            [global_options]
+            output_flag = true
+            log_to_console = true
+
+            [dispatch_options]
+            primal_feasibility_tolerance = 1e-5
+
+            [appraisal_options]
+            optimality_tolerance = 1e-5
+            ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            highs.dispatch_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.dispatch_options["log_to_console"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["log_to_console"],
+            toml::Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn highs_options_deserialisation_preserves_specific_options() {
+        let highs: HighsOptions = toml::from_str(
+            "
+            [global_options]
+            output_flag = true
+            log_to_console = true
+
+            [dispatch_options]
+            output_flag = false
+
+            [appraisal_options]
+            log_to_console = false
+            ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            highs.dispatch_options["output_flag"],
+            toml::Value::Boolean(false)
+        );
+        assert_eq!(
+            highs.dispatch_options["log_to_console"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["output_flag"],
+            toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            highs.appraisal_options["log_to_console"],
+            toml::Value::Boolean(false)
+        );
     }
 
     #[rstest]
