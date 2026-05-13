@@ -138,7 +138,9 @@ where
 fn default_pricing_strategy(commodity_kind: &CommodityType) -> PricingStrategy {
     match commodity_kind {
         CommodityType::Other => PricingStrategy::Unpriced,
-        CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand => PricingStrategy::Shadow,
+        CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand => {
+            PricingStrategy::FullCostAverage
+        }
     }
 }
 

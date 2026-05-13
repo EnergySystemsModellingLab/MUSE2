@@ -52,7 +52,7 @@ fields:
       `unpriced`.
 
       If unspecified, the commodity will use the default pricing strategy according to the commodity
-      type: `shadow` for `svd` and `sed` commodities, and `unpriced` for `oth` commodities.
+      type: `full_average` for `svd` and `sed` commodities, and `unpriced` for `oth` commodities.
   - name: units
     type: string
     description: The units of measurement for this commodity
