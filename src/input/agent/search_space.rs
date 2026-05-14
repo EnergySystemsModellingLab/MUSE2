@@ -14,6 +14,8 @@ use std::rc::Rc;
 
 const AGENT_SEARCH_SPACE_FILE_NAME: &str = "agent_search_space.csv";
 
+type ProducersMap = HashMap<(AgentID, CommodityID, u32), Rc<Vec<Rc<Process>>>>;
+
 #[derive(PartialEq, Debug, Deserialize)]
 struct AgentSearchSpaceRaw {
     /// The agent to apply the search space to.
@@ -151,6 +153,7 @@ where
         }
     }
 
+    let producers = get_producers_map(agents, processes);
     for (agent_id, agent) in agents {
         // Get or create search space map
         let search_space = search_spaces
@@ -158,7 +161,7 @@ where
             .or_insert_with(AgentSearchSpaceMap::new);
 
         // Add missing entries for commodities/years
-        fill_missing_search_space_entries(agent, processes, search_space);
+        fill_missing_search_space_entries(agent, &producers, search_space);
     }
 
     Ok(search_spaces)
@@ -170,7 +173,7 @@ where
 /// producers which operate in at least one of the same regions as the agent are considered.
 fn fill_missing_search_space_entries(
     agent: &Agent,
-    processes: &ProcessMap,
+    producers: &ProducersMap,
     search_space: &mut AgentSearchSpaceMap,
 ) {
     // Agents all have commodity portions and this field should have been assigned already
@@ -178,24 +181,37 @@ fn fill_missing_search_space_entries(
 
     for (commodity_id, year) in agent.commodity_portions.keys() {
         let key = (commodity_id.clone(), *year);
-        search_space.entry(key).or_insert_with(|| {
-            Rc::new(get_all_producers(processes, commodity_id, *year).collect())
-        });
+        search_space
+            .entry(key)
+            .or_insert_with(|| producers[&(agent.id.clone(), commodity_id.clone(), *year)].clone());
     }
 }
 
-/// Get all processes active in the relevant year and regions which produce the given commodity
-fn get_all_producers<'a>(
-    processes: &'a ProcessMap,
-    commodity_id: &'a CommodityID,
-    year: u32,
-) -> impl Iterator<Item = Rc<Process>> + 'a {
-    processes
-        .values()
-        .filter(move |process| {
-            process.active_for_year(year) && process.primary_output.as_ref() == Some(commodity_id)
-        })
-        .cloned()
+/// Get a map of all the producers for each agent, for each commodity and year combination
+fn get_producers_map(agents: &AgentMap, processes: &ProcessMap) -> ProducersMap {
+    let mut map = HashMap::new();
+    for (agent_id, agent) in agents {
+        for (commodity_id, year) in agent.commodity_portions.keys() {
+            let producers = processes
+                .values()
+                .filter(move |process| {
+                    process.active_for_year(*year)
+                        && process.primary_output.as_ref() == Some(commodity_id)
+                        && !process.regions.is_disjoint(&agent.regions)
+                })
+                .cloned()
+                .collect_vec();
+
+            try_insert(
+                &mut map,
+                &(agent_id.clone(), commodity_id.clone(), *year),
+                Rc::new(producers),
+            )
+            .expect("Unexpected duplicate element");
+        }
+    }
+
+    map
 }
 
 #[cfg(test)]
