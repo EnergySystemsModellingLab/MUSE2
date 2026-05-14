@@ -215,7 +215,6 @@ fn create_flow_map<'a>(
     }
 
     // Remove all the parent assets
-    flows.retain(|(asset, _, _), _| !asset.is_parent());
 
     flows
 }
