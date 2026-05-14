@@ -1,18 +1,26 @@
 //! Code for working with years.
-use super::is_sorted_and_unique;
-use anyhow::{Context, Result, ensure};
+use super::{is_sorted_and_unique, is_sorted_and_unique_with, parse_range_with_defaults};
+use anyhow::{Context, Result, bail, ensure};
 use itertools::Itertools;
+use std::ops::RangeInclusive;
 
-/// Parse a single year from a string and check it is in `valid_years`
-fn parse_and_validate_year(s: &str, valid_years: &[u32]) -> Option<u32> {
-    let year = s.trim().parse::<u32>().ok()?;
-    valid_years.binary_search(&year).is_ok().then_some(year)
+/// Return any valid years in the specified range
+fn get_valid_years_in_range(
+    range: &RangeInclusive<u32>,
+    valid_years: &[u32],
+) -> impl Iterator<Item = u32> {
+    valid_years
+        .iter()
+        .copied()
+        .filter(move |year| range.contains(year))
 }
 
 /// Parse a string of years separated by semicolons into a vector of u32 years.
 ///
-/// The string can be either "all" (case-insensitive), a single year, or a semicolon-separated list
-/// of years (e.g. "2020;2021;2022" or "2020; 2021; 2022")
+/// The string can be either "all" (case-insensitive) or year ranges (optionally) separated with
+/// semicolons. A year range can be a single year (e.g. 2020) or a range with a start year and/or
+/// end year (e.g. 2020.., ..2020, 2020..2025). For more information about the range syntax, see
+/// [`parse_range_with_defaults`].
 ///
 /// # Arguments
 ///
@@ -25,9 +33,11 @@ fn parse_and_validate_year(s: &str, valid_years: &[u32]) -> Option<u32> {
 ///
 /// # Panics
 ///
-/// If `valid_years` is unsorted or non-unique.
+/// If `valid_years` is empty, unsorted or contains duplicates.
 pub fn parse_year_str(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
-    // We depend on this in `parse_and_validate_year`
+    assert!(!valid_years.is_empty(), "`valid_years` cannot be empty");
+
+    // We depend on this to do a binary search below
     assert!(
         is_sorted_and_unique(valid_years),
         "`valid_years` must be sorted and unique"
@@ -40,74 +50,46 @@ pub fn parse_year_str(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
         return Ok(Vec::from_iter(valid_years.iter().copied()));
     }
 
-    ensure!(
-        !(s.contains(';') && s.contains("..")),
-        "Both ';' and '..' found in year string {s}. Discrete years and ranges cannot be mixed."
-    );
-
-    // We first process ranges
-    let years: Vec<_> = if s.contains("..") {
-        parse_years_range(s, valid_years)?
-    } else {
-        s.split(';')
-            .map(|y| {
-                parse_and_validate_year(y, valid_years)
-                    .with_context(|| format!("Invalid year: {y}"))
-            })
-            .try_collect()?
-    };
+    // Get ranges of years, separated by semicolons. Note that a range can be a single year.
+    let ranges: Vec<_> = s
+        .split(';')
+        .map(|s| {
+            parse_range_with_defaults(
+                s,
+                u32::MIN..=u32::MAX,
+                *valid_years.first().unwrap(),
+                *valid_years.last().unwrap(),
+            )
+            .with_context(|| format!("Invalid year range: {s}"))
+        })
+        .try_collect()?;
 
     ensure!(
-        is_sorted_and_unique(&years),
-        "Years must be in order and unique"
+        is_sorted_and_unique_with(ranges.iter(), |a, b| {
+            a.start() < b.start() && a.end() < b.start()
+        }),
+        "Year ranges must be sorted and non-overlapping"
     );
 
-    Ok(years)
-}
+    let mut years = Vec::new();
+    for range in ranges {
+        let old_len = years.len();
+        years.extend(get_valid_years_in_range(&range, valid_years));
 
-/// Parse a year string that is defined as a range, selecting the valid years within that range.
-///
-/// It should be of the form start..end. If either of the limits are omitted, they will default to
-/// the first and last years of the `valid_years`. If both limits are missing, this is equivalent to
-/// passing all.
-fn parse_years_range(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
-    // Require exactly one ".." separator so only forms start..end, start.. or ..end are allowed.
-    let parts: Vec<&str> = s.split("..").collect();
-    ensure!(
-        parts.len() == 2,
-        "Year range must be of the form 'start..end', 'start..' or '..end'. Invalid: {s}"
-    );
-    let left = parts[0].trim();
-    let right = parts[1].trim();
+        // No valid years in range
+        if years.len() == old_len {
+            // For readability, provide different error messages for single year vs range
+            if range.start() == range.end() {
+                bail!("Invalid year: {}", range.start());
+            }
+            bail!(
+                "No valid years in year range: {}..{}",
+                range.start(),
+                range.end()
+            );
+        }
+    }
 
-    // If the range start is open, we assign the first valid year
-    let start = if left.is_empty() {
-        valid_years[0]
-    } else {
-        left.parse::<u32>()
-            .ok()
-            .with_context(|| format!("Invalid start year in range: {left}"))?
-    };
-
-    // If the range end is open, we assign the last valid year
-    let end = if right.is_empty() {
-        *valid_years.last().unwrap()
-    } else {
-        right
-            .parse::<u32>()
-            .ok()
-            .with_context(|| format!("Invalid end year in range: {right}"))?
-    };
-
-    ensure!(
-        end > start,
-        "End year must be bigger than start year in range {s}"
-    );
-    let years: Vec<_> = (start..=end).filter(|y| valid_years.contains(y)).collect();
-    ensure!(
-        !years.is_empty(),
-        "No valid years found in year range string {s}"
-    );
     Ok(years)
 }
 
@@ -119,15 +101,15 @@ mod tests {
 
     #[rstest]
     #[case("2020", &[2020, 2021], &[2020])]
-    #[case("all", &[2020, 2021], &[2020,2021])]
-    #[case("ALL", &[2020, 2021], &[2020,2021])]
-    #[case(" ALL ", &[2020, 2021], &[2020,2021])]
-    #[case("2020;2021", &[2020, 2021], &[2020,2021])]
-    #[case("  2020;  2021", &[2020, 2021], &[2020,2021])] // whitespace should be stripped
-    #[case("2019..2026", &[2020,2025], &[2020,2025])]
-    #[case("..2023", &[2020,2025], &[2020])] // Empty start
-    #[case("2021..", &[2020,2025], &[2025])] // Empty end
-    #[case("..", &[2020,2025], &[2020,2025])]
+    #[case("all", &[2020, 2021], &[2020, 2021])]
+    #[case("ALL", &[2020, 2021], &[2020, 2021])]
+    #[case(" ALL ", &[2020, 2021], &[2020, 2021])]
+    #[case("2020;2021", &[2020, 2021], &[2020, 2021])]
+    #[case("  2020;  2021", &[2020, 2021], &[2020, 2021])] // whitespace should be stripped
+    #[case("2019..2026", &[2020, 2025], &[2020, 2025])]
+    #[case("..2023", &[2020, 2025], &[2020])] // Empty start
+    #[case("2021..", &[2020, 2025], &[2025])] // Empty end
+    #[case("2020;2021..2022", &[2020, 2021, 2022], &[2020, 2021, 2022])] // Can have multiple ranges
     fn parse_year_str_valid(
         #[case] input: &str,
         #[case] milestone_years: &[u32],
@@ -139,14 +121,14 @@ mod tests {
     #[rstest]
     #[case("", &[2020], "No years provided")]
     #[case("2021", &[2020], "Invalid year: 2021")]
-    #[case("a;2020", &[2020], "Invalid year: a")]
-    #[case("2021;2020", &[2020, 2021],"Years must be in order and unique")] // out of order
-    #[case("2021;2020;2021", &[2020, 2021],"Years must be in order and unique")] // duplicate
-    #[case("2021;2020..2021", &[2020, 2021],"Both ';' and '..' found in year string 2021;2020..2021. Discrete years and ranges cannot be mixed.")]
-    #[case("2021..2020", &[2020, 2021],"End year must be bigger than start year in range 2021..2020")] // out of order
-    #[case("2021..2024", &[2020,2025], "No valid years found in year range string 2021..2024")]
-    #[case("..2020..2025", &[2020,2025], "Year range must be of the form 'start..end', 'start..' or '..end'. Invalid: ..2020..2025")]
-    #[case("2020...2025", &[2020,2025], "Invalid end year in range: .2025")]
+    #[case("a;2020", &[2020], "Invalid year range: a")]
+    #[case("2021;2020", &[2020, 2021], "Year ranges must be sorted and non-overlapping")] // out of order
+    #[case("2021;2020;2021", &[2020, 2021], "Year ranges must be sorted and non-overlapping")] // duplicate
+    #[case("2021..2020", &[2020, 2021], "Invalid year range: 2021..2020")] // out of order
+    #[case("2021..2024", &[2020, 2025], "No valid years in year range: 2021..2024")]
+    #[case("..2020..2025", &[2020, 2025], "Invalid year range: ..2020..2025")]
+    #[case("2020...2025", &[2020, 2025], "Invalid year range: 2020...2025")]
+    #[case("..", &[2020, 2025], "Invalid year range: ..")]
     fn parse_year_str_invalid(
         #[case] input: &str,
         #[case] milestone_years: &[u32],

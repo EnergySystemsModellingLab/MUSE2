@@ -31,7 +31,6 @@ mod time_slice;
 use time_slice::read_time_slice_info;
 mod range;
 use range::parse_range;
-#[allow(unused_imports)]
 use range::parse_range_with_defaults;
 mod year;
 use year::parse_year_str;
