@@ -182,7 +182,20 @@ where
     T: PartialOrd + Clone,
     I: IntoIterator<Item = T>,
 {
-    iter.into_iter().tuple_windows().all(|(a, b)| a < b)
+    is_sorted_and_unique_with(iter, |a, b| a < b)
+}
+
+/// Check whether an iterator contains values that are sorted and unique, comparing with a custom
+/// function
+pub fn is_sorted_and_unique_with<T, I, F>(iter: I, mut less_than: F) -> bool
+where
+    T: Clone,
+    I: IntoIterator<Item = T>,
+    F: FnMut(&T, &T) -> bool,
+{
+    iter.into_iter()
+        .tuple_windows()
+        .all(|(a, b)| less_than(&a, &b))
 }
 
 /// Insert a key-value pair into a map implementing the `Insert` trait if the key does not
