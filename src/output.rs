@@ -116,9 +116,17 @@ pub fn create_output_directory(output_dir: &Path, allow_overwrite: bool) -> Resu
 
     Ok(overwrite)
 }
-/// Copy input files from the model directory to a subdirectory of the output directory
+
+/// Copy input files to output directory
 pub fn copy_input_files(model_dir: &Path, output_dir: &Path) -> Result<()> {
-    let input_copy_dir = output_dir.join("input");
+    
+    // Get the model name from the dir path. 
+    let model_name = model_dir
+        .file_name()
+        .context("Model cannot be in root folder")?
+        .to_str()
+        .context("Invalid chars in model dir name")?;
+    let input_copy_dir = output_dir.join("input").join(model_name);
     fs::create_dir_all(&input_copy_dir).context("Could not create input copy directory")?;
 
     for entry in fs::read_dir(model_dir)? {
@@ -126,11 +134,15 @@ pub fn copy_input_files(model_dir: &Path, output_dir: &Path) -> Result<()> {
         let path = entry.path();
         if path.is_file() {
             let file_name = path.file_name().unwrap();
+<<<<<<< HEAD
             let dest = input_copy_dir.join(file_name);
             fs::copy(&path, &dest)?;
             let mut permissions = fs::metadata(&dest)?.permissions();
             permissions.set_readonly(true);
             fs::set_permissions(dest, permissions)?;
+=======
+            fs::copy(&path, input_copy_dir.join(file_name))?;
+>>>>>>> 329413f0 (removed read only, change input directory files and added input direct to the gitignore)
         }
     }
     Ok(())
