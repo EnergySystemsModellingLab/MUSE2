@@ -2,7 +2,7 @@
 //! assets.
 use crate::commodity::CommodityID;
 use crate::id::define_id_type;
-use crate::process::{FlowDirection, Process};
+use crate::process::Process;
 use crate::region::RegionID;
 use crate::units::Dimensionless;
 use indexmap::{IndexMap, IndexSet};
@@ -48,19 +48,22 @@ pub struct Agent {
 
 impl Agent {
     /// Get all the processes in this agent's search space which produce the commodity in the given
-    /// year
-    pub fn iter_possible_producers_of<'a>(
+    /// region and year.
+    ///
+    /// # Panics
+    ///
+    /// If the agent does not operate in the given region or is not responsible for the given
+    /// commodity in the given year.
+    pub fn iter_search_space<'a>(
         &'a self,
-        region_id: &RegionID,
+        region_id: &'a RegionID,
         commodity_id: &'a CommodityID,
         year: u32,
     ) -> impl Iterator<Item = &'a Rc<Process>> + use<'a> {
-        let flows_key = (region_id.clone(), year);
+        assert!(self.regions.contains(region_id));
         self.search_space[&(commodity_id.clone(), year)]
             .iter()
-            .filter(move |process| {
-                process.flows[&flows_key][commodity_id].direction() == FlowDirection::Output
-            })
+            .filter(move |process| process.regions.contains(region_id))
     }
 }
 
