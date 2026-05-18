@@ -220,14 +220,8 @@ impl FilePatch {
     fn apply(&self, base_model_dir: &Path) -> Result<String> {
         // Read and validate the base file path
         let base_path = base_model_dir.join(&self.filename);
-        ensure!(
-            base_path.exists() && base_path.is_file(),
-            "Base file for patching does not exist: {}",
-            base_path.display()
-        );
 
-        // If this patch is a full replacement, validate the base file exists
-        // (checked above) and return the replacement content
+        // If this patch is a full replacement, return the replacement content.
         if let Some(content) = &self.replacement_content {
             return Ok(content.clone());
         }
@@ -489,23 +483,6 @@ mod tests {
         let _ = FilePatch::new("assets.csv")
             .with_replacement(&["col1,col2", "a,b"])
             .with_addition("c,d");
-    }
-
-    #[test]
-    fn file_patch_with_replacement_missing_base_file_fails() {
-        let model_patch = ModelPatch::from_example("simple").with_file_patch(
-            FilePatch::new("not_a_real_file.csv").with_replacement(&["x,y", "1,2"]),
-        );
-
-        let expected = format!(
-            "Base file for patching does not exist: {}",
-            std::path::PathBuf::from("examples")
-                .join("simple")
-                .join("not_a_real_file.csv")
-                .display()
-        );
-
-        assert_error!(model_patch.build_to_tempdir(), expected);
     }
 
     #[test]
