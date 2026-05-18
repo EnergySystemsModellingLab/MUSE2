@@ -21,12 +21,16 @@ ready to be released, carry out the following steps:
 ## Breaking changes
 
 - Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average" ([#1281])
+- The `agent_search_space.csv` input file has been renamed to `agent_search_spaces.csv` for
+  consistency ([#1293])
 
 ## Bug fixes
 
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
+- Fix parsing and validation of agent search space file ([#1293])
 
 [highs-opts-docs]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/custom_highs_options.html
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
-[#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
 [#1276]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1276
+[#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
+[#1293]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1293
