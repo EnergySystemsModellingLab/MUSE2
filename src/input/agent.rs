@@ -15,7 +15,7 @@ use std::path::Path;
 mod objective;
 use objective::read_agent_objectives;
 mod search_space;
-use search_space::read_agent_search_space;
+use search_space::read_agent_search_spaces;
 mod commodity_portion;
 use commodity_portion::read_agent_commodity_portions;
 
@@ -58,7 +58,7 @@ pub fn read_agents(
 ) -> Result<AgentMap> {
     let mut agents = read_agents_file(model_dir, region_ids)?;
 
-    // We read commodity portions first as they are required by `read_agent_search_space`
+    // We read commodity portions first as they are required by `read_agent_search_spaces`
     let mut agent_commodities = read_agent_commodity_portions(
         model_dir,
         &agents,
@@ -74,7 +74,7 @@ pub fn read_agents(
 
     let mut objectives = read_agent_objectives(model_dir, &agents, milestone_years)?;
     let commodity_ids = commodities.keys().cloned().collect();
-    let mut search_spaces = read_agent_search_space(
+    let mut search_spaces = read_agent_search_spaces(
         model_dir,
         &agents,
         processes,

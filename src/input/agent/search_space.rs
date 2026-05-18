@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
-const AGENT_SEARCH_SPACE_FILE_NAME: &str = "agent_search_space.csv";
+const AGENT_SEARCH_SPACES_FILE_NAME: &str = "agent_search_spaces.csv";
 
 type ProducersMap = HashMap<(AgentID, CommodityID, u32), Rc<Vec<Rc<Process>>>>;
 
@@ -141,20 +141,20 @@ where
 /// # Returns
 ///
 /// A `HashMap` mapping `AgentID` to `AgentSearchSpaceMap`.
-pub fn read_agent_search_space(
+pub fn read_agent_search_spaces(
     model_dir: &Path,
     agents: &AgentMap,
     processes: &ProcessMap,
     commodity_ids: &HashSet<CommodityID>,
     milestone_years: &[u32],
 ) -> Result<HashMap<AgentID, AgentSearchSpaceMap>> {
-    let file_path = model_dir.join(AGENT_SEARCH_SPACE_FILE_NAME);
+    let file_path = model_dir.join(AGENT_SEARCH_SPACES_FILE_NAME);
     let iter = read_csv_optional::<SearchSpaceEntry>(&file_path)?;
-    read_agent_search_space_from_iter(iter, agents, processes, commodity_ids, milestone_years)
+    read_agent_search_spaces_from_iter(iter, agents, processes, commodity_ids, milestone_years)
         .with_context(|| input_err_msg(&file_path))
 }
 
-fn read_agent_search_space_from_iter<I>(
+fn read_agent_search_spaces_from_iter<I>(
     iter: I,
     agents: &AgentMap,
     processes: &ProcessMap,
@@ -423,7 +423,7 @@ mod tests {
     fn model_runs_with_search_space_file1() {
         // Check that it runs with everything set to all
         assert_patched_runs_ok_simple!(vec![
-            FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+            FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                 "agent_id,commodity_id,years,search_space",
                 "A0_GEX,GASPRD,all,all",
                 "A0_GPR,GASNAT,all,all",
@@ -437,7 +437,7 @@ mod tests {
     fn model_runs_with_search_space_file2() {
         // Check that it runs with a more complex file
         assert_patched_runs_ok_simple!(vec![
-            FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+            FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                 "agent_id,commodity_id,years,search_space",
                 "A0_GEX,GASPRD,all,GASDRV",
                 "A0_GPR,GASNAT,2020,all",
@@ -455,7 +455,7 @@ mod tests {
     fn not_responsible_for_commodity() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "A0_GEX,ELCTRI,all,all",
                 ]),
@@ -469,7 +469,7 @@ mod tests {
     fn unknown_agent_id_fails() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "UNKNOWN_AGENT,GASPRD,all,all",
                 ])
@@ -482,7 +482,7 @@ mod tests {
     fn unknown_commodity_id_fails() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "A0_GEX,UNKNOWN_COMMODITY,all,all",
                 ])
@@ -495,7 +495,7 @@ mod tests {
     fn invalid_year_fails() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "A0_GEX,GASPRD,9999,all",
                 ])
@@ -508,7 +508,7 @@ mod tests {
     fn overlapping_entries_fails() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "A0_GEX,GASPRD,2020,all",
                     "A0_GEX,GASPRD,2020,GASDRV",
@@ -522,7 +522,7 @@ mod tests {
     fn invalid_search_space_fails() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "A0_GEX,GASPRD,all,NONEXISTENT_PROCESS",
                 ])
@@ -535,7 +535,7 @@ mod tests {
     fn process_not_valid_producer_fails() {
         assert_validate_fails_with_simple!(
             vec![
-                FilePatch::new(AGENT_SEARCH_SPACE_FILE_NAME).with_replacement(&[
+                FilePatch::new(AGENT_SEARCH_SPACES_FILE_NAME).with_replacement(&[
                     "agent_id,commodity_id,years,search_space",
                     "A0_GEX,GASPRD,all,GASPRC",
                 ])
