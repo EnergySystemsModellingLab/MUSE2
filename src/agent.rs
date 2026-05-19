@@ -18,7 +18,7 @@ pub type AgentMap = IndexMap<AgentID, Agent>;
 /// A map of commodity portions for an agent, keyed by commodity and year
 pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
 
-/// A map for the agent's search space, keyed by commodity and year
+/// A map for the agent's search space, keyed by commodity, region, and year
 pub type AgentSearchSpaceMap = HashMap<(CommodityID, RegionID, u32), Rc<Vec<Rc<Process>>>>;
 
 /// A map of objectives for an agent, keyed by year.
