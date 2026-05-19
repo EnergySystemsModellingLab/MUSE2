@@ -2,7 +2,8 @@
 use anyhow::Result;
 use float_cmp::approx_eq;
 use itertools::Itertools;
-use similar::{ChangeTag, TextDiff};
+use ordered_float::NotNan;
+use similar::{Algorithm, DiffOp, DiffTag, capture_diff_slices};
 use std::env;
 use std::fmt::Write as _;
 use std::fs::{File, read_dir};
@@ -97,10 +98,8 @@ fn compare_lines(
     let lines1 = read_lines(&output_dir1.join(file_name));
     let lines2 = read_lines(&output_dir2.join(file_name));
 
-    // check number of lines equal
+    // Check whether files differ using the existing field-by-field tolerance rules.
     let mut has_mismatch = lines1.len() != lines2.len();
-
-    // check each line is the same within numerical tolerance
     if !has_mismatch {
         has_mismatch = lines1
             .iter()
@@ -109,7 +108,8 @@ fn compare_lines(
     }
 
     if has_mismatch {
-        let diff = render_diff(&lines1, &lines2);
+        let diff_ops = capture_csv_diff_ops(&lines1, &lines2);
+        let diff = render_diff(&diff_ops, &lines1, &lines2);
         errors.push(format!("{file_name}: output differs\n{diff}"));
     }
 }
@@ -121,43 +121,112 @@ fn compare_line(line1: &str, line2: &str) -> bool {
         return false;
     }
 
-    // Check every field matches
-    fields1.into_iter().zip(fields2).all(|(f1, f2)| {
-        // First try to compare fields as floating-point values, falling back on string comparison
-        try_compare_floats(f1, f2).unwrap_or_else(|| f1 == f2)
-    })
+    fields1
+        .into_iter()
+        .zip(fields2)
+        .all(|(f1, f2)| try_compare_floats(f1, f2).unwrap_or_else(|| f1 == f2))
+}
+
+fn capture_csv_diff_ops(lines1: &[String], lines2: &[String]) -> Vec<DiffOp> {
+    let parsed1 = parse_csv_lines(lines1);
+    let parsed2 = parse_csv_lines(lines2);
+    capture_diff_slices(Algorithm::Myers, &parsed1, &parsed2)
+}
+
+fn has_non_equal_diff_ops(diff_ops: &[DiffOp]) -> bool {
+    diff_ops.iter().any(|op| op.tag() != DiffTag::Equal)
 }
 
 /// Given two lists of lines which don't match, render a diff showing
 /// which lines were added/removed, with line numbers from the original files.
-fn render_diff(lines1: &[String], lines2: &[String]) -> String {
-    let text1 = lines1.join("\n");
-    let text2 = lines2.join("\n");
-    let diff = TextDiff::from_lines(&text1, &text2);
-
+fn render_diff(diff_ops: &[DiffOp], lines1: &[String], lines2: &[String]) -> String {
     let mut out = String::new();
-    let mut line_num1 = 1;
-    let mut line_num2 = 1;
-    for change in diff.iter_all_changes() {
-        let line = change.to_string();
-        let line = line.trim_end_matches('\n');
-        match change.tag() {
-            ChangeTag::Delete => {
-                let _ = writeln!(out, "-L{line_num1}: {line}");
-                line_num1 += 1;
+    for op in diff_ops {
+        let (tag, old_range, new_range) = op.as_tag_tuple();
+        match tag {
+            DiffTag::Equal => {}
+            DiffTag::Delete => {
+                for old_idx in old_range {
+                    let _ = writeln!(out, "-L{}: {}", old_idx + 1, lines1[old_idx]);
+                }
             }
-            ChangeTag::Insert => {
-                let _ = writeln!(out, "+L{line_num2}: {line}");
-                line_num2 += 1;
+            DiffTag::Insert => {
+                for new_idx in new_range {
+                    let _ = writeln!(out, "+L{}: {}", new_idx + 1, lines2[new_idx]);
+                }
             }
-            ChangeTag::Equal => {
-                line_num1 += 1;
-                line_num2 += 1;
+            DiffTag::Replace => {
+                let old_start = old_range.start;
+                let new_start = new_range.start;
+                let paired_len = old_range.len().min(new_range.len());
+
+                for idx in 0..paired_len {
+                    let old_idx = old_start + idx;
+                    let new_idx = new_start + idx;
+                    if !compare_line(&lines1[old_idx], &lines2[new_idx]) {
+                        let _ = writeln!(out, "-L{}: {}", old_idx + 1, lines1[old_idx]);
+                        let _ = writeln!(out, "+L{}: {}", new_idx + 1, lines2[new_idx]);
+                    }
+                }
+
+                for (old_idx, line) in lines1
+                    .iter()
+                    .enumerate()
+                    .take(old_range.end)
+                    .skip(old_start + paired_len)
+                {
+                    let _ = writeln!(out, "-L{}: {}", old_idx + 1, line);
+                }
+                for (new_idx, line) in lines2
+                    .iter()
+                    .enumerate()
+                    .take(new_range.end)
+                    .skip(new_start + paired_len)
+                {
+                    let _ = writeln!(out, "+L{}: {}", new_idx + 1, line);
+                }
             }
         }
     }
 
     out
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct CsvLine(Vec<CsvField>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum CsvField {
+    Float(NotNan<f64>),
+    Text(String),
+}
+
+fn parse_csv_lines(lines: &[String]) -> Vec<CsvLine> {
+    lines.iter().map(|line| parse_csv_line(line)).collect()
+}
+
+fn parse_csv_line(line: &str) -> CsvLine {
+    CsvLine(line.split(',').map(parse_csv_field).collect())
+}
+
+fn parse_csv_field(field: &str) -> CsvField {
+    if let Some(float) = parse_finite(field) {
+        CsvField::Float(quantise_float(float))
+    } else {
+        CsvField::Text(field.to_string())
+    }
+}
+
+fn quantise_float(value: f64) -> NotNan<f64> {
+    let scaled = value / FLOAT_CMP_TOLERANCE;
+    let quantised = if scaled.is_finite() {
+        scaled.round() * FLOAT_CMP_TOLERANCE
+    } else {
+        value
+    };
+
+    let quantised = if quantised == -0.0 { 0.0 } else { quantised };
+    NotNan::new(quantised).expect("quantised float should always be finite")
 }
 
 /// Parse a string into an `f64`, returning `None` if parsing fails or value is infinite/NaN
@@ -203,4 +272,79 @@ fn read_lines(path: &Path) -> Vec<String> {
         .lines()
         .map_while(Result::ok)
         .collect()
+}
+
+#[test]
+fn tolerated_float_change_yields_no_diff_ops() {
+    let old_lines = vec!["asset,1.00000000001".to_string()];
+    let new_lines = vec!["asset,1.00000000002".to_string()];
+
+    let diff_ops = capture_csv_diff_ops(&old_lines, &new_lines);
+    assert!(!has_non_equal_diff_ops(&diff_ops));
+}
+
+#[test]
+fn parse_csv_lines_normalises_floats_within_tolerance() {
+    let lines1 = vec![
+        "asset_a,1.000000000001,region_1".to_string(),
+        "asset_b,2.5,region_2".to_string(),
+    ];
+    let lines2 = vec![
+        "asset_a,1.000000000002,region_1".to_string(),
+        "asset_b,2.5,region_2".to_string(),
+    ];
+
+    let parsed1 = parse_csv_lines(&lines1);
+    let parsed2 = parse_csv_lines(&lines2);
+
+    assert_eq!(parsed1, parsed2);
+}
+
+#[test]
+fn render_diff_ignores_tolerated_float_changes() {
+    let old_lines = vec![
+        "asset_a,1.00000000001".to_string(),
+        "asset_b,2.0".to_string(),
+    ];
+    let new_lines = vec![
+        "asset_a,1.00000000002".to_string(),
+        "asset_b,3.0".to_string(),
+    ];
+
+    let diff_ops = capture_csv_diff_ops(&old_lines, &new_lines);
+    let diff = render_diff(&diff_ops, &old_lines, &new_lines);
+
+    assert!(!diff.contains("asset_a"));
+    assert!(diff.contains("asset_b,2.0"));
+    assert!(diff.contains("asset_b,3.0"));
+}
+
+#[test]
+fn render_diff_ignores_tolerated_float_differences_one_line_missing() {
+    let old_lines = vec![
+        "asset_a,1.000000000001".to_string(),
+        "asset_b,2.000000000001".to_string(),
+        "asset_c,3.0".to_string(),
+        "asset_d,4.000000000001".to_string(),
+        "asset_e,5.000000000001".to_string(),
+        "asset_f,6.000000000001".to_string(),
+    ];
+    let new_lines = vec![
+        "asset_a,1.000000000002".to_string(),
+        "asset_b,2.000000000002".to_string(),
+        "asset_d,4.000000000002".to_string(),
+        "asset_e,5.000000000002".to_string(),
+        "asset_f,6.000000000002".to_string(),
+    ];
+
+    let diff_ops = capture_csv_diff_ops(&old_lines, &new_lines);
+    let diff = render_diff(&diff_ops, &old_lines, &new_lines);
+
+    assert!(!diff.contains("asset_a"));
+    assert!(!diff.contains("asset_b"));
+    assert!(!diff.contains("asset_d"));
+    assert!(!diff.contains("asset_e"));
+    assert!(!diff.contains("asset_f"));
+    assert!(diff.contains("-L3: asset_c,3.0"));
+    assert!(!diff.contains("asset_c,9.0"));
 }

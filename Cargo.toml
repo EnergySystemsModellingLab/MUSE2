@@ -42,6 +42,7 @@ erased-serde = "0.4.10"
 [dev-dependencies]
 assert_cmd = "2.2.2"
 map-macro = "0.3.0"
+ordered-float = "5.1.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
 similar = "3.1.0"
 yaml-rust2 = {version = "0.11.0", default-features = false}
