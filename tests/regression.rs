@@ -137,8 +137,8 @@ fn has_non_equal_diff_ops(diff_ops: &[DiffOp]) -> bool {
     diff_ops.iter().any(|op| op.tag() != DiffTag::Equal)
 }
 
-/// Given two lists of lines which don't match, render a diff showing
-/// which lines were added/removed, with line numbers from the original files.
+/// Render a line-based diff from `DiffOp`s, including old/new line numbers.
+/// For replaced lines, pairs that are equal under `compare_line` are omitted.
 fn render_diff(diff_ops: &[DiffOp], lines1: &[String], lines2: &[String]) -> String {
     let mut out = String::new();
     for op in diff_ops {
@@ -347,4 +347,24 @@ fn render_diff_ignores_tolerated_float_differences_one_line_missing() {
     assert!(!diff.contains("asset_f"));
     assert!(diff.contains("-L3: asset_c,3.0"));
     assert!(!diff.contains("asset_c,9.0"));
+}
+
+#[test]
+fn render_diff_ignores_quantisation_boundary_tolerance_case() {
+    let old_lines = vec![
+        "asset_a,25.852906323049822".to_string(),
+        "asset_b,2.0".to_string(),
+    ];
+    let new_lines = vec![
+        "asset_a,25.852906323050078".to_string(),
+        "asset_b,3.0".to_string(),
+    ];
+
+    // `asset_a` differs only within tolerance, while `asset_b` is a real change.
+    let diff_ops = capture_csv_diff_ops(&old_lines, &new_lines);
+    let diff = render_diff(&diff_ops, &old_lines, &new_lines);
+
+    assert!(!diff.contains("asset_a"));
+    assert!(diff.contains("-L2: asset_b,2.0"));
+    assert!(diff.contains("+L2: asset_b,3.0"));
 }
