@@ -4,9 +4,10 @@ use crate::agent::{Agent, AgentID, AgentMap, AgentSearchSpaceMap};
 use crate::commodity::CommodityID;
 use crate::id::IDCollection;
 use crate::process::{Process, ProcessMap};
+use crate::region::RegionID;
 use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
-use itertools::Itertools;
+use itertools::{Itertools, iproduct};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -14,7 +15,7 @@ use std::rc::Rc;
 
 const AGENT_SEARCH_SPACES_FILE_NAME: &str = "agent_search_spaces.csv";
 
-type ProducersMap = HashMap<(AgentID, CommodityID, u32), Rc<Vec<Rc<Process>>>>;
+type ProducersMap = HashMap<(CommodityID, RegionID, u32), Rc<Vec<Rc<Process>>>>;
 
 #[derive(PartialEq, Debug, Deserialize)]
 struct SearchSpaceEntry {
@@ -61,13 +62,13 @@ fn add_entry_to_search_space_map(
     let map = map.entry(agent.id.clone()).or_default();
     for_each_year_in_search_space(
         &entry.search_space,
-        agent_id,
+        agent,
         commodity_id,
         &years,
         processes,
         producers,
-        |commodity_id, year, search_space| {
-            try_insert(map, &(commodity_id, year), search_space)
+        |commodity_id, region_id, year, search_space| {
+            try_insert(map, &(commodity_id, region_id, year), search_space)
                 .context("Overlapping entries in search space file")
         },
     )?;
@@ -78,7 +79,7 @@ fn add_entry_to_search_space_map(
 /// Parse the search space string and iterate over the processed search space for each year
 fn for_each_year_in_search_space<F>(
     search_space: &str,
-    agent_id: &AgentID,
+    agent: &Agent,
     commodity_id: &CommodityID,
     years: &[u32],
     processes: &ProcessMap,
@@ -86,42 +87,57 @@ fn for_each_year_in_search_space<F>(
     mut f: F,
 ) -> Result<()>
 where
-    F: FnMut(CommodityID, u32, Rc<Vec<Rc<Process>>>) -> Result<()>,
+    F: FnMut(CommodityID, RegionID, u32, Rc<Vec<Rc<Process>>>) -> Result<()>,
 {
     ensure!(!search_space.is_empty(), "No processes provided");
 
+    let regions_and_years = iproduct!(agent.regions.iter(), years.iter().copied());
     if search_space.eq_ignore_ascii_case("all") {
         // Iterate over all possible producers for each year
-        for &year in years {
-            let search_space = &producers[&(agent_id.clone(), commodity_id.clone(), year)];
-            f(commodity_id.clone(), year, search_space.clone())?;
+        for (region_id, year) in regions_and_years {
+            let search_space = &producers[&(commodity_id.clone(), region_id.clone(), year)];
+            f(
+                commodity_id.clone(),
+                region_id.clone(),
+                year,
+                search_space.clone(),
+            )?;
         }
     } else {
         // Check each process ID in turn
-        let search_space: Rc<Vec<_>> = Rc::new(search_space
-            .split(';')
-            .map(|process_id_str| {
-                let process = processes
-                    .get(process_id_str.trim())
-                    .with_context(|| format!("Invalid process ID '{process_id_str}'"))?;
+        let search_space: Rc<Vec<_>> = Rc::new(
+            search_space
+                .split(';')
+                .map(|process_id_str| {
+                    let process = processes
+                        .get(process_id_str.trim())
+                        .with_context(|| format!("Invalid process ID '{process_id_str}'"))?;
 
-                // Check that the specified process is a possibility for all specified years
-                for &year in years {
-                    let producers = &producers[&(agent_id.clone(), commodity_id.clone(), year)];
-                    ensure!(
-                        producers.iter().any(|producer| producer.id == process.id),
-                        "Process '{}' does not produce commodity '{commodity_id}' in year {year} \
-                        in any of the valid regions for agent '{agent_id}'",
-                        &process.id
-                    );
-                }
+                    // Check that the specified process is a possibility for all specified regions
+                    // and years
+                    for (region_id, year) in regions_and_years.clone() {
+                        let producers =
+                            &producers[&(commodity_id.clone(), region_id.clone(), year)];
+                        ensure!(
+                            producers.iter().any(|producer| producer.id == process.id),
+                            "Process '{}' does not produce commodity '{commodity_id}' in region \
+                            '{region_id}' in year {year}",
+                            &process.id
+                        );
+                    }
 
-                Ok(process.clone())
-            })
-            .try_collect()?);
+                    Ok(process.clone())
+                })
+                .try_collect()?,
+        );
 
-        for &year in years {
-            f(commodity_id.clone(), year, search_space.clone())?;
+        for (region_id, year) in regions_and_years {
+            f(
+                commodity_id.clone(),
+                region_id.clone(),
+                year,
+                search_space.clone(),
+            )?;
         }
     }
 
@@ -204,35 +220,40 @@ fn fill_missing_search_space_entries(
     assert!(!agent.commodity_portions.is_empty());
 
     for (commodity_id, year) in agent.commodity_portions.keys() {
-        let key = (commodity_id.clone(), *year);
-        search_space
-            .entry(key)
-            .or_insert_with(|| producers[&(agent.id.clone(), commodity_id.clone(), *year)].clone());
+        for region_id in &agent.regions {
+            let key = (commodity_id.clone(), region_id.clone(), *year);
+            search_space
+                .entry(key.clone())
+                .or_insert_with(|| producers[&key].clone());
+        }
     }
 }
 
-/// Get a map of all the producers for each agent, for each commodity and year combination
+/// Get a map of all the producers for each commodity, region and year combination
 fn get_producers_map(agents: &AgentMap, processes: &ProcessMap) -> ProducersMap {
-    let mut map = HashMap::new();
-    for (agent_id, agent) in agents {
+    // First, work out every combination of commodity/region/year we care about and populate map
+    // with empty entries
+    let mut map = ProducersMap::new();
+    for agent in agents.values() {
         for (commodity_id, year) in agent.commodity_portions.keys() {
-            let producers = processes
-                .values()
-                .filter(move |process| {
-                    process.active_for_year(*year)
-                        && process.primary_output.as_ref() == Some(commodity_id)
-                        && !process.regions.is_disjoint(&agent.regions)
-                })
-                .cloned()
-                .collect_vec();
-
-            try_insert(
-                &mut map,
-                &(agent_id.clone(), commodity_id.clone(), *year),
-                Rc::new(producers),
-            )
-            .expect("Unexpected duplicate element");
+            for region_id in &agent.regions {
+                map.entry((commodity_id.clone(), region_id.clone(), *year))
+                    .or_default();
+            }
         }
+    }
+
+    // Now go through map and fill up the Vecs with the relevant processes
+    for ((commodity_id, region_id, year), vec) in &mut map {
+        let producers = processes
+            .values()
+            .filter(move |process| {
+                process.active_for_year(*year)
+                    && process.primary_output.as_ref() == Some(commodity_id)
+                    && process.regions.contains(region_id)
+            })
+            .cloned();
+        Rc::get_mut(vec).unwrap().extend(producers);
     }
 
     map
@@ -242,14 +263,17 @@ fn get_producers_map(agents: &AgentMap, processes: &ProcessMap) -> ProducersMap 
 mod tests {
     use super::*;
     use crate::{
+        agent::{AgentCommodityPortionsMap, AgentObjectiveMap, DecisionRule},
         fixture::{
             agent_id, assert_error, assert_patched_runs_ok_simple,
-            assert_validate_fails_with_simple, commodity_id, process, processes,
+            assert_validate_fails_with_simple, commodity_id, process, processes, region_id,
         },
         patch::FilePatch,
     };
     use indexmap::indexmap;
+    use map_macro::hash_map;
     use rstest::{fixture, rstest};
+    use std::iter;
 
     #[fixture]
     fn process1(process: Process) -> Rc<Process> {
@@ -264,72 +288,54 @@ mod tests {
         })
     }
 
+    #[fixture]
+    fn agent(agent_id: AgentID, region_id: RegionID) -> Agent {
+        Agent {
+            id: agent_id,
+            description: String::new(),
+            commodity_portions: AgentCommodityPortionsMap::new(),
+            search_space: AgentSearchSpaceMap::new(),
+            decision_rule: DecisionRule::Single,
+            regions: iter::once(region_id).collect(),
+            objectives: AgentObjectiveMap::new(),
+        }
+    }
+
     #[rstest]
-    fn empty_search_space_returns_error(agent_id: AgentID, commodity_id: CommodityID) {
+    fn empty_search_space_returns_error(agent: Agent, commodity_id: CommodityID) {
         let result = for_each_year_in_search_space(
             "",
-            &agent_id,
+            &agent,
             &commodity_id,
             &[2020],
             &ProcessMap::new(),
             &ProducersMap::new(),
-            |_, _, _| Ok(()),
+            |_, _, _, _| Ok(()),
         );
         assert_error!(result, "No processes provided");
     }
 
     #[rstest]
-    #[case("all")]
-    #[case("ALL")]
-    #[case("All")]
-    fn all_is_case_insensitive(
-        #[case] search_space: &str,
-        agent_id: AgentID,
-        commodity_id: CommodityID,
-        process: Process,
-    ) {
-        let mut producers = ProducersMap::new();
-        producers.insert(
-            (agent_id.clone(), commodity_id.clone(), 2020),
-            Rc::new(vec![Rc::new(process)]),
-        );
-        let result = for_each_year_in_search_space(
-            search_space,
-            &agent_id,
-            &commodity_id,
-            &[2020],
-            &ProcessMap::new(),
-            &producers,
-            |_, _, _| Ok(()),
-        );
-        result.unwrap();
-    }
-
-    #[rstest]
     fn all_calls_f_for_each_year(
-        agent_id: AgentID,
+        agent: Agent,
         commodity_id: CommodityID,
+        region_id: RegionID,
         process1: Rc<Process>,
         process2: Rc<Process>,
     ) {
-        let mut producers = ProducersMap::new();
-        producers.insert(
-            (agent_id.clone(), commodity_id.clone(), 2020),
-            Rc::new(vec![process1.clone()]),
-        );
-        producers.insert(
-            (agent_id.clone(), commodity_id.clone(), 2030),
-            Rc::new(vec![process2.clone()]),
-        );
+        let producers = hash_map! {
+            (commodity_id.clone(), region_id.clone(), 2020) => Rc::new(vec![process1.clone()]),
+            (commodity_id.clone(), region_id.clone(), 2030) => Rc::new(vec![process2.clone()])
+        };
         let mut calls: Vec<(u32, Rc<Vec<Rc<Process>>>)> = Vec::new();
         for_each_year_in_search_space(
             "all",
-            &agent_id,
+            &agent,
             &commodity_id,
             &[2020, 2030],
             &ProcessMap::new(),
             &producers,
-            |_, year, search_space| {
+            |_, _, year, search_space| {
                 calls.push((year, search_space));
                 Ok(())
             },
@@ -346,29 +352,26 @@ mod tests {
 
     #[rstest]
     fn specific_process_calls_f_for_each_year(
-        agent_id: AgentID,
+        agent: Agent,
         commodity_id: CommodityID,
+        region_id: RegionID,
         processes: ProcessMap,
     ) {
         let process = processes.values().next().unwrap().clone();
-        let mut producers = ProducersMap::new();
-        producers.insert(
-            (agent_id.clone(), commodity_id.clone(), 2020),
-            Rc::new(vec![process.clone()]),
-        );
-        producers.insert(
-            (agent_id.clone(), commodity_id.clone(), 2030),
-            Rc::new(vec![process.clone()]),
-        );
+        let value = Rc::new(vec![process.clone()]);
+        let producers = hash_map! {
+            (commodity_id.clone(), region_id.clone(), 2020) => value.clone(),
+            (commodity_id.clone(), region_id.clone(), 2030) => value
+        };
         let mut calls: Vec<(u32, Rc<Vec<Rc<Process>>>)> = Vec::new();
         for_each_year_in_search_space(
             "process1",
-            &agent_id,
+            &agent,
             &commodity_id,
             &[2020, 2030],
             &processes,
             &producers,
-            |_, year, search_space| {
+            |_, _, year, search_space| {
                 calls.push((year, search_space));
                 Ok(())
             },
@@ -385,16 +388,15 @@ mod tests {
 
     #[rstest]
     fn multiple_process_ids_calls_f_with_all_processes(
-        agent_id: AgentID,
+        agent: Agent,
         commodity_id: CommodityID,
+        region_id: RegionID,
         process1: Rc<Process>,
         process2: Rc<Process>,
     ) {
-        let mut producers = ProducersMap::new();
-        producers.insert(
-            (agent_id.clone(), commodity_id.clone(), 2020),
-            Rc::new(vec![process1.clone(), process2.clone()]),
-        );
+        let producers = hash_map! {
+            (commodity_id.clone(), region_id.clone(), 2020) => Rc::new(vec![process1.clone(), process2.clone()])
+        };
         let processes: ProcessMap = indexmap! {
             process1.id.clone() => process1.clone(),
             process2.id.clone() => process2.clone(),
@@ -402,12 +404,12 @@ mod tests {
         let mut calls: Vec<(u32, Rc<Vec<Rc<Process>>>)> = Vec::new();
         for_each_year_in_search_space(
             "process1;process2",
-            &agent_id,
+            &agent,
             &commodity_id,
             &[2020],
             &processes,
             &producers,
-            |_, year, search_space| {
+            |_, _, year, search_space| {
                 calls.push((year, search_space));
                 Ok(())
             },
@@ -540,8 +542,7 @@ mod tests {
                     "A0_GEX,GASPRD,all,GASPRC",
                 ])
             ],
-            "Process 'GASPRC' does not produce commodity 'GASPRD' in year 2020 \
-            in any of the valid regions for agent 'A0_GEX'"
+            "Process 'GASPRC' does not produce commodity 'GASPRD' in region 'GBR' in year 2020"
         );
     }
 }

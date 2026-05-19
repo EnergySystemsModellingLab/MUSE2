@@ -19,7 +19,7 @@ pub type AgentMap = IndexMap<AgentID, Agent>;
 pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
 
 /// A map for the agent's search space, keyed by commodity and year
-pub type AgentSearchSpaceMap = HashMap<(CommodityID, u32), Rc<Vec<Rc<Process>>>>;
+pub type AgentSearchSpaceMap = HashMap<(CommodityID, RegionID, u32), Rc<Vec<Rc<Process>>>>;
 
 /// A map of objectives for an agent, keyed by year.
 ///
@@ -54,16 +54,13 @@ impl Agent {
     ///
     /// If the agent does not operate in the given region or is not responsible for the given
     /// commodity in the given year.
-    pub fn iter_search_space<'a>(
-        &'a self,
-        region_id: &'a RegionID,
-        commodity_id: &'a CommodityID,
+    pub fn iter_search_space(
+        &self,
+        region_id: &RegionID,
+        commodity_id: &CommodityID,
         year: u32,
-    ) -> impl Iterator<Item = &'a Rc<Process>> + use<'a> {
-        assert!(self.regions.contains(region_id));
-        self.search_space[&(commodity_id.clone(), year)]
-            .iter()
-            .filter(move |process| process.regions.contains(region_id))
+    ) -> impl Iterator<Item = &Rc<Process>> {
+        self.search_space[&(commodity_id.clone(), region_id.clone(), year)].iter()
     }
 }
 
