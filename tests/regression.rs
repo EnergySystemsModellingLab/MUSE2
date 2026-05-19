@@ -2,7 +2,9 @@
 use anyhow::Result;
 use float_cmp::approx_eq;
 use itertools::Itertools;
+use similar::{ChangeTag, TextDiff};
 use std::env;
+use std::fmt::Write as _;
 use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -95,43 +97,28 @@ fn compare_lines(
     let lines1 = read_lines(&output_dir1.join(file_name));
     let lines2 = read_lines(&output_dir2.join(file_name));
 
-    // Check for different number of lines
-    if lines1.len() != lines2.len() {
-        errors.push(format!(
-            "{file_name}: Different number of lines: {} vs {}",
-            lines1.len(),
-            lines2.len()
-        ));
+    // check number of lines equal
+    let mut has_mismatch = lines1.len() != lines2.len();
+
+    // check each line is the same within numerical tolerance
+    if !has_mismatch {
+        has_mismatch = lines1
+            .iter()
+            .zip(&lines2)
+            .any(|(line1, line2)| !compare_line(line1, line2));
     }
 
-    // Compare each line
-    for (idx, (line1, line2)) in lines1.into_iter().zip(lines2).enumerate() {
-        let line_num = idx + 1; // (1-based) line number
-        if !compare_line(line_num, &line1, &line2, file_name, errors) {
-            errors.push(format!(
-                "{file_name}: line {line_num}:\n    + \"{line1}\"\n    - \"{line2}\""
-            ));
-        }
+    if has_mismatch {
+        let diff = render_diff(&lines1, &lines2);
+        errors.push(format!("{file_name}: output differs\n{diff}"));
     }
 }
 
-fn compare_line(
-    num: usize,
-    line1: &str,
-    line2: &str,
-    file_name: &str,
-    errors: &mut Vec<String>,
-) -> bool {
+fn compare_line(line1: &str, line2: &str) -> bool {
     let fields1 = line1.split(',').collect_vec();
     let fields2 = line2.split(',').collect_vec();
     if fields1.len() != fields2.len() {
-        errors.push(format!(
-            "{}: line {}: Different number of fields: {} vs {}",
-            file_name,
-            num,
-            fields1.len(),
-            fields2.len()
-        ));
+        return false;
     }
 
     // Check every field matches
@@ -139,6 +126,38 @@ fn compare_line(
         // First try to compare fields as floating-point values, falling back on string comparison
         try_compare_floats(f1, f2).unwrap_or_else(|| f1 == f2)
     })
+}
+
+/// Given two lists of lines which don't match, render a diff showing
+/// which lines were added/removed, with line numbers from the original files.
+fn render_diff(lines1: &[String], lines2: &[String]) -> String {
+    let text1 = lines1.join("\n");
+    let text2 = lines2.join("\n");
+    let diff = TextDiff::from_lines(&text1, &text2);
+
+    let mut out = String::new();
+    let mut line_num1 = 1;
+    let mut line_num2 = 1;
+    for change in diff.iter_all_changes() {
+        let line = change.to_string();
+        let line = line.trim_end_matches('\n');
+        match change.tag() {
+            ChangeTag::Delete => {
+                let _ = writeln!(out, "-L{line_num1}: {line}");
+                line_num1 += 1;
+            }
+            ChangeTag::Insert => {
+                let _ = writeln!(out, "+L{line_num2}: {line}");
+                line_num2 += 1;
+            }
+            ChangeTag::Equal => {
+                line_num1 += 1;
+                line_num2 += 1;
+            }
+        }
+    }
+
+    out
 }
 
 /// Parse a string into an `f64`, returning `None` if parsing fails or value is infinite/NaN
