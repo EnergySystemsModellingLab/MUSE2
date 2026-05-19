@@ -25,5 +25,5 @@ fields:
     type: string
     description: The processes in which this agent will invest
     notes: |
-      One or more process IDs separated by semicolons. If this field is empty or `all`, all
-      processes will be considered.
+      One or more process IDs separated by semicolons or `all`, meaning all processes
+      producing the relevant commodity in the given year in a relevant region.
