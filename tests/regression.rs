@@ -1,5 +1,6 @@
 //! Common code for running regression tests.
 use anyhow::Result;
+use colored::Colorize;
 use float_cmp::approx_eq;
 use itertools::Itertools;
 use ordered_float::NotNan;
@@ -147,12 +148,20 @@ fn render_diff(diff_ops: &[DiffOp], lines1: &[String], lines2: &[String]) -> Str
             DiffTag::Equal => {}
             DiffTag::Delete => {
                 for old_idx in old_range {
-                    let _ = writeln!(out, "-L{}: {}", old_idx + 1, lines1[old_idx]);
+                    let _ = writeln!(
+                        out,
+                        "{}",
+                        format!("-L{}: {}", old_idx + 1, lines1[old_idx]).red()
+                    );
                 }
             }
             DiffTag::Insert => {
                 for new_idx in new_range {
-                    let _ = writeln!(out, "+L{}: {}", new_idx + 1, lines2[new_idx]);
+                    let _ = writeln!(
+                        out,
+                        "{}",
+                        format!("+L{}: {}", new_idx + 1, lines2[new_idx]).green()
+                    );
                 }
             }
             DiffTag::Replace => {
@@ -164,8 +173,16 @@ fn render_diff(diff_ops: &[DiffOp], lines1: &[String], lines2: &[String]) -> Str
                     let old_idx = old_start + idx;
                     let new_idx = new_start + idx;
                     if !compare_line(&lines1[old_idx], &lines2[new_idx]) {
-                        let _ = writeln!(out, "-L{}: {}", old_idx + 1, lines1[old_idx]);
-                        let _ = writeln!(out, "+L{}: {}", new_idx + 1, lines2[new_idx]);
+                        let _ = writeln!(
+                            out,
+                            "{}",
+                            format!("-L{}: {}", old_idx + 1, lines1[old_idx]).red()
+                        );
+                        let _ = writeln!(
+                            out,
+                            "{}",
+                            format!("+L{}: {}", new_idx + 1, lines2[new_idx]).green()
+                        );
                     }
                 }
 
@@ -175,7 +192,7 @@ fn render_diff(diff_ops: &[DiffOp], lines1: &[String], lines2: &[String]) -> Str
                     .take(old_range.end)
                     .skip(old_start + paired_len)
                 {
-                    let _ = writeln!(out, "-L{}: {}", old_idx + 1, line);
+                    let _ = writeln!(out, "{}", format!("-L{}: {}", old_idx + 1, line).red());
                 }
                 for (new_idx, line) in lines2
                     .iter()
@@ -183,7 +200,7 @@ fn render_diff(diff_ops: &[DiffOp], lines1: &[String], lines2: &[String]) -> Str
                     .take(new_range.end)
                     .skip(new_start + paired_len)
                 {
-                    let _ = writeln!(out, "+L{}: {}", new_idx + 1, line);
+                    let _ = writeln!(out, "{}", format!("+L{}: {}", new_idx + 1, line).green());
                 }
             }
         }
