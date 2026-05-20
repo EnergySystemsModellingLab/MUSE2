@@ -151,7 +151,18 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
                 output_path.display()
             )
         })?;
-    copy_input_files(model_path, output_path)?;
+
+    let model_path = model_path
+        .canonicalize()
+        .context("Failed to resolve model path.")?;
+    let model_name = model_path
+        .file_name()
+        .context("Model cannot be the root directory.")?
+        .to_str()
+        .context("Invalid chars in model directory name")?;
+
+    copy_input_files(&model_path, output_path, model_name)
+        .context("Failed to copy input files to output directory.")?;
 
     // Initialise program logger
     log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
@@ -159,7 +170,7 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
 
     // Load the model to run
-    let model = load_model(model_path).context("Failed to load model.")?;
+    let model = load_model(&model_path).context("Failed to load model.")?;
     info!("Loaded model from {}", model_path.display());
     info!("Output folder: {}", output_path.display());
 

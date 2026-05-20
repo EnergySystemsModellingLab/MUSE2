@@ -118,15 +118,11 @@ pub fn create_output_directory(output_dir: &Path, allow_overwrite: bool) -> Resu
 }
 
 /// Copy input files to output directory
-pub fn copy_input_files(model_dir: &Path, output_dir: &Path) -> Result<()> {
-
+pub fn copy_input_files(model_dir: &Path, output_dir: &Path, model_name: &str) -> Result<()> {
     // Get the model name from the dir path.
-    let model_name = model_dir
-        .file_name()
-        .context("Model cannot be in root folder")?
-        .to_str()
-        .context("Invalid chars in model dir name")?;
-    let input_copy_dir = output_dir.join("input").join(model_name);
+    let mut input_copy_dir = output_dir.to_path_buf();
+    input_copy_dir.extend(["input", model_name]);
+
     fs::create_dir_all(&input_copy_dir).context("Could not create input copy directory")?;
 
     for entry in fs::read_dir(model_dir)? {
