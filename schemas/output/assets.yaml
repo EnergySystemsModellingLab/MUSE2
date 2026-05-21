@@ -14,9 +14,7 @@ fields:
     type: string
     description: The group ID number of this asset, if any
     notes: |
-      When an asset has been divided into child assets, a single row is emitted for the whole group
-      with this field filled and `asset_id` empty. For non-divisible assets, this field will be
-      empty.
+      Numerical identifier used for divisible assets.
   - name: process_id
     type: string
     description: The ID of this asset's associated process

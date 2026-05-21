@@ -1,5 +1,5 @@
 $schema: https://specs.frictionlessdata.io/schemas/table-schema.json
-description: Capacity of each asset or group at each milestone year during the simulation.
+description: Capacity of each asset at each milestone year during the simulation.
 
 fields:
   - name: asset_id
@@ -23,3 +23,8 @@ fields:
     notes: |
       For divisible assets, this is the total capacity across all active child assets
       (i.e. unit size multiplied by the number of active units).
+  - name: num_units
+    type: integer
+    description: The number of active units making up the asset in this year
+    notes: |
+      For non-divisible assets, this is always blank.
