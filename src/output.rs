@@ -164,6 +164,7 @@ struct AssetCapacityRow {
     group_id: Option<AssetGroupID>,
     year: u32,
     capacity: Capacity,
+    num_units: Option<u32>,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.
@@ -647,6 +648,7 @@ impl DataWriter {
                         group_id: Some(group_id),
                         year,
                         capacity: parent.total_capacity(),
+                        num_units: parent.capacity().n_units(),
                     };
                     self.asset_capacities_writer.serialize(row)?;
                 }
@@ -656,6 +658,7 @@ impl DataWriter {
                     group_id: None,
                     year,
                     capacity: asset.total_capacity(),
+                    num_units: None,
                 };
                 self.asset_capacities_writer.serialize(row)?;
             }
@@ -780,6 +783,7 @@ mod tests {
             group_id: None,
             year: milestone_year,
             capacity: asset.total_capacity(),
+            num_units: None,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
