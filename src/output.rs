@@ -14,7 +14,6 @@ use crate::units::{
 use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -130,7 +129,6 @@ struct AssetRow {
     region_id: RegionID,
     agent_id: AgentID,
     commission_year: u32,
-    decommission_year: Option<u32>,
 }
 
 impl AssetRow {
@@ -143,7 +141,6 @@ impl AssetRow {
             region_id: asset.region_id().clone(),
             agent_id: asset.agent_id().unwrap().clone(),
             commission_year: asset.commission_year(),
-            decommission_year: asset.decommission_year(),
         }
     }
 
@@ -156,7 +153,6 @@ impl AssetRow {
             region_id: parent.region_id().clone(),
             agent_id: parent.agent_id().unwrap().clone(),
             commission_year: parent.commission_year(),
-            decommission_year: None,
         }
     }
 }
@@ -534,7 +530,7 @@ impl DebugDataWriter {
 
 /// An object for writing commodity prices to file
 pub struct DataWriter {
-    assets_path: PathBuf,
+    assets_writer: csv::Writer<File>,
     asset_capacities_writer: csv::Writer<File>,
     flows_writer: csv::Writer<File>,
     prices_writer: csv::Writer<File>,
@@ -565,7 +561,7 @@ impl DataWriter {
         };
 
         Ok(Self {
-            assets_path: output_path.join(ASSETS_FILE_NAME),
+            assets_writer: new_writer(ASSETS_FILE_NAME)?,
             asset_capacities_writer: new_writer(ASSET_CAPACITIES_FILE_NAME)?,
             flows_writer: new_writer(COMMODITY_FLOWS_FILE_NAME)?,
             prices_writer: new_writer(COMMODITY_PRICES_FILE_NAME)?,
@@ -608,36 +604,27 @@ impl DataWriter {
         Ok(())
     }
 
-    /// Write asset definitions to a CSV file.
+    /// Append newly commissioned asset definitions to the assets CSV file.
     ///
-    /// The whole file is written at once and is overwritten with subsequent invocations. This is
-    /// done so that partial results will be written in the case of errors and so that the user can
-    /// see the results while the simulation is still running.
-    ///
-    /// The file is sorted by asset/group ID. For divisible asset groups, a single row is emitted
-    /// per group (using the parent asset's metadata).
-    ///
-    /// # Panics
-    ///
-    /// Panics if any of the assets has not yet been commissioned (decommissioned assets are fine).
+    /// For divisible asset groups, a single row is emitted per group (using the parent asset's
+    /// metadata).
     pub fn write_assets<'a, I>(&mut self, assets: I) -> Result<()>
     where
         I: Iterator<Item = &'a AssetRef>,
     {
-        let mut writer = csv::Writer::from_path(&self.assets_path)?;
         let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
-        for asset in assets.sorted() {
+        for asset in assets {
             if let Some(parent) = asset.parent() {
                 // Active child of a group: emit one row for the group (first child wins)
                 let group_id = asset.group_id().unwrap();
                 if seen_group_ids.insert(group_id) {
-                    writer.serialize(AssetRow::from_parent(parent))?;
+                    self.assets_writer
+                        .serialize(AssetRow::from_parent(parent))?;
                 }
             } else {
-                writer.serialize(AssetRow::new(asset))?;
+                self.assets_writer.serialize(AssetRow::new(asset))?;
             }
         }
-        writer.flush()?;
 
         Ok(())
     }
@@ -711,6 +698,7 @@ impl DataWriter {
 
     /// Flush the underlying streams
     pub fn flush(&mut self) -> Result<()> {
+        self.assets_writer.flush()?;
         self.asset_capacities_writer.flush()?;
         self.flows_writer.flush()?;
         self.prices_writer.flush()?;

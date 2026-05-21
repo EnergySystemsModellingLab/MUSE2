@@ -27,8 +27,11 @@ impl AssetPool {
         &self.assets
     }
 
-    /// Commission new assets for the specified milestone year from the input data
-    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) {
+    /// Commission new assets for the specified milestone year from the input data.
+    ///
+    /// Returns the newly commissioned assets (children, for divisible assets).
+    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) -> Vec<AssetRef> {
+        let start = self.assets.len();
         let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
 
         for asset in to_commission {
@@ -46,6 +49,8 @@ impl AssetPool {
 
             self.commission(asset, "user input");
         }
+
+        self.assets[start..].to_vec()
     }
 
     /// Commission the specified asset or, if divisible, its children
@@ -165,11 +170,15 @@ impl AssetPool {
         std::mem::take(&mut self.assets)
     }
 
-    /// Extend the active pool with Commissioned or Selected assets
-    pub fn extend<I>(&mut self, assets: I)
+    /// Extend the active pool with Commissioned or Selected assets.
+    ///
+    /// Returns the newly commissioned assets (those that were in `Selected` state on entry).
+    pub fn extend<I>(&mut self, assets: I) -> Vec<AssetRef>
     where
         I: IntoIterator<Item = AssetRef>,
     {
+        let first_new_id = self.next_id;
+
         // Check all assets are either Commissioned or Selected, and, if the latter,
         // then commission them
         for mut asset in assets {
@@ -194,6 +203,14 @@ impl AssetPool {
 
         // Sanity check: all assets should be unique
         debug_assert_eq!(self.assets.iter().unique().count(), self.assets.len());
+
+        // Newly commissioned assets have IDs >= first_new_id. Since assets are sorted by ID,
+        // they are at the tail of the slice.
+        let new_start = self.assets.partition_point(|a| match &a.state {
+            AssetState::Commissioned { id, .. } => id.0 < first_new_id,
+            _ => panic!("Active pool should only contain commissioned assets"),
+        });
+        self.assets[new_start..].to_vec()
     }
 }
 

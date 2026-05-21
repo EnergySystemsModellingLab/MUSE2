@@ -37,10 +37,10 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     info!("Milestone year: {year}");
 
     // Commission assets for base year
-    asset_pool.commission_new(year, &mut user_assets);
+    let new_assets = asset_pool.commission_new(year, &mut user_assets);
 
     // Write assets to file
-    writer.write_assets(asset_pool.iter())?;
+    writer.write_assets(new_assets.iter())?;
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
@@ -67,7 +67,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         asset_pool.decommission_old(year, &mut decommissioned);
 
         // Commission user-defined assets for this year
-        asset_pool.commission_new(year, &mut user_assets);
+        let new_user_assets = asset_pool.commission_new(year, &mut user_assets);
 
         // Take all the active assets as a list of existing assets
         let existing_assets = asset_pool.take();
@@ -119,8 +119,8 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             }
         };
 
-        // Add selected_assets to the active pool
-        asset_pool.extend(selected_assets);
+        // Add selected_assets to the active pool, receiving the newly commissioned ones
+        let newly_commissioned = asset_pool.extend(selected_assets);
 
         // Decommission unused assets
         asset_pool.mothball_unretained(existing_assets, year);
@@ -130,8 +130,8 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             &mut decommissioned,
         );
 
-        // Write assets
-        writer.write_assets(decommissioned.iter().chain(asset_pool.iter()))?;
+        // Write newly commissioned assets
+        writer.write_assets(new_user_assets.iter().chain(newly_commissioned.iter()))?;
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();
