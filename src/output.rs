@@ -529,13 +529,13 @@ impl DebugDataWriter {
     }
 }
 
-/// An object for writing commodity prices to file
+/// An object for writing output data to file
 pub struct DataWriter {
-    assets_writer: csv::Writer<File>,
-    asset_capacities_writer: csv::Writer<File>,
-    flows_writer: csv::Writer<File>,
-    prices_writer: csv::Writer<File>,
-    debug_writer: Option<DebugDataWriter>,
+    assets: csv::Writer<File>,
+    asset_capacities: csv::Writer<File>,
+    flows: csv::Writer<File>,
+    prices: csv::Writer<File>,
+    debug: Option<DebugDataWriter>,
 }
 
 impl DataWriter {
@@ -562,11 +562,11 @@ impl DataWriter {
         };
 
         Ok(Self {
-            assets_writer: new_writer(ASSETS_FILE_NAME)?,
-            asset_capacities_writer: new_writer(ASSET_CAPACITIES_FILE_NAME)?,
-            flows_writer: new_writer(COMMODITY_FLOWS_FILE_NAME)?,
-            prices_writer: new_writer(COMMODITY_PRICES_FILE_NAME)?,
-            debug_writer,
+            assets: new_writer(ASSETS_FILE_NAME)?,
+            asset_capacities: new_writer(ASSET_CAPACITIES_FILE_NAME)?,
+            flows: new_writer(COMMODITY_FLOWS_FILE_NAME)?,
+            prices: new_writer(COMMODITY_PRICES_FILE_NAME)?,
+            debug: debug_writer,
         })
     }
 
@@ -577,7 +577,7 @@ impl DataWriter {
         run_description: &str,
         solution: &Solution,
     ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.write_dispatch_debug_info(milestone_year, run_description, solution)?;
         }
 
@@ -592,7 +592,7 @@ impl DataWriter {
         appraisal_results: &[AppraisalOutput],
         demand: &IndexMap<TimeSliceID, Flow>,
     ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
             wtr.write_appraisal_time_slice_results(
                 milestone_year,
@@ -619,11 +619,10 @@ impl DataWriter {
                 // Active child of a group: emit one row for the group (first child wins)
                 let group_id = asset.group_id().unwrap();
                 if seen_group_ids.insert(group_id) {
-                    self.assets_writer
-                        .serialize(AssetRow::from_parent(parent))?;
+                    self.assets.serialize(AssetRow::from_parent(parent))?;
                 }
             } else {
-                self.assets_writer.serialize(AssetRow::new(asset))?;
+                self.assets.serialize(AssetRow::new(asset))?;
             }
         }
 
@@ -650,7 +649,7 @@ impl DataWriter {
                         capacity: parent.total_capacity(),
                         num_units: parent.capacity().n_units(),
                     };
-                    self.asset_capacities_writer.serialize(row)?;
+                    self.asset_capacities.serialize(row)?;
                 }
             } else {
                 let row = AssetCapacityRow {
@@ -660,7 +659,7 @@ impl DataWriter {
                     capacity: asset.total_capacity(),
                     num_units: None,
                 };
-                self.asset_capacities_writer.serialize(row)?;
+                self.asset_capacities.serialize(row)?;
             }
         }
 
@@ -677,7 +676,7 @@ impl DataWriter {
                 time_slice: time_slice.clone(),
                 flow: *flow,
             };
-            self.flows_writer.serialize(row)?;
+            self.flows.serialize(row)?;
         }
 
         Ok(())
@@ -693,7 +692,7 @@ impl DataWriter {
                 time_slice: time_slice.clone(),
                 price,
             };
-            self.prices_writer.serialize(row)?;
+            self.prices.serialize(row)?;
         }
 
         Ok(())
@@ -701,11 +700,11 @@ impl DataWriter {
 
     /// Flush the underlying streams
     pub fn flush(&mut self) -> Result<()> {
-        self.assets_writer.flush()?;
-        self.asset_capacities_writer.flush()?;
-        self.flows_writer.flush()?;
-        self.prices_writer.flush()?;
-        if let Some(wtr) = &mut self.debug_writer {
+        self.assets.flush()?;
+        self.asset_capacities.flush()?;
+        self.flows.flush()?;
+        self.prices.flush()?;
+        if let Some(wtr) = &mut self.debug {
             wtr.flush()?;
         }
 
@@ -714,14 +713,14 @@ impl DataWriter {
 
     /// Add context to the debug writer
     pub fn set_debug_context(&mut self, context: String) {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.context = Some(context);
         }
     }
 
     /// Clear context from the debug writer
     pub fn clear_debug_context(&mut self) {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.context = None;
         }
     }
