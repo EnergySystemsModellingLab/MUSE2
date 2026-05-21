@@ -29,9 +29,3 @@ fields:
   - name: commission_year
     type: integer
     description: The year in which the asset was commissioned
-  - name: decommission_year
-    type: integer
-    description: The year in which the asset was decommissioned
-    notes: |
-      This field will be empty if the asset was not decommissioned during the lifetime of the
-      simulation
