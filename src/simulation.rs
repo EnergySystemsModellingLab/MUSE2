@@ -57,6 +57,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
     // Write results of dispatch optimisation to file
     writer.write_flows(year, &flow_map)?;
+    writer.write_asset_capacities(year, asset_pool.iter())?;
     writer.write_prices(year, &prices)?;
 
     while let Some(year) = year_iter.next() {
@@ -147,6 +148,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;
+        writer.write_asset_capacities(year, asset_pool.iter())?;
         writer.write_prices(year, &new_prices)?;
 
         // Prices for the next year
