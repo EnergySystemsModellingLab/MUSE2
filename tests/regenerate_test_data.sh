@@ -26,6 +26,9 @@ run_example() {
     env MUSE2_LOG_LEVEL=error MUSE2_USE_DEFAULT_SETTINGS=1 \
         cargo -q run example run -o "data/$example" "$example" \
             --overwrite $@
+    env MUSE2_LOG_LEVEL=error MUSE2_USE_DEFAULT_SETTINGS=1 \
+        cargo -q run example run -o "data/${example}_debug" "$example" \
+            --overwrite --no-copy-input-files $@
 }
 
 for example in $examples; do

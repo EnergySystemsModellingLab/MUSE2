@@ -52,6 +52,8 @@ pub struct Settings {
     pub results_root: PathBuf,
     /// Results root path to save MUSE2 graph outputs. Defaults to `muse2_graphs`.
     pub graph_results_root: PathBuf,
+    /// Whether to copy input files to the output folder.
+    pub copy_input_files: bool,
 }
 
 impl Default for Settings {
@@ -62,6 +64,7 @@ impl Default for Settings {
             debug_model: false,
             results_root: PathBuf::from("muse2_results"),
             graph_results_root: PathBuf::from("muse2_graphs"),
+            copy_input_files: true,
         }
     }
 }

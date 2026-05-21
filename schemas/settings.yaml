@@ -26,6 +26,10 @@ properties:
     notes: |
       This includes raw values such as commodity balance duals, which may be useful for debugging
       the model or understanding results in more detail.
+  copy_input_files:
+    type: boolean
+    description: Whether to copy input files to the output folder
+    default: true
   results_root:
     type: string
     description: Results root path to save MUSE2 results
