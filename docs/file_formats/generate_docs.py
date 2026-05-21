@@ -32,7 +32,12 @@ INPUT_FILE_ORDER = {
     "Processes": ["processes", "process_*"],
 }
 OUTPUT_FILE_ORDER = {
-    "Main CSV output files": ["assets", "commodity_flows", "commodity_prices"]
+    "Main CSV output files": [
+        "assets",
+        "asset_capacities",
+        "commodity_flows",
+        "commodity_prices",
+    ]
 }
 
 sys.path.append(str(FILE_FORMAT_DOCS_DIR))
