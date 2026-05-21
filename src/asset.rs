@@ -69,8 +69,6 @@ pub struct AssetGroupID(u32);
 ///
 /// `Future` and `Candidate` assets can be converted to `Commissioned` assets by calling
 /// the `commission` method (or via pool operations that commission future/selected assets).
-///
-/// `Commissioned` assets can be decommissioned by calling `decommission`.
 #[derive(Clone, Debug, PartialEq, strum::Display)]
 pub enum AssetState {
     /// The asset has been commissioned
@@ -85,15 +83,6 @@ pub enum AssetState {
         ///
         /// All divided assets have a parent, which tracks the total capacity across the children.
         parent: Option<AssetRef>,
-    },
-    /// The asset has been decommissioned
-    Decommissioned {
-        /// The ID of the asset
-        id: AssetID,
-        /// The ID of the agent that owned the asset
-        agent_id: AgentID,
-        /// The year the asset was decommissioned
-        decommission_year: u32,
     },
     /// The asset is planned for commissioning in the future
     Future {
@@ -686,16 +675,6 @@ impl Asset {
         self.commission_year
     }
 
-    /// Get the decommission year for this asset
-    pub fn decommission_year(&self) -> Option<u32> {
-        match &self.state {
-            AssetState::Decommissioned {
-                decommission_year, ..
-            } => Some(*decommission_year),
-            _ => None,
-        }
-    }
-
     /// Get the region ID for this asset
     pub fn region_id(&self) -> &RegionID {
         &self.region_id
@@ -714,9 +693,7 @@ impl Asset {
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
-            AssetState::Commissioned { id, .. } | AssetState::Decommissioned { id, .. } => {
-                Some(*id)
-            }
+            AssetState::Commissioned { id, .. } => Some(*id),
             _ => None,
         }
     }
@@ -763,7 +740,6 @@ impl Asset {
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
             AssetState::Commissioned { agent_id, .. }
-            | AssetState::Decommissioned { agent_id, .. }
             | AssetState::Future { agent_id }
             | AssetState::Selected { agent_id }
             | AssetState::Parent { agent_id, .. } => Some(agent_id),
@@ -832,37 +808,6 @@ impl Asset {
 
         self.capacity
             .set(AssetCapacity::Discrete(n_units - 1, unit_size));
-    }
-
-    /// Decommission this asset
-    fn decommission(&mut self, decommission_year: u32, reason: &str) {
-        let (id, agent_id, parent) = match &self.state {
-            AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent),
-            _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
-        };
-        debug!(
-            "Decommissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
-            self.process_id(),
-            id,
-            agent_id,
-            reason
-        );
-
-        // If this is a child asset, we need to decrease the parent's capacity appropriately
-        if let Some(parent) = parent {
-            parent.decrement_unit_count();
-        }
-
-        self.state = AssetState::Decommissioned {
-            id,
-            agent_id,
-            decommission_year: decommission_year.min(self.max_decommission_year()),
-        };
     }
 
     /// Commission the asset.
@@ -1557,108 +1502,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case::commission_during_process_lifetime(2024, 2024)]
-    #[case::decommission_after_process_lifetime_ends(2026, 2025)]
-    fn asset_decommission(
-        #[case] requested_decommission_year: u32,
-        #[case] expected_decommission_year: u32,
-        process: Process,
-    ) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset = Asset::new_future(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-        )
-        .unwrap();
-        asset.commission(AssetID(1), None, "");
-        assert!(asset.is_commissioned());
-        assert_eq!(asset.id(), Some(AssetID(1)));
-
-        // Test successful decommissioning
-        asset.decommission(requested_decommission_year, "");
-        assert!(!asset.is_commissioned());
-        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
-    }
-
-    #[rstest]
-    #[case::decommission_after_predefined_max_year(2026, 2025, Some(2025))]
-    #[case::decommission_before_predefined_max_year(2024, 2024, Some(2025))]
-    #[case::decommission_during_process_lifetime_end_no_max_year(2024, 2024, None)]
-    #[case::decommission_after_process_lifetime_end_no_max_year(2026, 2025, None)]
-    fn asset_decommission_with_max_decommission_year_predefined(
-        #[case] requested_decommission_year: u32,
-        #[case] expected_decommission_year: u32,
-        #[case] max_decommission_year: Option<u32>,
-        process: Process,
-    ) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset = Asset::new_future_with_max_decommission(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-            max_decommission_year,
-        )
-        .unwrap();
-        asset.commission(AssetID(1), None, "");
-        assert!(asset.is_commissioned());
-        assert_eq!(asset.id(), Some(AssetID(1)));
-
-        // Test successful decommissioning
-        asset.decommission(requested_decommission_year, "");
-        assert!(!asset.is_commissioned());
-        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
-    }
-
-    #[rstest]
-    fn asset_decommission_divisible(asset_divisible: Asset) {
-        let asset = AssetRef::from(asset_divisible);
-        let original_capacity = asset.capacity();
-
-        // Commission children
-        let mut children = Vec::new();
-        let mut next_id = 0;
-        asset.into_for_each_child(&mut 0, |parent, mut child| {
-            child
-                .make_mut()
-                .commission(AssetID(next_id), parent.cloned(), "");
-            next_id += 1;
-            children.push(child);
-        });
-
-        let parent = children[0].parent().unwrap().clone();
-        assert_eq!(parent.capacity(), original_capacity);
-        children[0].make_mut().decommission(2020, "");
-
-        let AssetCapacity::Discrete(original_units, original_unit_size) = original_capacity else {
-            panic!("Capacity type should be discrete");
-        };
-        assert_eq!(
-            parent.capacity(),
-            AssetCapacity::Discrete(original_units - 1, original_unit_size)
-        );
-    }
-
-    #[rstest]
     #[should_panic(expected = "Assets with state Candidate cannot be commissioned")]
     fn commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
         asset.commission(AssetID(1), None, "");
-    }
-
-    #[rstest]
-    #[should_panic(expected = "Cannot decommission an asset that hasn't been commissioned")]
-    fn decommission_wrong_state(process: Process) {
-        let mut asset =
-            Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.decommission(2025, "");
     }
 
     #[test]

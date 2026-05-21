@@ -1,7 +1,7 @@
 //! Defines a data structure for representing the current active pool of assets.
 use super::{AssetID, AssetRef, AssetState};
 use itertools::Itertools;
-use log::warn;
+use log::{debug, warn};
 use std::cmp::min;
 use std::slice;
 
@@ -65,43 +65,56 @@ impl AssetPool {
     }
 
     /// Decommission old assets for the specified milestone year
-    pub fn decommission_old<E: Extend<AssetRef>>(&mut self, year: u32, decommissioned: &mut E) {
-        let to_decommission = self
-            .assets
-            .extract_if(.., move |asset| asset.max_decommission_year() <= year)
-            .map(move |mut asset| {
-                asset.make_mut().decommission(year, "end of life");
-                asset
+    pub fn decommission_old(&mut self, year: u32) {
+        self.assets
+            .extract_if(.., |asset| asset.max_decommission_year() <= year)
+            .for_each(|asset| {
+                if let AssetState::Commissioned {
+                    id,
+                    agent_id,
+                    parent,
+                    ..
+                } = &asset.state
+                {
+                    debug!(
+                        "Decommissioning '{}' asset (ID: {id}) for agent '{agent_id}' \
+                        (reason: end of life)",
+                        asset.process_id(),
+                    );
+                    if let Some(parent) = parent {
+                        parent.decrement_unit_count();
+                    }
+                }
             });
-        decommissioned.extend(to_decommission);
     }
 
     /// Decommission mothballed assets if mothballed long enough
-    pub fn decommission_mothballed<E: Extend<AssetRef>>(
-        &mut self,
-        year: u32,
-        mothball_years: u32,
-        decommissioned: &mut E,
-    ) {
-        let to_decommission = self
-            .assets
-            .extract_if(.., move |asset| {
+    pub fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
+        self.assets
+            .extract_if(.., |asset| {
                 asset
                     .get_mothballed_year()
                     .is_some_and(|myear| myear <= year - min(mothball_years, year))
             })
-            .map(move |mut asset| {
-                let decommissioned = asset.get_mothballed_year().unwrap() + mothball_years;
-                asset.make_mut().decommission(
-                    decommissioned,
-                    &format!(
-                        "The asset has not been used for the set mothball years ({mothball_years} \
-                        years)."
-                    ),
-                );
-                asset
+            .for_each(|asset| {
+                if let AssetState::Commissioned {
+                    id,
+                    agent_id,
+                    parent,
+                    ..
+                } = &asset.state
+                {
+                    debug!(
+                        "Decommissioning '{}' asset (ID: {id}) for agent '{agent_id}' \
+                        (reason: The asset has not been used for the set mothball years \
+                        ({mothball_years} years).)",
+                        asset.process_id(),
+                    );
+                    if let Some(parent) = parent {
+                        parent.decrement_unit_count();
+                    }
+                }
             });
-        decommissioned.extend(to_decommission);
     }
 
     /// Mothball the specified assets if they are no longer in the active pool and put them back
@@ -325,29 +338,20 @@ mod tests {
         asset_pool.commission_new(2020, &mut user_assets);
         assert!(user_assets.is_empty());
         assert_eq!(asset_pool.assets.len(), 2);
-        let mut decommissioned = Vec::new();
 
         // should decommission first asset (lifetime == 5)
-        asset_pool.decommission_old(2030, &mut decommissioned);
+        asset_pool.decommission_old(2030);
         assert_eq!(asset_pool.assets.len(), 1);
         assert_eq!(asset_pool.assets[0].commission_year, 2020);
-        assert_eq!(decommissioned.len(), 1);
-        assert_eq!(decommissioned[0].commission_year, 2010);
-        assert_eq!(decommissioned[0].decommission_year(), Some(2030));
 
         // nothing to decommission
-        decommissioned.clear();
-        asset_pool.decommission_old(2032, &mut decommissioned);
+        asset_pool.decommission_old(2032);
         assert_eq!(asset_pool.assets.len(), 1);
         assert_eq!(asset_pool.assets[0].commission_year, 2020);
 
         // should decommission second asset
-        decommissioned.clear();
-        asset_pool.decommission_old(2040, &mut decommissioned);
+        asset_pool.decommission_old(2040);
         assert!(asset_pool.assets.is_empty());
-        assert_eq!(decommissioned.len(), 1);
-        assert_eq!(decommissioned[0].commission_year, 2020);
-        assert_eq!(decommissioned[0].decommission_year(), Some(2040));
     }
 
     #[rstest]
@@ -628,13 +632,10 @@ mod tests {
         );
 
         // Decommission unused assets
-        let mut decommissioned = Vec::new();
-        asset_pool.decommission_mothballed(2025, mothball_years, &mut decommissioned);
+        asset_pool.decommission_mothballed(2025, mothball_years);
 
         // Only the removed asset should be decommissioned (since it's not in active pool)
         assert_eq!(asset_pool.assets.len(), 1); // Active pool unchanged
-        assert_eq!(decommissioned.len(), 1);
-        assert_eq!(decommissioned[0].decommission_year(), Some(2025));
     }
 
     #[rstest]

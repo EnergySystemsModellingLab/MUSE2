@@ -28,7 +28,6 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
     let mut user_assets = model.user_assets.clone();
     let mut asset_pool = AssetPool::new(); // active assets
-    let mut decommissioned = Vec::new();
 
     // Iterate over milestone years
     let mut year_iter = model.iter_years().peekable();
@@ -64,7 +63,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         info!("Milestone year: {year}");
 
         // Decommission assets whose lifetime has passed
-        asset_pool.decommission_old(year, &mut decommissioned);
+        asset_pool.decommission_old(year);
 
         // Commission user-defined assets for this year
         let new_user_assets = asset_pool.commission_new(year, &mut user_assets);
@@ -124,11 +123,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Decommission unused assets
         asset_pool.mothball_unretained(existing_assets, year);
-        asset_pool.decommission_mothballed(
-            year,
-            model.parameters.mothball_years,
-            &mut decommissioned,
-        );
+        asset_pool.decommission_mothballed(year, model.parameters.mothball_years);
 
         // Write newly commissioned assets
         writer.write_assets(new_user_assets.iter().chain(newly_commissioned.iter()))?;
