@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# dependencies = [
-#     "jinja2",
-# ]
-# ///
 #
 # A script to generate the versions.md file, listing links to old versions of documentation.
 

@@ -44,7 +44,7 @@ repos:
     hooks:
       - id: pretty-format-toml
         args: [--autofix, --indent, "4", --no-sort]
-        exclude: ^Cargo\.lock$
+        exclude: ^(Cargo|uv)\.lock$
       - id: pretty-format-rust
         args: [--autofix]
   - repo: https://github.com/doublify/pre-commit-rust
