@@ -1,12 +1,12 @@
 //! Code for reading process flows from a CSV file.
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
+use crate::input::parse_year_str;
 use crate::process::{
     FlowDirection, FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap,
 };
 use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
-use crate::year::parse_year_str;
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::{IndexMap, IndexSet};
 use itertools::iproduct;

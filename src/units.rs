@@ -1,15 +1,16 @@
 //! This module defines various unit types and their conversions.
-
 use float_cmp::{ApproxEq, F64Margin};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+use std::str::FromStr;
 
 /// A trait encompassing most of the functionality of unit types
 pub trait UnitType:
     fmt::Debug
     + Copy
+    + FromStr
     + PartialEq
     + PartialOrd
     + Serialize
@@ -53,6 +54,7 @@ macro_rules! base_unit_struct {
             Serialize,
             derive_more::Add,
             derive_more::Sub,
+            derive_more::FromStr,
         )]
         pub struct $name(pub f64);
 
