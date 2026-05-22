@@ -117,6 +117,25 @@ pub fn create_output_directory(output_dir: &Path, allow_overwrite: bool) -> Resu
     Ok(overwrite)
 }
 
+/// Copy input files to output directory
+pub fn copy_input_files(model_dir: &Path, output_dir: &Path, model_name: &str) -> Result<()> {
+    // Get the model name from the dir path.
+    let mut input_copy_dir = output_dir.to_path_buf();
+    input_copy_dir.extend(["input", model_name]);
+
+    fs::create_dir_all(&input_copy_dir).context("Could not create input copy directory")?;
+
+    for entry in fs::read_dir(model_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            let file_name = path.file_name().unwrap();
+            fs::copy(&path, input_copy_dir.join(file_name))?;
+        }
+    }
+    Ok(())
+}
+
 /// Represents a row in the assets output CSV file.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct AssetRow {

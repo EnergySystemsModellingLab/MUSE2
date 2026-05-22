@@ -635,7 +635,7 @@ fn get_candidate_assets<'a>(
     year: u32,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
-        .iter_possible_producers_of(region_id, &commodity.id, year)
+        .iter_search_space(region_id, &commodity.id, year)
         .map(move |process| {
             let mut asset =
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
