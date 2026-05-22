@@ -333,9 +333,9 @@ mod tests {
         // First call commissions one divisible asset and returns all of its children
         let mut user_assets = vec![asset_divisible.clone().into()];
         let first_batch = asset_pool.commission_new(year, &mut user_assets);
-
         assert_eq!(first_batch.len(), expected_children);
         assert!(first_batch.iter().all(|asset| asset.parent().is_some()));
+
         // IDs should form a contiguous sequence starting from 0
         let n = expected_children as u32;
         assert_equal(first_batch.iter().map(|a| a.id().unwrap().0), 0..n);
@@ -343,7 +343,6 @@ mod tests {
         // Second call should return only assets commissioned in this second invocation
         let mut later_assets = vec![asset_divisible.into()];
         let second_batch = asset_pool.commission_new(year + 1, &mut later_assets);
-
         assert_eq!(asset_pool.assets.len(), expected_children * 2);
         assert!(
             second_batch
