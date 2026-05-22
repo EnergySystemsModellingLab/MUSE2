@@ -324,6 +324,38 @@ mod tests {
     }
 
     #[rstest]
+    #[allow(clippy::cast_possible_truncation)]
+    fn asset_pool_commission_new_returns_only_assets_from_call(asset_divisible: Asset) {
+        let year = asset_divisible.commission_year();
+        let expected_children = expected_children_for_divisible(&asset_divisible);
+        let mut asset_pool = AssetPool::new();
+
+        // First call commissions one divisible asset and returns all of its children
+        let mut user_assets = vec![asset_divisible.clone().into()];
+        let first_batch = asset_pool.commission_new(year, &mut user_assets);
+
+        assert_eq!(first_batch.len(), expected_children);
+        assert!(first_batch.iter().all(|asset| asset.parent().is_some()));
+        // IDs should form a contiguous sequence starting from 0
+        let n = expected_children as u32;
+        assert_equal(first_batch.iter().map(|a| a.id().unwrap().0), 0..n);
+
+        // Second call should return only assets commissioned in this second invocation
+        let mut later_assets = vec![asset_divisible.into()];
+        let second_batch = asset_pool.commission_new(year + 1, &mut later_assets);
+
+        assert_eq!(asset_pool.assets.len(), expected_children * 2);
+        assert!(
+            second_batch
+                .iter()
+                .all(|asset| !first_batch.iter().any(|old| old == asset))
+        );
+
+        // IDs of the second batch continue directly on from the first
+        assert_equal(second_batch.iter().map(|a| a.id().unwrap().0), n..n * 2);
+    }
+
+    #[rstest]
     fn asset_pool_commission_already_decommissioned(asset: Asset) {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new();
@@ -464,6 +496,52 @@ mod tests {
         let expected_children = expected_children_for_divisible(&new_assets[0]);
         asset_pool.extend(new_assets);
         assert_eq!(asset_pool.assets.len(), original_count + expected_children);
+    }
+
+    #[rstest]
+    #[allow(clippy::cast_possible_truncation)]
+    fn asset_pool_extend_returns_only_newly_commissioned_assets(
+        mut user_assets: Vec<AssetRef>,
+        mut process: Process,
+    ) {
+        let mut asset_pool = AssetPool::new();
+
+        // Seed pool with already commissioned assets and take them as the existing set
+        let initial_assets = asset_pool.commission_new(2020, &mut user_assets);
+        let initial_count = initial_assets.len();
+        let existing_assets = asset_pool.take();
+
+        // Add one selected divisible asset so extend commissions multiple new children
+        process.unit_size = Some(Capacity(4.0));
+        let process_rc = Rc::new(process);
+        let selected_divisible: AssetRef = Asset::new_selected(
+            "agent_selected".into(),
+            Rc::clone(&process_rc),
+            "GBR".into(),
+            Capacity(11.0),
+            2020,
+        )
+        .unwrap()
+        .into();
+        let expected_new = expected_children_for_divisible(&selected_divisible);
+
+        // Extend with a mix of existing commissioned assets and one selected divisible asset
+        let returned = asset_pool.extend(
+            existing_assets
+                .iter()
+                .cloned()
+                .chain(iter::once(selected_divisible)),
+        );
+
+        // Returned assets should be exactly the newly commissioned children
+        assert_eq!(returned.len(), expected_new);
+        assert_eq!(asset_pool.assets.len(), initial_count + expected_new);
+        assert!(returned.iter().all(|asset| asset.parent().is_some()));
+
+        // IDs form a contiguous range immediately after the pre-existing assets
+        let start = initial_count as u32;
+        let end = (initial_count + expected_new) as u32;
+        assert_equal(returned.iter().map(|a| a.id().unwrap().0), start..end);
     }
 
     #[rstest]
