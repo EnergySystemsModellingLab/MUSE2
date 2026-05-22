@@ -628,7 +628,7 @@ impl DataWriter {
 
     /// Write commodity flows to a CSV file
     pub fn write_flows(&mut self, milestone_year: u32, flow_map: &FlowMap) -> Result<()> {
-        for ((asset, commodity_id, time_slice), flow) in flow_map {
+        for ((asset, commodity_id, _region_id, time_slice), flow) in flow_map {
             let row = CommodityFlowRow {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
@@ -720,11 +720,16 @@ mod tests {
     }
 
     #[rstest]
-    fn write_flows(assets: AssetPool, commodity_id: CommodityID, time_slice: TimeSliceID) {
+    fn write_flows(
+        assets: AssetPool,
+        commodity_id: CommodityID,
+        region_id: RegionID,
+        time_slice: TimeSliceID,
+    ) {
         let milestone_year = 2020;
         let asset = assets.iter().next().unwrap();
         let flow_map = indexmap! {
-            (asset.clone(), commodity_id.clone(), time_slice.clone()) => Flow(42.0)
+            (asset.clone(), commodity_id.clone(), region_id.clone(), time_slice.clone()) => Flow(42.0)
         };
 
         // Write a flow

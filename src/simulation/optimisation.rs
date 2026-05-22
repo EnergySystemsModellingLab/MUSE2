@@ -28,7 +28,7 @@ mod constraints;
 use constraints::{ConstraintKeys, add_model_constraints};
 
 /// A map of commodity flows calculated during the optimisation
-pub type FlowMap = IndexMap<(AssetRef, CommodityID, TimeSliceID), Flow>;
+pub type FlowMap = IndexMap<(AssetRef, CommodityID, RegionID, TimeSliceID), Flow>;
 
 /// A decision variable in the optimisation
 ///
@@ -193,7 +193,12 @@ fn create_flow_map<'a>(
     for (asset, time_slice, activity) in activity {
         let n_units = Dimensionless(asset.num_children().unwrap_or(1) as f64);
         for flow in asset.iter_flows() {
-            let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
+            let flow_key = (
+                asset.clone(),
+                flow.commodity.id.clone(),
+                asset.region_id().clone(),
+                time_slice.clone(),
+            );
             let flow_value = activity * flow.coeff / n_units;
             flows.insert(flow_key, flow_value);
         }
@@ -204,9 +209,19 @@ fn create_flow_map<'a>(
         if let Some(parent) = asset.parent() {
             for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
                 for time_slice in time_slice_info.iter_ids() {
-                    let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
+                    let flow = flows[&(
+                        parent.clone(),
+                        commodity_id.clone(),
+                        parent.region_id().clone(),
+                        time_slice.clone(),
+                    )];
                     flows.insert(
-                        (asset.clone(), commodity_id.clone(), time_slice.clone()),
+                        (
+                            asset.clone(),
+                            commodity_id.clone(),
+                            asset.region_id().clone(),
+                            time_slice.clone(),
+                        ),
                         flow,
                     );
                 }
@@ -215,7 +230,7 @@ fn create_flow_map<'a>(
     }
 
     // Remove all the parent assets
-    flows.retain(|(asset, _, _), _| !asset.is_parent());
+    flows.retain(|(asset, _, _, _), _| !asset.is_parent());
 
     flows
 }

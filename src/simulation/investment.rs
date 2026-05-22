@@ -498,13 +498,9 @@ fn flatten_preset_demands_for_year(
 /// TODO: this is a very flawed approach. The proper solution might be for agents to consider
 /// multiple commodities simultaneously, but that would require substantial work to implement.
 fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
-    for ((asset, commodity_id, time_slice), flow) in flows {
+    for ((asset, commodity_id, region_id, time_slice), flow) in flows {
         if assets.contains(asset) {
-            let key = (
-                commodity_id.clone(),
-                asset.region_id().clone(),
-                time_slice.clone(),
-            );
+            let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
 
             // Only consider input flows and output flows from the primary output commodity
             // (excluding secondary outputs)
