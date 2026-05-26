@@ -943,6 +943,7 @@ mod tests {
         let commodity_rc = Rc::new(svd_commodity);
         let process_flow = ProcessFlow {
             commodity: Rc::clone(&commodity_rc),
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(2.0), // 2 units of flow per unit of activity
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -979,6 +980,7 @@ mod tests {
         let commodity_rc = Rc::new(svd_commodity);
         let process_flow = ProcessFlow {
             commodity: Rc::clone(&commodity_rc),
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(1.0), // 1 unit of flow per unit of activity
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),

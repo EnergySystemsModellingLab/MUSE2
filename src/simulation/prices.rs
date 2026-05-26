@@ -1166,9 +1166,15 @@ mod tests {
     use std::collections::{HashMap, HashSet};
     use std::rc::Rc;
 
-    fn build_process_flow(commodity: &Commodity, coeff: f64, cost: MoneyPerFlow) -> ProcessFlow {
+    fn build_process_flow(
+        commodity: &Commodity,
+        coeff: f64,
+        cost: MoneyPerFlow,
+        region_id: &RegionID,
+    ) -> ProcessFlow {
         ProcessFlow {
             commodity: Rc::new(commodity.clone()),
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(coeff),
             kind: FlowType::Fixed,
             cost,
@@ -1307,11 +1313,20 @@ mod tests {
         let mut flows = IndexMap::new();
         flows.insert(
             a.id.clone(),
-            build_process_flow(&a, -1.0, MoneyPerFlow(0.0)),
+            build_process_flow(&a, -1.0, MoneyPerFlow(0.0), &region_id),
         );
-        flows.insert(b.id.clone(), build_process_flow(&b, 1.0, MoneyPerFlow(0.0)));
-        flows.insert(c.id.clone(), build_process_flow(&c, 2.0, MoneyPerFlow(3.0)));
-        flows.insert(d.id.clone(), build_process_flow(&d, 1.0, MoneyPerFlow(4.0)));
+        flows.insert(
+            b.id.clone(),
+            build_process_flow(&b, 1.0, MoneyPerFlow(0.0), &region_id),
+        );
+        flows.insert(
+            c.id.clone(),
+            build_process_flow(&c, 2.0, MoneyPerFlow(3.0), &region_id),
+        );
+        flows.insert(
+            d.id.clone(),
+            build_process_flow(&d, 1.0, MoneyPerFlow(4.0), &region_id),
+        );
 
         let process = build_process(
             flows,
@@ -1390,11 +1405,20 @@ mod tests {
         let mut flows = IndexMap::new();
         flows.insert(
             a.id.clone(),
-            build_process_flow(&a, -1.0, MoneyPerFlow(0.0)),
+            build_process_flow(&a, -1.0, MoneyPerFlow(0.0), &region_id),
         );
-        flows.insert(b.id.clone(), build_process_flow(&b, 1.0, MoneyPerFlow(0.0)));
-        flows.insert(c.id.clone(), build_process_flow(&c, 2.0, MoneyPerFlow(3.0)));
-        flows.insert(d.id.clone(), build_process_flow(&d, 1.0, MoneyPerFlow(4.0)));
+        flows.insert(
+            b.id.clone(),
+            build_process_flow(&b, 1.0, MoneyPerFlow(0.0), &region_id),
+        );
+        flows.insert(
+            c.id.clone(),
+            build_process_flow(&c, 2.0, MoneyPerFlow(3.0), &region_id),
+        );
+        flows.insert(
+            d.id.clone(),
+            build_process_flow(&d, 1.0, MoneyPerFlow(4.0), &region_id),
+        );
 
         let process = build_process(
             flows,

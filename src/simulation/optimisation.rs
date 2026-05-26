@@ -196,7 +196,7 @@ fn create_flow_map<'a>(
             let flow_key = (
                 asset.clone(),
                 flow.commodity.id.clone(),
-                asset.region_id().clone(),
+                flow.region_id.clone(),
                 time_slice.clone(),
             );
             let flow_value = activity * flow.coeff / n_units;
@@ -207,19 +207,19 @@ fn create_flow_map<'a>(
     // Copy flows for each child asset
     for asset in existing_assets {
         if let Some(parent) = asset.parent() {
-            for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
+            for asset_flow in asset.iter_flows() {
                 for time_slice in time_slice_info.iter_ids() {
                     let flow = flows[&(
                         parent.clone(),
-                        commodity_id.clone(),
-                        parent.region_id().clone(),
+                        asset_flow.commodity.id.clone(),
+                        asset_flow.region_id.clone(),
                         time_slice.clone(),
                     )];
                     flows.insert(
                         (
                             asset.clone(),
-                            commodity_id.clone(),
-                            asset.region_id().clone(),
+                            asset_flow.commodity.id.clone(),
+                            asset_flow.region_id.clone(),
                             time_slice.clone(),
                         ),
                         flow,

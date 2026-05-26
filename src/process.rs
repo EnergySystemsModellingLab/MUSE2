@@ -391,6 +391,8 @@ impl ActivityLimits {
 pub struct ProcessFlow {
     /// The commodity produced or consumed by this flow
     pub commodity: Rc<Commodity>,
+    /// The region in which this flow occurs
+    pub region_id: RegionID,
     /// Maximum annual commodity flow quantity relative to other commodity flows.
     ///
     /// Positive value indicates flow out and negative value indicates flow in.
@@ -674,7 +676,7 @@ mod tests {
     }
 
     #[fixture]
-    fn flow_with_cost() -> ProcessFlow {
+    fn flow_with_cost(region_id: RegionID) -> ProcessFlow {
         ProcessFlow {
             commodity: Rc::new(Commodity {
                 id: "test_commodity".into(),
@@ -687,6 +689,7 @@ mod tests {
                 demand: DemandMap::new(),
                 units: "PJ".into(),
             }),
+            region_id,
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(5.0),
@@ -696,7 +699,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost_and_levy(region_id: RegionID, time_slice: TimeSliceID) -> ProcessFlow {
         let mut levies = CommodityLevyMap::new();
-        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
+        levies.insert((region_id.clone(), 2020, time_slice), MoneyPerFlow(10.0));
 
         ProcessFlow {
             commodity: Rc::new(Commodity {
@@ -710,6 +713,7 @@ mod tests {
                 demand: DemandMap::new(),
                 units: "PJ".into(),
             }),
+            region_id,
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(5.0),
@@ -719,7 +723,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost_and_incentive(region_id: RegionID, time_slice: TimeSliceID) -> ProcessFlow {
         let mut levies = CommodityLevyMap::new();
-        levies.insert((region_id, 2020, time_slice), MoneyPerFlow(-3.0));
+        levies.insert((region_id.clone(), 2020, time_slice), MoneyPerFlow(-3.0));
 
         ProcessFlow {
             commodity: Rc::new(Commodity {
@@ -733,6 +737,7 @@ mod tests {
                 demand: DemandMap::new(),
                 units: "PJ".into(),
             }),
+            region_id,
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(5.0),
@@ -747,6 +752,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_no_levies,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -766,6 +772,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -785,6 +792,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_incentive,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -800,6 +808,7 @@ mod tests {
     fn get_levy_different_region(commodity_with_levy: Rc<Commodity>, time_slice: TimeSliceID) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -819,6 +828,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -834,6 +844,7 @@ mod tests {
     fn get_levy_different_time_slice(commodity_with_levy: Rc<Commodity>, region_id: RegionID) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -858,6 +869,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_consumption_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0), // Positive coefficient means production
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -877,6 +889,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_consumption_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(-1.0), // Negative coefficient means consumption
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -896,6 +909,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_production_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(1.0), // Positive coefficient means production
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -915,6 +929,7 @@ mod tests {
     ) {
         let flow = ProcessFlow {
             commodity: commodity_with_production_levy,
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(-1.0), // Negative coefficient means consumption
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
@@ -1004,18 +1019,21 @@ mod tests {
 
         let flow_in = ProcessFlow {
             commodity: Rc::clone(&commodity),
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(-1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let flow_out = ProcessFlow {
             commodity: Rc::clone(&commodity),
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let flow_zero = ProcessFlow {
             commodity: Rc::clone(&commodity),
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(0.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),

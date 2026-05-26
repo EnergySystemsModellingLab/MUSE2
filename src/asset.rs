@@ -440,7 +440,7 @@ impl Asset {
         // The cost for all commodity flows (including levies/incentives)
         let flows_cost = self
             .iter_flows()
-            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
+            .map(|flow| flow.get_total_cost_per_activity(&flow.region_id, year, time_slice))
             .sum();
 
         self.process_parameter.variable_operating_cost + flows_cost
@@ -504,7 +504,7 @@ impl Asset {
             .map(|flow| {
                 flow.coeff
                     * prices
-                        .get(&flow.commodity.id, &self.region_id, time_slice)
+                        .get(&flow.commodity.id, &flow.region_id, time_slice)
                         .unwrap_or(MoneyPerFlow(0.0))
             })
             .sum()
@@ -534,7 +534,7 @@ impl Asset {
         let flow_costs = self
             .iter_flows()
             .filter(excludes_sed_svd_output)
-            .map(|flow| flow.get_total_cost_per_activity(&self.region_id, year, time_slice))
+            .map(|flow| flow.get_total_cost_per_activity(&flow.region_id, year, time_slice))
             .sum();
 
         cost_of_inputs + flow_costs + self.process_parameter.variable_operating_cost
@@ -583,7 +583,7 @@ impl Asset {
         Box::new(output_flows_iter.map(move |flow| {
             // Get the costs for this specific commodity flow
             let commodity_specific_costs_per_flow =
-                flow.get_total_cost_per_flow(&self.region_id, year, time_slice);
+                flow.get_total_cost_per_flow(&flow.region_id, year, time_slice);
 
             // Add these to the generic costs to get total cost for this commodity
             let marginal_cost = generic_cost_per_flow + commodity_specific_costs_per_flow;
@@ -1293,6 +1293,7 @@ mod tests {
         let commodity_rc = Rc::new(svd_commodity);
         let process_flow = ProcessFlow {
             commodity: Rc::clone(&commodity_rc),
+            region_id: region_id.clone(),
             coeff: FlowPerActivity(-2.0), // Input
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),

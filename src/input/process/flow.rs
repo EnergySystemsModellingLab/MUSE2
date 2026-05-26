@@ -184,23 +184,22 @@ where
             .get(record.commodity_id.as_str())
             .with_context(|| format!("{} is not a valid commodity ID", &record.commodity_id))?;
 
-        // Create ProcessFlow object
-        let process_flow = ProcessFlow {
-            commodity: Rc::clone(commodity),
-            coeff: record.coeff,
-            kind: FlowType::Fixed,
-            cost: record.cost.unwrap_or(MoneyPerFlow(0.0)),
-        };
-
         // Insert flow into the map
         let region_year_map = flows_map.entry(id.clone()).or_default();
         for (year, region_id) in iproduct!(record_years, record_regions.iter()) {
+            let process_flow = ProcessFlow {
+                commodity: Rc::clone(commodity),
+                region_id: region_id.clone(),
+                coeff: record.coeff,
+                kind: FlowType::Fixed,
+                cost: record.cost.unwrap_or(MoneyPerFlow(0.0)),
+            };
             let flows_map = region_year_map
                 .entry((region_id.clone(), year))
                 .or_default();
             let existing = Rc::get_mut(flows_map)
                 .unwrap() // safe: there will only be one copy
-                .insert(commodity.id.clone(), process_flow.clone())
+                .insert(commodity.id.clone(), process_flow)
                 .is_some();
             ensure!(
                 !existing,
@@ -412,6 +411,7 @@ mod tests {
     fn flow(commodity: Rc<Commodity>, coeff: f64) -> ProcessFlow {
         ProcessFlow {
             commodity,
+            region_id: "GBR".into(),
             coeff: FlowPerActivity(coeff),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
