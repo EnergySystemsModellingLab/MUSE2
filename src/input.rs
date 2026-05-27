@@ -4,7 +4,6 @@ use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
 use crate::id::{HasID, IDLike};
 use crate::model::{Model, ModelParameters};
-use crate::region::RegionID;
 use crate::units::UnitType;
 use anyhow::{Context, Result, bail, ensure};
 use float_cmp::approx_eq;
@@ -303,14 +302,14 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
 
 /// Load commodity flow graphs for a model.
 ///
-/// Loads necessary input data and creates a graph of commodity flows for each region and year,
-/// where nodes are commodities and edges are processes.
+/// Loads necessary input data and creates a graph of commodity flows for each year,
+/// where nodes are `(commodity, region)` pairs and edges are processes.
 ///
 /// Graphs validation is NOT performed. This ensures that graphs can be generated even when
 /// validation would fail, which may be helpful for debugging.
 pub fn load_commodity_graphs<P: AsRef<Path>>(
     model_dir: P,
-) -> Result<IndexMap<(RegionID, u32), CommoditiesGraph>> {
+) -> Result<IndexMap<u32, CommoditiesGraph>> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
