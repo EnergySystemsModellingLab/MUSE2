@@ -6,8 +6,8 @@ use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
 use itertools::iproduct;
 use petgraph::Directed;
-use petgraph::dot::Dot;
-use petgraph::graph::{EdgeReference, Graph};
+use petgraph::graph::Graph;
+use petgraph::visit::EdgeRef;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -197,14 +197,58 @@ pub fn build_commodity_graphs_for_model(
         .collect()
 }
 
-/// Gets custom DOT attributes for edges in a commodity graph
-fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
-    match edge_ref.weight() {
-        // Use dashed lines for secondary flows
-        GraphEdge::Secondary(..) => "style=dashed".to_string(),
-        // Other edges use default attributes
-        _ => String::new(),
+/// Writes a commodity graph in DOT format, grouping commodity nodes into subgraph clusters
+/// by region
+fn write_dot(graph: &CommoditiesGraph, writer: &mut impl IoWrite) -> std::io::Result<()> {
+    // Partition nodes: special nodes (SOURCE/SINK/DEMAND) and commodity nodes grouped by region
+    let mut special_nodes: Vec<(usize, &GraphNode)> = Vec::new();
+    let mut region_nodes: IndexMap<&RegionID, Vec<(usize, &CommodityID)>> = IndexMap::new();
+
+    for node_idx in graph.node_indices() {
+        match graph.node_weight(node_idx).unwrap() {
+            GraphNode::Commodity(cid, region_id) => {
+                region_nodes
+                    .entry(region_id)
+                    .or_default()
+                    .push((node_idx.index(), cid));
+            }
+            node => special_nodes.push((node_idx.index(), node)),
+        }
     }
+
+    writeln!(writer, "digraph {{")?;
+    for (id, node) in &special_nodes {
+        writeln!(writer, r#"{id} [label="{node}"]"#)?;
+    }
+    for (region_id, nodes) in &region_nodes {
+        writeln!(
+            writer,
+            r#"subgraph cluster_{region_id} {{label="{region_id}""#
+        )?;
+        for (id, cid) in nodes {
+            writeln!(writer, r#"{id} [label="{cid}"]"#)?;
+        }
+        writeln!(writer, "}}")?;
+    }
+    for edge_ref in graph.edge_references() {
+        let src = edge_ref.source().index();
+        let dst = edge_ref.target().index();
+        match edge_ref.weight() {
+            GraphEdge::Primary(process_id, _) => {
+                writeln!(writer, r#"{src} -> {dst} [label="{process_id}"]"#)?;
+            }
+            GraphEdge::Secondary(process_id, _) => {
+                writeln!(
+                    writer,
+                    r#"{src} -> {dst} [label="{process_id}" style=dashed]"#
+                )?;
+            }
+            GraphEdge::Demand => {
+                writeln!(writer, r#"{src} -> {dst} [label="DEMAND"]"#)?;
+            }
+        }
+    }
+    writeln!(writer, "}}")
 }
 
 /// Saves commodity graphs to file
@@ -215,14 +259,8 @@ pub fn save_commodity_graphs_for_model(
     output_path: &Path,
 ) -> Result<()> {
     for (year, graph) in commodity_graphs {
-        let dot = Dot::with_attr_getters(
-            graph,
-            &[],
-            &get_edge_attributes,  // Custom attributes for edges
-            &|_, _| String::new(), // Use default attributes for nodes
-        );
         let mut file = File::create(output_path.join(format!("{year}.dot")))?;
-        write!(file, "{dot}")?;
+        write_dot(graph, &mut file)?;
     }
     Ok(())
 }
