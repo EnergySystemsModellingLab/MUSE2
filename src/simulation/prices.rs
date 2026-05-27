@@ -1161,7 +1161,7 @@ mod tests {
         MoneyPerCapacityPerYear, MoneyPerFlow,
     };
     use float_cmp::assert_approx_eq;
-    use indexmap::{IndexMap, IndexSet};
+    use indexmap::IndexSet;
     use rstest::rstest;
     use std::collections::{HashMap, HashSet};
     use std::rc::Rc;
@@ -1183,7 +1183,7 @@ mod tests {
 
     #[allow(clippy::too_many_arguments)]
     fn build_process(
-        flows: IndexMap<(CommodityID, RegionID), ProcessFlow>,
+        flows: Vec<ProcessFlow>,
         region_id: &RegionID,
         year: u32,
         time_slice_info: &TimeSliceInfo,
@@ -1310,23 +1310,12 @@ mod tests {
         let mut d = other_commodity.clone();
         d.id = "D".into();
 
-        let mut flows = IndexMap::new();
-        flows.insert(
-            (a.id.clone(), region_id.clone()),
+        let flows = vec![
             build_process_flow(&a, -1.0, MoneyPerFlow(0.0), &region_id),
-        );
-        flows.insert(
-            (b.id.clone(), region_id.clone()),
             build_process_flow(&b, 1.0, MoneyPerFlow(0.0), &region_id),
-        );
-        flows.insert(
-            (c.id.clone(), region_id.clone()),
             build_process_flow(&c, 2.0, MoneyPerFlow(3.0), &region_id),
-        );
-        flows.insert(
-            (d.id.clone(), region_id.clone()),
             build_process_flow(&d, 1.0, MoneyPerFlow(4.0), &region_id),
-        );
+        ];
 
         let process = build_process(
             flows,
@@ -1402,23 +1391,12 @@ mod tests {
         let mut d = other_commodity.clone();
         d.id = "D".into();
 
-        let mut flows = IndexMap::new();
-        flows.insert(
-            (a.id.clone(), region_id.clone()),
+        let flows = vec![
             build_process_flow(&a, -1.0, MoneyPerFlow(0.0), &region_id),
-        );
-        flows.insert(
-            (b.id.clone(), region_id.clone()),
             build_process_flow(&b, 1.0, MoneyPerFlow(0.0), &region_id),
-        );
-        flows.insert(
-            (c.id.clone(), region_id.clone()),
             build_process_flow(&c, 2.0, MoneyPerFlow(3.0), &region_id),
-        );
-        flows.insert(
-            (d.id.clone(), region_id.clone()),
             build_process_flow(&d, 1.0, MoneyPerFlow(4.0), &region_id),
-        );
+        ];
 
         let process = build_process(
             flows,

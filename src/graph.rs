@@ -74,10 +74,7 @@ impl Display for GraphEdge {
 /// returns its flows. It considers both the commission year and the process lifetime, since a
 /// process may operate for years after its commission window. If the process cannot be operating
 /// in the target region/year, `None` is returned.
-fn get_flow_for_year(
-    process: &Process,
-    target: (RegionID, u32),
-) -> Option<Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>> {
+fn get_flow_for_year(process: &Process, target: (RegionID, u32)) -> Option<Rc<Vec<ProcessFlow>>> {
     // If its already in the map, we return it
     if process.flows.contains_key(&target) {
         return process.flows.get(&target).cloned();
@@ -125,14 +122,14 @@ fn create_commodities_graph_for_region_year(
 
         // Get output nodes for the process
         let mut outputs: Vec<_> = flows
-            .values()
+            .iter()
             .filter(|flow| flow.direction() == FlowDirection::Output)
             .map(|flow| GraphNode::Commodity(flow.commodity.id.clone()))
             .collect();
 
         // Get input nodes for the process
         let mut inputs: Vec<_> = flows
-            .values()
+            .iter()
             .filter(|flow| flow.direction() == FlowDirection::Input)
             .map(|flow| GraphNode::Commodity(flow.commodity.id.clone()))
             .collect();

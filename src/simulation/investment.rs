@@ -951,8 +951,7 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-        let process_flows =
-            indexmap! { (commodity_rc.id.clone(), RegionID::from("GBR")) => process_flow.clone() };
+        let process_flows = vec![process_flow.clone()];
         let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
         process.flows = process_flows_map;
 
@@ -989,8 +988,7 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-        let process_flows =
-            indexmap! { (commodity_rc.id.clone(), RegionID::from("GBR")) => process_flow.clone() };
+        let process_flows = vec![process_flow.clone()];
         let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
         process.flows = process_flows_map;
 

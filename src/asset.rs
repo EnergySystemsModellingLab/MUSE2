@@ -13,7 +13,6 @@ use crate::units::{
     MoneyPerCapacity, MoneyPerFlow, Year,
 };
 use anyhow::{Context, Result, ensure};
-use indexmap::IndexMap;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -129,7 +128,7 @@ pub struct Asset {
     /// Activity limits for this asset
     activity_limits: Rc<ActivityLimits>,
     /// The commodity flows for this asset
-    flows: Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>,
+    flows: Rc<Vec<ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
     process_parameter: Rc<ProcessParameter>,
     /// The region in which the asset is located
@@ -653,17 +652,19 @@ impl Asset {
         commodity_id: &CommodityID,
         region_id: &RegionID,
     ) -> Option<&ProcessFlow> {
-        self.flows.get(&(commodity_id.clone(), region_id.clone()))
+        self.flows
+            .iter()
+            .find(|f| &f.commodity.id == commodity_id && &f.region_id == region_id)
     }
 
     /// Iterate over the asset's flows
     pub fn iter_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
-        self.flows.values()
+        self.flows.iter()
     }
 
     /// Iterate over the asset's output SED/SVD flows
     pub fn iter_output_flows(&self) -> impl Iterator<Item = &ProcessFlow> {
-        self.flows.values().filter(|flow| {
+        self.flows.iter().filter(|flow| {
             flow.direction() == FlowDirection::Output
                 && matches!(
                     flow.commodity.kind,
@@ -676,7 +677,7 @@ impl Asset {
     pub fn primary_output(&self) -> Option<&ProcessFlow> {
         let commodity_id = self.process.primary_output.as_ref()?;
         self.flows
-            .values()
+            .iter()
             .find(|f| &f.commodity.id == commodity_id && f.direction() == FlowDirection::Output)
     }
 
@@ -1283,7 +1284,6 @@ mod tests {
         MoneyPerFlow,
     };
     use float_cmp::assert_approx_eq;
-    use indexmap::indexmap;
     use rstest::{fixture, rstest};
     use std::rc::Rc;
 
@@ -1303,8 +1303,7 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-        let process_flows =
-            indexmap! { (commodity_rc.id.clone(), region_id.clone()) => process_flow.clone() };
+        let process_flows = vec![process_flow.clone()];
         let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
         process.flows = process_flows_map;
 

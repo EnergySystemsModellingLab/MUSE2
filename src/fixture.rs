@@ -24,8 +24,8 @@ use crate::units::{
     MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
 };
 use anyhow::Result;
+use indexmap::IndexSet;
 use indexmap::indexmap;
-use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use rstest::fixture;
 use std::collections::HashMap;
@@ -277,15 +277,15 @@ pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
 
 #[fixture]
 /// Create an empty set of `ProcessFlows` for a given region/year
-pub fn process_flows() -> Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>> {
-    Rc::new(IndexMap::new())
+pub fn process_flows() -> Rc<Vec<ProcessFlow>> {
+    Rc::new(Vec::new())
 }
 
 #[fixture]
 /// Create a `ProcessFlowsMap` with the provided flows for each region/year
 pub fn process_flows_map(
     region_ids: IndexSet<RegionID>,
-    process_flows: Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>,
+    process_flows: Rc<Vec<ProcessFlow>>,
 ) -> ProcessFlowsMap {
     region_ids
         .into_iter()

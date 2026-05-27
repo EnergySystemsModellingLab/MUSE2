@@ -8,7 +8,7 @@ use crate::process::{
 use crate::region::{RegionID, parse_region_str};
 use crate::units::{FlowPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, bail, ensure};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use itertools::iproduct;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -94,7 +94,7 @@ fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) 
     for (process_id, process_flows) in flows_map {
         for ((region_id, year), flows) in process_flows {
             let sed_svd_output_units: IndexSet<&str> = flows
-                .values()
+                .iter()
                 .filter_map(|flow| {
                     let commodity = &flow.commodity;
                     (flow.coeff.value() > 0.0
@@ -194,13 +194,13 @@ where
                 kind: FlowType::Fixed,
                 cost: record.cost.unwrap_or(MoneyPerFlow(0.0)),
             };
-            let flows_map = region_year_map
+            let flows = region_year_map
                 .entry((region_id.clone(), year))
                 .or_default();
-            let existing = Rc::get_mut(flows_map)
-                .unwrap() // safe: there will only be one copy
-                .insert((commodity.id.clone(), region_id.clone()), process_flow)
-                .is_some();
+            let inner = Rc::get_mut(flows).unwrap(); // safe: there will only be one copy
+            let existing = inner
+                .iter()
+                .any(|f| f.commodity.id == commodity.id && f.region_id == *region_id);
             ensure!(
                 !existing,
                 "Duplicate process flow entry for region {}, year {} and commodity {}",
@@ -208,6 +208,7 @@ where
                 year,
                 commodity.id
             );
+            inner.push(process_flow);
         }
     }
 
@@ -276,11 +277,9 @@ fn validate_flows_and_update_primary_output(
 /// Infer the primary output.
 ///
 /// This is only possible if there is only one output flow for the process.
-fn infer_primary_output(
-    map: &IndexMap<(CommodityID, RegionID), ProcessFlow>,
-) -> Result<Option<CommodityID>> {
-    let mut iter = map.iter().filter_map(|((commodity_id, _), flow)| {
-        (flow.direction() == FlowDirection::Output).then_some(commodity_id)
+fn infer_primary_output(flows: &[ProcessFlow]) -> Result<Option<CommodityID>> {
+    let mut iter = flows.iter().filter_map(|flow| {
+        (flow.direction() == FlowDirection::Output).then_some(&flow.commodity.id)
     });
 
     let Some(first_output) = iter.next() else {
@@ -298,26 +297,24 @@ fn infer_primary_output(
 
 /// Check the flows are correct for the specified primary output (or lack thereof)
 fn check_flows_primary_output(
-    flows_map: &IndexMap<(CommodityID, RegionID), ProcessFlow>,
+    flows: &[ProcessFlow],
     primary_output: Option<&CommodityID>,
 ) -> Result<()> {
     if let Some(primary_output) = primary_output {
         ensure!(
-            flows_map
-                .keys()
-                .any(|(commodity_id, _)| commodity_id == primary_output),
+            flows.iter().any(|f| &f.commodity.id == primary_output),
             "Primary output commodity '{primary_output}' isn't a process flow"
         );
         ensure!(
-            flows_map.values().any(|f| {
+            flows.iter().any(|f| {
                 &f.commodity.id == primary_output && f.direction() == FlowDirection::Output
             }),
             "Primary output commodity '{primary_output}' isn't an output flow",
         );
     } else {
         ensure!(
-            flows_map
-                .values()
+            flows
+                .iter()
                 .all(|x| x.direction() == FlowDirection::Input
                     || x.direction() == FlowDirection::Zero),
             "First year is only inputs, but subsequent years have outputs, although no primary \
@@ -353,13 +350,10 @@ fn validate_secondary_flows(
         let mut number_of_years: HashMap<(CommodityID, RegionID), u32> = HashMap::new();
         for (year, region_id) in iter {
             if let Some(commodity_map) = map.get(&(region_id.clone(), year)) {
-                let flow =
-                    commodity_map
-                        .iter()
-                        .filter_map(|((commodity_id, flow_region_id), flow)| {
-                            (Some(commodity_id) != process.primary_output.as_ref())
-                                .then_some(((commodity_id.clone(), flow_region_id.clone()), flow))
-                        });
+                let flow = commodity_map.iter().filter_map(|flow| {
+                    (Some(&flow.commodity.id) != process.primary_output.as_ref())
+                        .then_some(((flow.commodity.id.clone(), flow.region_id.clone()), flow))
+                });
 
                 for (key, value) in flow {
                     flows.entry(key.clone()).or_default().push(value);
@@ -410,7 +404,6 @@ mod tests {
     use crate::process::{FlowType, Process, ProcessFlow, ProcessMap};
     use crate::time_slice::TimeSliceLevel;
     use crate::units::{FlowPerActivity, MoneyPerFlow};
-    use indexmap::IndexMap;
     use itertools::Itertools;
     use map_macro::hash_map;
     use rstest::{fixture, rstest};
@@ -436,11 +429,7 @@ mod tests {
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
         let years = years.unwrap_or(process.years.clone().collect());
-        let map: Rc<IndexMap<_, _>> = Rc::new(
-            flows
-                .map(|(commodity_id, flow)| ((commodity_id, flow.region_id.clone()), flow))
-                .collect(),
-        );
+        let map: Rc<Vec<ProcessFlow>> = Rc::new(flows.map(|(_, flow)| flow).collect());
         let flows_inner = iproduct!(&process.regions, years)
             .map(|(region_id, year)| ((region_id.clone(), year), map.clone()))
             .collect();
