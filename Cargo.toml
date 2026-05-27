@@ -14,7 +14,7 @@ categories = ["science", "simulation", "command-line-utilities"]
 [dependencies]
 anyhow = "1.0.102"
 csv = "1.4.0"
-log = "0.4.29"
+log = "0.4.30"
 float-cmp = "0.10.0"
 itertools = "0.14.0"
 serde = {version = "1.0.228", features = ["derive", "rc"]}
@@ -46,7 +46,7 @@ rstest = {version = "0.26.1", default-features = false, features = ["crate-name"
 yaml-rust2 = {version = "0.11.0", default-features = false}
 
 [build-dependencies]
-built = {version = "0.8.0", features = ["chrono", "git2"]}
+built = {version = "0.8.1", features = ["chrono", "git2"]}
 
 [lints.clippy]
 # Disallow lints from "all" and "pedantic" groups by default
