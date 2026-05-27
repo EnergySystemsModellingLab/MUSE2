@@ -201,7 +201,7 @@ fn create_flow_map<'a>(
     // Copy flows for each child asset
     for asset in existing_assets {
         if let Some(parent) = asset.parent() {
-            let n_units = Dimensionless(asset.num_children().unwrap_or(1) as f64);
+            let n_units = Dimensionless(parent.num_children().unwrap() as f64);
             for time_slice in time_slice_info.iter_ids() {
                 for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
                     let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
