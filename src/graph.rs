@@ -77,7 +77,7 @@ impl Display for GraphEdge {
 fn get_flow_for_year(
     process: &Process,
     target: (RegionID, u32),
-) -> Option<Rc<IndexMap<CommodityID, ProcessFlow>>> {
+) -> Option<Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>> {
     // If its already in the map, we return it
     if process.flows.contains_key(&target) {
         return process.flows.get(&target).cloned();

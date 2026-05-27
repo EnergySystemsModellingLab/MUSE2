@@ -199,7 +199,7 @@ where
                 .or_default();
             let existing = Rc::get_mut(flows_map)
                 .unwrap() // safe: there will only be one copy
-                .insert(commodity.id.clone(), process_flow)
+                .insert((commodity.id.clone(), region_id.clone()), process_flow)
                 .is_some();
             ensure!(
                 !existing,
@@ -276,8 +276,10 @@ fn validate_flows_and_update_primary_output(
 /// Infer the primary output.
 ///
 /// This is only possible if there is only one output flow for the process.
-fn infer_primary_output(map: &IndexMap<CommodityID, ProcessFlow>) -> Result<Option<CommodityID>> {
-    let mut iter = map.iter().filter_map(|(commodity_id, flow)| {
+fn infer_primary_output(
+    map: &IndexMap<(CommodityID, RegionID), ProcessFlow>,
+) -> Result<Option<CommodityID>> {
+    let mut iter = map.iter().filter_map(|((commodity_id, _), flow)| {
         (flow.direction() == FlowDirection::Output).then_some(commodity_id)
     });
 
@@ -296,16 +298,20 @@ fn infer_primary_output(map: &IndexMap<CommodityID, ProcessFlow>) -> Result<Opti
 
 /// Check the flows are correct for the specified primary output (or lack thereof)
 fn check_flows_primary_output(
-    flows_map: &IndexMap<CommodityID, ProcessFlow>,
+    flows_map: &IndexMap<(CommodityID, RegionID), ProcessFlow>,
     primary_output: Option<&CommodityID>,
 ) -> Result<()> {
     if let Some(primary_output) = primary_output {
-        let flow = flows_map.get(primary_output).with_context(|| {
-            format!("Primary output commodity '{primary_output}' isn't a process flow")
-        })?;
-
         ensure!(
-            flow.direction() == FlowDirection::Output,
+            flows_map
+                .keys()
+                .any(|(commodity_id, _)| commodity_id == primary_output),
+            "Primary output commodity '{primary_output}' isn't a process flow"
+        );
+        ensure!(
+            flows_map.values().any(|f| {
+                &f.commodity.id == primary_output && f.direction() == FlowDirection::Output
+            }),
             "Primary output commodity '{primary_output}' isn't an output flow",
         );
     } else {
@@ -341,16 +347,19 @@ fn validate_secondary_flows(
             .filter(|&y| process.years.contains(y))
             .collect();
 
-        // Get the non-primary io flows for all years, if any, arranged by (commodity, region)
+        // Get the non-primary io flows for all years, if any, arranged by (commodity, flow region)
         let iter = iproduct!(process.years.clone(), process.regions.iter());
         let mut flows: HashMap<(CommodityID, RegionID), Vec<&ProcessFlow>> = HashMap::new();
         let mut number_of_years: HashMap<(CommodityID, RegionID), u32> = HashMap::new();
         for (year, region_id) in iter {
             if let Some(commodity_map) = map.get(&(region_id.clone(), year)) {
-                let flow = commodity_map.iter().filter_map(|(commodity_id, flow)| {
-                    (Some(commodity_id) != process.primary_output.as_ref())
-                        .then_some(((commodity_id.clone(), region_id.clone()), flow))
-                });
+                let flow =
+                    commodity_map
+                        .iter()
+                        .filter_map(|((commodity_id, flow_region_id), flow)| {
+                            (Some(commodity_id) != process.primary_output.as_ref())
+                                .then_some(((commodity_id.clone(), flow_region_id.clone()), flow))
+                        });
 
                 for (key, value) in flow {
                     flows.entry(key.clone()).or_default().push(value);
@@ -427,7 +436,11 @@ mod tests {
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
         let years = years.unwrap_or(process.years.clone().collect());
-        let map: Rc<IndexMap<_, _>> = Rc::new(flows.collect());
+        let map: Rc<IndexMap<_, _>> = Rc::new(
+            flows
+                .map(|(commodity_id, flow)| ((commodity_id, flow.region_id.clone()), flow))
+                .collect(),
+        );
         let flows_inner = iproduct!(&process.regions, years)
             .map(|(region_id, year)| ((region_id.clone(), year), map.clone()))
             .collect();

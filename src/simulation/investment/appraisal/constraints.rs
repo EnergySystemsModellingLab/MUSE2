@@ -152,7 +152,10 @@ pub fn add_demand_constraints(
         let mut terms = Vec::new();
         for (time_slice, _) in ts_selection.iter(time_slice_info) {
             demand_for_ts_selection += demand[time_slice];
-            let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+            let flow_coeff = asset
+                .get_flow_for_market(&commodity.id, asset.region_id())
+                .unwrap()
+                .coeff;
             terms.push((activity_vars[time_slice], flow_coeff.value()));
             terms.push((unmet_demand_vars[time_slice], 1.0));
         }

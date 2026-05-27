@@ -277,7 +277,7 @@ pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
 
 #[fixture]
 /// Create an empty set of `ProcessFlows` for a given region/year
-pub fn process_flows() -> Rc<IndexMap<CommodityID, ProcessFlow>> {
+pub fn process_flows() -> Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>> {
     Rc::new(IndexMap::new())
 }
 
@@ -285,7 +285,7 @@ pub fn process_flows() -> Rc<IndexMap<CommodityID, ProcessFlow>> {
 /// Create a `ProcessFlowsMap` with the provided flows for each region/year
 pub fn process_flows_map(
     region_ids: IndexSet<RegionID>,
-    process_flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
+    process_flows: Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>,
 ) -> ProcessFlowsMap {
     region_ids
         .into_iter()

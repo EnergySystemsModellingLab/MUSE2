@@ -129,7 +129,7 @@ pub struct Asset {
     /// Activity limits for this asset
     activity_limits: Rc<ActivityLimits>,
     /// The commodity flows for this asset
-    flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
+    flows: Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
     process_parameter: Rc<ProcessParameter>,
     /// The region in which the asset is located
@@ -647,9 +647,13 @@ impl Asset {
         self.total_capacity() * self.process.capacity_to_activity
     }
 
-    /// Get a specific process flow
-    pub fn get_flow(&self, commodity_id: &CommodityID) -> Option<&ProcessFlow> {
-        self.flows.get(commodity_id)
+    /// Get a specific process flow by commodity and flow region
+    pub fn get_flow_for_market(
+        &self,
+        commodity_id: &CommodityID,
+        region_id: &RegionID,
+    ) -> Option<&ProcessFlow> {
+        self.flows.get(&(commodity_id.clone(), region_id.clone()))
     }
 
     /// Iterate over the asset's flows
@@ -670,10 +674,10 @@ impl Asset {
 
     /// Get the primary output flow (if any) for this asset
     pub fn primary_output(&self) -> Option<&ProcessFlow> {
-        self.process
-            .primary_output
-            .as_ref()
-            .map(|commodity_id| &self.flows[commodity_id])
+        let commodity_id = self.process.primary_output.as_ref()?;
+        self.flows
+            .values()
+            .find(|f| &f.commodity.id == commodity_id && f.direction() == FlowDirection::Output)
     }
 
     /// Whether this asset has been commissioned
@@ -1249,12 +1253,13 @@ where
         self.filter(move |asset| asset.region_id == *region_id)
     }
 
-    /// Iterate over process flows affecting the given commodity
-    fn flows_for_commodity(
+    /// Iterate over process flows targeting the given market (commodity + flow region)
+    fn flows_for_market(
         self,
         commodity_id: &'a CommodityID,
+        region_id: &'a RegionID,
     ) -> impl Iterator<Item = (&'a AssetRef, &'a ProcessFlow)> + 'a {
-        self.filter_map(|asset| Some((asset, asset.get_flow(commodity_id)?)))
+        self.filter_map(|asset| Some((asset, asset.get_flow_for_market(commodity_id, region_id)?)))
     }
 }
 
@@ -1298,7 +1303,8 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        let process_flows =
+            indexmap! { (commodity_rc.id.clone(), region_id.clone()) => process_flow.clone() };
         let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
         process.flows = process_flows_map;
 

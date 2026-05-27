@@ -29,8 +29,11 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
 
 /// A map of process flows, keyed by region and year.
 ///
-/// The value is actually a map itself, keyed by commodity ID.
-pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
+/// The value is a map keyed by `(CommodityID, RegionID)`, where the `RegionID` is the
+/// region in which the flow occurs (the flow's target/source region, which may differ from
+/// the asset's own region for inter-region trade).
+pub type ProcessFlowsMap =
+    HashMap<(RegionID, u32), Rc<IndexMap<(CommodityID, RegionID), ProcessFlow>>>;
 
 /// Map of process investment constraints, keyed by region and year
 pub type ProcessInvestmentConstraintsMap =

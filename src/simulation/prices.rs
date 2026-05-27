@@ -946,7 +946,7 @@ where
 
             // Costs will be weighted by output (activity * coefficient)
             let output_coeff = asset
-                .get_flow(&commodity_id)
+                .get_flow_for_market(&commodity_id, region_id)
                 .expect("Commodity should be an output flow for this asset")
                 .coeff;
             let output_weight = activity * output_coeff;
@@ -1183,7 +1183,7 @@ mod tests {
 
     #[allow(clippy::too_many_arguments)]
     fn build_process(
-        flows: IndexMap<CommodityID, ProcessFlow>,
+        flows: IndexMap<(CommodityID, RegionID), ProcessFlow>,
         region_id: &RegionID,
         year: u32,
         time_slice_info: &TimeSliceInfo,
@@ -1312,19 +1312,19 @@ mod tests {
 
         let mut flows = IndexMap::new();
         flows.insert(
-            a.id.clone(),
+            (a.id.clone(), region_id.clone()),
             build_process_flow(&a, -1.0, MoneyPerFlow(0.0), &region_id),
         );
         flows.insert(
-            b.id.clone(),
+            (b.id.clone(), region_id.clone()),
             build_process_flow(&b, 1.0, MoneyPerFlow(0.0), &region_id),
         );
         flows.insert(
-            c.id.clone(),
+            (c.id.clone(), region_id.clone()),
             build_process_flow(&c, 2.0, MoneyPerFlow(3.0), &region_id),
         );
         flows.insert(
-            d.id.clone(),
+            (d.id.clone(), region_id.clone()),
             build_process_flow(&d, 1.0, MoneyPerFlow(4.0), &region_id),
         );
 
@@ -1404,19 +1404,19 @@ mod tests {
 
         let mut flows = IndexMap::new();
         flows.insert(
-            a.id.clone(),
+            (a.id.clone(), region_id.clone()),
             build_process_flow(&a, -1.0, MoneyPerFlow(0.0), &region_id),
         );
         flows.insert(
-            b.id.clone(),
+            (b.id.clone(), region_id.clone()),
             build_process_flow(&b, 1.0, MoneyPerFlow(0.0), &region_id),
         );
         flows.insert(
-            c.id.clone(),
+            (c.id.clone(), region_id.clone()),
             build_process_flow(&c, 2.0, MoneyPerFlow(3.0), &region_id),
         );
         flows.insert(
-            d.id.clone(),
+            (d.id.clone(), region_id.clone()),
             build_process_flow(&d, 1.0, MoneyPerFlow(4.0), &region_id),
         );
 

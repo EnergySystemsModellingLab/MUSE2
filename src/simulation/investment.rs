@@ -571,7 +571,10 @@ fn get_demand_limiting_capacity(
     commodity: &Commodity,
     demand: &DemandMap,
 ) -> Capacity {
-    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+    let coeff = asset
+        .get_flow_for_market(&commodity.id, asset.region_id())
+        .unwrap()
+        .coeff;
     let mut capacity = Capacity(0.0);
 
     for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
@@ -948,7 +951,8 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        let process_flows =
+            indexmap! { (commodity_rc.id.clone(), RegionID::from("GBR")) => process_flow.clone() };
         let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
         process.flows = process_flows_map;
 
@@ -985,7 +989,8 @@ mod tests {
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
-        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        let process_flows =
+            indexmap! { (commodity_rc.id.clone(), RegionID::from("GBR")) => process_flow.clone() };
         let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
         process.flows = process_flows_map;
 
