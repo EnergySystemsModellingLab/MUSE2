@@ -160,9 +160,9 @@ impl AssetRow {
 /// Represents a row in the asset capacities output CSV file.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct AssetCapacityRow {
+    milestone_year: u32,
     asset_id: Option<AssetID>,
     group_id: Option<AssetGroupID>,
-    year: u32,
     capacity: Capacity,
     num_units: Option<u32>,
 }
@@ -633,7 +633,7 @@ impl DataWriter {
     ///
     /// This file is appended to on each invocation. For divisible asset groups, a single row is
     /// emitted per group with the total capacity.
-    pub fn write_asset_capacities<'a, I>(&mut self, year: u32, assets: I) -> Result<()>
+    pub fn write_asset_capacities<'a, I>(&mut self, milestone_year: u32, assets: I) -> Result<()>
     where
         I: Iterator<Item = &'a AssetRef>,
     {
@@ -643,9 +643,9 @@ impl DataWriter {
                 let group_id = asset.group_id().unwrap();
                 if seen_group_ids.insert(group_id) {
                     let row = AssetCapacityRow {
+                        milestone_year,
                         asset_id: None,
                         group_id: Some(group_id),
-                        year,
                         capacity: parent.total_capacity(),
                         num_units: parent.capacity().n_units(),
                     };
@@ -653,9 +653,9 @@ impl DataWriter {
                 }
             } else {
                 let row = AssetCapacityRow {
+                    milestone_year,
                     asset_id: asset.id(),
                     group_id: None,
-                    year,
                     capacity: asset.total_capacity(),
                     num_units: None,
                 };
@@ -780,9 +780,9 @@ mod tests {
         // Read back and compare
         let asset = assets.iter().next().unwrap();
         let expected = AssetCapacityRow {
+            milestone_year,
             asset_id: asset.id(),
             group_id: None,
-            year: milestone_year,
             capacity: asset.total_capacity(),
             num_units: None,
         };
@@ -863,9 +863,9 @@ mod tests {
         let first_child = commissioned.first().unwrap();
         let parent = first_child.parent().unwrap();
         let expected = AssetCapacityRow {
+            milestone_year,
             asset_id: None,
             group_id: parent.group_id(),
-            year: milestone_year,
             capacity: parent.total_capacity(),
             num_units: parent.capacity().n_units(),
         };
