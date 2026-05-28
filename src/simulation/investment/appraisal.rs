@@ -258,26 +258,19 @@ fn calculate_lcox(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(
-        model,
-        asset,
-        max_capacity,
-        commodity,
-        coefficients,
-        demand,
-        highs::Sense::Minimise,
-    )?;
+    let results =
+        perform_optimisation(model, asset, max_capacity, commodity, coefficients, demand)?;
 
     let cost_index = lcox(
-        results.capacity.total_capacity(),
-        coefficients.capacity_coefficient,
+        max_capacity.total_capacity(),
+        annual_fixed_cost(asset),
         &results.activity,
         &coefficients.market_costs,
     );
 
     Ok(AppraisalOutput::new(
         asset.clone(),
-        results.capacity,
+        max_capacity,
         results,
         cost_index.map(LCOXMetric::new),
         coefficients.clone(),
@@ -297,15 +290,8 @@ fn calculate_npv(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(
-        model,
-        asset,
-        max_capacity,
-        commodity,
-        coefficients,
-        demand,
-        highs::Sense::Maximise,
-    )?;
+    let results =
+        perform_optimisation(model, asset, max_capacity, commodity, coefficients, demand)?;
 
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
@@ -414,7 +400,7 @@ mod tests {
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity, MoneyPerFlow};
+    use crate::units::{Money, MoneyPerActivity};
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
     use std::rc::Rc;
@@ -583,10 +569,8 @@ mod tests {
 
     fn objective_coeffs() -> Rc<ObjectiveCoefficients> {
         Rc::new(ObjectiveCoefficients {
-            capacity_coefficient: MoneyPerCapacity(0.0),
             activity_coefficients: IndexMap::new(),
             market_costs: IndexMap::new(),
-            unmet_demand_coefficient: MoneyPerFlow(0.0),
         })
     }
 
