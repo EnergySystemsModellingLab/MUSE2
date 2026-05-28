@@ -21,7 +21,7 @@ use crate::simulation::investment::appraisal::{
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
+    MoneyPerCapacity, MoneyPerCapacityPerYear, Year,
 };
 use anyhow::Result;
 use indexmap::indexmap;
@@ -408,10 +408,8 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         asset: AssetRef::from(asset),
         capacity: AssetCapacity::Continuous(Capacity(42.0)),
         coefficients: Rc::new(ObjectiveCoefficients {
-            capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
             market_costs,
-            unmet_demand_coefficient: MoneyPerFlow(10000.0),
         }),
         activity,
         unmet_demand,
