@@ -14,8 +14,8 @@ use crate::units::{
 use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -31,6 +31,9 @@ const COMMODITY_PRICES_FILE_NAME: &str = "commodity_prices.csv";
 
 /// The output file name for assets
 const ASSETS_FILE_NAME: &str = "assets.csv";
+
+/// The output file name for asset capacities
+const ASSET_CAPACITIES_FILE_NAME: &str = "asset_capacities.csv";
 
 /// Debug output file for asset dispatch
 const ACTIVITY_ASSET_DISPATCH: &str = "debug_dispatch_assets.csv";
@@ -139,30 +142,48 @@ pub fn copy_input_files(model_dir: &Path, output_dir: &Path, model_name: &str) -
 /// Represents a row in the assets output CSV file.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct AssetRow {
-    asset_id: AssetID,
+    asset_id: Option<AssetID>,
+    group_id: Option<AssetGroupID>,
     process_id: ProcessID,
     region_id: RegionID,
     agent_id: AgentID,
-    group_id: Option<AssetGroupID>,
     commission_year: u32,
-    decommission_year: Option<u32>,
-    capacity: Capacity,
 }
 
 impl AssetRow {
-    /// Create a new [`AssetRow`]
+    /// Create a new [`AssetRow`] for a non-group asset
     fn new(asset: &Asset) -> Self {
         Self {
-            asset_id: asset.id().unwrap(),
+            asset_id: asset.id(),
+            group_id: None,
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             agent_id: asset.agent_id().unwrap().clone(),
-            group_id: asset.group_id(),
             commission_year: asset.commission_year(),
-            decommission_year: asset.decommission_year(),
-            capacity: asset.total_capacity(),
         }
     }
+
+    /// Create a new [`AssetRow`] for a group, using the parent asset's metadata
+    fn from_parent(parent: &Asset) -> Self {
+        Self {
+            asset_id: None,
+            group_id: parent.group_id(),
+            process_id: parent.process_id().clone(),
+            region_id: parent.region_id().clone(),
+            agent_id: parent.agent_id().unwrap().clone(),
+            commission_year: parent.commission_year(),
+        }
+    }
+}
+
+/// Represents a row in the asset capacities output CSV file.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct AssetCapacityRow {
+    milestone_year: u32,
+    asset_id: Option<AssetID>,
+    group_id: Option<AssetGroupID>,
+    capacity: Capacity,
+    num_units: Option<u32>,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.
@@ -527,12 +548,13 @@ impl DebugDataWriter {
     }
 }
 
-/// An object for writing commodity prices to file
+/// An object for writing output data to file
 pub struct DataWriter {
-    assets_path: PathBuf,
-    flows_writer: csv::Writer<File>,
-    prices_writer: csv::Writer<File>,
-    debug_writer: Option<DebugDataWriter>,
+    assets: csv::Writer<File>,
+    asset_capacities: csv::Writer<File>,
+    flows: csv::Writer<File>,
+    prices: csv::Writer<File>,
+    debug: Option<DebugDataWriter>,
 }
 
 impl DataWriter {
@@ -559,10 +581,11 @@ impl DataWriter {
         };
 
         Ok(Self {
-            assets_path: output_path.join(ASSETS_FILE_NAME),
-            flows_writer: new_writer(COMMODITY_FLOWS_FILE_NAME)?,
-            prices_writer: new_writer(COMMODITY_PRICES_FILE_NAME)?,
-            debug_writer,
+            assets: new_writer(ASSETS_FILE_NAME)?,
+            asset_capacities: new_writer(ASSET_CAPACITIES_FILE_NAME)?,
+            flows: new_writer(COMMODITY_FLOWS_FILE_NAME)?,
+            prices: new_writer(COMMODITY_PRICES_FILE_NAME)?,
+            debug: debug_writer,
         })
     }
 
@@ -573,7 +596,7 @@ impl DataWriter {
         run_description: &str,
         solution: &Solution,
     ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.write_dispatch_debug_info(milestone_year, run_description, solution)?;
         }
 
@@ -588,7 +611,7 @@ impl DataWriter {
         appraisal_results: &[AppraisalOutput],
         demand: &IndexMap<TimeSliceID, Flow>,
     ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
             wtr.write_appraisal_time_slice_results(
                 milestone_year,
@@ -601,27 +624,63 @@ impl DataWriter {
         Ok(())
     }
 
-    /// Write assets to a CSV file.
+    /// Append newly commissioned asset definitions to the assets CSV file.
     ///
-    /// The whole file is written at once and is overwritten with subsequent invocations. This is
-    /// done so that partial results will be written in the case of errors and so that the user can
-    /// see the results while the simulation is still running.
-    ///
-    /// The file is sorted by asset ID.
-    ///
-    /// # Panics
-    ///
-    /// Panics if any of the assets has not yet been commissioned (decommissioned assets are fine).
+    /// For divisible asset groups, a single row is emitted per group (using the parent asset's
+    /// metadata).
     pub fn write_assets<'a, I>(&mut self, assets: I) -> Result<()>
     where
         I: Iterator<Item = &'a AssetRef>,
     {
-        let mut writer = csv::Writer::from_path(&self.assets_path)?;
-        for asset in assets.sorted() {
-            let row = AssetRow::new(asset);
-            writer.serialize(row)?;
+        let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
+        for asset in assets {
+            if let Some(parent) = asset.parent() {
+                // Active child of a group: emit one row for the group (first child wins)
+                let group_id = asset.group_id().unwrap();
+                if seen_group_ids.insert(group_id) {
+                    self.assets.serialize(AssetRow::from_parent(parent))?;
+                }
+            } else {
+                self.assets.serialize(AssetRow::new(asset))?;
+            }
         }
-        writer.flush()?;
+
+        Ok(())
+    }
+
+    /// Write asset capacities for the current milestone year to a CSV file.
+    ///
+    /// This file is appended to on each invocation. For divisible asset groups, a single row is
+    /// emitted per group with the total capacity.
+    pub fn write_asset_capacities<'a, I>(&mut self, milestone_year: u32, assets: I) -> Result<()>
+    where
+        I: Iterator<Item = &'a AssetRef>,
+    {
+        let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
+        for asset in assets {
+            if let Some(parent) = asset.parent() {
+                let group_id = asset.group_id().unwrap();
+                if seen_group_ids.insert(group_id) {
+                    let row = AssetCapacityRow {
+                        milestone_year,
+                        asset_id: None,
+                        group_id: Some(group_id),
+                        capacity: parent.total_capacity(),
+                        num_units: parent.capacity().n_units(),
+                    };
+                    self.asset_capacities.serialize(row)?;
+                }
+            } else {
+                let row = AssetCapacityRow {
+                    milestone_year,
+                    asset_id: asset.id(),
+                    group_id: None,
+                    capacity: asset.total_capacity(),
+                    num_units: None,
+                };
+                self.asset_capacities.serialize(row)?;
+            }
+        }
 
         Ok(())
     }
@@ -636,7 +695,7 @@ impl DataWriter {
                 time_slice: time_slice.clone(),
                 flow: *flow,
             };
-            self.flows_writer.serialize(row)?;
+            self.flows.serialize(row)?;
         }
 
         Ok(())
@@ -652,7 +711,7 @@ impl DataWriter {
                 time_slice: time_slice.clone(),
                 price,
             };
-            self.prices_writer.serialize(row)?;
+            self.prices.serialize(row)?;
         }
 
         Ok(())
@@ -660,9 +719,11 @@ impl DataWriter {
 
     /// Flush the underlying streams
     pub fn flush(&mut self) -> Result<()> {
-        self.flows_writer.flush()?;
-        self.prices_writer.flush()?;
-        if let Some(wtr) = &mut self.debug_writer {
+        self.assets.flush()?;
+        self.asset_capacities.flush()?;
+        self.flows.flush()?;
+        self.prices.flush()?;
+        if let Some(wtr) = &mut self.debug {
             wtr.flush()?;
         }
 
@@ -671,14 +732,14 @@ impl DataWriter {
 
     /// Add context to the debug writer
     pub fn set_debug_context(&mut self, context: String) {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.context = Some(context);
         }
     }
 
     /// Clear context from the debug writer
     pub fn clear_debug_context(&mut self) {
-        if let Some(wtr) = &mut self.debug_writer {
+        if let Some(wtr) = &mut self.debug {
             wtr.context = None;
         }
     }
@@ -688,7 +749,9 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{appraisal_output, asset, assets, commodity_id, region_id, time_slice};
+    use crate::fixture::{
+        appraisal_output, asset, asset_divisible, assets, commodity_id, region_id, time_slice,
+    };
     use crate::simulation::investment::appraisal::AppraisalOutput;
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
@@ -717,6 +780,119 @@ mod tests {
             .try_collect()
             .unwrap();
         assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn write_asset_capacities(assets: AssetPool) {
+        let milestone_year = 2020;
+        let dir = tempdir().unwrap();
+
+        // Write asset capacities
+        {
+            let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
+            writer
+                .write_asset_capacities(milestone_year, assets.iter())
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let asset = assets.iter().next().unwrap();
+        let expected = AssetCapacityRow {
+            milestone_year,
+            asset_id: asset.id(),
+            group_id: None,
+            capacity: asset.total_capacity(),
+            num_units: None,
+        };
+        let records: Vec<AssetCapacityRow> =
+            csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn write_assets_divisible_group_deduplicated(asset_divisible: Asset) {
+        let milestone_year = asset_divisible.commission_year();
+        let mut pool = AssetPool::new();
+        let mut user_assets = vec![asset_divisible.into()];
+
+        // Commission a divisible asset so the active pool contains multiple children in one group
+        let commissioned = pool
+            .commission_new(milestone_year, &mut user_assets)
+            .to_vec();
+        assert!(commissioned.len() > 1);
+
+        let dir = tempdir().unwrap();
+
+        // Write all active assets: divisible children should collapse to one group row
+        {
+            let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
+            writer.write_assets(pool.iter()).unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare: we expect a single group row with parent-derived metadata
+        let records: Vec<AssetRow> = csv::Reader::from_path(dir.path().join(ASSETS_FILE_NAME))
+            .unwrap()
+            .into_deserialize()
+            .try_collect()
+            .unwrap();
+        assert_eq!(records.len(), 1);
+
+        let first_child = commissioned.first().unwrap();
+        let parent = first_child.parent().unwrap();
+        let expected = AssetRow::from_parent(parent);
+        assert_eq!(records[0], expected);
+        assert_eq!(records[0].asset_id, None);
+        assert_eq!(records[0].group_id, parent.group_id());
+    }
+
+    #[rstest]
+    fn write_asset_capacities_divisible_group_deduplicated(asset_divisible: Asset) {
+        let milestone_year = asset_divisible.commission_year();
+        let mut pool = AssetPool::new();
+        let mut user_assets = vec![asset_divisible.into()];
+
+        // Commission a divisible asset so we get several children under one parent/group
+        let commissioned = pool
+            .commission_new(milestone_year, &mut user_assets)
+            .to_vec();
+        assert!(commissioned.len() > 1);
+
+        let dir = tempdir().unwrap();
+
+        // Write capacities: divisible children should be deduplicated to one group entry
+        {
+            let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
+            writer
+                .write_asset_capacities(milestone_year, pool.iter())
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare: group capacity and unit count must match the parent
+        let records: Vec<AssetCapacityRow> =
+            csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_eq!(records.len(), 1);
+
+        let first_child = commissioned.first().unwrap();
+        let parent = first_child.parent().unwrap();
+        let expected = AssetCapacityRow {
+            milestone_year,
+            asset_id: None,
+            group_id: parent.group_id(),
+            capacity: parent.total_capacity(),
+            num_units: parent.capacity().n_units(),
+        };
+        assert_eq!(records[0], expected);
     }
 
     #[rstest]
