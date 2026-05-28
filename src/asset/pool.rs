@@ -1,7 +1,7 @@
 //! Defines a data structure for representing the current active pool of assets.
 use super::{AssetID, AssetRef, AssetState};
 use itertools::Itertools;
-use log::{debug, warn};
+use log::warn;
 use std::cmp::min;
 use std::slice;
 
@@ -68,23 +68,8 @@ impl AssetPool {
     pub fn decommission_old(&mut self, year: u32) {
         self.assets
             .extract_if(.., |asset| asset.max_decommission_year() <= year)
-            .for_each(|asset| {
-                if let AssetState::Commissioned {
-                    id,
-                    agent_id,
-                    parent,
-                    ..
-                } = &asset.state
-                {
-                    debug!(
-                        "Decommissioning '{}' asset (ID: {id}) for agent '{agent_id}' \
-                        (reason: end of life)",
-                        asset.process_id(),
-                    );
-                    if let Some(parent) = parent {
-                        parent.decrement_unit_count();
-                    }
-                }
+            .for_each(|mut asset| {
+                asset.make_mut().decommission("end of life");
             });
     }
 
@@ -96,24 +81,11 @@ impl AssetPool {
                     .get_mothballed_year()
                     .is_some_and(|myear| myear <= year - min(mothball_years, year))
             })
-            .for_each(|asset| {
-                if let AssetState::Commissioned {
-                    id,
-                    agent_id,
-                    parent,
-                    ..
-                } = &asset.state
-                {
-                    debug!(
-                        "Decommissioning '{}' asset (ID: {id}) for agent '{agent_id}' \
-                        (reason: The asset has not been used for the set mothball years \
-                        ({mothball_years} years).)",
-                        asset.process_id(),
-                    );
-                    if let Some(parent) = parent {
-                        parent.decrement_unit_count();
-                    }
-                }
+            .for_each(|mut asset| {
+                asset.make_mut().decommission(&format!(
+                    "The asset has not been used for the set mothball years ({mothball_years} \
+                        years)."
+                ));
             });
     }
 

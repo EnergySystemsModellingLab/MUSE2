@@ -810,6 +810,31 @@ impl Asset {
             .set(AssetCapacity::Discrete(n_units - 1, unit_size));
     }
 
+    /// Decommission this asset
+    fn decommission(&mut self, reason: &str) {
+        let (id, agent_id, parent) = match &self.state {
+            AssetState::Commissioned {
+                id,
+                agent_id,
+                parent,
+                ..
+            } => (*id, agent_id.clone(), parent),
+            _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
+        };
+        debug!(
+            "Decommissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
+            self.process_id(),
+            id,
+            agent_id,
+            reason
+        );
+
+        // If this is a child asset, we need to decrease the parent's capacity appropriately
+        if let Some(parent) = parent {
+            parent.decrement_unit_count();
+        }
+    }
+
     /// Commission the asset.
     ///
     /// Only assets with an [`AssetState`] of `Future` or `Selected` can be commissioned. If the
