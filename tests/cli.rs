@@ -83,7 +83,7 @@ fn check_no_copy_input_files_flag() {
     ]);
 
     // Check that input files were not copied to the output directory
-    assert!(!output_dir.join("model").exists());
+    assert!(!output_dir.join("input").exists());
 }
 
 /// Test the `example extract`
