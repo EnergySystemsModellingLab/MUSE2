@@ -39,6 +39,10 @@ pub struct RunOpts {
     /// Whether to write additional information to CSV files
     #[arg(long)]
     pub debug_model: bool,
+
+    /// Whether to skip copying input files to the output folder
+    #[arg(long)]
+    pub no_copy_input_files: bool,
 }
 
 /// Options for the `graph` command
@@ -134,6 +138,9 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     if opts.overwrite {
         settings.overwrite = true;
     }
+    if opts.no_copy_input_files {
+        settings.copy_input_files = false;
+    }
 
     // Get path to output folder
     let pathbuf: PathBuf;
@@ -161,9 +168,10 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
         .to_str()
         .context("Invalid chars in model directory name")?;
 
-    copy_input_files(&model_path, output_path, model_name)
-        .context("Failed to copy input files to output directory.")?;
-
+    if settings.copy_input_files {
+        copy_input_files(&model_path, output_path, model_name)
+            .context("Failed to copy input files to output directory.")?;
+    }
     // Initialise program logger
     log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
 
