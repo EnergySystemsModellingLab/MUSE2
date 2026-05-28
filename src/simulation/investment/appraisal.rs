@@ -314,7 +314,7 @@ fn calculate_npv(
     );
 
     let profitability_index = profitability_index(
-        results.capacity.total_capacity(),
+        max_capacity.total_capacity(),
         annual_fixed_cost,
         &results.activity,
         &coefficients.activity_coefficients,
