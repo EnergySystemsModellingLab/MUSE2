@@ -131,6 +131,34 @@ pub struct Asset {
     max_decommission_year: u32,
 }
 
+/// Functions for filtering process flows.
+///
+/// See [`Asset::get_revenue_from_flows_with_filter`].
+pub mod flow_filters {
+    use crate::commodity::CommodityID;
+    use crate::process::ProcessFlow;
+
+    /// A function for filtering over process flows
+    pub trait FlowsFilter: FnMut(&ProcessFlow) -> bool {}
+    impl<F: FnMut(&ProcessFlow) -> bool> FlowsFilter for F {}
+
+    /// Include all process flows
+    pub fn all_flows(_: &ProcessFlow) -> bool {
+        true
+    }
+
+    /// Include all process flows except the asset's primary output
+    pub fn exclude_primary_output(asset: &super::Asset) -> impl FlowsFilter + Clone {
+        let excluded = asset.primary_output().map(|flow| &flow.commodity.id);
+        exclude_commodity(excluded)
+    }
+
+    /// Include all process flows except the specified commodity
+    pub fn exclude_commodity(excluded: Option<&CommodityID>) -> impl FlowsFilter + Clone {
+        move |flow| excluded.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
+    }
+}
+
 impl Asset {
     /// Create a new candidate asset
     pub fn new_candidate(
@@ -443,7 +471,7 @@ impl Asset {
         prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
+        self.get_revenue_from_flows_with_filter(prices, time_slice, flow_filters::all_flows)
     }
 
     /// Get the total revenue from all flows excluding the primary output.
@@ -454,11 +482,11 @@ impl Asset {
         prices: &CommodityPrices,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
-        let excluded_commodity = self.primary_output().map(|flow| &flow.commodity.id);
-
-        self.get_revenue_from_flows_with_filter(prices, time_slice, |flow| {
-            excluded_commodity.is_none_or(|commodity_id| commodity_id != &flow.commodity.id)
-        })
+        self.get_revenue_from_flows_with_filter(
+            prices,
+            time_slice,
+            flow_filters::exclude_primary_output(self),
+        )
     }
 
     /// Get the total cost of purchasing input commodities per unit of activity for this asset.
@@ -479,14 +507,14 @@ impl Asset {
     ///
     /// Takes a function as an argument to filter the flows. If a price is missing, it is assumed to
     /// be zero.
-    fn get_revenue_from_flows_with_filter<F>(
+    pub fn get_revenue_from_flows_with_filter<F>(
         &self,
         prices: &CommodityPrices,
         time_slice: &TimeSliceID,
         mut filter_for_flows: F,
     ) -> MoneyPerActivity
     where
-        F: FnMut(&ProcessFlow) -> bool,
+        F: flow_filters::FlowsFilter,
     {
         self.iter_flows()
             .filter(|flow| filter_for_flows(flow))
