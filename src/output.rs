@@ -190,7 +190,8 @@ struct AssetCapacityRow {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct CommodityFlowRow {
     milestone_year: u32,
-    asset_id: AssetID,
+    asset_id: Option<AssetID>,
+    group_id: Option<AssetGroupID>,
     commodity_id: CommodityID,
     time_slice: TimeSliceID,
     flow: Flow,
@@ -688,9 +689,15 @@ impl DataWriter {
     /// Write commodity flows to a CSV file
     pub fn write_flows(&mut self, milestone_year: u32, flow_map: &FlowMap) -> Result<()> {
         for ((asset, commodity_id, time_slice), flow) in flow_map {
+            if asset.parent().is_some() {
+                // Skip child assets, as their flows are included in the parent asset's flow
+                continue;
+            }
+
             let row = CommodityFlowRow {
                 milestone_year,
-                asset_id: asset.id().unwrap(),
+                asset_id: asset.id(),
+                group_id: asset.group_id(),
                 commodity_id: commodity_id.clone(),
                 time_slice: time_slice.clone(),
                 flow: *flow,
@@ -914,7 +921,8 @@ mod tests {
         // Read back and compare
         let expected = CommodityFlowRow {
             milestone_year,
-            asset_id: asset.id().unwrap(),
+            asset_id: asset.id(),
+            group_id: None,
             commodity_id,
             time_slice,
             flow: Flow(42.0),

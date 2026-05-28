@@ -191,10 +191,9 @@ fn create_flow_map<'a>(
     // multiply this value by the flow coeffs to get commodity flows.
     let mut flows = FlowMap::new();
     for (asset, time_slice, activity) in activity {
-        let n_units = Dimensionless(asset.num_children().unwrap_or(1) as f64);
         for flow in asset.iter_flows() {
             let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
-            let flow_value = activity * flow.coeff / n_units;
+            let flow_value = activity * flow.coeff;
             flows.insert(flow_key, flow_value);
         }
     }
@@ -202,20 +201,18 @@ fn create_flow_map<'a>(
     // Copy flows for each child asset
     for asset in existing_assets {
         if let Some(parent) = asset.parent() {
-            for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
-                for time_slice in time_slice_info.iter_ids() {
+            let n_units = Dimensionless(parent.num_children().unwrap() as f64);
+            for time_slice in time_slice_info.iter_ids() {
+                for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
                     let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
                     flows.insert(
                         (asset.clone(), commodity_id.clone(), time_slice.clone()),
-                        flow,
+                        flow / n_units,
                     );
                 }
             }
         }
     }
-
-    // Remove all the parent assets
-    flows.retain(|(asset, _, _), _| !asset.is_parent());
 
     flows
 }
