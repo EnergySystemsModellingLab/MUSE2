@@ -38,16 +38,6 @@ define_regression_test_with_patches!(simple_ironing_out);
 /// Tolerance for comparing floating-point values in CSV lines.
 const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 
-/// Return a value offset from the base by a fraction of the tolerance.
-fn offset_from(base: f64, multiplier: f64) -> f64 {
-    base + FLOAT_CMP_TOLERANCE * multiplier
-}
-
-/// Build a CSV line from a name and floating-point value.
-fn csv_line(name: &str, value: f64) -> String {
-    format!("{name},{value}")
-}
-
 /// Run a regression test for the given example with optional extra arguments to `muse2 run`.
 fn run_regression_test(example: &str, extra_args: &[&str]) {
     // Allow user to set output dir for regression tests so they can examine results. This is
@@ -322,6 +312,16 @@ fn read_lines(path: &Path) -> Vec<String> {
 
 mod tests {
     use super::*;
+
+    /// Return a value offset from the base by a fraction of the tolerance.
+    fn offset_from(base: f64, multiplier: f64) -> f64 {
+        base + FLOAT_CMP_TOLERANCE * multiplier
+    }
+
+    /// Build a CSV line from a name and floating-point value.
+    fn csv_line(name: &str, value: f64) -> String {
+        format!("{name},{value}")
+    }
 
     #[test]
     fn tolerated_float_change_is_normalised_away() {
