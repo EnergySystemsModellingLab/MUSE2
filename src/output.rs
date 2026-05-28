@@ -802,7 +802,9 @@ mod tests {
         let mut user_assets = vec![asset_divisible.into()];
 
         // Commission a divisible asset so the active pool contains multiple children in one group
-        let commissioned = pool.commission_new(milestone_year, &mut user_assets);
+        let commissioned = pool
+            .commission_new(milestone_year, &mut user_assets)
+            .to_vec();
         assert!(commissioned.len() > 1);
 
         let dir = tempdir().unwrap();
@@ -837,7 +839,9 @@ mod tests {
         let mut user_assets = vec![asset_divisible.into()];
 
         // Commission a divisible asset so we get several children under one parent/group
-        let commissioned = pool.commission_new(milestone_year, &mut user_assets);
+        let commissioned = pool
+            .commission_new(milestone_year, &mut user_assets)
+            .to_vec();
         assert!(commissioned.len() > 1);
 
         let dir = tempdir().unwrap();

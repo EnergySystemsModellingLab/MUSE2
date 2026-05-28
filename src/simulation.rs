@@ -66,7 +66,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         asset_pool.decommission_old(year);
 
         // Commission user-defined assets for this year
-        let new_user_assets = asset_pool.commission_new(year, &mut user_assets);
+        let new_user_assets = asset_pool.commission_new(year, &mut user_assets).to_vec();
 
         // Take all the active assets as a list of existing assets
         let existing_assets = asset_pool.take();
@@ -119,7 +119,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         };
 
         // Add selected_assets to the active pool, receiving the newly commissioned ones
-        let newly_commissioned = asset_pool.extend(selected_assets);
+        let newly_commissioned = asset_pool.extend(selected_assets).to_vec();
 
         // Decommission unused assets
         asset_pool.mothball_unretained(existing_assets, year);

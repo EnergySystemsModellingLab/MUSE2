@@ -30,7 +30,7 @@ impl AssetPool {
     /// Commission new assets for the specified milestone year from the input data.
     ///
     /// Returns the newly commissioned assets (children, for divisible assets).
-    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) -> Vec<AssetRef> {
+    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) -> &[AssetRef] {
         let start = self.assets.len();
         let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
 
@@ -50,7 +50,7 @@ impl AssetPool {
             self.commission(asset, "user input");
         }
 
-        self.assets[start..].to_vec()
+        &self.assets[start..]
     }
 
     /// Commission the specified asset or, if divisible, its children
@@ -186,7 +186,7 @@ impl AssetPool {
     /// Extend the active pool with Commissioned or Selected assets.
     ///
     /// Returns the newly commissioned assets (those that were in `Selected` state on entry).
-    pub fn extend<I>(&mut self, assets: I) -> Vec<AssetRef>
+    pub fn extend<I>(&mut self, assets: I) -> &[AssetRef]
     where
         I: IntoIterator<Item = AssetRef>,
     {
@@ -223,7 +223,7 @@ impl AssetPool {
             AssetState::Commissioned { id, .. } => id.0 < first_new_id,
             _ => panic!("Active pool should only contain commissioned assets"),
         });
-        self.assets[new_start..].to_vec()
+        &self.assets[new_start..]
     }
 }
 
@@ -332,7 +332,7 @@ mod tests {
 
         // First call commissions one divisible asset and returns all of its children
         let mut user_assets = vec![asset_divisible.clone().into()];
-        let first_batch = asset_pool.commission_new(year, &mut user_assets);
+        let first_batch = asset_pool.commission_new(year, &mut user_assets).to_vec();
         assert_eq!(first_batch.len(), expected_children);
         assert!(first_batch.iter().all(|asset| asset.parent().is_some()));
 
@@ -342,7 +342,9 @@ mod tests {
 
         // Second call should return only assets commissioned in this second invocation
         let mut later_assets = vec![asset_divisible.into()];
-        let second_batch = asset_pool.commission_new(year + 1, &mut later_assets);
+        let second_batch = asset_pool
+            .commission_new(year + 1, &mut later_assets)
+            .to_vec();
         assert_eq!(asset_pool.assets.len(), expected_children * 2);
         assert!(
             second_batch
@@ -525,12 +527,14 @@ mod tests {
         let expected_new = expected_children_for_divisible(&selected_divisible);
 
         // Extend with a mix of existing commissioned assets and one selected divisible asset
-        let returned = asset_pool.extend(
-            existing_assets
-                .iter()
-                .cloned()
-                .chain(iter::once(selected_divisible)),
-        );
+        let returned = asset_pool
+            .extend(
+                existing_assets
+                    .iter()
+                    .cloned()
+                    .chain(iter::once(selected_divisible)),
+            )
+            .to_vec();
 
         // Returned assets should be exactly the newly commissioned children
         assert_eq!(returned.len(), expected_new);
