@@ -18,7 +18,7 @@ use crate::simulation::investment::appraisal::LCOXMetric;
 use crate::simulation::investment::appraisal::{
     AppraisalOutput, coefficients::ObjectiveCoefficients,
 };
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
     MoneyPerCapacity, MoneyPerCapacityPerYear, Year,
@@ -403,7 +403,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
     let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
     let market_costs = indexmap! { time_slice.clone() => MoneyPerActivity(0.4) };
     let activity = indexmap! { time_slice.clone() => Activity(10.0) };
-    let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
+    let unmet_demand = indexmap! { TimeSliceSelection::Single(time_slice.clone()) => Flow(5.0) };
     AppraisalOutput {
         asset: AssetRef::from(asset),
         capacity: AssetCapacity::Continuous(Capacity(42.0)),

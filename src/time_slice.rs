@@ -217,6 +217,20 @@ impl TimeSliceLevel {
     }
 }
 
+impl Serialize for TimeSliceLevel {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let s = match self {
+            Self::DayNight => "daynight",
+            Self::Season => "season",
+            Self::Annual => "annual",
+        };
+        serializer.serialize_str(s)
+    }
+}
+
 /// Information about the time slices in the simulation, including names and durations
 #[derive(PartialEq, Debug)]
 pub struct TimeSliceInfo {

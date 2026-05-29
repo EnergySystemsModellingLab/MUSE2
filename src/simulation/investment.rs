@@ -7,7 +7,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
@@ -23,11 +23,11 @@ use appraisal::{
     sort_and_filter_appraisal_outputs,
 };
 
-/// A map of demand across time slices for a specific market
-type DemandMap = IndexMap<TimeSliceID, Flow>;
+/// A map of demand across time-slice selections for a specific market
+type DemandMap = IndexMap<TimeSliceSelection, Flow>;
 
-/// Demand for a given combination of commodity, region and time slice
-type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
+/// Demand for a given combination of commodity, region and time-slice selection
+type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Flow>;
 
 /// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
@@ -177,8 +177,7 @@ pub fn perform_agent_investment(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
-    let mut net_demand =
-        flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
+    let mut net_demand = flatten_preset_demands_for_year(&model.commodities, year);
 
     // Keep a list of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -277,7 +276,7 @@ fn select_assets_for_single_market(
         let demand_portion_for_market = get_demand_portion_for_market(
             &model.time_slice_info,
             demand,
-            commodity_id,
+            commodity,
             region_id,
             commodity_portion,
         );
@@ -452,39 +451,27 @@ fn select_assets_for_cycle(
     Ok(all_cycle_assets)
 }
 
-/// Flatten the preset commodity demands for a given year into a map of commodity, region and
-/// time slice to demand.
+/// Build the initial net demand map for a given year.
 ///
-/// Since demands for some commodities may be specified at a coarser time slice level, we need to
-/// distribute these demands over all time slices. Note: the way that we do this distribution is
-/// irrelevant, as demands will only be balanced to the appropriate level, but we still need to do
-/// this for the solver to work.
+/// Demand for each commodity is stored at its natural time-slice selection level, matching the
+/// balance level at which the investment appraisal operates.
 ///
 /// **TODO**: these assumptions may need to be revisited, e.g. when we come to storage technologies
-fn flatten_preset_demands_for_year(
-    commodities: &CommodityMap,
-    time_slice_info: &TimeSliceInfo,
-    year: u32,
-) -> AllDemandMap {
+fn flatten_preset_demands_for_year(commodities: &CommodityMap, year: u32) -> AllDemandMap {
     let mut demand_map = AllDemandMap::new();
     for (commodity_id, commodity) in commodities {
         for ((region_id, data_year, time_slice_selection), demand) in &commodity.demand {
             if *data_year != year {
                 continue;
             }
-
-            // We split the demand equally over all time slices in the selection
-            // NOTE: since demands will only be balanced to the time slice level of the commodity
-            // it doesn't matter how we do this distribution, only the total matters.
-            #[allow(clippy::cast_precision_loss)]
-            let n_time_slices = time_slice_selection.iter(time_slice_info).count() as f64;
-            let demand_per_slice = *demand / Dimensionless(n_time_slices);
-            for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
-                demand_map.insert(
-                    (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-                    demand_per_slice,
-                );
-            }
+            demand_map.insert(
+                (
+                    commodity_id.clone(),
+                    region_id.clone(),
+                    time_slice_selection.clone(),
+                ),
+                *demand,
+            );
         }
     }
     demand_map
@@ -502,12 +489,6 @@ fn flatten_preset_demands_for_year(
 fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
     for ((asset, commodity_id, time_slice), flow) in flows {
         if assets.contains(asset) {
-            let key = (
-                commodity_id.clone(),
-                asset.region_id().clone(),
-                time_slice.clone(),
-            );
-
             // Only consider input flows and output flows from the primary output commodity
             // (excluding secondary outputs)
             if (flow < &Flow(0.0))
@@ -515,6 +496,13 @@ fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[A
                     .primary_output()
                     .is_some_and(|p| &p.commodity.id == commodity_id)
             {
+                let level = asset
+                    .get_flow(commodity_id)
+                    .unwrap()
+                    .commodity
+                    .time_slice_level;
+                let selection = level.containing_selection(time_slice);
+                let key = (commodity_id.clone(), asset.region_id().clone(), selection);
                 // Note: we use the negative of the flow as input flows are negative in the flow map.
                 demand
                     .entry(key)
@@ -529,20 +517,21 @@ fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[A
 fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
-    commodity_id: &CommodityID,
+    commodity: &Commodity,
     region_id: &RegionID,
     commodity_portion: Dimensionless,
 ) -> DemandMap {
     time_slice_info
-        .iter_ids()
-        .map(|time_slice| {
-            (
-                time_slice.clone(),
-                commodity_portion
-                    * *demand
-                        .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
-                        .unwrap_or(&Flow(0.0)),
-            )
+        .iter_selections_at_level(commodity.time_slice_level)
+        .map(|ts_selection| {
+            let demand_for_selection = *demand
+                .get(&(
+                    commodity.id.clone(),
+                    region_id.clone(),
+                    ts_selection.clone(),
+                ))
+                .unwrap_or(&Flow(0.0));
+            (ts_selection, commodity_portion * demand_for_selection)
         })
         .collect()
 }
@@ -582,10 +571,7 @@ fn get_demand_limiting_capacity(
 
     for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
     {
-        let demand_for_selection: Flow = time_slice_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| demand[time_slice])
-            .sum();
+        let demand_for_selection = demand[&time_slice_selection];
 
         // Calculate max capacity required for this time slice selection
         // For commodities with a coarse time slice level, we have to allow the possibility that all
@@ -804,6 +790,7 @@ fn select_best_assets(
             &format!("{} {} round {}", &commodity.id, &agent.id, round),
             &outputs_for_opts,
             &demand,
+            commodity.time_slice_level,
         )?;
 
         // Sort by investment priority and discard non-feasible options
@@ -815,7 +802,7 @@ fn select_best_assets(
             let remaining_demands: Vec<_> = demand
                 .iter()
                 .filter(|(_, flow)| **flow > Flow(0.0))
-                .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
+                .map(|(ts_selection, flow)| format!("{} : {:e}", ts_selection, flow.value()))
                 .collect();
 
             bail!(
@@ -933,7 +920,7 @@ mod tests {
         ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessParameterMap,
     };
     use crate::region::RegionID;
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
     use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
@@ -963,7 +950,7 @@ mod tests {
         let asset = asset(process);
 
         // Create demand map - demand of 10.0 for our time slice
-        let demand = indexmap! { time_slice.clone() => Flow(10.0)};
+        let demand = indexmap! { TimeSliceSelection::Single(time_slice.clone()) => Flow(10.0)};
 
         // Call the function
         let result = get_demand_limiting_capacity(&time_slice_info, &asset, &commodity_rc, &demand);
@@ -1007,8 +994,8 @@ mod tests {
 
         // Create demand map with different demands for each time slice
         let demand = indexmap! {
-            time_slice1.clone() => Flow(4.0), // Requires capacity of 4.0/0.2 = 20.0
-            time_slice2.clone() => Flow(3.0), // Would require infinite capacity, but should be skipped
+            TimeSliceSelection::Single(time_slice1.clone()) => Flow(4.0), // Requires capacity of 4.0/0.2 = 20.0
+            TimeSliceSelection::Single(time_slice2.clone()) => Flow(3.0), // Would require infinite capacity, but should be skipped
         };
 
         // Call the function
