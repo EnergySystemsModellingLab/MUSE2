@@ -8,9 +8,9 @@ use crate::output::DataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::timeit::InvestmentTimer;
-use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
+use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use context_manager;
 use indexmap::IndexMap;
@@ -27,11 +27,11 @@ use appraisal::{
     sort_and_filter_appraisal_outputs,
 };
 
-/// A map of demand across time slices for a specific market
-pub type DemandMap = IndexMap<TimeSliceID, Flow>;
+/// A map of demand across balance-level time slice selections for a specific market
+pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
 
-/// Demand for a given combination of commodity, region and time slice
-pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
+/// Demand for a given combination of commodity, region and balance-level time slice selection
+pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Flow>;
 
 /// Perform agent investment to determine capacity investment of new assets for next milestone year.
 ///
@@ -123,21 +123,14 @@ pub fn perform_agent_investment(
             &mut net_demand,
             &solution.create_flow_map(),
             &selected_assets,
+            &model.commodities,
         );
     }
 
     Ok(all_selected_assets)
 }
 
-/// Flatten the preset commodity demands for a given year into a map of commodity, region and
-/// time slice to demand.
-///
-/// Since demands for some commodities may be specified at a coarser time slice level, we need to
-/// distribute these demands over all time slices. Note: the way that we do this distribution is
-/// irrelevant, as demands will only be balanced to the appropriate level, but we still need to do
-/// this for the solver to work.
-///
-/// **TODO**: these assumptions may need to be revisited, e.g. when we come to storage technologies
+/// Collect preset commodity demands for a given year at their configured balance level.
 pub fn flatten_preset_demands_for_year(
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
@@ -150,16 +143,13 @@ pub fn flatten_preset_demands_for_year(
                 continue;
             }
 
-            // We split the demand equally over all time slices in the selection
-            // NOTE: since demands will only be balanced to the time slice level of the commodity
-            // it doesn't matter how we do this distribution, only the total matters.
-            #[allow(clippy::cast_precision_loss)]
-            let n_time_slices = time_slice_selection.iter(time_slice_info).count() as f64;
-            let demand_per_slice = *demand / Dimensionless(n_time_slices);
-            for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
+            let balance_selections = time_slice_selection
+                .iter_at_level(time_slice_info, commodity.time_slice_level)
+                .expect("demand selection must be at or below the commodity balance level");
+            for (selection, _) in balance_selections {
                 demand_map.insert(
-                    (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-                    demand_per_slice,
+                    (commodity_id.clone(), region_id.clone(), selection),
+                    *demand,
                 );
             }
         }
@@ -176,13 +166,19 @@ pub fn flatten_preset_demands_for_year(
 ///
 /// TODO: this is a very flawed approach. The proper solution might be for agents to consider
 /// multiple commodities simultaneously, but that would require substantial work to implement.
-pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets: &[AssetRef]) {
+pub fn update_net_demand_map(
+    demand: &mut AllDemandMap,
+    flows: &FlowMap,
+    assets: &[AssetRef],
+    commodities: &CommodityMap,
+) {
     for ((asset, commodity_id, time_slice), flow) in flows {
         if assets.contains(asset) {
+            let commodity = &commodities[commodity_id];
             let key = (
                 commodity_id.clone(),
                 asset.region_id().clone(),
-                time_slice.clone(),
+                commodity.time_slice_level.containing_selection(time_slice),
             );
 
             // Only consider input flows and output flows from the primary output commodity
@@ -193,10 +189,14 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
                     .is_some_and(|p| &p.commodity.id == commodity_id)
             {
                 // Note: we use the negative of the flow as input flows are negative in the flow map.
-                demand
+                let value = demand
                     .entry(key)
                     .and_modify(|value| *value -= *flow)
                     .or_insert(-*flow);
+
+                if value.abs() <= Flow::EPSILON {
+                    *value = Flow(0.0);
+                }
             }
         }
     }
@@ -227,6 +227,9 @@ pub fn calculate_candidate_asset_capacity_scale(
         return Capacity(0.0);
     }
     let annual_demand = demand.values().copied().sum::<Flow>();
+    if annual_demand <= Flow(1e-12) {
+        return Capacity(0.0);
+    }
     annual_demand / max_annual_supply_per_capacity
 }
 
@@ -295,12 +298,7 @@ pub fn get_demand_limiting_capacity(
                                     > ActivityPerCapacity(0.0)
                             })
                         })
-                        .map(|(bucket, _)| {
-                            bucket
-                                .iter(time_slice_info)
-                                .map(|(ts, _)| demand[ts])
-                                .sum::<Flow>()
-                        })
+                        .map(|(bucket, _)| demand[&bucket])
                         .sum()
                 });
 
@@ -437,6 +435,7 @@ pub fn select_best_assets(
             &format!("{} {} round {}", commodity.id, agent.id, round),
             &outputs,
             &demand,
+            commodity.time_slice_level,
         )?;
 
         // Sort by investment priority and discard non-feasible options
@@ -663,7 +662,7 @@ mod tests {
         let asset = asset(process);
 
         // Create demand map - demand of 10.0 for our time slice
-        let demand = indexmap! { time_slice.clone() => Flow(10.0)};
+        let demand = indexmap! { TimeSliceSelection::Single(time_slice.clone()) => Flow(10.0)};
 
         // Call the function
         let result = get_demand_limiting_capacity(&time_slice_info, &asset, &commodity_rc, &demand);
@@ -707,8 +706,8 @@ mod tests {
 
         // Create demand map with different demands for each time slice
         let demand = indexmap! {
-            time_slice1.clone() => Flow(4.0), // Requires capacity of 4.0/0.2 = 20.0
-            time_slice2.clone() => Flow(3.0), // Would require infinite capacity, but should be skipped
+            TimeSliceSelection::Single(time_slice1.clone()) => Flow(4.0), // Requires capacity of 4.0/0.2 = 20.0
+            TimeSliceSelection::Single(time_slice2.clone()) => Flow(3.0), // Would require infinite capacity, but should be skipped
         };
 
         // Call the function
@@ -774,8 +773,8 @@ mod tests {
         let asset = asset(process);
 
         let demand = indexmap! {
-            time_slice1.clone() => Flow(5.0),
-            time_slice2.clone() => Flow(5.0),
+            TimeSliceSelection::Single(time_slice1.clone()) => Flow(5.0),
+            TimeSliceSelection::Single(time_slice2.clone()) => Flow(5.0),
         };
 
         let result =
@@ -815,7 +814,7 @@ mod tests {
         process.activity_limits = process_activity_limits_map(process.regions.clone(), limits);
 
         let asset = asset(process);
-        let demand = indexmap! { time_slice => demand_value };
+        let demand = indexmap! { TimeSliceSelection::Single(time_slice) => demand_value };
         assert_eq!(
             calculate_candidate_asset_capacity_scale(&asset, &commodity_rc, &demand),
             expected

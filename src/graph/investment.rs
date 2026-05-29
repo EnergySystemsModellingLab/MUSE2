@@ -601,7 +601,10 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            MarketSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
+            MarketSet::Cycle {
+                investment_order: vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())],
+                excluded_processes: vec![],
+            }
         );
     }
 

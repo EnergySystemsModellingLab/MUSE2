@@ -398,17 +398,15 @@ where
 
             // For SVD commodities, the demand must be present in the map; for SED commodities,
             // missing entries mean no demand for this selection.
-            let demand_for_selection: Flow = ts_selection
-                .iter(&model.time_slice_info)
-                .map(|(time_slice, _)| {
-                    let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-
-                    match commodity.kind {
-                        CommodityType::ServiceDemand => market_demands[&key],
-                        _ => market_demands.get(&key).copied().unwrap_or(Flow(0.0)),
-                    }
-                })
-                .sum();
+            let key = (
+                commodity_id.clone(),
+                region_id.clone(),
+                ts_selection.clone(),
+            );
+            let demand_for_selection = match commodity.kind {
+                CommodityType::ServiceDemand => market_demands[&key],
+                _ => market_demands.get(&key).copied().unwrap_or(Flow(0.0)),
+            };
             let min = demand_for_selection.max(epsilon);
 
             // Consume collected terms into a row. `terms.drain(..)` ensures the vector is

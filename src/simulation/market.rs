@@ -1,5 +1,5 @@
 //! Code for creating sets of markets.
-use super::optimisation::DispatchRun;
+use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
@@ -8,11 +8,11 @@ use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
-    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale,
-    flatten_preset_demands_for_year, select_best_assets, update_net_demand_map,
+    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
+    update_net_demand_map,
 };
 use crate::simulation::prices::Prices;
-use crate::time_slice::TimeSliceInfo;
+use crate::time_slice::{TimeSliceInfo, TimeSliceLevel};
 use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result, bail};
 use itertools::{Itertools, chain};
@@ -192,6 +192,7 @@ pub fn select_assets_for_single_market(
             commodity_id,
             region_id,
             commodity_portion,
+            commodity.time_slice_level,
         );
 
         // Existing and candidate assets from which to choose
@@ -263,8 +264,8 @@ pub fn select_assets_for_cycle(
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &Prices,
-    seen_markets: &[(CommodityID, RegionID)],
-    previously_selected_assets: &[AssetRef],
+    _seen_markets: &[(CommodityID, RegionID)],
+    _previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let MarketSet::Cycle {
@@ -280,10 +281,21 @@ pub fn select_assets_for_cycle(
         .map(|(c, r)| format!("{c}|{r}"))
         .join(", ");
 
+    // Feedback processes are excluded from the second pass while their first-pass flows are
+    // retained as part of the demand carried into that pass.
+    let feedback_processes = model
+        .processes
+        .iter()
+        .filter(|(_, process)| process.feedback_process)
+        .map(|(process_id, _)| process_id.clone())
+        .collect::<Vec<_>>();
+
     // STEP 1
     // Iterate over the markets in order1, considering all processes
     let mut net_demand = demand.clone();
     let mut assets_for_first_pass = Vec::new();
+    let mut retained_first_pass_assets = Vec::new();
+    let mut excluded_flows = FlowMap::new();
     for market in investment_order {
         let (commodity_id, region_id) = market.clone();
 
@@ -308,6 +320,12 @@ pub fn select_assets_for_cycle(
             continue;
         }
         assets_for_first_pass.extend(selected_assets.iter().cloned());
+        retained_first_pass_assets.extend(
+            selected_assets
+                .iter()
+                .filter(|asset| feedback_processes.contains(asset.process_id()))
+                .cloned(),
+        );
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
@@ -322,38 +340,47 @@ pub fn select_assets_for_cycle(
         debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
 
         // Update demand map with flows from newly selected assets
+        let flows = solution.create_flow_map();
+        for ((asset, commodity_id, time_slice), flow) in &flows {
+            if feedback_processes.contains(asset.process_id()) {
+                excluded_flows
+                    .entry((asset.clone(), commodity_id.clone(), time_slice.clone()))
+                    .and_modify(|stored_flow| *stored_flow += *flow)
+                    .or_insert(*flow);
+            }
+        }
         update_net_demand_map(
             &mut net_demand,
-            &solution.create_flow_map(),
+            &flows,
             &selected_assets,
+            &model.commodities,
         );
     }
 
     // STEP 2
-    // Iterate over the markets in order2, excluding the specified processes
-    let preset_demands =
-        flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
+    // Iterate over the markets in order2, excluding feedback processes
+    let mut net_demand = demand.clone();
+    update_net_demand_map(
+        &mut net_demand,
+        &excluded_flows,
+        &assets_for_first_pass,
+        &model.commodities,
+    );
     let mut assets_for_second_pass = Vec::new();
-    for (idx, (commodity_id, region_id)) in investment_order.iter().enumerate() {
-        // Collect excluded processes
-        let excluded_processes = model
-            .processes
-            .iter()
-            .filter(|(_, process)| process.feedback_process)
-            .map(|(process_id, _)| process_id.clone())
-            .collect::<Vec<_>>();
+    for market in investment_order {
+        let (commodity_id, region_id) = market.clone();
 
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 2");
         let selected_assets = select_assets_for_single_market(
             model,
-            commodity_id,
-            region_id,
+            &commodity_id,
+            &region_id,
             year,
             &net_demand,
             existing_assets,
             prices,
-            &excluded_processes,
+            &feedback_processes,
             writer,
         )?;
         debug!("Completed {commodity_id}|{region_id} selection pass 2");
@@ -365,20 +392,20 @@ pub fn select_assets_for_cycle(
         }
         assets_for_second_pass.extend(selected_assets.iter().cloned());
 
-        // Assemble full list of assets for dispatch (previously selected + all chosen so far)
-        let mut all_assets = previously_selected_assets.to_vec();
-        all_assets.extend(assets_for_first_pass.iter().cloned());
-        all_assets.extend(assets_for_second_pass.iter().cloned());
+        // // Assemble full list of assets for dispatch (previously selected + all chosen so far)
+        // let mut all_assets = previously_selected_assets.to_vec();
+        // all_assets.extend(assets_for_first_pass.iter().cloned());
+        // all_assets.extend(assets_for_second_pass.iter().cloned());
 
-        // We balance all previously seen markets plus all cycle markets up to and including this one
-        let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&investment_order[0..=idx]);
+        // // We balance all previously seen markets plus all cycle markets up to and including this one
+        // let mut markets_to_balance = seen_markets.to_vec();
+        // markets_to_balance.extend_from_slice(&investment_order[0..=idx]);
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
-        let solution = DispatchRun::new(model, &all_assets, year, &preset_demands)
+        let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
             .without_commodity_constraints()
-            .with_market_balance_subset(&markets_to_balance)
+            .with_market_balance_subset(std::slice::from_ref(market))
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
                 writer,
@@ -391,12 +418,13 @@ pub fn select_assets_for_cycle(
             &mut net_demand,
             &solution.create_flow_map(),
             &selected_assets,
+            &model.commodities,
         );
     }
 
     // Combine equivalent candidate assets
     let mut combined_assets: Vec<AssetRef> = Vec::new();
-    for asset in assets_for_first_pass
+    for asset in retained_first_pass_assets
         .into_iter()
         .chain(assets_for_second_pass)
     {
@@ -422,17 +450,20 @@ pub fn get_demand_portion_for_market(
     commodity_id: &CommodityID,
     region_id: &RegionID,
     commodity_portion: Dimensionless,
+    balance_level: TimeSliceLevel,
 ) -> DemandMap {
     time_slice_info
-        .iter_ids()
-        .map(|time_slice| {
-            (
-                time_slice.clone(),
-                commodity_portion
-                    * *demand
-                        .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
-                        .unwrap_or(&Flow(0.0)),
-            )
+        .iter_selections_at_level(balance_level)
+        .map(|selection| {
+            let demand = *demand
+                .get(&(commodity_id.clone(), region_id.clone(), selection.clone()))
+                .unwrap_or(&Flow(0.0));
+            let demand = if demand.abs() <= Flow(1e-12) {
+                Flow(0.0)
+            } else {
+                demand
+            };
+            (selection, commodity_portion * demand)
         })
         .collect()
 }
@@ -525,6 +556,7 @@ fn get_candidate_assets<'a>(
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
                 capacity_scale * capacity_tranche_fraction
             };
+            // println!("DEMAND: {demand:?}");
             let asset_capacity = AssetCapacity::single(tranche_size);
             asset.set_capacity(asset_capacity);
             asset.into()

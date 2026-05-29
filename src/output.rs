@@ -4,10 +4,11 @@ use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
+use crate::simulation::investment::DemandMap;
 use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceLevel};
 use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use csv;
@@ -497,13 +498,15 @@ impl DebugDataWriter {
         milestone_year: u32,
         run_description: &str,
         appraisal_results: &[AppraisalOutput],
-        demand: &IndexMap<TimeSliceID, Flow>,
+        demand: &DemandMap,
+        balance_level: TimeSliceLevel,
     ) -> Result<()> {
         for result in appraisal_results {
             for (time_slice, activity) in &result.activity {
                 let activity_coefficient = result.coefficients.activity_coefficients[time_slice];
-                let demand = demand[time_slice];
-                let unmet_demand = result.unmet_demand[time_slice];
+                let selection = balance_level.containing_selection(time_slice);
+                let demand = demand[&selection];
+                let unmet_demand = result.unmet_demand[&selection];
                 let row = AppraisalResultsTimeSliceRow {
                     milestone_year,
                     run_description: self.with_context(run_description),
@@ -599,7 +602,8 @@ impl DataWriter {
         milestone_year: u32,
         run_description: &str,
         appraisal_results: &[AppraisalOutput],
-        demand: &IndexMap<TimeSliceID, Flow>,
+        demand: &DemandMap,
+        balance_level: TimeSliceLevel,
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug {
             wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
@@ -608,6 +612,7 @@ impl DataWriter {
                 run_description,
                 appraisal_results,
                 demand,
+                balance_level,
             )?;
         }
 
@@ -712,7 +717,7 @@ mod tests {
         appraisal_output, asset, assets, commodity_id, multi_tranche_asset, region_id, time_slice,
     };
     use crate::simulation::investment::appraisal::AppraisalOutput;
-    use crate::time_slice::TimeSliceID;
+    use crate::time_slice::{TimeSliceID, TimeSliceSelection};
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
     use rstest::rstest;
@@ -1122,7 +1127,7 @@ mod tests {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let dir = tempdir().unwrap();
-        let demand = indexmap! {time_slice.clone() => Flow(100.0) };
+        let demand = indexmap! {TimeSliceSelection::Single(time_slice.clone()) => Flow(100.0) };
 
         // Write appraisal time slice results
         {
@@ -1133,6 +1138,7 @@ mod tests {
                     &run_description,
                     &[appraisal_output],
                     &demand,
+                    TimeSliceLevel::DayNight,
                 )
                 .unwrap();
             writer.flush().unwrap();
