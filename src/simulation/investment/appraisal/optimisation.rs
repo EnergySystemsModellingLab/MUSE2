@@ -21,33 +21,6 @@ use indexmap::IndexMap;
 /// in which columns are added to the problem when extracting solution values.
 pub type Variable = highs::Col;
 
-/// Map storing variables for the optimisation problem
-struct VariableMap {
-    /// Activity variables in each time slice
-    activity_vars: IndexMap<TimeSliceID, Variable>,
-}
-
-impl VariableMap {
-    /// Creates a new variable map by adding variables to the optimisation problem.
-    ///
-    /// # Arguments
-    /// * `problem` - The optimisation problem to add variables to
-    /// * `cost_coefficients` - Objective function coefficients for each variable
-    ///
-    /// # Returns
-    /// A new `VariableMap` containing all created decision variables
-    fn add_to_problem(problem: &mut Problem, cost_coefficients: &ObjectiveCoefficients) -> Self {
-        // Create activity variables for each time slice
-        let mut activity_vars = IndexMap::new();
-        for (time_slice, cost) in &cost_coefficients.activity_coefficients {
-            let var = problem.add_column(cost.value(), 0.0..);
-            activity_vars.insert(time_slice.clone(), var);
-        }
-
-        Self { activity_vars }
-    }
-}
-
 /// Map containing optimisation results and coefficients
 pub struct ResultsMap {
     /// Activity variables in each time slice
@@ -56,30 +29,41 @@ pub struct ResultsMap {
     pub unmet_demand: DemandMap,
 }
 
+/// Adds activity variables to the problem, one per time slice.
+///
+/// Returns a map from time slice to the corresponding decision variable.
+fn add_activity_vars(
+    problem: &mut Problem,
+    cost_coefficients: &ObjectiveCoefficients,
+) -> IndexMap<TimeSliceID, Variable> {
+    cost_coefficients
+        .activity_coefficients
+        .iter()
+        .map(|(time_slice, cost)| {
+            let var = problem.add_column(cost.value(), 0.0..);
+            (time_slice.clone(), var)
+        })
+        .collect()
+}
+
 /// Adds constraints to the problem.
 fn add_constraints(
     problem: &mut Problem,
     asset: &AssetRef,
     max_capacity: AssetCapacity,
     commodity: &Commodity,
-    variables: &VariableMap,
+    activity_vars: &IndexMap<TimeSliceID, Variable>,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
 ) {
-    add_activity_constraints(
-        problem,
-        asset,
-        max_capacity,
-        &variables.activity_vars,
-        time_slice_info,
-    );
+    add_activity_constraints(problem, asset, max_capacity, activity_vars, time_slice_info);
     add_demand_constraints(
         problem,
         asset,
         commodity,
         time_slice_info,
         demand,
-        &variables.activity_vars,
+        activity_vars,
     );
 }
 
@@ -134,7 +118,7 @@ pub fn perform_optimisation(
 ) -> Result<ResultsMap> {
     // Create problem and add variables
     let mut problem = Problem::default();
-    let variables = VariableMap::add_to_problem(&mut problem, coefficients);
+    let activity_vars = add_activity_vars(&mut problem, coefficients);
 
     // Add constraints
     add_constraints(
@@ -142,7 +126,7 @@ pub fn perform_optimisation(
         asset,
         max_capacity,
         commodity,
-        &variables,
+        &activity_vars,
         demand,
         &model.time_slice_info,
     );
@@ -155,8 +139,7 @@ pub fn perform_optimisation(
         .map_err(ModelError::into_anyhow)?
         .get_solution();
     let solution_values = solution.columns();
-    let activity = variables
-        .activity_vars
+    let activity = activity_vars
         .keys()
         .zip(solution_values.iter())
         .map(|(time_slice, &value)| (time_slice.clone(), Activity::new(value)))
