@@ -154,12 +154,11 @@ fn criterion_benchmark(c: &mut Criterion) {
             .next()
             .expect("No agent found responsible for the target commodity/region/year");
 
-    let net_demand =
-        flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, YEAR);
+    let net_demand = flatten_preset_demands_for_year(&model.commodities, YEAR);
     let demand = get_demand_portion_for_market(
         &model.time_slice_info,
         &net_demand,
-        &commodity.id,
+        commodity,
         region_id,
         commodity_portion,
     );
