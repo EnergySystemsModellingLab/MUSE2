@@ -32,7 +32,7 @@ macro_rules! define_regression_test_with_extra_args {
             run_regression_test(stringify!($example), $extra_args, false);
         }
     };
-    ($example:ident, $extra_args:expr, $debug_model:literal) => {
+    ($example:ident, $extra_args:expr, $debug_model:expr) => {
         #[test]
         fn $example() {
             run_regression_test(stringify!($example), $extra_args, $debug_model);

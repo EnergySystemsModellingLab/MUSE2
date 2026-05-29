@@ -96,13 +96,11 @@ fn check_example_extract_command(#[case] patch: bool) {
 /// Test the `example run` command with no additional flags
 #[test]
 fn check_example_run_command() {
-    assert_muse2_runs(&[
-        "example",
-        "run",
-        "simple",
-        "--output-dir",
-        &tempdir().unwrap().path().to_path_buf().to_string_lossy(),
-    ]);
+    let tmp = tempdir().unwrap();
+    let output_dir = tmp.path().join("out");
+    let output_dir_str = output_dir.to_string_lossy();
+
+    assert_muse2_runs(&["example", "run", "simple", "--output-dir", &output_dir_str]);
 }
 
 // NB: `example run` extra flags are covered by regression tests

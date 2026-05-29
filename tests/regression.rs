@@ -37,10 +37,10 @@ define_regression_test_with_patches!(simple_ironing_out);
 /// The tolerance when comparing floating-point values in CSV files
 const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 
-/// Run a regression test for the given example with optional extra arguments to `muse2 run`.
+/// Run a regression test for the given example with optional extra arguments to `muse2 example run`.
 ///
-/// The `debug-model` flag is always used so the debug files are available to examine. The debug
-/// files are only tested when the `debug_model` flag is true.
+/// The `--debug-model` flag is always used so the debug files are available to examine. The debug
+/// files are only tested when the `debug_model` parameter is true.
 fn run_regression_test(example: &str, extra_args: &[&str], debug_model: bool) {
     // Allow user to set output dir for regression tests so they can examine results. This is
     // principally intended for use by CI.
