@@ -107,49 +107,69 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Lazily computed only if at least one FullCost market is encountered.
     let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
 
-    // Iterate over investment sets in reverse order. Single and Layer sets price all their
-    // markets simultaneously (they are independent). Cycle sets price markets one at a time
-    // to account for circular dependencies.
+    // Iterate over investment sets in reverse order
     for investment_set in model.investment_order[&year].iter().rev() {
-        match investment_set {
-            InvestmentSet::Single(market) => {
-                price_markets(
+        price_investment_set(
+            investment_set,
+            model,
+            solution,
+            year,
+            &shadow_prices,
+            &mut annual_activities,
+            &mut result,
+        );
+    }
+
+    Ok(result)
+}
+
+/// Calculate prices for the markets in an investment set, updating `result`.
+fn price_investment_set(
+    investment_set: &InvestmentSet,
+    model: &Model,
+    solution: &Solution,
+    year: u32,
+    shadow_prices: &CommodityPrices,
+    annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
+    result: &mut CommodityPrices,
+) {
+    match investment_set {
+        InvestmentSet::Single(market) => {
+            price_markets(
+                model,
+                solution,
+                year,
+                std::slice::from_ref(market),
+                shadow_prices,
+                annual_activities,
+                result,
+            );
+        }
+        InvestmentSet::Cycle(markets) => {
+            price_cycle(
+                model,
+                solution,
+                year,
+                markets,
+                shadow_prices,
+                annual_activities,
+                result,
+            );
+        }
+        InvestmentSet::Layer(investment_sets) => {
+            for set in investment_sets {
+                price_investment_set(
+                    set,
                     model,
                     solution,
                     year,
-                    std::slice::from_ref(market),
-                    &shadow_prices,
-                    &mut annual_activities,
-                    &mut result,
-                );
-            }
-            InvestmentSet::Layer(_) => {
-                let markets: Vec<_> = investment_set.iter_markets().cloned().collect();
-                price_markets(
-                    model,
-                    solution,
-                    year,
-                    &markets,
-                    &shadow_prices,
-                    &mut annual_activities,
-                    &mut result,
-                );
-            }
-            InvestmentSet::Cycle(markets) => {
-                price_cycle(
-                    model,
-                    solution,
-                    year,
-                    markets,
-                    &shadow_prices,
-                    &mut annual_activities,
-                    &mut result,
+                    shadow_prices,
+                    annual_activities,
+                    result,
                 );
             }
         }
     }
-
-    Ok(result)
 }
 
 /// Calculate prices for a collection of independent markets and insert them into `result`.
