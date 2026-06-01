@@ -320,7 +320,7 @@ fn price_cycle(
         }
     }
 
-    // Iterative over the markets for a fixed number of iterations, updating prices each time
+    // Iterate over the markets for a fixed number of iterations, updating prices each time
     for _ in 0..n_iterations {
         // Price markets in reverse order (i.e. upstream markets first)
         for market in markets.iter().rev() {
