@@ -156,6 +156,19 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 ///
 /// `result` serves as both the source of input prices (prices of input commodities from
 /// upstream markets already computed) and the destination for newly computed prices.
+///
+/// # Arguments
+///
+/// * `model` - The model
+/// * `solution` - Solution to dispatch optimisation
+/// * `year` - The year for which prices are being calculated
+/// * `markets` - The markets to calculate prices for
+/// * `shadow_prices` - Shadow prices for all commodities
+/// * `annual_activities` - Optional map of annual activities for all assets, used for full cost
+///   pricing. If not provided, it will be calculated on demand if at least one market uses full
+///   cost pricing.
+/// * `result` - In-progress map of calculated prices, which will be extended with the newly
+///   calculated prices for these markets
 fn price_markets(
     model: &Model,
     solution: &Solution,
@@ -263,6 +276,11 @@ fn price_markets(
 }
 
 /// Calculate prices for a set of cyclically-dependent markets, updating `result`.
+///
+/// Markets should be ordered in the input slice according to the direction of dependencies
+/// (downstream markets first) as solved by `order_sccs`.  Prices are calculated in the reverse of
+/// this order (i.e. upstream markets first), with a (currently unused) iterative loop to allow
+/// for feedback between markets.
 fn price_cycle(
     model: &Model,
     solution: &Solution,
@@ -282,8 +300,9 @@ fn price_cycle(
         }
     }
 
+    // Iterative over the markets for a fixed number of iterations, updating prices each time
     for _ in 0..n_iterations {
-        // Price each market in reverse order
+        // Price markets in reverse order (i.e. upstream markets first)
         for market in markets.iter().rev() {
             price_markets(
                 model,
