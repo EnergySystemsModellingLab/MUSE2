@@ -4,8 +4,8 @@ GASPRD,Gas produced,sed,season,,PJ
 GASOLI,Gasoline,sed,season,,PJ
 DIESEL,Diesel,sed,season,,PJ
 GASNAT,Natural gas,sed,season,,PJ
-ELCTRI,Electricity,sed,daynight,shadow,PJ
-H2YPRD,Hydrogen,sed,season,shadow,PJ
+ELCTRI,Electricity,sed,daynight,,PJ
+H2YPRD,Hydrogen,sed,season,,PJ
 TPASKM,Passenger kms,svd,daynight,,bpkm
 RSHEAT,Residential heating,svd,daynight,,PJ
 CO2EMT,CO2 emitted,oth,annual,,ktCO2
