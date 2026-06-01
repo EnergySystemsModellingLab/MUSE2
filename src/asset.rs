@@ -665,6 +665,11 @@ impl Asset {
             .map(|commodity_id| &self.flows[commodity_id])
     }
 
+    /// Get the primary output commodity (if any) for this asset
+    pub fn primary_output_commodity(&self) -> Option<&CommodityID> {
+        self.process.primary_output.as_ref()
+    }
+
     /// Whether this asset has been commissioned
     pub fn is_commissioned(&self) -> bool {
         matches!(&self.state, AssetState::Commissioned { .. })
