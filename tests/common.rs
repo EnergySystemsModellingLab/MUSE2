@@ -29,7 +29,13 @@ macro_rules! define_regression_test_with_extra_args {
     ($example:ident, $extra_args:expr) => {
         #[test]
         fn $example() {
-            run_regression_test(stringify!($example), $extra_args);
+            run_regression_test(stringify!($example), $extra_args, false);
+        }
+    };
+    ($example:ident, $extra_args:expr, $debug_model:expr) => {
+        #[test]
+        fn $example() {
+            run_regression_test(stringify!($example), $extra_args, $debug_model);
         }
     };
 }
@@ -50,7 +56,7 @@ pub(crate) use define_regression_test;
 #[allow(unused_macros)]
 macro_rules! define_regression_test_with_debug_files {
     ($example:ident) => {
-        define_regression_test_with_extra_args!($example, &["--debug-model"]);
+        define_regression_test_with_extra_args!($example, &[], true);
     };
 }
 #[allow(unused_imports)]
