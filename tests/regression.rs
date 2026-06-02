@@ -29,7 +29,7 @@ define_regression_test_with_patches!(simple_npv);
 define_regression_test_with_patches!(simple_marginal);
 define_regression_test_with_patches!(simple_marginal_average);
 define_regression_test_with_patches!(simple_full);
-define_regression_test_with_patches!(simple_full_average);
+define_regression_test_with_patches!(simple_shadow);
 define_regression_test_with_patches!(simple_ironing_out);
 
 // ------  END: regression tests  ------
