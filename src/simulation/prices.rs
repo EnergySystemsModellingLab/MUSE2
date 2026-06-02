@@ -216,10 +216,9 @@ fn price_markets(
     if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
         for (commodity_id, region_id) in shadow_set {
             for time_slice in model.time_slice_info.iter_ids() {
-                let shadow_price = shadow_prices
-                    .get(commodity_id, region_id, time_slice)
-                    .unwrap();
-                result.insert(commodity_id, region_id, time_slice, shadow_price);
+                if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
+                    result.insert(commodity_id, region_id, time_slice, shadow_price);
+                }
             }
         }
     }
@@ -315,10 +314,9 @@ fn price_cycle(
     // Seed the markets with shadow prices
     for (commodity_id, region_id) in markets {
         for time_slice in model.time_slice_info.iter_ids() {
-            let shadow_price = shadow_prices
-                .get(commodity_id, region_id, time_slice)
-                .unwrap();
-            result.insert(commodity_id, region_id, time_slice, shadow_price);
+            if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
+                result.insert(commodity_id, region_id, time_slice, shadow_price);
+            }
         }
     }
 
