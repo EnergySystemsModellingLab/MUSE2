@@ -311,10 +311,9 @@ fn price_cycle(
     result: &mut CommodityPrices,
 ) {
     let n_iterations = 1;
-    let cycle_market_set: HashSet<_> = markets.iter().cloned().collect();
 
     // Seed the markets with shadow prices
-    for (commodity_id, region_id) in &cycle_market_set {
+    for (commodity_id, region_id) in markets {
         for time_slice in model.time_slice_info.iter_ids() {
             let shadow_price = shadow_prices
                 .get(commodity_id, region_id, time_slice)
