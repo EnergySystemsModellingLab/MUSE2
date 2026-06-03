@@ -583,8 +583,8 @@ fn get_demand_limiting_capacity(
     let mut demand_cache: HashMap<_, Flow> = HashMap::new();
 
     // Calculate demand-limiting capacity at each timeslice level and take the max.
-    // This is necessary because process availability limits at the seasonal/annual level may be
-    // more restrictive than limits at the time slice level.
+    // This is necessary because process availability limits at the seasonal/annual level may
+    // necessitate higher capacity that activity limits at the time slice level.
     for level in TimeSliceLevel::iter() {
         for time_slice_selection in time_slice_info.iter_selections_at_level(level) {
             // Max supply within this time slice selection according to the asset's activity limits
