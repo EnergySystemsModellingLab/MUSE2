@@ -112,7 +112,24 @@ fn validate_agent_commodity_portions(
     region_ids: &IndexSet<RegionID>,
     milestone_years: &[u32],
 ) -> Result<()> {
-    // CHECK 1: Each specified commodity must have data for all years
+    // CHECK 1: Commodities of type OTH are not invested in, so should not be included in portions
+    for (id, portions) in agent_commodity_portions {
+        // Colate set of commodities for this agent
+        let commodity_ids: HashSet<_> = portions.keys().map(|(id, _)| id).collect();
+
+        // Check that none of these commodities are of type OTH
+        for commodity_id in commodity_ids {
+            let commodity = commodities
+                .get(commodity_id)
+                .context("Invalid commodity ID")?;
+            ensure!(
+                commodity.kind != CommodityType::Other,
+                "Agent {id} contains portion for commodity {commodity_id} which is of type OTH"
+            );
+        }
+    }
+
+    // CHECK 2: Each specified commodity must have data for all years
     for (id, portions) in agent_commodity_portions {
         // Colate set of commodities for this agent
         let commodity_ids: HashSet<_> = portions.keys().map(|(id, _)| id).collect();
@@ -128,7 +145,7 @@ fn validate_agent_commodity_portions(
         }
     }
 
-    // CHECK 2: Total portions for each commodity/year/region must sum to 1
+    // CHECK 3: Total portions for each commodity/year/region must sum to 1
     // First step is to create a map with the key as (commodity_id, year, region_id), and the value
     // as the sum of the portions for that key across all agents
     let mut summed_portions = HashMap::new();
@@ -158,7 +175,7 @@ fn validate_agent_commodity_portions(
         );
     }
 
-    // CHECK 3: All commodities of SVD or SED type must be covered for all regions and years
+    // CHECK 4: All commodities of SVD or SED type must be covered for all regions and years
     // This checks the same summed_portions map as above, just checking the keys
     // We first need to create a list of SVD and SED commodities to check against
     let svd_and_sed_commodities = commodities
@@ -199,6 +216,20 @@ mod tests {
     use indexmap::IndexMap;
     use std::rc::Rc;
 
+    fn make_commodity(id: &str, kind: CommodityType) -> Rc<Commodity> {
+        Rc::new(Commodity {
+            id: id.into(),
+            description: String::new(),
+            kind,
+            time_slice_level: TimeSliceLevel::Annual,
+            pricing_strategy: PricingStrategy::Shadow,
+            levies_prod: CommodityLevyMap::new(),
+            levies_cons: CommodityLevyMap::new(),
+            demand: DemandMap::new(),
+            units: "PJ".into(),
+        })
+    }
+
     #[test]
     fn validate_agent_commodity_portions_works() {
         let region_ids = IndexSet::from([RegionID::new("region1"), RegionID::new("region2")]);
@@ -217,17 +248,7 @@ mod tests {
         )]);
         let mut commodities = IndexMap::from([(
             CommodityID::new("commodity1"),
-            Rc::new(Commodity {
-                id: "commodity1".into(),
-                description: "A commodity".into(),
-                kind: CommodityType::SupplyEqualsDemand,
-                time_slice_level: TimeSliceLevel::Annual,
-                pricing_strategy: PricingStrategy::Shadow,
-                levies_prod: CommodityLevyMap::new(),
-                levies_cons: CommodityLevyMap::new(),
-                demand: DemandMap::new(),
-                units: "PJ".into(),
-            }),
+            make_commodity("commodity1", CommodityType::SupplyEqualsDemand),
         )]);
 
         // Valid case
@@ -261,21 +282,31 @@ mod tests {
         // Invalid case: SED commodity without associated commodity portions
         commodities.insert(
             CommodityID::new("commodity2"),
-            Rc::new(Commodity {
-                id: "commodity2".into(),
-                description: "Another commodity".into(),
-                kind: CommodityType::SupplyEqualsDemand,
-                time_slice_level: TimeSliceLevel::Annual,
-                pricing_strategy: PricingStrategy::Shadow,
-                levies_prod: CommodityLevyMap::new(),
-                levies_cons: CommodityLevyMap::new(),
-                demand: DemandMap::new(),
-                units: "PJ".into(),
-            }),
+            make_commodity("commodity2", CommodityType::SupplyEqualsDemand),
         );
         assert!(
             validate_agent_commodity_portions(
                 &agent_commodity_portions,
+                &agents,
+                &commodities,
+                &region_ids,
+                &milestone_years
+            )
+            .is_err()
+        );
+
+        // Invalid case: includes commodity of type Other
+        commodities.insert(
+            CommodityID::new("commodity3"),
+            make_commodity("commodity3", CommodityType::Other),
+        );
+        let mut map_v3 = AgentCommodityPortionsMap::new();
+        map_v3.insert(("commodity1".into(), 2020), Dimensionless(1.0));
+        map_v3.insert(("commodity3".into(), 2020), Dimensionless(1.0));
+        let agent_commodities_v3 = HashMap::from([("agent1".into(), map_v3)]);
+        assert!(
+            validate_agent_commodity_portions(
+                &agent_commodities_v3,
                 &agents,
                 &commodities,
                 &region_ids,
