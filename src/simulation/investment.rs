@@ -7,7 +7,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
@@ -15,6 +15,7 @@ use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use strum::IntoEnumIterator;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -579,22 +580,44 @@ fn get_demand_limiting_capacity(
 ) -> Capacity {
     let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
     let mut capacity = Capacity(0.0);
+    let mut demand_cache: HashMap<_, Flow> = HashMap::new();
 
-    for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
-    {
-        let demand_for_selection: Flow = time_slice_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| demand[time_slice])
-            .sum();
+    // Calculate demand-limiting capacity at each timeslice level and take the max.
+    // This is necessary because process availability limits at the seasonal/annual level may be
+    // more restrictive than limits at the time slice level.
+    for level in TimeSliceLevel::iter() {
+        for time_slice_selection in time_slice_info.iter_selections_at_level(level) {
+            // Max supply within this time slice selection according to the asset's activity limits
+            let max_supply_for_selection = *asset
+                .get_activity_per_capacity_limits_for_selection(&time_slice_selection)
+                .end()
+                * coeff;
 
-        // Calculate max capacity required for this time slice selection
-        // For commodities with a coarse time slice level, we have to allow the possibility that all
-        // of the demand gets served by production in a single time slice
-        for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
-            let max_flow_per_cap =
-                *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
-            if max_flow_per_cap != FlowPerCapacity(0.0) {
-                capacity = capacity.max(demand_for_selection / max_flow_per_cap);
+            // Max demand in this time slice selection
+            // If the commodity balance level is coarser that the level we're looking at,
+            // we need to use the demand value for the encompassing coarser level. For example, if
+            // we're at the time slice level and the commodity has a seasonal balance level, we
+            // need to use the demand value for the whole season, not the individual time slice.
+            // This is to allow for the possibility that all seasonal demand gets served by a single
+            // time slice.
+            let demand_selection_level = level.max(commodity.time_slice_level);
+            let demand_selection =
+                time_slice_selection.containing_selection_at_level(demand_selection_level);
+            let max_demand_for_selection = *demand_cache
+                .entry(demand_selection.clone())
+                .or_insert_with(|| {
+                    demand_selection
+                        .iter(time_slice_info)
+                        .map(|(time_slice, _)| demand[time_slice])
+                        .sum()
+                });
+
+            // Calculate demand limiting capacity for this time slice selection and take the max
+            // across selections
+            // Exclude any selections where the asset has zero supply, as these would effectively
+            // have infinite demand-limiting capacity.
+            if max_supply_for_selection != FlowPerCapacity(0.0) {
+                capacity = capacity.max(max_demand_for_selection / max_supply_for_selection);
             }
         }
     }
