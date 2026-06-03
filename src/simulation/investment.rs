@@ -8,7 +8,7 @@ use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
-use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
+use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -593,21 +593,28 @@ fn get_demand_limiting_capacity(
                 .end()
                 * coeff;
 
-            // Max demand in this time slice selection
+            // Serviceable demand in this time slice selection
             // If the commodity balance level is coarser that the level we're looking at,
             // we need to use the demand value for the encompassing coarser level. For example, if
             // we're at the time slice level and the commodity has a seasonal balance level, we
             // need to use the demand value for the whole season, not the individual time slice.
             // This is to allow for the possibility that all seasonal demand gets served by a single
             // time slice.
+            // When aggregating demand over a coarser selection, exclude constituent time slices
+            // where this asset cannot supply at all. Otherwise demand from unreachable time slices
+            // would incorrectly contribute to the required capacity.
             let demand_selection_level = level.max(commodity.time_slice_level);
             let demand_selection =
                 time_slice_selection.containing_selection_at_level(demand_selection_level);
-            let max_demand_for_selection = *demand_cache
+            let serviceable_demand_for_selection = *demand_cache
                 .entry(demand_selection.clone())
                 .or_insert_with(|| {
                     demand_selection
                         .iter(time_slice_info)
+                        .filter(|(time_slice, _)| {
+                            *asset.get_activity_per_capacity_limits(time_slice).end()
+                                > ActivityPerCapacity(0.0)
+                        })
                         .map(|(time_slice, _)| demand[time_slice])
                         .sum()
                 });
@@ -617,7 +624,8 @@ fn get_demand_limiting_capacity(
             // Exclude any selections where the asset has zero supply, as these would effectively
             // have infinite demand-limiting capacity.
             if max_supply_for_selection != FlowPerCapacity(0.0) {
-                capacity = capacity.max(max_demand_for_selection / max_supply_for_selection);
+                capacity =
+                    capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
             }
         }
     }
