@@ -260,9 +260,10 @@ mod tests {
         milestone_years: [u32; 1],
     ) {
         // Invalid case: includes commodity of type Other
-        if let Some(val) = agent_commodity_portions.get_mut(&AgentID::new("agent1")) {
-            val.insert(("other_commodity".into(), 2020), Dimensionless(1.0));
-        }
+        agent_commodity_portions
+            .get_mut(&AgentID::new("agent1"))
+            .unwrap()
+            .insert(("other_commodity".into(), 2020), Dimensionless(0.5));
         assert_error!(
             validate_agent_commodity_portions(
                 &agent_commodity_portions,
@@ -304,9 +305,10 @@ mod tests {
         milestone_years: [u32; 1],
     ) {
         // Invalid case: portions do not sum to 1
-        if let Some(val) = agent_commodity_portions.get_mut(&AgentID::new("agent1")) {
-            val.insert(("commodity1".into(), 2020), Dimensionless(0.5));
-        }
+        agent_commodity_portions
+            .get_mut(&AgentID::new("agent1"))
+            .unwrap()
+            .insert(("commodity1".into(), 2020), Dimensionless(0.5));
         let result = validate_agent_commodity_portions(
             &agent_commodity_portions,
             &agents,
