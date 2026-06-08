@@ -47,6 +47,7 @@ type PatchMap = BTreeMap<&'static str, PatchInfo>;
 static PATCHES: LazyLock<PatchMap> = LazyLock::new(get_all_patches);
 
 /// Get all patches
+#[allow(clippy::too_many_lines)]
 fn get_all_patches() -> PatchMap {
     [
         // The simple example with gas boiler process made divisible
@@ -72,6 +73,24 @@ fn get_all_patches() -> PatchMap {
                         .with_deletion("A0_RES,all,lcox,,")
                         .with_addition("A0_RES,all,npv,,"),
                 ],
+                None,
+            ),
+        ),
+        (
+            // The circularity example with objective type set to NPV for all agents
+            "circularity_npv",
+            PatchInfo::new(
+                "circularity",
+                vec![FilePatch::new("agent_objectives.csv").with_replacement(&[
+                    "agent_id,years,objective_type,decision_weight,decision_lexico_order",
+                    "A0_OAG,all,lcox,,",
+                    "A0_ELC,all,npv,,",
+                    "A0_RES,all,lcox,,",
+                    "A0_TRA,all,lcox,,",
+                    "A0_BPD,all,lcox,,",
+                    "A0_BPL,all,lcox,,",
+                    "A0_REF,all,lcox,,",
+                ])],
                 None,
             ),
         ),
