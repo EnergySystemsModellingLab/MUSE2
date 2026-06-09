@@ -255,14 +255,8 @@ impl TimeSliceInfo {
             .split('.')
             .collect_tuple()
             .context("Time slice must be in the form season.time_of_day")?;
-        let season = self
-            .seasons
-            .get_id(season)
-            .with_context(|| format!("{season} is not a known season"))?;
-        let time_of_day = self
-            .times_of_day
-            .get_id(time_of_day)
-            .with_context(|| format!("{time_of_day} is not a known time of day"))?;
+        let season = self.seasons.get_id(season)?;
+        let time_of_day = self.times_of_day.get_id(time_of_day)?;
 
         Ok(TimeSliceID {
             season: season.clone(),
@@ -280,11 +274,7 @@ impl TimeSliceInfo {
             let time_slice = self.get_time_slice_id_from_str(time_slice)?;
             Ok(TimeSliceSelection::Single(time_slice))
         } else {
-            let season = self
-                .seasons
-                .get_id(time_slice)
-                .with_context(|| format!("'{time_slice}' is not a valid season"))?
-                .clone();
+            let season = self.seasons.get_id(time_slice)?.clone();
             Ok(TimeSliceSelection::Season(season))
         }
     }

@@ -489,7 +489,7 @@ mod tests {
                     "A0_GEX,UNKNOWN_COMMODITY,all,all",
                 ])
             ],
-            "Unknown ID UNKNOWN_COMMODITY found"
+            "Unknown commodity ID 'UNKNOWN_COMMODITY'"
         );
     }
 
