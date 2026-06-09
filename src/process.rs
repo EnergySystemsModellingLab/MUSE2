@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-define_id_type! {ProcessID}
+define_id_type! {ProcessID, "process ID"}
 
 /// A map of [`Process`]es, keyed by process ID
 pub type ProcessMap = IndexMap<ProcessID, Rc<Process>>;

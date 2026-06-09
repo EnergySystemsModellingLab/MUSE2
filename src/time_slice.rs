@@ -13,8 +13,8 @@ use serde_string_enum::DeserializeLabeledStringEnum;
 use std::fmt::Display;
 use std::iter;
 
-define_id_type! {Season}
-define_id_type! {TimeOfDay}
+define_id_type! {Season, "season"}
+define_id_type! {TimeOfDay, "time of day"}
 
 /// An ID describing season and time of day
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]

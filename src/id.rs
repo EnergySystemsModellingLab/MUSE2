@@ -7,10 +7,13 @@ use std::fmt::Display;
 use std::hash::Hash;
 
 /// A trait alias for ID types
-pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
+pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + From<String> {
+    /// Get the name of this type of ID (e.g. "commodity", "region" etc.)
+    fn get_type_name() -> &'static str;
+}
 
 macro_rules! define_id_type {
-    ($name:ident) => {
+    ($name:ident, $type_name:expr) => {
         #[derive(
             Clone,
             derive_more::Display,
@@ -69,7 +72,11 @@ macro_rules! define_id_type {
             }
         }
 
-        impl crate::id::ID for $name {}
+        impl crate::id::ID for $name {
+            fn get_type_name() -> &'static str {
+                $type_name
+            }
+        }
 
         impl $name {
             /// Create a new ID from a string slice
@@ -82,7 +89,7 @@ macro_rules! define_id_type {
 pub(crate) use define_id_type;
 
 #[cfg(test)]
-define_id_type!(GenericID);
+define_id_type!(GenericID, "generic");
 
 /// Indicates that the struct has an ID field
 pub trait HasID<T: ID> {
