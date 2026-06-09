@@ -8,9 +8,9 @@ use crate::region::RegionID;
 use crate::units::Dimensionless;
 use anyhow::{Context, Result, ensure};
 use float_cmp::approx_eq;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 const AGENT_COMMODITIES_FILE_NAME: &str = "agent_commodity_portions.csv";
@@ -115,7 +115,7 @@ fn validate_agent_commodity_portions(
     // CHECK 1: Commodities of type OTH are not invested in, so should not be included in portions
     for (id, portions) in agent_commodity_portions {
         // Collate set of commodities for this agent
-        let commodity_ids: HashSet<_> = portions.keys().map(|(id, _)| id).collect();
+        let commodity_ids: IndexSet<_> = portions.keys().map(|(id, _)| id).collect();
 
         // Check that none of these commodities are of type OTH
         for commodity_id in commodity_ids {
@@ -129,7 +129,7 @@ fn validate_agent_commodity_portions(
     // CHECK 2: Each specified commodity must have data for all years
     for (id, portions) in agent_commodity_portions {
         // Collate set of commodities for this agent
-        let commodity_ids: HashSet<_> = portions.keys().map(|(id, _)| id).collect();
+        let commodity_ids: IndexSet<_> = portions.keys().map(|(id, _)| id).collect();
 
         // Check that each commodity has data for all milestone years
         for commodity_id in commodity_ids {
@@ -145,7 +145,7 @@ fn validate_agent_commodity_portions(
     // CHECK 3: Total portions for each commodity/year/region must sum to 1
     // First step is to create a map with the key as (commodity_id, year, region_id), and the value
     // as the sum of the portions for that key across all agents
-    let mut summed_portions = HashMap::new();
+    let mut summed_portions = IndexMap::new();
     for (id, agent_commodity_portions) in agent_commodity_portions {
         let agent = &agents[id];
         for ((commodity_id, year), portion) in agent_commodity_portions {
@@ -309,23 +309,16 @@ mod tests {
             .get_mut(&AgentID::new("agent1"))
             .unwrap()
             .insert(("commodity1".into(), 2020), Dimensionless(0.5));
-        let result = validate_agent_commodity_portions(
-            &agent_commodity_portions,
-            &agents,
-            &commodities,
-            &region_ids,
-            &milestone_years,
+        assert_error!(
+            validate_agent_commodity_portions(
+                &agent_commodity_portions,
+                &agents,
+                &commodities,
+                &region_ids,
+                &milestone_years,
+            ),
+            "Commodity commodity1 in year 2020 and region GBR does not sum to 1.0"
         );
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .chain()
-                .next()
-                .unwrap()
-                .to_string()
-                .contains("does not sum to 1.0")
-        ); // Required because region that is included in error message is non-deterministic.
     }
 
     #[rstest]
