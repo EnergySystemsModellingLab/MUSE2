@@ -7,8 +7,8 @@ use std::fmt::Display;
 use std::hash::Hash;
 
 /// A trait alias for ID types
-pub trait IDLike: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
-impl<T> IDLike for T where T: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
+pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
+impl<T> ID for T where T: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
 
 macro_rules! define_id_type {
     ($name:ident) => {
@@ -84,9 +84,9 @@ pub(crate) use define_id_type;
 define_id_type!(GenericID);
 
 /// Indicates that the struct has an ID field
-pub trait HasID<ID: IDLike> {
+pub trait HasID<T: ID> {
     /// Get the struct's ID
-    fn get_id(&self) -> &ID;
+    fn get_id(&self) -> &T;
 }
 
 /// Implement the `HasID` trait for the given type, assuming it has a field called `id`
@@ -102,7 +102,7 @@ macro_rules! define_id_getter {
 pub(crate) use define_id_getter;
 
 /// A data structure containing a set of IDs
-pub trait IDCollection<ID: IDLike> {
+pub trait IDCollection<T: ID> {
     /// Check if the ID is in the collection, returning a reference to it if found.
     ///
     /// # Arguments
@@ -112,12 +112,12 @@ pub trait IDCollection<ID: IDLike> {
     /// # Returns
     ///
     /// A reference to the ID in `self`, or an error if not found.
-    fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID>;
+    fn get_id<S: Borrow<str> + Display + ?Sized>(&self, id: &S) -> Result<&T>;
 }
 
 macro_rules! define_id_methods {
     () => {
-        fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID> {
+        fn get_id<S: Borrow<str> + Display + ?Sized>(&self, id: &S) -> Result<&T> {
             let found = self
                 .get(id.borrow())
                 .with_context(|| format!("Unknown ID {id} found"))?;
@@ -126,16 +126,16 @@ macro_rules! define_id_methods {
     };
 }
 
-impl<ID: IDLike> IDCollection<ID> for HashSet<ID> {
+impl<T: ID> IDCollection<T> for HashSet<T> {
     define_id_methods!();
 }
 
-impl<ID: IDLike> IDCollection<ID> for IndexSet<ID> {
+impl<T: ID> IDCollection<T> for IndexSet<T> {
     define_id_methods!();
 }
 
-impl<ID: IDLike, V> IDCollection<ID> for IndexMap<ID, V> {
-    fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID> {
+impl<T: ID, V> IDCollection<T> for IndexMap<T, V> {
+    fn get_id<S: Borrow<str> + Display + ?Sized>(&self, id: &S) -> Result<&T> {
         let (found, _) = self
             .get_key_value(id.borrow())
             .with_context(|| format!("Unknown ID {id} found"))?;
