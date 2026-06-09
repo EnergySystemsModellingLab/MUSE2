@@ -3,11 +3,11 @@ use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
 use std::borrow::Borrow;
 use std::collections::HashSet;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
 /// A trait alias for ID types
-pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + From<String> {
+pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + Debug + From<String> {
     /// Get the name of this type of ID (e.g. "commodity", "region" etc.)
     fn get_type_name() -> &'static str;
 }
