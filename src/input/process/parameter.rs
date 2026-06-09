@@ -1,5 +1,6 @@
 //! Code for reading process parameters from a CSV file
 use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
+use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::process::{ProcessID, ProcessMap, ProcessParameter, ProcessParameterMap};
 use crate::region::parse_region_str;
@@ -105,9 +106,7 @@ where
     let mut map: HashMap<ProcessID, ProcessParameterMap> = HashMap::new();
     for param_raw in iter {
         // Get process
-        let (id, process) = processes
-            .get_key_value(param_raw.process_id.as_str())
-            .with_context(|| format!("Process {} not found", param_raw.process_id))?;
+        let (id, process) = processes.get_id_value(&param_raw.process_id)?;
 
         // Get years
         let process_years: Vec<u32> = process.years.clone().collect();

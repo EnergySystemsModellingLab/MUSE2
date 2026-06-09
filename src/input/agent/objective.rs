@@ -1,6 +1,7 @@
 //! Code for reading agent objectives from a CSV file.
 use super::super::{input_err_msg, read_csv, try_insert};
 use crate::agent::{AgentID, AgentMap, AgentObjectiveMap, DecisionRule, ObjectiveType};
+use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::units::Dimensionless;
 use anyhow::{Context, Result, ensure};
@@ -58,9 +59,7 @@ where
 {
     let mut all_objectives = HashMap::new();
     for objective in iter {
-        let (id, agent) = agents
-            .get_key_value(&objective.agent_id)
-            .context("Invalid agent ID")?;
+        let (id, agent) = agents.get_id_value(&objective.agent_id)?;
 
         // Check that required parameters are present and others are absent
         check_objective_parameter(&objective, &agent.decision_rule)?;

@@ -176,6 +176,19 @@ impl<T: ID, V> IDCollection<T> for IndexMap<T, V> {
     }
 }
 
+/// A trait for getting an ID and a value from a map
+pub trait GetIDValue<K: ID, V> {
+    /// Get the ID and value, if any, for the given collection
+    fn get_id_value<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<(&K, &V), MissingIDError<K>>;
+}
+
+impl<K: ID + Borrow<str>, V> GetIDValue<K, V> for IndexMap<K, V> {
+    fn get_id_value<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<(&K, &V), MissingIDError<K>> {
+        self.get_key_value(id.borrow())
+            .ok_or_else(|| MissingIDError::new(id.borrow()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

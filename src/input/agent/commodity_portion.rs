@@ -133,7 +133,7 @@ fn validate_agent_commodity_portions(
     // as the sum of the portions for that key across all agents
     let mut summed_portions = HashMap::new();
     for (id, agent_commodity_portions) in agent_commodity_portions {
-        let agent = agents.get(id).context("Invalid agent ID")?;
+        let agent = &agents[id];
         for ((commodity_id, year), portion) in agent_commodity_portions {
             for region in region_ids {
                 if agent.regions.contains(region) {

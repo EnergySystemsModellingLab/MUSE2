@@ -1,5 +1,6 @@
 //! Code for reading process investment constraints from a CSV file.
 use super::super::input_err_msg;
+use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::input::{read_csv_optional, try_insert};
 use crate::process::{
@@ -92,9 +93,7 @@ where
         record.validate()?;
 
         // Verify the process exists
-        let (process_id, process) = processes
-            .get_key_value(record.process_id.as_str())
-            .with_context(|| format!("Process {} not found", record.process_id))?;
+        let (process_id, process) = processes.get_id_value(&record.process_id)?;
 
         // Parse and validate regions
         let process_regions = &process.regions;

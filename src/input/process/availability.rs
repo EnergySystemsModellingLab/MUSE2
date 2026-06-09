@@ -1,5 +1,6 @@
 //! Code for reading process availabilities from a CSV file.
 use super::super::{input_err_msg, parse_range, read_csv_optional, try_insert};
+use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
@@ -98,9 +99,7 @@ where
 
     for record in iter {
         // Get process
-        let (id, process) = processes
-            .get_key_value(record.process_id.as_str())
-            .with_context(|| format!("Process {} not found", record.process_id))?;
+        let (id, process) = processes.get_id_value(&record.process_id)?;
 
         // Get regions
         let process_regions = &process.regions;
