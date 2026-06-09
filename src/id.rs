@@ -8,7 +8,6 @@ use std::hash::Hash;
 
 /// A trait alias for ID types
 pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
-impl<T> ID for T where T: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
 
 macro_rules! define_id_type {
     ($name:ident) => {
@@ -69,6 +68,8 @@ macro_rules! define_id_type {
                 Ok(id.into())
             }
         }
+
+        impl crate::id::ID for $name {}
 
         impl $name {
             /// Create a new ID from a string slice
