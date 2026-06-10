@@ -11,28 +11,29 @@ use tempfile::{TempDir, tempdir};
 mod common;
 use common::*;
 
-// ------ BEGIN: regression tests ------
+/// Define regression tests
+mod regression {
+    use super::*;
 
-// We only check the debug files for the `simple` example at present
-define_regression_test_with_debug_files!(simple);
+    // We only check the debug files for the `simple` example at present
+    define_regression_test_with_debug_files!(simple);
 
-// Other example models
-define_regression_test!(missing_commodity);
-define_regression_test!(muse1_default);
-define_regression_test!(two_outputs);
-define_regression_test!(circularity);
-define_regression_test!(two_regions);
+    // Other example models
+    define_regression_test!(missing_commodity);
+    define_regression_test!(muse1_default);
+    define_regression_test!(two_outputs);
+    define_regression_test!(circularity);
+    define_regression_test!(two_regions);
 
-// Patched examples
-define_regression_test_with_patches!(simple_divisible);
-define_regression_test_with_patches!(simple_npv);
-define_regression_test_with_patches!(simple_marginal);
-define_regression_test_with_patches!(simple_marginal_average);
-define_regression_test_with_patches!(simple_full);
-define_regression_test_with_patches!(simple_shadow);
-define_regression_test_with_patches!(simple_ironing_out);
-
-// ------  END: regression tests  ------
+    // Patched examples
+    define_regression_test_with_patches!(simple_divisible);
+    define_regression_test_with_patches!(simple_npv);
+    define_regression_test_with_patches!(simple_marginal);
+    define_regression_test_with_patches!(simple_marginal_average);
+    define_regression_test_with_patches!(simple_full);
+    define_regression_test_with_patches!(simple_shadow);
+    define_regression_test_with_patches!(simple_ironing_out);
+}
 
 /// The tolerance when comparing floating-point values in CSV files
 const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
