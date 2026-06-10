@@ -29,7 +29,7 @@ define_regression_test_with_patches!(simple_npv);
 define_regression_test_with_patches!(simple_marginal);
 define_regression_test_with_patches!(simple_marginal_average);
 define_regression_test_with_patches!(simple_full);
-define_regression_test_with_patches!(simple_full_average);
+define_regression_test_with_patches!(simple_shadow);
 define_regression_test_with_patches!(simple_ironing_out);
 
 // ------  END: regression tests  ------
@@ -37,8 +37,11 @@ define_regression_test_with_patches!(simple_ironing_out);
 /// The tolerance when comparing floating-point values in CSV files
 const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
 
-/// Run a regression test for the given example with optional extra arguments to `muse2 run`.
-fn run_regression_test(example: &str, extra_args: &[&str]) {
+/// Run a regression test for the given example with optional extra arguments to `muse2 example run`.
+///
+/// The `--debug-model` flag is always used so the debug files are available to examine. The debug
+/// files are only tested when the `debug_model` parameter is true.
+fn run_regression_test(example: &str, extra_args: &[&str], debug_model: bool) {
     // Allow user to set output dir for regression tests so they can examine results. This is
     // principally intended for use by CI.
     let tmp: TempDir;
@@ -51,17 +54,20 @@ fn run_regression_test(example: &str, extra_args: &[&str]) {
 
     // Invoke muse2
     let output_dir_str = output_dir.to_string_lossy();
-    let mut args = vec!["example", "run", example, "--output-dir", &output_dir_str];
+    let mut args = vec![
+        "example",
+        "run",
+        example,
+        "--debug-model",
+        "--output-dir",
+        &output_dir_str,
+    ];
     args.extend(extra_args);
     assert_muse2_runs(&args);
 
     // Check that the output files match (approximately)
     let test_data_dir = PathBuf::from(format!("tests/data/{example}"));
-    compare_output_dirs(
-        &output_dir,
-        &test_data_dir,
-        extra_args.contains(&"--debug-model"),
-    );
+    compare_output_dirs(&output_dir, &test_data_dir, debug_model);
 }
 
 fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model: bool) {

@@ -331,7 +331,7 @@ pub fn processes(process: Process) -> ProcessMap {
 }
 
 #[fixture]
-pub fn agents() -> AgentMap {
+pub fn agents(region_ids: IndexSet<RegionID>) -> AgentMap {
     iter::once((
         "agent1".into(),
         Agent {
@@ -340,7 +340,7 @@ pub fn agents() -> AgentMap {
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
-            regions: IndexSet::new(),
+            regions: region_ids,
             objectives: AgentObjectiveMap::new(),
         },
     ))
