@@ -2,7 +2,7 @@
 use super::super::{input_err_msg, read_csv_optional, try_insert};
 use crate::agent::{Agent, AgentID, AgentMap, AgentSearchSpaceMap};
 use crate::commodity::CommodityID;
-use crate::id::IDCollection;
+use crate::id::{GetIDValue, IDCollection};
 use crate::input::parse_year_str;
 use crate::process::{Process, ProcessMap};
 use crate::region::RegionID;
@@ -46,9 +46,7 @@ fn add_entry_to_search_space_map(
     producers: &ProducersMap,
     map: &mut HashMap<AgentID, AgentSearchSpaceMap>,
 ) -> Result<()> {
-    let (agent_id, agent) = agents
-        .get_key_value(entry.agent_id.as_str())
-        .with_context(|| format!("Invalid agent ID '{}'", &entry.agent_id))?;
+    let (agent_id, agent) = agents.get_id_value(&entry.agent_id)?;
     let commodity_id = commodity_ids.get_id(&entry.commodity_id)?;
     let years = parse_year_str(&entry.years, milestone_years)?;
     ensure!(
@@ -109,9 +107,7 @@ where
             search_space
                 .split(';')
                 .map(|process_id_str| {
-                    let process = processes
-                        .get(process_id_str.trim())
-                        .with_context(|| format!("Invalid process ID '{process_id_str}'"))?;
+                    let (_, process) = processes.get_id_value(process_id_str.trim())?;
 
                     // Check that the specified process is a possibility for all specified regions
                     // and years
@@ -476,7 +472,7 @@ mod tests {
                     "UNKNOWN_AGENT,GASPRD,all,all",
                 ])
             ],
-            "Invalid agent ID 'UNKNOWN_AGENT'"
+            "Unknown agent ID 'UNKNOWN_AGENT'"
         );
     }
 
@@ -489,7 +485,7 @@ mod tests {
                     "A0_GEX,UNKNOWN_COMMODITY,all,all",
                 ])
             ],
-            "Unknown ID UNKNOWN_COMMODITY found"
+            "Unknown commodity ID 'UNKNOWN_COMMODITY'"
         );
     }
 
@@ -529,7 +525,7 @@ mod tests {
                     "A0_GEX,GASPRD,all,NONEXISTENT_PROCESS",
                 ])
             ],
-            "Invalid process ID 'NONEXISTENT_PROCESS'"
+            "Unknown process ID 'NONEXISTENT_PROCESS'"
         );
     }
 

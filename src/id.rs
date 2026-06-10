@@ -1,17 +1,21 @@
 //! Code for handling IDs
-use anyhow::{Context, Result};
+use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
 use std::borrow::Borrow;
 use std::collections::HashSet;
-use std::fmt::Display;
+use std::error::Error;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
+use std::marker::PhantomData;
 
-/// A trait alias for ID types
-pub trait IDLike: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
-impl<T> IDLike for T where T: Eq + Hash + Borrow<str> + Clone + Display + From<String> {}
+/// A trait for ID types
+pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + Debug + From<String> {
+    /// Get the name of this type of ID (e.g. "commodity ID", "region ID" etc.)
+    fn get_type_name() -> &'static str;
+}
 
 macro_rules! define_id_type {
-    ($name:ident) => {
+    ($name:ident, $type_name:expr) => {
         #[derive(
             Clone,
             derive_more::Display,
@@ -70,6 +74,12 @@ macro_rules! define_id_type {
             }
         }
 
+        impl crate::id::ID for $name {
+            fn get_type_name() -> &'static str {
+                $type_name
+            }
+        }
+
         impl $name {
             /// Create a new ID from a string slice
             pub fn new(id: &str) -> Self {
@@ -81,12 +91,12 @@ macro_rules! define_id_type {
 pub(crate) use define_id_type;
 
 #[cfg(test)]
-define_id_type!(GenericID);
+define_id_type!(GenericID, "generic ID");
 
 /// Indicates that the struct has an ID field
-pub trait HasID<ID: IDLike> {
+pub trait HasID<T: ID> {
     /// Get the struct's ID
-    fn get_id(&self) -> &ID;
+    fn get_id(&self) -> &T;
 }
 
 /// Implement the `HasID` trait for the given type, assuming it has a field called `id`
@@ -101,8 +111,33 @@ macro_rules! define_id_getter {
 }
 pub(crate) use define_id_getter;
 
+/// Indicates that the specified ID was not found in a given collection
+#[derive(Debug)]
+pub struct MissingIDError<T: ID> {
+    missing_id: String,
+    _phantom: PhantomData<fn() -> T>,
+}
+
+impl<T: ID> MissingIDError<T> {
+    /// Create a new `MissingIDError`
+    pub fn new(missing_id: &str) -> MissingIDError<T> {
+        MissingIDError::<T> {
+            missing_id: missing_id.to_string(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: ID> Display for MissingIDError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown {} '{}'", T::get_type_name(), self.missing_id)
+    }
+}
+
+impl<T: ID> Error for MissingIDError<T> {}
+
 /// A data structure containing a set of IDs
-pub trait IDCollection<ID: IDLike> {
+pub trait IDCollection<T: ID> {
     /// Check if the ID is in the collection, returning a reference to it if found.
     ///
     /// # Arguments
@@ -112,34 +147,45 @@ pub trait IDCollection<ID: IDLike> {
     /// # Returns
     ///
     /// A reference to the ID in `self`, or an error if not found.
-    fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID>;
+    fn get_id<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<&T, MissingIDError<T>>;
 }
 
 macro_rules! define_id_methods {
     () => {
-        fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID> {
-            let found = self
-                .get(id.borrow())
-                .with_context(|| format!("Unknown ID {id} found"))?;
-            Ok(found)
+        fn get_id<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<&T, MissingIDError<T>> {
+            self.get(id.borrow())
+                .ok_or_else(|| MissingIDError::new(id.borrow()))
         }
     };
 }
 
-impl<ID: IDLike> IDCollection<ID> for HashSet<ID> {
+impl<T: ID> IDCollection<T> for HashSet<T> {
     define_id_methods!();
 }
 
-impl<ID: IDLike> IDCollection<ID> for IndexSet<ID> {
+impl<T: ID> IDCollection<T> for IndexSet<T> {
     define_id_methods!();
 }
 
-impl<ID: IDLike, V> IDCollection<ID> for IndexMap<ID, V> {
-    fn get_id<T: Borrow<str> + Display + ?Sized>(&self, id: &T) -> Result<&ID> {
+impl<T: ID, V> IDCollection<T> for IndexMap<T, V> {
+    fn get_id<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<&T, MissingIDError<T>> {
         let (found, _) = self
             .get_key_value(id.borrow())
-            .with_context(|| format!("Unknown ID {id} found"))?;
+            .ok_or_else(|| MissingIDError::new(id.borrow()))?;
         Ok(found)
+    }
+}
+
+/// A trait for getting an ID and a value from a map
+pub trait GetIDValue<K: ID, V> {
+    /// Get the ID and value, if any, for the given collection
+    fn get_id_value<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<(&K, &V), MissingIDError<K>>;
+}
+
+impl<K: ID + Borrow<str>, V> GetIDValue<K, V> for IndexMap<K, V> {
+    fn get_id_value<S: Borrow<str> + ?Sized>(&self, id: &S) -> Result<(&K, &V), MissingIDError<K>> {
+        self.get_key_value(id.borrow())
+            .ok_or_else(|| MissingIDError::new(id.borrow()))
     }
 }
 

@@ -2,7 +2,7 @@
 use crate::graph::investment::solve_investment_order_for_model;
 use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
-use crate::id::{HasID, IDLike};
+use crate::id::{HasID, ID};
 use crate::model::{Model, ModelParameters};
 use crate::region::RegionID;
 use crate::units::UnitType;
@@ -135,13 +135,13 @@ pub fn input_err_msg<P: AsRef<Path>>(file_path: P) -> String {
 ///
 /// As this function is only ever used for top-level CSV files (i.e. the ones which actually define
 /// the IDs for a given type), we use an ordered map to maintain the order in the input files.
-fn read_csv_id_file<T, ID: IDLike>(file_path: &Path) -> Result<IndexMap<ID, T>>
+fn read_csv_id_file<T, I: ID>(file_path: &Path) -> Result<IndexMap<I, T>>
 where
-    T: HasID<ID> + DeserializeOwned,
+    T: HasID<I> + DeserializeOwned,
 {
-    fn fill_and_validate_map<T, ID: IDLike>(file_path: &Path) -> Result<IndexMap<ID, T>>
+    fn fill_and_validate_map<T, I: ID>(file_path: &Path) -> Result<IndexMap<I, T>>
     where
-        T: HasID<ID> + DeserializeOwned,
+        T: HasID<I> + DeserializeOwned,
     {
         let mut map = IndexMap::new();
         for record in read_csv::<T>(file_path)? {

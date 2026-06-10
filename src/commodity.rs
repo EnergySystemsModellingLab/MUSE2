@@ -9,7 +9,7 @@ use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-define_id_type! {CommodityID}
+define_id_type! {CommodityID, "commodity ID"}
 
 /// A map of [`Commodity`]s, keyed by commodity ID
 pub type CommodityMap = IndexMap<CommodityID, Rc<Commodity>>;

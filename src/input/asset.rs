@@ -2,7 +2,7 @@
 use super::{input_err_msg, read_csv_optional};
 use crate::agent::AgentID;
 use crate::asset::{Asset, AssetRef};
-use crate::id::IDCollection;
+use crate::id::{GetIDValue, IDCollection};
 use crate::process::ProcessMap;
 use crate::region::RegionID;
 use crate::units::Capacity;
@@ -75,9 +75,8 @@ where
 {
     iter.map(|asset| -> Result<_> {
         let agent_id = agent_ids.get_id(&asset.agent_id)?;
-        let process = processes
-            .get(asset.process_id.as_str())
-            .with_context(|| format!("Invalid process ID: {}", &asset.process_id))?;
+        let (process_id, process) = processes
+            .get_id_value(&asset.process_id)?;
         let region_id = region_ids.get_id(&asset.region_id)?;
 
         // Validate commission year. It should be within the process valid range...
@@ -86,21 +85,21 @@ where
             "Agent {} has asset with commission year {}, not within process {} commission years: {:?}",
             asset.agent_id,
             asset.commission_year,
-            asset.process_id,
+            process_id,
             process.years
         );
         // ... and also have associated process parameters and flows
         ensure!(
             process.parameters.contains_key(&(region_id.clone(), asset.commission_year)),
             "Parameters for process {} do not contain entry for year {}, required for asset in agent {}",
-            asset.process_id,
+            process_id,
             asset.commission_year,
             asset.agent_id,
         );
         ensure!(
             process.flows.contains_key(&(region_id.clone(), asset.commission_year)),
             "Flows for process {} do not contain entry for year {}, required for asset in agent {}",
-            asset.process_id,
+            process_id,
             asset.commission_year,
             asset.agent_id,
         );
@@ -115,7 +114,7 @@ where
                     "Asset capacity {} for process {} is not a multiple of unit size {}. \
                      Asset will be divided into {} units with combined capacity of {}.",
                     asset.capacity,
-                    asset.process_id,
+                    process_id,
                     unit_size,
                     n_units,
                     unit_size.value() * n_units

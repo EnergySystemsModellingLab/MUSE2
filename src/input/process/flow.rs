@@ -1,6 +1,7 @@
 //! Code for reading process flows from a CSV file.
 use super::super::{input_err_msg, read_csv};
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
+use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::process::{
     FlowDirection, FlowType, ProcessFlow, ProcessFlowsMap, ProcessID, ProcessMap,
@@ -161,9 +162,7 @@ where
         record.validate()?;
 
         // Get process
-        let (id, process) = processes
-            .get_key_value(record.process_id.as_str())
-            .with_context(|| format!("Process {} not found", record.process_id))?;
+        let (id, process) = processes.get_id_value(&record.process_id)?;
 
         // Get regions
         let process_regions = &process.regions;
@@ -180,9 +179,7 @@ where
             })?;
 
         // Get commodity
-        let commodity = commodities
-            .get(record.commodity_id.as_str())
-            .with_context(|| format!("{} is not a valid commodity ID", &record.commodity_id))?;
+        let (_, commodity) = commodities.get_id_value(&record.commodity_id)?;
 
         // Create ProcessFlow object
         let process_flow = ProcessFlow {

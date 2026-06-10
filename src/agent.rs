@@ -10,7 +10,7 @@ use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-define_id_type! {AgentID}
+define_id_type! {AgentID, "agent ID"}
 
 /// A map of [`Agent`]s, keyed by agent ID
 pub type AgentMap = IndexMap<AgentID, Agent>;

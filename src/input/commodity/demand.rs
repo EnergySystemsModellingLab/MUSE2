@@ -301,7 +301,7 @@ mod tests {
         ];
         assert_error!(
             read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020]),
-            "Unknown ID FRA found"
+            "Unknown region ID 'FRA'"
         );
     }
 
