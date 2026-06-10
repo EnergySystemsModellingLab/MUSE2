@@ -384,15 +384,17 @@ fn select_assets_for_cycle(
             .collect();
 
         // Retrieve installable capacity limits for flexible capacity assets.
-        let key = (commodity_id.clone(), year);
         let mut agent_share_cache = HashMap::new();
         let capacity_limits = flexible_capacity_assets
             .iter()
             .filter_map(|asset| {
                 let agent_id = asset.agent_id().unwrap();
+                let commodity_id = asset.primary_output_commodity().unwrap();
                 let agent_share = *agent_share_cache
-                    .entry(agent_id.clone())
-                    .or_insert_with(|| model.agents[agent_id].commodity_portions[&key]);
+                    .entry((agent_id, commodity_id))
+                    .or_insert_with(|| {
+                        model.agents[agent_id].commodity_portions[&(commodity_id.clone(), year)]
+                    });
                 asset
                     .max_installable_capacity(agent_share)
                     .map(|max_capacity| (asset.clone(), max_capacity))
