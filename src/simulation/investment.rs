@@ -806,7 +806,7 @@ fn select_best_assets(
             &demand,
         )?;
 
-        // Sort by investment priority and discord non-feasible options
+        // Sort by investment priority and discard non-feasible options
         sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
         // Check if there are any remaining options. If not, we cannot meet demand, so have to bail
