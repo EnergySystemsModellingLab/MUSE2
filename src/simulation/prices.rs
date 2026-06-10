@@ -12,6 +12,9 @@ use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
+/// Number of iterations to perform when calculating prices for cyclically-dependent markets.
+const N_CYCLE_ITERATIONS: i32 = 1;
+
 /// Weighted average accumulator for `MoneyPerFlow` prices.
 #[derive(Clone, Copy, Debug)]
 struct WeightedAverageAccumulator<W: UnitType> {
@@ -298,8 +301,8 @@ fn price_markets(
 ///
 /// Markets should be ordered in the input slice according to the direction of dependencies
 /// (downstream markets first) as solved by `order_sccs`.  Prices are calculated in the reverse of
-/// this order (i.e. upstream markets first), with a (currently unused) iterative loop to allow
-/// for feedback between markets.
+/// this order (i.e. upstream markets first), with an iterative loop to allow for feedback between
+/// markets.
 fn price_cycle(
     model: &Model,
     solution: &Solution,
@@ -309,8 +312,6 @@ fn price_cycle(
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     result: &mut CommodityPrices,
 ) {
-    let n_iterations = 1;
-
     // Seed the markets with shadow prices
     for (commodity_id, region_id) in markets {
         for time_slice in model.time_slice_info.iter_ids() {
@@ -321,7 +322,7 @@ fn price_cycle(
     }
 
     // Iterate over the markets for a fixed number of iterations, updating prices each time
-    for _ in 0..n_iterations {
+    for _ in 0..N_CYCLE_ITERATIONS {
         // Price markets in reverse order (i.e. upstream markets first)
         for market in markets.iter().rev() {
             price_markets(
