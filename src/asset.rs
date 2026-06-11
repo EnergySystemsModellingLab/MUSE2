@@ -62,13 +62,13 @@ pub struct AssetGroupID(u32);
 
 /// The state of an asset
 ///
-/// New assets are created as either `Future` or `Candidate` assets. `Future` assets (which are
-/// specified in the input data) have a fixed capacity and capital costs already accounted for,
-/// whereas `Candidate` assets capital costs are not yet accounted for, and their capacity is
-/// determined by the investment algorithm.
+/// New assets are created as either `Ready` or `Candidate` assets. `Ready` assets from the input
+/// data have a fixed capacity and capital costs already accounted for, whereas `Candidate` assets'
+/// capital costs are not yet accounted for, and their capacity is determined by the investment
+/// algorithm.
 ///
-/// `Future` and `Candidate` assets can be converted to `Commissioned` assets by calling
-/// the `commission` method (or via pool operations that commission future/ready assets).
+/// `Ready` and `Candidate` assets can be converted to `Commissioned` assets by calling the
+/// `commission` method (or via pool operations that commission ready assets).
 #[derive(Clone, Debug, PartialEq, strum::Display)]
 pub enum AssetState {
     /// The asset has been commissioned
@@ -84,15 +84,12 @@ pub enum AssetState {
         /// All divided assets have a parent, which tracks the total capacity across the children.
         parent: Option<AssetRef>,
     },
-    /// The asset is planned for commissioning in the future
-    Future {
-        /// The ID of the agent that will own the asset
-        agent_id: AgentID,
-    },
     /// The asset is ready for investment, but not yet confirmed
     Ready {
         /// The ID of the agent that would own the asset
         agent_id: AgentID,
+        /// The reason why this asset is due to be commissioned
+        commission_reason: &'static str,
     },
     /// The asset is a parent of other assets.
     ///
@@ -193,7 +190,10 @@ impl Asset {
         check_capacity_valid_for_asset(capacity)?;
         let unit_size = process.unit_size;
         Self::new_with_state(
-            AssetState::Future { agent_id },
+            AssetState::Ready {
+                agent_id,
+                commission_reason: "user input",
+            },
             process,
             region_id,
             AssetCapacity::from_capacity(capacity, unit_size),
@@ -234,7 +234,10 @@ impl Asset {
     ) -> Result<Self> {
         let unit_size = process.unit_size;
         Self::new_with_state(
-            AssetState::Ready { agent_id },
+            AssetState::Ready {
+                agent_id,
+                commission_reason: "selected",
+            },
             process,
             region_id,
             AssetCapacity::from_capacity(capacity, unit_size),
@@ -745,8 +748,7 @@ impl Asset {
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
             AssetState::Commissioned { agent_id, .. }
-            | AssetState::Future { agent_id }
-            | AssetState::Ready { agent_id }
+            | AssetState::Ready { agent_id, .. }
             | AssetState::Parent { agent_id, .. } => Some(agent_id),
             AssetState::Candidate => None,
         }
@@ -845,11 +847,13 @@ impl Asset {
     /// # Arguments
     ///
     /// * `id` - The ID to give the newly commissioned asset
-    /// * `reason` - The reason for commissioning (included in log)
     /// * `parent` - The parent asset, if this is a child asset
-    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>, reason: &str) {
-        let agent_id = match &self.state {
-            AssetState::Future { agent_id } | AssetState::Ready { agent_id } => agent_id,
+    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>) {
+        let (agent_id, reason) = match &self.state {
+            AssetState::Ready {
+                agent_id,
+                commission_reason,
+            } => (agent_id, commission_reason),
             state => panic!("Assets with state {state} cannot be commissioned"),
         };
         debug!(
@@ -875,7 +879,10 @@ impl Asset {
             "select_candidate_for_investment can only be called on Candidate assets"
         );
         check_capacity_valid_for_asset(self.total_capacity()).unwrap();
-        self.state = AssetState::Ready { agent_id };
+        self.state = AssetState::Ready {
+            agent_id,
+            commission_reason: "selected",
+        };
     }
 
     /// Set the year this asset was mothballed
@@ -1053,11 +1060,8 @@ impl AssetRef {
         F: FnMut(Option<&AssetRef>, AssetRef),
     {
         assert!(
-            matches!(
-                self.state,
-                AssetState::Future { .. } | AssetState::Ready { .. }
-            ),
-            "Assets with state {} cannot be divided. Only Future or Ready assets can be divided",
+            matches!(self.state, AssetState::Ready { .. }),
+            "Assets with state {} cannot be divided. Only Ready assets can be divided",
             self.state
         );
 
@@ -1510,7 +1514,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset1.commission(AssetID(1), None, "");
+        asset1.commission(AssetID(1), None);
         assert!(asset1.is_commissioned());
         assert_eq!(asset1.id(), Some(AssetID(1)));
 
@@ -1523,7 +1527,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset2.commission(AssetID(2), None, "");
+        asset2.commission(AssetID(2), None);
         assert!(asset2.is_commissioned());
         assert_eq!(asset2.id(), Some(AssetID(2)));
     }
@@ -1533,7 +1537,7 @@ mod tests {
     fn commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), None, "");
+        asset.commission(AssetID(1), None);
     }
 
     #[test]

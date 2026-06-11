@@ -47,18 +47,18 @@ impl AssetPool {
                 continue;
             }
 
-            self.commission(asset, "user input");
+            self.commission(asset);
         }
 
         &self.assets[start..]
     }
 
     /// Commission the specified asset or, if divisible, its children
-    fn commission(&mut self, asset: AssetRef, reason: &str) {
+    fn commission(&mut self, asset: AssetRef) {
         asset.into_for_each_child(&mut self.next_group_id, |parent, mut child| {
             child
                 .make_mut()
-                .commission(AssetID(self.next_id), parent.cloned(), reason);
+                .commission(AssetID(self.next_id), parent.cloned());
             self.next_id += 1;
             self.assets.push(child);
         });
@@ -173,7 +173,7 @@ impl AssetPool {
                     self.assets.push(asset);
                 }
                 AssetState::Ready { .. } => {
-                    self.commission(asset, "selected");
+                    self.commission(asset);
                 }
                 _ => panic!(
                     "Cannot extend asset pool with asset in state {}. Only assets in \
