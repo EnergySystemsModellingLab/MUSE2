@@ -586,47 +586,56 @@ fn get_demand_limiting_capacity(
     // This is necessary because process availability limits at the seasonal/annual level may
     // necessitate higher capacity that activity limits at the time slice level.
     for level in TimeSliceLevel::iter() {
-        for time_slice_selection in time_slice_info.iter_selections_at_level(level) {
-            // Max supply within this time slice selection according to the asset's activity limits
+        for selection in time_slice_info.iter_selections_at_level(level) {
+            // Maximum supply within this selection according to the asset's activity limits.
             let max_supply_for_selection = *asset
-                .get_activity_per_capacity_limits_for_selection(&time_slice_selection)
+                .get_activity_per_capacity_limits_for_selection(&selection)
                 .end()
                 * coeff;
 
-            // Serviceable demand in this time slice selection
-            // If the commodity balance level is coarser that the level we're looking at,
-            // we need to use the demand value for the encompassing coarser level. For example, if
-            // we're at the time slice level and the commodity has a seasonal balance level, we
-            // need to use the demand value for the whole season, not the individual time slice.
-            // This is to allow for the possibility that all seasonal demand gets served by a single
-            // time slice.
-            // When aggregating demand over a coarser selection, exclude constituent time slices
-            // where this asset cannot supply at all. Otherwise demand from unreachable time slices
-            // would incorrectly contribute to the required capacity.
+            // Selections with zero supply would imply infinite demand-limiting capacity,
+            // so they do not contribute to the maximum.
+            if max_supply_for_selection == FlowPerCapacity(0.0) {
+                continue;
+            }
+
+            // Serviceable demand within this selection.
+            //
+            // Demand is effectively grouped into balance buckets at the commodity's
+            // balance level. A balance bucket contributes if:
+            //   1. The bucket is contained within this selection, and
+            //   2. The asset can operate in at least one constituent timeslice
+            //      within that bucket.
+            //
+            // Demand within a balance bucket is fungible, so if the asset can serve
+            // any timeslice in the bucket, all demand in that bucket is considered
+            // serviceable.
             let demand_selection_level = level.max(commodity.time_slice_level);
-            let demand_selection =
-                time_slice_selection.containing_selection_at_level(demand_selection_level);
+            let demand_selection = selection.containing_selection_at_level(demand_selection_level);
             let serviceable_demand_for_selection = *demand_cache
                 .entry(demand_selection.clone())
                 .or_insert_with(|| {
                     demand_selection
-                        .iter(time_slice_info)
-                        .filter(|(time_slice, _)| {
-                            *asset.get_activity_per_capacity_limits(time_slice).end()
-                                > ActivityPerCapacity(0.0)
+                        .iter_at_level(time_slice_info, commodity.time_slice_level)
+                        .unwrap()
+                        .filter(|(bucket, _)| {
+                            bucket.iter(time_slice_info).any(|(ts, _)| {
+                                *asset.get_activity_per_capacity_limits(ts).end()
+                                    > ActivityPerCapacity(0.0)
+                            })
                         })
-                        .map(|(time_slice, _)| demand[time_slice])
+                        .map(|(bucket, _)| {
+                            bucket
+                                .iter(time_slice_info)
+                                .map(|(ts, _)| demand[ts])
+                                .sum::<Flow>()
+                        })
                         .sum()
                 });
 
-            // Calculate demand limiting capacity for this time slice selection and take the max
-            // across selections
-            // Exclude any selections where the asset has zero supply, as these would effectively
-            // have infinite demand-limiting capacity.
-            if max_supply_for_selection != FlowPerCapacity(0.0) {
-                capacity =
-                    capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
-            }
+            // Calculate demand-limiting capacity for this selection and take the
+            // maximum across all selections.
+            capacity = capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
         }
     }
 
