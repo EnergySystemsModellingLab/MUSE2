@@ -30,7 +30,7 @@ We provide a [justfile] for some common developer tasks.
 [Docker]: https://www.docker.com/
 [Visual Studio Code]: https://code.visualstudio.com/
 [GitHub Codespaces]: https://github.com/features/codespaces
-[justfile]: ../../justfile
+[justfile]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/justfile
 
 ## Installing tools
 
