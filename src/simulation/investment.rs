@@ -181,7 +181,7 @@ pub fn perform_agent_investment(
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
 
     // Keep a list of all the assets selected
-    // This includes Commissioned assets that are selected for retention, and new Selected assets
+    // This includes Commissioned assets that are selected for retention, and new Ready assets
     let mut all_selected_assets = Vec::new();
 
     let investment_order = &model.investment_order[&year];
@@ -321,7 +321,7 @@ fn select_assets_for_single_market(
 /// market in turn.
 ///
 /// Dispatch optimisation is performed after each market is visited to rebalance demand.
-/// While dispatching, newly selected (`Selected`) assets are given flexible capacity (bounded by
+/// While dispatching, newly selected (`Ready`) assets are given flexible capacity (bounded by
 /// `capacity_margin`) so small demand shifts caused by later markets can be absorbed. After all
 /// markets have been visited once, the final set of assets is returned, applying any capacity
 /// adjustments from the final full-system dispatch optimisation.
@@ -376,10 +376,10 @@ fn select_assets_for_cycle(
         let mut markets_to_balance = seen_markets.to_vec();
         markets_to_balance.extend_from_slice(&markets[0..=idx]);
 
-        // We allow all `Selected` state assets to have flexible capacity
+        // We allow all `Ready` state assets to have flexible capacity
         let flexible_capacity_assets: Vec<_> = assets_for_cycle_flat
             .iter()
-            .filter(|asset| matches!(asset.state(), AssetState::Selected { .. }))
+            .filter(|asset| matches!(asset.state(), AssetState::Ready { .. }))
             .cloned()
             .collect();
 
@@ -856,7 +856,7 @@ fn select_best_assets(
         round += 1;
     }
 
-    // Convert Candidate assets to Selected
+    // Convert Candidate assets to Ready
     // At this point we also assign the agent ID to the asset
     for asset in &mut best_assets {
         if let AssetState::Candidate = asset.state() {

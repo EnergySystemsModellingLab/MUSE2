@@ -155,16 +155,16 @@ impl AssetPool {
         std::mem::take(&mut self.assets)
     }
 
-    /// Extend the active pool with Commissioned or Selected assets.
+    /// Extend the active pool with Commissioned or Ready assets.
     ///
-    /// Returns the newly commissioned assets (those that were in `Selected` state on entry).
+    /// Returns the newly commissioned assets (those that were in `Ready` state on entry).
     pub fn extend<I>(&mut self, assets: I) -> &[AssetRef]
     where
         I: IntoIterator<Item = AssetRef>,
     {
         let first_new_id = self.next_id;
 
-        // Check all assets are either Commissioned or Selected, and, if the latter,
+        // Check all assets are either Commissioned or Ready, and, if the latter,
         // then commission them
         for mut asset in assets {
             match &asset.state {
@@ -172,12 +172,12 @@ impl AssetPool {
                     asset.make_mut().unmothball();
                     self.assets.push(asset);
                 }
-                AssetState::Selected { .. } => {
+                AssetState::Ready { .. } => {
                     self.commission(asset, "selected");
                 }
                 _ => panic!(
                     "Cannot extend asset pool with asset in state {}. Only assets in \
-                Commissioned or Selected states are allowed.",
+                    Commissioned or Ready states are allowed.",
                     asset.state
                 ),
             }
@@ -406,7 +406,7 @@ mod tests {
         // Create new non-commissioned assets
         let process_rc = Rc::new(process);
         let new_assets = vec![
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent2".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
@@ -415,7 +415,7 @@ mod tests {
             )
             .unwrap()
             .into(),
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent3".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
@@ -456,7 +456,7 @@ mod tests {
         process.unit_size = Some(Capacity(4.0));
         let process_rc = Rc::new(process);
         let new_assets: Vec<AssetRef> = vec![
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent2".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
@@ -484,10 +484,10 @@ mod tests {
         let initial_count = initial_assets.len();
         let existing_assets = asset_pool.take();
 
-        // Add one selected divisible asset so extend commissions multiple new children
+        // Add one ready divisible asset so extend() commissions multiple new children
         process.unit_size = Some(Capacity(4.0));
         let process_rc = Rc::new(process);
-        let selected_divisible: AssetRef = Asset::new_selected(
+        let ready_divisible: AssetRef = Asset::new_ready(
             "agent_selected".into(),
             Rc::clone(&process_rc),
             "GBR".into(),
@@ -496,15 +496,15 @@ mod tests {
         )
         .unwrap()
         .into();
-        let expected_new = expected_children_for_divisible(&selected_divisible);
+        let expected_new = expected_children_for_divisible(&ready_divisible);
 
-        // Extend with a mix of existing commissioned assets and one selected divisible asset
+        // Extend with a mix of existing commissioned assets and one ready divisible asset
         let returned = asset_pool
             .extend(
                 existing_assets
                     .iter()
                     .cloned()
-                    .chain(iter::once(selected_divisible)),
+                    .chain(iter::once(ready_divisible)),
             )
             .to_vec();
 
@@ -526,7 +526,7 @@ mod tests {
         asset_pool.commission_new(2020, &mut user_assets);
 
         // Create a new non-commissioned asset
-        let new_asset = Asset::new_selected(
+        let new_asset = Asset::new_ready(
             "agent_new".into(),
             process.into(),
             "GBR".into(),
@@ -562,7 +562,7 @@ mod tests {
         // Create new assets that would be out of order if added at the end
         let process_rc = Rc::new(process);
         let new_assets = vec![
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent_high_id".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
@@ -571,7 +571,7 @@ mod tests {
             )
             .unwrap()
             .into(),
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent_low_id".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
@@ -618,7 +618,7 @@ mod tests {
         // Create new non-commissioned assets
         let process_rc = Rc::new(process);
         let new_assets = vec![
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent1".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
@@ -627,7 +627,7 @@ mod tests {
             )
             .unwrap()
             .into(),
-            Asset::new_selected(
+            Asset::new_ready(
                 "agent2".into(),
                 Rc::clone(&process_rc),
                 "GBR".into(),
