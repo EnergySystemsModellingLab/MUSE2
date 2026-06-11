@@ -67,8 +67,8 @@ pub struct AssetGroupID(u32);
 /// capital costs are not yet accounted for, and their capacity is determined by the investment
 /// algorithm.
 ///
-/// `Ready` and `Candidate` assets can be converted to `Commissioned` assets by calling the
-/// `commission` method (or via pool operations that commission ready assets).
+/// `Ready` assets can be converted to `Commissioned` assets by calling the `commission` method (or
+/// via pool operations that commission ready assets).
 #[derive(Clone, Debug, PartialEq, strum::Display)]
 pub enum AssetState {
     /// The asset has been commissioned
@@ -799,8 +799,8 @@ impl Asset {
 
     /// Commission the asset.
     ///
-    /// Only assets with an [`AssetState`] of `Future` or `Ready` can be commissioned. If the
-    /// asset's state is something else, this function will panic.
+    /// Only assets with an [`AssetState`] of `Ready` can be commissioned. If the asset's state is
+    /// something else, this function will panic.
     ///
     /// # Arguments
     ///
@@ -1063,7 +1063,7 @@ impl AssetRef {
     /// When the asset has a discrete capacity, each of the children will be made up of a single
     /// unit of the original asset's unit size.
     ///
-    /// Panics if this asset's state is not `Future` or `Ready`.
+    /// Panics if this asset's state is not `Ready`.
     fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
     where
         F: FnMut(Option<&AssetRef>, AssetRef),
