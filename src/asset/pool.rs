@@ -1,5 +1,5 @@
 //! Defines a data structure for representing the current active pool of assets.
-use super::{AssetID, AssetRef, AssetState};
+use super::{AssetID, AssetRef, AssetState, UserAsset};
 use itertools::Itertools;
 use log::warn;
 use std::cmp::min;
@@ -30,7 +30,7 @@ impl AssetPool {
     /// Commission new assets for the specified milestone year from the input data.
     ///
     /// Returns the newly commissioned assets (children, for divisible assets).
-    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<AssetRef>) -> &[AssetRef] {
+    pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<UserAsset>) -> &[AssetRef] {
         let start = self.assets.len();
         let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
 
@@ -47,7 +47,7 @@ impl AssetPool {
                 continue;
             }
 
-            self.commission(asset);
+            self.commission(asset.into());
         }
 
         &self.assets[start..]
@@ -214,7 +214,7 @@ mod tests {
     use std::rc::Rc;
 
     #[fixture]
-    fn user_assets(mut process: Process) -> Vec<AssetRef> {
+    fn user_assets(mut process: Process) -> Vec<UserAsset> {
         // Update process parameters (lifetime = 20 years)
         let process_param = ProcessParameter {
             capital_cost: MoneyPerCapacity(5.0),
@@ -229,15 +229,15 @@ mod tests {
         let rc_process = Rc::new(process);
         [2020, 2010]
             .map(|year| {
-                Asset::new_future(
+                UserAsset::new(
                     "agent1".into(),
                     Rc::clone(&rc_process),
                     "GBR".into(),
                     Capacity(1.0),
                     year,
+                    None,
                 )
                 .unwrap()
-                .into()
             })
             .into_iter()
             .collect_vec()
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_commission_new1(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_commission_new1(mut user_assets: Vec<UserAsset>) {
         // Asset to be commissioned in this year
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2010, &mut user_assets);
@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_commission_new2(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_commission_new2(mut user_assets: Vec<UserAsset>) {
         // Commission year has passed
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2011, &mut user_assets);
@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_commission_new3(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_commission_new3(mut user_assets: Vec<UserAsset>) {
         // Nothing to commission for this year
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2000, &mut user_assets);
@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_decommission_old(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_decommission_old(mut user_assets: Vec<UserAsset>) {
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
         assert!(user_assets.is_empty());
@@ -360,7 +360,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_get(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_get(mut user_assets: Vec<UserAsset>) {
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
         assert_eq!(asset_pool.get(AssetID(0)), Some(&asset_pool.assets[0]));
@@ -368,7 +368,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_empty(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_extend_empty(mut user_assets: Vec<UserAsset>) {
         // Start with commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_existing_assets(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_extend_existing_assets(mut user_assets: Vec<UserAsset>) {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_new_assets(mut user_assets: Vec<AssetRef>, process: Process) {
+    fn asset_pool_extend_new_assets(mut user_assets: Vec<UserAsset>, process: Process) {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -444,7 +444,7 @@ mod tests {
 
     #[rstest]
     fn asset_pool_extend_new_divisible_assets(
-        mut user_assets: Vec<AssetRef>,
+        mut user_assets: Vec<UserAsset>,
         mut process: Process,
     ) {
         // Start with some commissioned assets
@@ -474,7 +474,7 @@ mod tests {
     #[rstest]
     #[allow(clippy::cast_possible_truncation)]
     fn asset_pool_extend_returns_only_newly_commissioned_assets(
-        mut user_assets: Vec<AssetRef>,
+        mut user_assets: Vec<UserAsset>,
         mut process: Process,
     ) {
         let mut asset_pool = AssetPool::new();
@@ -520,7 +520,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_mixed_assets(mut user_assets: Vec<AssetRef>, process: Process) {
+    fn asset_pool_extend_mixed_assets(mut user_assets: Vec<UserAsset>, process: Process) {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -554,7 +554,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_maintains_sort_order(mut user_assets: Vec<AssetRef>, process: Process) {
+    fn asset_pool_extend_maintains_sort_order(mut user_assets: Vec<UserAsset>, process: Process) {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -590,7 +590,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_no_duplicates_expected(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_extend_no_duplicates_expected(mut user_assets: Vec<UserAsset>) {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -609,7 +609,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_extend_increments_next_id(mut user_assets: Vec<AssetRef>, process: Process) {
+    fn asset_pool_extend_increments_next_id(mut user_assets: Vec<UserAsset>, process: Process) {
         // Start with some commissioned assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -647,7 +647,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_mothball_unretained(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_mothball_unretained(mut user_assets: Vec<UserAsset>) {
         // Commission some assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -667,7 +667,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_decommission_unused(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_decommission_unused(mut user_assets: Vec<UserAsset>) {
         // Commission some assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -692,7 +692,7 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_decommission_if_not_active_none_active(mut user_assets: Vec<AssetRef>) {
+    fn asset_pool_decommission_if_not_active_none_active(mut user_assets: Vec<UserAsset>) {
         // Commission some assets
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
@@ -716,7 +716,7 @@ mod tests {
     #[should_panic(expected = "Cannot mothball asset that has not been commissioned")]
     fn asset_pool_decommission_if_not_active_non_commissioned_asset(process: Process) {
         // Create a non-commissioned asset
-        let non_commissioned_asset = Asset::new_future(
+        let non_commissioned_asset = Asset::new_ready(
             "agent_new".into(),
             process.into(),
             "GBR".into(),

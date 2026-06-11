@@ -178,54 +178,12 @@ impl Asset {
         }
     }
 
-    /// Create a new future asset
-    pub fn new_future_with_max_decommission(
-        agent_id: AgentID,
-        process: Rc<Process>,
-        region_id: RegionID,
-        capacity: Capacity,
-        commission_year: u32,
-        max_decommission_year: Option<u32>,
-    ) -> Result<Self> {
-        check_capacity_valid_for_asset(capacity)?;
-        let unit_size = process.unit_size;
-        Self::new_with_state(
-            AssetState::Ready {
-                agent_id,
-                commission_reason: "user input",
-            },
-            process,
-            region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
-            commission_year,
-            max_decommission_year,
-        )
-    }
-
-    /// Create a new future asset
-    pub fn new_future(
-        agent_id: AgentID,
-        process: Rc<Process>,
-        region_id: RegionID,
-        capacity: Capacity,
-        commission_year: u32,
-    ) -> Result<Self> {
-        Self::new_future_with_max_decommission(
-            agent_id,
-            process,
-            region_id,
-            capacity,
-            commission_year,
-            None,
-        )
-    }
-
     /// Create a new ready asset
     ///
     /// This is only used for testing. In the real program, Ready assets can only be created from
     /// Candidate assets by calling `select_candidate_for_investment`.
     #[cfg(test)]
-    fn new_ready(
+    pub fn new_ready(
         agent_id: AgentID,
         process: Rc<Process>,
         region_id: RegionID,
@@ -1005,6 +963,57 @@ pub fn check_region_year_valid_for_process(
     Ok(())
 }
 
+/// An asset defined by the user in the assets input file
+#[derive(Clone, Debug, PartialEq)]
+pub struct UserAsset(AssetRef);
+
+impl UserAsset {
+    /// Create a new [`UserAsset`]
+    pub fn new(
+        agent_id: AgentID,
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+        max_decommission_year: Option<u32>,
+    ) -> Result<Self> {
+        check_capacity_valid_for_asset(capacity)?;
+        let unit_size = process.unit_size;
+        let asset = Asset::new_with_state(
+            AssetState::Ready {
+                agent_id,
+                commission_reason: "user input",
+            },
+            process,
+            region_id,
+            AssetCapacity::from_capacity(capacity, unit_size),
+            commission_year,
+            max_decommission_year,
+        )?;
+
+        Ok(Self(asset.into()))
+    }
+}
+
+#[cfg(test)]
+impl From<Asset> for UserAsset {
+    fn from(asset: Asset) -> Self {
+        assert!(
+            matches!(asset.state, AssetState::Ready { .. }),
+            "User assets must be in Ready state"
+        );
+        Self(asset.into())
+    }
+}
+
+impl Deref for UserAsset {
+    type Target = Asset;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Whether the specified value is a valid capacity for an asset
 pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     ensure!(
@@ -1139,6 +1148,12 @@ impl From<Asset> for AssetRef {
     }
 }
 
+impl From<UserAsset> for AssetRef {
+    fn from(value: UserAsset) -> Self {
+        value.0
+    }
+}
+
 impl From<AssetRef> for Rc<Asset> {
     fn from(value: AssetRef) -> Self {
         value.0
@@ -1241,8 +1256,8 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple, asset,
-        asset_divisible, process, process_activity_limits_map, process_flows_map, region_id,
+        agent_id, assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple,
+        asset, asset_divisible, process, process_activity_limits_map, process_flows_map, region_id,
         svd_commodity, time_slice, time_slice_info,
     };
     use crate::patch::FilePatch;
@@ -1291,54 +1306,6 @@ mod tests {
         assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
     }
 
-    #[rstest]
-    #[case(Capacity(0.01))]
-    #[case(Capacity(0.5))]
-    #[case(Capacity(1.0))]
-    #[case(Capacity(100.0))]
-    fn asset_new_valid(process: Process, #[case] capacity: Capacity) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("GBR".into());
-        let asset = Asset::new_future(agent_id, process.into(), region_id, capacity, 2015).unwrap();
-        assert!(asset.id().is_none());
-    }
-
-    #[rstest]
-    #[case(Capacity(0.0))]
-    #[case(Capacity(-0.01))]
-    #[case(Capacity(-1.0))]
-    #[case(Capacity(f64::NAN))]
-    #[case(Capacity(f64::INFINITY))]
-    #[case(Capacity(f64::NEG_INFINITY))]
-    fn asset_new_invalid_capacity(process: Process, #[case] capacity: Capacity) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("GBR".into());
-        assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, capacity, 2015),
-            "Capacity must be a finite, positive number"
-        );
-    }
-
-    #[rstest]
-    fn asset_new_invalid_commission_year(process: Process) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("GBR".into());
-        assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, Capacity(1.0), 2007),
-            "Process process1 does not operate in the year 2007"
-        );
-    }
-
-    #[rstest]
-    fn asset_new_invalid_region(process: Process) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("FRA".into());
-        assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, Capacity(1.0), 2015),
-            "Process process1 does not operate in region FRA"
-        );
-    }
-
     #[fixture]
     fn process_with_activity_limits(
         mut process: Process,
@@ -1358,7 +1325,7 @@ mod tests {
 
     #[fixture]
     fn asset_with_activity_limits(process_with_activity_limits: Process) -> Asset {
-        Asset::new_future(
+        Asset::new_ready(
             "agent1".into(),
             Rc::new(process_with_activity_limits),
             "GBR".into(),
@@ -1381,6 +1348,76 @@ mod tests {
     }
 
     #[rstest]
+    #[case(Capacity(0.01))]
+    #[case(Capacity(0.5))]
+    #[case(Capacity(1.0))]
+    #[case(Capacity(100.0))]
+    fn user_asset_new_valid(
+        agent_id: AgentID,
+        process: Process,
+        region_id: RegionID,
+        #[case] capacity: Capacity,
+    ) {
+        let asset =
+            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None).unwrap();
+        assert!(asset.id().is_none());
+    }
+
+    #[rstest]
+    #[case(Capacity(0.0))]
+    #[case(Capacity(-0.01))]
+    #[case(Capacity(-1.0))]
+    #[case(Capacity(f64::NAN))]
+    #[case(Capacity(f64::INFINITY))]
+    #[case(Capacity(f64::NEG_INFINITY))]
+    fn user_asset_new_invalid_capacity(
+        agent_id: AgentID,
+        process: Process,
+        region_id: RegionID,
+        #[case] capacity: Capacity,
+    ) {
+        assert_error!(
+            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None),
+            "Capacity must be a finite, positive number"
+        );
+    }
+
+    #[rstest]
+    fn user_asset_new_invalid_commission_year(
+        agent_id: AgentID,
+        process: Process,
+        region_id: RegionID,
+    ) {
+        assert_error!(
+            UserAsset::new(
+                agent_id,
+                process.into(),
+                region_id,
+                Capacity(1.0),
+                2007,
+                None
+            ),
+            "Process process1 does not operate in the year 2007"
+        );
+    }
+
+    #[rstest]
+    fn user_asset_new_invalid_region(agent_id: AgentID, process: Process) {
+        let region_id = RegionID("FRA".into());
+        assert_error!(
+            UserAsset::new(
+                agent_id,
+                process.into(),
+                region_id,
+                Capacity(1.0),
+                2015,
+                None
+            ),
+            "Process process1 does not operate in region FRA"
+        );
+    }
+
+    #[rstest]
     #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
     #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
     #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
@@ -1393,7 +1430,7 @@ mod tests {
     ) {
         process.unit_size = Some(unit_size);
         let asset = AssetRef::from(
-            Asset::new_future(
+            Asset::new_ready(
                 "agent1".into(),
                 Rc::new(process),
                 "GBR".into(),
@@ -1504,32 +1541,18 @@ mod tests {
 
     #[rstest]
     fn asset_commission(process: Process) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset1 = Asset::new_future(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-        )
-        .unwrap();
-        asset1.commission(AssetID(1), None);
-        assert!(asset1.is_commissioned());
-        assert_eq!(asset1.id(), Some(AssetID(1)));
-
         // Test successful commissioning of Ready asset
-        let mut asset2 = Asset::new_ready(
+        let mut asset = Asset::new_ready(
             "agent1".into(),
-            Rc::clone(&process_rc),
+            process.into(),
             "GBR".into(),
             Capacity(1.0),
             2020,
         )
         .unwrap();
-        asset2.commission(AssetID(2), None);
-        assert!(asset2.is_commissioned());
-        assert_eq!(asset2.id(), Some(AssetID(2)));
+        asset.commission(AssetID(2), None);
+        assert!(asset.is_commissioned());
+        assert_eq!(asset.id(), Some(AssetID(2)));
     }
 
     #[rstest]
