@@ -11,6 +11,20 @@ const EXAMPLE_NAME: &str = "simple";
 const MODEL_DIR: &str = "examples/simple";
 const PATCH_EXAMPLE_NAME: &str = "simple_divisible";
 
+/// Test the `help` command
+#[test]
+fn check_help_command() {
+    assert!(
+        get_muse2_stdout(&["help"]).contains(
+            format!(
+                "https://energysystemsmodellinglab.github.io/MUSE2/release/v{}/",
+                env!("CARGO_PKG_VERSION")
+            )
+            .as_str()
+        )
+    );
+}
+
 /// Test the `run` command
 #[test]
 fn check_run_command() {

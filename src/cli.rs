@@ -17,7 +17,15 @@ use settings::SettingsSubcommands;
 
 /// The command line interface for the simulation.
 #[derive(Parser)]
-#[command(version, about)]
+#[command(
+    version,
+    about,
+    after_help = concat!(
+        "For more detailed documentation on this version of MUSE2, see: https://energysystemsmodellinglab.github.io/MUSE2/release/v",
+        env!("CARGO_PKG_VERSION"),
+        "/"
+    )
+)]
 struct Cli {
     /// The available commands.
     #[command(subcommand)]
