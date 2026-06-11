@@ -20,9 +20,10 @@ use settings::SettingsSubcommands;
 #[command(
     version,
     about,
-    after_help = format!(
-        "For more detailed documentation on this version of MUSE2, see: https://energysystemsmodellinglab.github.io/MUSE2/release/v{}/",
-        env!("CARGO_PKG_VERSION")
+    after_help = concat!(
+        "For more detailed documentation on this version of MUSE2, see: https://energysystemsmodellinglab.github.io/MUSE2/release/v",
+        env!("CARGO_PKG_VERSION"),
+        "/"
     )
 )]
 struct Cli {
