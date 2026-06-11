@@ -404,5 +404,5 @@ The Cost Index is £508 per MWh of electricity produced.
  This metric is compared across all supply options to identify
  the lowest-cost solution for meeting demand.
 
-[framework-overview]: https://energysystemsmodellinglab.github.io/MUSE2/model/index.html#framework-overview
+[framework-overview]: index.html#framework-overview
 [Dispatch Optimisation Formulation]: ./dispatch_optimisation.md

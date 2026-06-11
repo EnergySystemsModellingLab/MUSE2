@@ -133,7 +133,7 @@ just regenerate_test_data --patch simple_divisible
 [test fixtures]: https://en.wikipedia.org/wiki/Test_fixture
 [`rstest`]: https://docs.rs/rstest
 [`fixture.rs`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/src/fixture.rs
-[patched example]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/patch/index.html
+[patched example]: ../api/muse2/patch/index.html
 
 ## Example models
 
@@ -147,7 +147,7 @@ simple as possible.
 If you add a new example model, please also add a regression test to [`tests/regression.rs`].
 
 [`examples`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/examples/
-[user-guide-example-models]: https://energysystemsmodellinglab.github.io/MUSE2/user_guide.html#example-models
+[user-guide-example-models]: ../user_guide.md#example-models
 [`tests/regression.rs`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/tests/regression.rs
 
 ## Unit types
@@ -163,11 +163,11 @@ unitless, there is a [`Dimensionless`] type to make this explicit.
 
 For more information, consult [the documentation for the `units` module][units-module-docs].
 
-[`Money`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Money.html
-[`Activity`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Activity.html
-[`MoneyPerActivity`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.MoneyPerActivity.html
-[`Dimensionless`]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/struct.Dimensionless.html
-[units-module-docs]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/units/index.html
+[`Money`]: ../api/muse2/units/struct.Money.html
+[`Activity`]: ../api/muse2/units/struct.Activity.html
+[`MoneyPerActivity`]: ../api/muse2/units/struct.MoneyPerActivity.html
+[`Dimensionless`]: ../api/muse2/units/struct.Dimensionless.html
+[units-module-docs]: ../api/muse2/units/index.html
 
 ## Input and output files
 
@@ -191,9 +191,9 @@ checking that there is a producer for every required commodity in the first year
 
 [CSV]: https://en.wikipedia.org/wiki/Comma-separated_values
 [TOML]: https://toml.io/en/
-[input-module]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/input/index.html
-[output-module]: https://energysystemsmodellinglab.github.io/MUSE2/api/muse2/output/index.html
-[file-format-docs]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/
+[input-module]: ../api/muse2/input/index.html
+[output-module]: ../api/muse2/output/index.html
+[file-format-docs]: ../file_formats/
 [JSON schemas]: https://json-schema.org/
 [table schemas]: https://specs.frictionlessdata.io/table-schema/
 [`serde`]: https://serde.rs/

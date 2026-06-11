@@ -32,5 +32,5 @@ primal_feasibility_tolerance = 10e-6
 optimality_tolerance = 10e-6
 ```
 
-[model.toml]: https://energysystemsmodellinglab.github.io/MUSE2/file_formats/input_files.html#model-parameters-modeltoml
+[model.toml]: ../file_formats/input_files.md#model-parameters-modeltoml
 [highs-opts]: https://ergo-code.github.io/HiGHS/stable/options/definitions/

@@ -115,7 +115,7 @@ with [Graphviz online].
 Dashed lines are used to indicate flows for non-primary outputs of a process (as defined in the
 `processes.csv` input file).
 
-[the `muse2 save-graphs` command]: https://energysystemsmodellinglab.github.io/MUSE2/command_line_help.html#muse2-save-graphs
+[the `muse2 save-graphs` command]: command_line_help.md#muse2-save-graphs
 [DOT format]: https://graphviz.org/doc/info/lang.html
 [Graphviz]: https://graphviz.org/
 [Graphviz online]: https://dreampuf.github.io/GraphvizOnline
@@ -134,8 +134,7 @@ settings help`.
 For information about the available settings, see [the documentation for the `settings.toml`
 file][settings.toml-docs].
 
-[settings.toml-docs]:
-https://energysystemsmodellinglab.github.io/MUSE2/file_formats/program_settings.html
+[settings.toml-docs]: file_formats/program_settings.md
 
 ## Setting the log level
 
