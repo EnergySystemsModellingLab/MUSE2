@@ -200,7 +200,7 @@ pub fn asset(process: Process) -> Asset {
     let region_id: RegionID = "GBR".into();
     let agent_id = "agent1".into();
     let commission_year = 2015;
-    Asset::new_future(
+    Asset::new_ready(
         agent_id,
         process.into(),
         region_id,
@@ -213,7 +213,7 @@ pub fn asset(process: Process) -> Asset {
 #[fixture]
 pub fn asset_divisible(mut process: Process) -> Asset {
     process.unit_size = Some(Capacity(4.0));
-    Asset::new_future(
+    Asset::new_ready(
         "agent1".into(),
         Rc::new(process),
         "GBR".into(),

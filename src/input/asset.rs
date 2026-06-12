@@ -1,7 +1,7 @@
-//! Code for reading [`Asset`]s from a CSV file.
+//! Code for reading user assets from a CSV file.
 use super::{input_err_msg, read_csv_optional};
 use crate::agent::AgentID;
-use crate::asset::{Asset, AssetRef};
+use crate::asset::UserAsset;
 use crate::id::{GetIDValue, IDCollection};
 use crate::process::ProcessMap;
 use crate::region::RegionID;
@@ -39,13 +39,13 @@ struct AssetRaw {
 ///
 /// # Returns
 ///
-/// A `Vec` of [`AssetRef`]s or an error.
+/// A `Vec` of [`UserAsset`]s or an error.
 pub fn read_user_assets(
     model_dir: &Path,
     agent_ids: &IndexSet<AgentID>,
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Vec<UserAsset>> {
     let file_path = model_dir.join(ASSETS_FILE_NAME);
     let assets_csv = read_csv_optional(&file_path)?;
     read_assets_from_iter(assets_csv, agent_ids, processes, region_ids)
@@ -63,13 +63,13 @@ pub fn read_user_assets(
 ///
 /// # Returns
 ///
-/// A [`Vec`] of [`Asset`]s or an error.
+/// A [`Vec`] of [`UserAsset`]s or an error.
 fn read_assets_from_iter<I>(
     iter: I,
     agent_ids: &IndexSet<AgentID>,
     processes: &ProcessMap,
     region_ids: &IndexSet<RegionID>,
-) -> Result<Vec<AssetRef>>
+) -> Result<Vec<UserAsset>>
 where
     I: Iterator<Item = AssetRaw>,
 {
@@ -122,15 +122,14 @@ where
             }
         }
 
-        let asset = Asset::new_future_with_max_decommission(
+        UserAsset::new(
             agent_id.clone(),
             Rc::clone(process),
             region_id.clone(),
             asset.capacity,
             asset.commission_year,
             asset.max_decommission_year,
-        )?;
-        Ok(asset.into())
+        )
     })
     .try_collect()
 }
@@ -166,7 +165,7 @@ mod tests {
             commission_year: 2010,
             max_decommission_year,
         };
-        let asset_out = Asset::new_future_with_max_decommission(
+        let asset_out = UserAsset::new(
             "agent1".into(),
             Rc::clone(processes.values().next().unwrap()),
             "GBR".into(),
@@ -174,8 +173,7 @@ mod tests {
             2010,
             max_decommission_year,
         )
-        .unwrap()
-        .into();
+        .unwrap();
         assert_equal(
             read_assets_from_iter(iter::once(asset_in), &agent_ids, &processes, &region_ids)
                 .unwrap(),

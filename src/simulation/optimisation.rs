@@ -800,10 +800,10 @@ fn add_capacity_variables(
     let start = problem.num_cols();
 
     for asset in assets {
-        // Can only have flexible capacity for `Selected` assets
+        // Can only have flexible capacity for `Ready` assets
         assert!(
-            matches!(asset.state(), AssetState::Selected { .. }),
-            "Flexible capacity can only be assigned to `Selected` type assets. Offending asset: {asset:?}"
+            matches!(asset.state(), AssetState::Ready { .. }),
+            "Flexible capacity can only be assigned to `Ready` type assets. Offending asset: {asset:?}"
         );
 
         let current_capacity = asset.capacity();
