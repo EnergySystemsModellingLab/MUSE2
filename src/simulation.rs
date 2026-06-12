@@ -194,7 +194,7 @@ fn run_dispatch_for_year(
         .transpose()?
         .unwrap_or_default();
 
-    Ok((flow_map, prices))
+    Ok((flow_map, prices.market))
 }
 
 /// Create candidate assets for all potential processes in a specified year

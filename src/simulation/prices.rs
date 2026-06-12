@@ -85,6 +85,15 @@ impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
     }
 }
 
+/// Sets of prices calculated from dispatch results
+#[derive(Default)]
+pub struct Prices {
+    /// Commodity market prices calculated according to user-specified strategies
+    pub market: PriceMap,
+    /// Commodity shadow prices
+    pub shadow: PriceMap,
+}
+
 /// Calculate commodity prices.
 ///
 /// Calculate prices for each commodity/region/time-slice according to the commodity's configured
@@ -98,14 +107,13 @@ impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
 ///
 /// # Returns
 ///
-/// A `PriceMap` mapping `(commodity, region, time_slice)` to `MoneyPerFlow` representing
-/// endogenous prices computed from the optimisation solution.
-pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<PriceMap> {
+/// Market prices for commodities as well as shadow prices.
+pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<Prices> {
     // Collect shadow prices for all SED/SVD commodities
     let shadow_prices = PriceMap::from_iter(solution.iter_commodity_balance_duals());
 
     // Set up empty prices map
-    let mut result = PriceMap::default();
+    let mut market_prices = PriceMap::default();
 
     // Lazily computed only if at least one FullCost market is encountered.
     let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
@@ -119,14 +127,17 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
             year,
             &shadow_prices,
             &mut annual_activities,
-            &mut result,
+            &mut market_prices,
         );
     }
 
-    Ok(result)
+    Ok(Prices {
+        market: market_prices,
+        shadow: shadow_prices,
+    })
 }
 
-/// Calculate prices for the markets in an investment set, updating `result`.
+/// Calculate prices for the markets in an investment set, updating `market_prices`.
 fn price_investment_set(
     investment_set: &InvestmentSet,
     model: &Model,
@@ -134,7 +145,7 @@ fn price_investment_set(
     year: u32,
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
-    result: &mut PriceMap,
+    market_prices: &mut PriceMap,
 ) {
     match investment_set {
         InvestmentSet::Single(market) => {
@@ -145,7 +156,7 @@ fn price_investment_set(
                 std::slice::from_ref(market),
                 shadow_prices,
                 annual_activities,
-                result,
+                market_prices,
             );
         }
         InvestmentSet::Cycle(markets) => {
@@ -156,7 +167,7 @@ fn price_investment_set(
                 markets,
                 shadow_prices,
                 annual_activities,
-                result,
+                market_prices,
             );
         }
         InvestmentSet::Layer(investment_sets) => {
@@ -168,16 +179,16 @@ fn price_investment_set(
                     year,
                     shadow_prices,
                     annual_activities,
-                    result,
+                    market_prices,
                 );
             }
         }
     }
 }
 
-/// Calculate prices for a collection of independent markets and insert them into `result`.
+/// Calculate prices for a collection of independent markets and insert them into `market_prices`.
 ///
-/// `result` serves as both the source of input prices (prices of input commodities from
+/// `market_prices` serves as both the source of input prices (prices of input commodities from
 /// upstream markets already computed) and the destination for newly computed prices.
 ///
 /// # Arguments
@@ -190,7 +201,7 @@ fn price_investment_set(
 /// * `annual_activities` - Optional map of annual activities for all assets, used for full cost
 ///   pricing. If not provided, it will be calculated on demand if at least one market uses full
 ///   cost pricing.
-/// * `result` - In-progress map of calculated prices, which will be extended with the newly
+/// * `market_prices` - In-progress map of calculated prices, which will be extended with the newly
 ///   calculated prices for these markets
 fn price_markets(
     model: &Model,
@@ -199,7 +210,7 @@ fn price_markets(
     markets: &[(CommodityID, RegionID)],
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
-    result: &mut PriceMap,
+    market_prices: &mut PriceMap,
 ) {
     // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
     // For now, commodities use a single strategy for all regions, but this may change in the future.
@@ -220,7 +231,7 @@ fn price_markets(
         for (commodity_id, region_id) in shadow_set {
             for time_slice in model.time_slice_info.iter_ids() {
                 if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
-                    result.insert(commodity_id, region_id, time_slice, shadow_price);
+                    market_prices.insert(commodity_id, region_id, time_slice, shadow_price);
                 }
             }
         }
@@ -231,7 +242,7 @@ fn price_markets(
         add_scarcity_adjusted_prices(
             solution.iter_activity_duals(),
             shadow_prices,
-            result,
+            market_prices,
             scarcity_set,
         );
     }
@@ -241,7 +252,7 @@ fn price_markets(
         add_marginal_cost_prices(
             solution.iter_activity_for_existing(),
             solution.iter_activity_keys_for_candidates(),
-            result,
+            market_prices,
             year,
             marginal_set,
             &model.commodities,
@@ -254,7 +265,7 @@ fn price_markets(
         add_marginal_cost_average_prices(
             solution.iter_activity_for_existing(),
             solution.iter_activity_keys_for_candidates(),
-            result,
+            market_prices,
             year,
             marginal_avg_set,
             &model.commodities,
@@ -271,7 +282,7 @@ fn price_markets(
             solution.iter_activity_for_existing(),
             solution.iter_activity_keys_for_candidates(),
             annual_activities,
-            result,
+            market_prices,
             year,
             fullcost_set,
             &model.commodities,
@@ -288,7 +299,7 @@ fn price_markets(
             solution.iter_activity_for_existing(),
             solution.iter_activity_keys_for_candidates(),
             annual_activities,
-            result,
+            market_prices,
             year,
             full_avg_set,
             &model.commodities,
@@ -297,7 +308,7 @@ fn price_markets(
     }
 }
 
-/// Calculate prices for a set of cyclically-dependent markets, updating `result`.
+/// Calculate prices for a set of cyclically-dependent markets, updating `market_prices`.
 ///
 /// Markets should be ordered in the input slice according to the direction of dependencies
 /// (downstream markets first) as solved by `order_sccs`.  Prices are calculated in the reverse of
@@ -310,13 +321,13 @@ fn price_cycle(
     markets: &[(CommodityID, RegionID)],
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
-    result: &mut PriceMap,
+    market_prices: &mut PriceMap,
 ) {
     // Seed the markets with shadow prices
     for (commodity_id, region_id) in markets {
         for time_slice in model.time_slice_info.iter_ids() {
             if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
-                result.insert(commodity_id, region_id, time_slice, shadow_price);
+                market_prices.insert(commodity_id, region_id, time_slice, shadow_price);
             }
         }
     }
@@ -332,7 +343,7 @@ fn price_cycle(
                 std::slice::from_ref(market),
                 shadow_prices,
                 annual_activities,
-                result,
+                market_prices,
             );
         }
     }
@@ -464,7 +475,9 @@ impl PriceMap {
     }
 }
 
-impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)> for PriceMap {
+impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>
+    for PriceMap
+{
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
