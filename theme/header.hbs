@@ -1,0 +1,33 @@
+<style>
+  :root { --banner-height: 36px; }
+
+  #version-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--banner-height);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875em;
+    box-sizing: border-box;
+    padding: 0 16px;
+    background-color: #fff3cd;
+    border-bottom: 1px solid #ffc107;
+  }
+
+  #version-banner, #version-banner * {
+    color: #664d03 !important;
+  }
+
+  body { padding-top: var(--banner-height); }
+  #mdbook-menu-bar.sticky { top: var(--banner-height) !important; }
+  #mdbook-sidebar {
+    top: var(--banner-height) !important;
+    height: calc(100vh - var(--banner-height)) !important;
+  }
+</style>
+
+<div id="version-banner">
+  This is the <strong>&nbsp;development version&nbsp;</strong> of the MUSE2 documentation.
+</div>
