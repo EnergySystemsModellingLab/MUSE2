@@ -1,0 +1,20 @@
+[run]
+model_path = '\\?\C:\Users\aas524\Energy Systems Modelling\MUSE2\MUSE2 Repository\examples\simple'
+datetime = "Fri, 12 Jun 2026 14:13:19 +0100"
+
+[program]
+name = "muse2"
+version = "2.1.0"
+target = "x86_64-pc-windows-msvc"
+is_debug = true
+rustc_version = "rustc 1.96.0 (ac68faa20 2026-05-25)"
+build_time_utc = "Fri, 12 Jun 2026 13:13:03 +0000"
+git_commit_hash = "cd1a4d4"
+
+[platform]
+sysname = "Windows_NT"
+nodename = "IC-5CG4220VCS"
+release = "10.0"
+version = "26100"
+machine = "x86_64"
+osname = "MS/Windows (Windows 11)"
