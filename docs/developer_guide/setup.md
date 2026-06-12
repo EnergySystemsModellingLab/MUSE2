@@ -94,6 +94,9 @@ The source code will now be available in a folder named `MUSE2`.
 We use [pre-commit] to automatically run a number of hooks for this repository when a new Git
 commit is made. You can run `pre-commit` via our `justfile`, provided you have `uv` installed.
 
+Alternatively, you can use [prek], which aims to be a drop-in replacement for `pre-commit`. Being
+written in Rust, it has no dependencies and can be installed with `cargo`.
+
 You can enable `pre-commit` for this repository with:
 
 ```sh
@@ -107,5 +110,6 @@ Note: you may get errors due to the [`clippy`] hook failing. In this case, you m
 automatically fix them by running `cargo clipfix` (which we have defined as an alias in
 [`.cargo/config.toml`]).
 
+[prek]: https://prek.j178.dev/
 [`clippy`]: https://doc.rust-lang.org/clippy
 [`.cargo/config.toml`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/.cargo/config.toml
