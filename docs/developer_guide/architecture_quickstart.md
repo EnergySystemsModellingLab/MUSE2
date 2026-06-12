@@ -167,7 +167,7 @@ For more information, consult [the documentation for the `units` module][units-m
 [`Activity`]: ../api/muse2/units/struct.Activity.html
 [`MoneyPerActivity`]: ../api/muse2/units/struct.MoneyPerActivity.html
 [`Dimensionless`]: ../api/muse2/units/struct.Dimensionless.html
-[units-module-docs]: ../api/muse2/units/index.html
+[units-module-docs]: ../api/muse2/units/
 
 ## Input and output files
 
@@ -191,8 +191,8 @@ checking that there is a producer for every required commodity in the first year
 
 [CSV]: https://en.wikipedia.org/wiki/Comma-separated_values
 [TOML]: https://toml.io/en/
-[input-module]: ../api/muse2/input/index.html
-[output-module]: ../api/muse2/output/index.html
+[input-module]: ../api/muse2/input/
+[output-module]: ../api/muse2/output/
 [file-format-docs]: ../file_formats/
 [JSON schemas]: https://json-schema.org/
 [table schemas]: https://specs.frictionlessdata.io/table-schema/
