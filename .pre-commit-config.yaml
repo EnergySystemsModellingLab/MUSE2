@@ -70,7 +70,7 @@ repos:
       - id: codespell
         args: [--ignore-words, .codespell_ignore.txt]
         exclude: \.svg$
-  - repo: https://github.com/EnergySystemsModellingLab/cffconvert
+  - repo: https://github.com/ImperialCollegeLondon/cffconvert
     rev: 2.1.0
     hooks:
       - id: validate-cff
