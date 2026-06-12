@@ -29,7 +29,7 @@ ready to be released, carry out the following steps:
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
 - Fix parsing and validation of agent search space file ([#1293])
 
-[highs-opts-docs]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/custom_highs_options.html
+[highs-opts-docs]: ../developer_guide/custom_highs_options.md
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
 [#1276]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1276
 [#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
