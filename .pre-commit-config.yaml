@@ -60,10 +60,6 @@ repos:
         args: [--fix]
       - id: ruff-format
         types_or: [python]
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.9.1
-    hooks:
-      - id: nbstripout
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
