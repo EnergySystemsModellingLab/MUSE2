@@ -6,7 +6,7 @@ use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
@@ -74,7 +74,7 @@ impl InvestmentSet {
         year: u32,
         demand: &AllDemandMap,
         existing_assets: &[AssetRef],
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         seen_markets: &[(CommodityID, RegionID)],
         previously_selected_assets: &[AssetRef],
         writer: &mut DataWriter,
@@ -173,7 +173,7 @@ pub fn perform_agent_investment(
     model: &Model,
     year: u32,
     existing_assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
@@ -259,7 +259,7 @@ fn select_assets_for_single_market(
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let commodity = &model.commodities[commodity_id];
@@ -338,7 +338,7 @@ fn select_assets_for_cycle(
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     seen_markets: &[(CommodityID, RegionID)],
     previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
@@ -727,7 +727,7 @@ fn select_best_assets(
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     mut demand: DemandMap,
     year: u32,
     writer: &mut DataWriter,

@@ -98,14 +98,14 @@ impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
 ///
 /// # Returns
 ///
-/// A `CommodityPrices` mapping `(commodity, region, time_slice)` to `MoneyPerFlow` representing
+/// A `PriceMap` mapping `(commodity, region, time_slice)` to `MoneyPerFlow` representing
 /// endogenous prices computed from the optimisation solution.
-pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<CommodityPrices> {
+pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<PriceMap> {
     // Collect shadow prices for all SED/SVD commodities
-    let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
+    let shadow_prices = PriceMap::from_iter(solution.iter_commodity_balance_duals());
 
     // Set up empty prices map
-    let mut result = CommodityPrices::default();
+    let mut result = PriceMap::default();
 
     // Lazily computed only if at least one FullCost market is encountered.
     let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
@@ -132,9 +132,9 @@ fn price_investment_set(
     model: &Model,
     solution: &Solution,
     year: u32,
-    shadow_prices: &CommodityPrices,
+    shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
-    result: &mut CommodityPrices,
+    result: &mut PriceMap,
 ) {
     match investment_set {
         InvestmentSet::Single(market) => {
@@ -197,9 +197,9 @@ fn price_markets(
     solution: &Solution,
     year: u32,
     markets: &[(CommodityID, RegionID)],
-    shadow_prices: &CommodityPrices,
+    shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
-    result: &mut CommodityPrices,
+    result: &mut PriceMap,
 ) {
     // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
     // For now, commodities use a single strategy for all regions, but this may change in the future.
@@ -308,9 +308,9 @@ fn price_cycle(
     solution: &Solution,
     year: u32,
     markets: &[(CommodityID, RegionID)],
-    shadow_prices: &CommodityPrices,
+    shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
-    result: &mut CommodityPrices,
+    result: &mut PriceMap,
 ) {
     // Seed the markets with shadow prices
     for (commodity_id, region_id) in markets {
@@ -340,9 +340,9 @@ fn price_cycle(
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
 #[derive(Default, Clone)]
-pub struct CommodityPrices(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
+pub struct PriceMap(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
-impl CommodityPrices {
+impl PriceMap {
     /// Insert/update a price for the given commodity, region and time slice.
     pub fn insert(
         &mut self,
@@ -464,9 +464,7 @@ impl CommodityPrices {
     }
 }
 
-impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>
-    for CommodityPrices
-{
+impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)> for PriceMap {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
@@ -480,11 +478,11 @@ impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerF
                 )
             })
             .collect();
-        CommodityPrices(map)
+        PriceMap(map)
     }
 }
 
-impl IntoIterator for CommodityPrices {
+impl IntoIterator for PriceMap {
     type Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow);
     type IntoIter = indexmap::map::IntoIter<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>;
 
@@ -503,8 +501,8 @@ impl IntoIterator for CommodityPrices {
 /// * `markets_to_price` - Set of markets to calculate scarcity-adjusted prices for
 fn add_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
-    shadow_prices: &CommodityPrices,
-    existing_prices: &mut CommodityPrices,
+    shadow_prices: &PriceMap,
+    existing_prices: &mut PriceMap,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
@@ -600,7 +598,7 @@ fn add_scarcity_adjusted_prices<'a, I>(
 fn add_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
-    existing_prices: &mut CommodityPrices,
+    existing_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -666,7 +664,7 @@ fn add_marginal_cost_prices<'a, I, J>(
 fn iter_existing_asset_max_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
+    existing_prices: &PriceMap,
     year: u32,
     commodities: &CommodityMap,
     pricing_strategy: &PricingStrategy,
@@ -791,7 +789,7 @@ where
 fn iter_candidate_asset_min_prices<'a, I>(
     activity_keys_for_candidates: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
+    existing_prices: &PriceMap,
     priced_groups: &HashSet<(CommodityID, RegionID, TimeSliceSelection)>,
     year: u32,
     commodities: &CommodityMap,
@@ -911,7 +909,7 @@ where
 fn add_marginal_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
-    existing_prices: &mut CommodityPrices,
+    existing_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -977,7 +975,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
 fn iter_existing_asset_average_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
+    existing_prices: &PriceMap,
     year: u32,
     commodities: &CommodityMap,
     pricing_strategy: &PricingStrategy,
@@ -1158,7 +1156,7 @@ fn add_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
-    existing_prices: &mut CommodityPrices,
+    existing_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -1212,7 +1210,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
-    existing_prices: &mut CommodityPrices,
+    existing_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -1333,7 +1331,7 @@ mod tests {
     }
 
     fn assert_price_approx(
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         commodity: &CommodityID,
         region: &RegionID,
         time_slice: &TimeSliceID,
@@ -1362,8 +1360,8 @@ mod tests {
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
-        let mut prices1 = CommodityPrices::default();
-        let mut prices2 = CommodityPrices::default();
+        let mut prices1 = PriceMap::default();
+        let mut prices2 = PriceMap::default();
 
         // Set up two price sets for a single commodity/region/time slice
         let commodity = CommodityID::new("test_commodity");
@@ -1384,7 +1382,7 @@ mod tests {
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
-        let mut prices = CommodityPrices::default();
+        let mut prices = PriceMap::default();
 
         // Insert a price
         prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(100.0));
@@ -1439,7 +1437,7 @@ mod tests {
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
         let existing_prices =
-            CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
+            PriceMap::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
         let mut markets = HashSet::new();
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
@@ -1522,7 +1520,7 @@ mod tests {
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
         let existing_prices =
-            CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
+            PriceMap::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
         let mut markets = HashSet::new();
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));

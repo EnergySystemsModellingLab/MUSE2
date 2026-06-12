@@ -15,7 +15,7 @@ use optimisation::{DispatchRun, FlowMap};
 pub mod investment;
 use investment::perform_agent_investment;
 pub mod prices;
-pub use prices::CommodityPrices;
+pub use prices::PriceMap;
 
 /// Run the simulation.
 ///
@@ -162,7 +162,7 @@ fn run_dispatch_for_year(
     candidates: &[AssetRef],
     year: u32,
     writer: &mut DataWriter,
-) -> Result<(FlowMap, CommodityPrices)> {
+) -> Result<(FlowMap, PriceMap)> {
     // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
     // flows (i.e. all are zero)
     let (solution_existing, flow_map) = (!assets.is_empty())

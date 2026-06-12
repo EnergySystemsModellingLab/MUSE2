@@ -3,7 +3,7 @@ use super::costs::annual_fixed_cost;
 use crate::agent::ObjectiveType;
 use crate::asset::AssetRef;
 use crate::model::Model;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow};
 use indexmap::IndexMap;
@@ -30,7 +30,7 @@ pub fn calculate_coefficients_for_assets(
     model: &Model,
     objective_type: &ObjectiveType,
     assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     year: u32,
 ) -> HashMap<AssetRef, Rc<ObjectiveCoefficients>> {
     assets
@@ -61,7 +61,7 @@ pub fn calculate_coefficients_for_assets(
 pub fn calculate_coefficients_for_lcox(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     value_of_lost_load: MoneyPerFlow,
     year: u32,
 ) -> ObjectiveCoefficients {
@@ -94,7 +94,7 @@ pub fn calculate_coefficients_for_lcox(
 pub fn calculate_coefficients_for_npv(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     year: u32,
 ) -> ObjectiveCoefficients {
     // Small constant added to each activity coefficient to ensure break-even/slightly negative
@@ -125,7 +125,7 @@ pub fn calculate_coefficients_for_npv(
 fn calculate_activity_coefficient_for_lcox(
     asset: &AssetRef,
     time_slice: &TimeSliceID,
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     year: u32,
 ) -> MoneyPerActivity {
     // Get the operating cost of the asset. This includes the variable operating cost, levies and
@@ -143,7 +143,7 @@ fn calculate_activity_coefficient_for_lcox(
 fn calculate_activity_coefficient_for_npv(
     asset: &AssetRef,
     time_slice: &TimeSliceID,
-    prices: &CommodityPrices,
+    prices: &PriceMap,
     year: u32,
 ) -> MoneyPerActivity {
     // Get the operating cost of the asset. This includes the variable operating cost, levies and

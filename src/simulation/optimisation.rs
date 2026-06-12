@@ -8,7 +8,7 @@ use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
@@ -78,7 +78,7 @@ impl VariableMap {
     fn new_with_activity_vars(
         problem: &mut Problem,
         model: &Model,
-        input_prices: Option<&CommodityPrices>,
+        input_prices: Option<&PriceMap>,
         existing_assets: &[AssetRef],
         candidate_assets: &[AssetRef],
         year: u32,
@@ -463,9 +463,9 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 /// Markets being balanced (i.e. with commodity balance constraints) will have prices calculated
 /// internally by the solver, so we need to remove them to prevent double-counting.
 fn filter_input_prices(
-    input_prices: &CommodityPrices,
+    input_prices: &PriceMap,
     markets_to_balance: &[(CommodityID, RegionID)],
-) -> CommodityPrices {
+) -> PriceMap {
     input_prices
         .iter()
         .filter(|(commodity_id, region_id, _, _)| {
@@ -523,7 +523,7 @@ pub struct DispatchRun<'model, 'run> {
     capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
-    input_prices: Option<&'run CommodityPrices>,
+    input_prices: Option<&'run PriceMap>,
     year: u32,
     capacity_margin: Dimensionless,
 }
@@ -581,7 +581,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Explicitly provide prices for certain input commodities
-    pub fn with_input_prices(self, input_prices: &'run CommodityPrices) -> Self {
+    pub fn with_input_prices(self, input_prices: &'run PriceMap) -> Self {
         Self {
             input_prices: Some(input_prices),
             ..self
@@ -667,7 +667,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_without_unmet_demand_variables(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
-        input_prices: Option<&CommodityPrices>,
+        input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
         self.run_internal(
             markets_to_balance,
@@ -681,7 +681,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
         allow_unmet_demand: bool,
-        input_prices: Option<&CommodityPrices>,
+        input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
         let parent_assets = get_parent_or_self(self.existing_assets);
 
@@ -769,7 +769,7 @@ fn add_activity_variables(
     problem: &mut Problem,
     variables: &mut ActivityVariableMap,
     time_slice_info: &TimeSliceInfo,
-    input_prices: Option<&CommodityPrices>,
+    input_prices: Option<&PriceMap>,
     assets: &[AssetRef],
     year: u32,
 ) -> Range<usize> {
@@ -875,7 +875,7 @@ fn calculate_activity_coefficient(
     asset: &Asset,
     year: u32,
     time_slice: &TimeSliceID,
-    input_prices: Option<&CommodityPrices>,
+    input_prices: Option<&PriceMap>,
 ) -> MoneyPerActivity {
     let opex = asset.get_operating_cost(year, time_slice);
     if let Some(prices) = input_prices {
