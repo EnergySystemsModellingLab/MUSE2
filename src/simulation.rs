@@ -39,7 +39,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let new_assets = asset_pool.commission_new(year, &mut user_assets);
 
     // Write assets to file
-    writer.write_assets(new_assets.iter())?;
+    writer.write_assets(new_assets)?;
     writer.write_asset_capacities(year, asset_pool.iter())?;
 
     // Gather candidates for the next year, if any
@@ -66,7 +66,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         asset_pool.decommission_old(year);
 
         // Commission user-defined assets for this year
-        let new_user_assets = asset_pool.commission_new(year, &mut user_assets).to_vec();
+        let mut new_assets = asset_pool.commission_new(year, &mut user_assets).to_vec();
 
         // Take all the active assets as a list of existing assets
         let existing_assets = asset_pool.take();
@@ -119,14 +119,15 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         };
 
         // Add selected_assets to the active pool, receiving the newly commissioned ones
-        let newly_commissioned = asset_pool.extend(selected_assets).to_vec();
+        let newly_selected = asset_pool.extend(selected_assets);
+        new_assets.extend_from_slice(newly_selected);
 
         // Decommission unused assets
         asset_pool.mothball_unretained(existing_assets, year);
         asset_pool.decommission_mothballed(year, model.parameters.mothball_years);
 
         // Write newly commissioned assets
-        writer.write_assets(new_user_assets.iter().chain(newly_commissioned.iter()))?;
+        writer.write_assets(&new_assets)?;
         writer.write_asset_capacities(year, asset_pool.iter())?;
 
         // Gather candidates for the next year, if any
