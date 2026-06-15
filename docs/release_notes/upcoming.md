@@ -16,7 +16,7 @@ ready to be released, carry out the following steps:
 
 ## New features
 
-- Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver [#1276]
+- Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver ([#1276])
 
 ## Breaking changes
 
