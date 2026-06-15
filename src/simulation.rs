@@ -40,7 +40,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
     // Write assets to file
     writer.write_assets(new_assets)?;
-    writer.write_asset_capacities(year, asset_pool.iter())?;
+    writer.write_asset_capacities(year, &asset_pool)?;
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
@@ -128,7 +128,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Write newly commissioned assets
         writer.write_assets(&new_assets)?;
-        writer.write_asset_capacities(year, asset_pool.iter())?;
+        writer.write_asset_capacities(year, &asset_pool)?;
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();

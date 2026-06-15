@@ -650,10 +650,11 @@ impl DataWriter {
     ///
     /// This file is appended to on each invocation. For divisible asset groups, a single row is
     /// emitted per group with the total capacity.
-    pub fn write_asset_capacities<'a, I>(&mut self, milestone_year: u32, assets: I) -> Result<()>
-    where
-        I: Iterator<Item = &'a AssetRef>,
-    {
+    pub fn write_asset_capacities(
+        &mut self,
+        milestone_year: u32,
+        assets: &[AssetRef],
+    ) -> Result<()> {
         let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
         for asset in assets {
             if let Some(parent) = asset.parent() {
@@ -795,7 +796,7 @@ mod tests {
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
             writer
-                .write_asset_capacities(milestone_year, assets.iter())
+                .write_asset_capacities(milestone_year, &assets)
                 .unwrap();
             writer.flush().unwrap();
         }
@@ -873,7 +874,7 @@ mod tests {
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
             writer
-                .write_asset_capacities(milestone_year, assets.iter())
+                .write_asset_capacities(milestone_year, &assets)
                 .unwrap();
             writer.flush().unwrap();
         }
