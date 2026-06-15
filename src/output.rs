@@ -388,12 +388,7 @@ impl DebugDataWriter {
             map.entry((asset, time_slice)).or_default().2 = Some(column_dual);
         }
 
-        for (asset, time_slice, activity, activity_dual, column_dual) in
-            map.iter()
-                .map(|(&(agent, ts), &(activity, activity_dual, column_dual))| {
-                    (agent, ts, activity, activity_dual, column_dual)
-                })
-        {
+        for ((asset, time_slice), (activity, activity_dual, column_dual)) in map {
             let row = DispatchRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
