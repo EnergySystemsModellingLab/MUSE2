@@ -4,9 +4,9 @@ use crate::asset::{Asset, AssetGroupID, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
-use crate::simulation::PriceMap;
 use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
+use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{
     Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow,
