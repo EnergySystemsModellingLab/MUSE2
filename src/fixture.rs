@@ -75,7 +75,7 @@ pub(crate) use patch_and_validate_simple;
 /// Check whether validation succeeds for simple example with patches
 macro_rules! assert_validate_ok_simple {
     ($file_patches:expr) => {
-        assert!(crate::fixture::patch_and_validate_simple!($file_patches).is_ok())
+        crate::fixture::patch_and_validate_simple!($file_patches).unwrap();
     };
 }
 pub(crate) use assert_validate_ok_simple;
@@ -116,7 +116,7 @@ pub(crate) use patch_and_run_simple;
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! assert_patched_runs_ok_simple {
     ($file_patches:expr) => {
-        assert!(crate::fixture::patch_and_run_simple!($file_patches).is_ok())
+        crate::fixture::patch_and_run_simple!($file_patches).unwrap();
     };
 }
 pub(crate) use assert_patched_runs_ok_simple;
