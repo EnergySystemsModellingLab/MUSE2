@@ -53,7 +53,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
     let (mut prices, flow_map) =
-        run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
+        run_dispatch_for_year(model, &asset_pool, &candidates, year, &mut writer)?;
 
     // Write results of dispatch optimisation to file
     writer.write_flows(year, &flow_map)?;
@@ -141,7 +141,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
         let (new_prices, flow_map) =
-            run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
+            run_dispatch_for_year(model, &asset_pool, &candidates, year, &mut writer)?;
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;

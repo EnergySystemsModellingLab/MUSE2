@@ -771,7 +771,7 @@ mod tests {
         // Write an asset
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
-            writer.write_assets(assets.as_slice()).unwrap();
+            writer.write_assets(&assets).unwrap();
             writer.flush().unwrap();
         }
 
@@ -835,7 +835,7 @@ mod tests {
         // Write all active assets: divisible children should collapse to one group row
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
-            writer.write_assets(assets.as_slice()).unwrap();
+            writer.write_assets(&assets).unwrap();
             writer.flush().unwrap();
         }
 
