@@ -25,7 +25,8 @@ run_example() {
 
     env MUSE2_LOG_LEVEL=error MUSE2_USE_DEFAULT_SETTINGS=1 \
     cargo -q run example run -o "data/$example" "$example" \
-        --overwrite --no-copy-input-files $@
+        --overwrite --no-copy-input-files $@ \
+        || echo ERROR: Failed to run example "$example" > /dev/stderr
 }
 
 for example in $examples; do
