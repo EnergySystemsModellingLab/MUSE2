@@ -8,6 +8,7 @@ use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
 use anyhow::Result;
+use derive_more::{Index, IndexMut};
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
@@ -350,7 +351,7 @@ fn price_cycle(
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Index, IndexMut)]
 pub struct PriceMap(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
 impl PriceMap {
