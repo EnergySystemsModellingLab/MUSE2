@@ -20,7 +20,7 @@ use std::cell::Cell;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter;
-use std::ops::{Deref, RangeInclusive};
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 mod capacity;
@@ -964,8 +964,8 @@ pub fn check_region_year_valid_for_process(
 }
 
 /// An asset defined by the user in the assets input file
-#[derive(Clone, Debug, PartialEq)]
-pub struct UserAsset(AssetRef);
+#[derive(Clone, Debug, PartialEq, derive_more::Deref, derive_more::Into)]
+pub struct UserAsset(#[deref(forward)] AssetRef);
 
 impl UserAsset {
     /// Create a new [`UserAsset`]
@@ -1006,14 +1006,6 @@ impl From<Asset> for UserAsset {
     }
 }
 
-impl Deref for UserAsset {
-    type Target = Asset;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// Whether the specified value is a valid capacity for an asset
 pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     ensure!(
@@ -1028,8 +1020,8 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
 /// [`AssetRef`] implements equality, ordering, and hashing using an [`AssetID`], if available, but
 /// otherwise using a combination of other fields which should be unique at all the relevant points
 /// in the simulation.
-#[derive(Clone, Debug)]
-pub struct AssetRef(Rc<Asset>);
+#[derive(Clone, Debug, derive_more::Deref, derive_more::From, derive_more::Into)]
+pub struct AssetRef(#[deref(forward)] Rc<Asset>);
 
 impl AssetRef {
     /// Make a mutable reference to the underlying [`Asset`]
@@ -1136,35 +1128,9 @@ impl AssetRef {
     }
 }
 
-impl From<Rc<Asset>> for AssetRef {
-    fn from(value: Rc<Asset>) -> Self {
-        Self(value)
-    }
-}
-
 impl From<Asset> for AssetRef {
     fn from(value: Asset) -> Self {
         Self::from(Rc::new(value))
-    }
-}
-
-impl From<UserAsset> for AssetRef {
-    fn from(value: UserAsset) -> Self {
-        value.0
-    }
-}
-
-impl From<AssetRef> for Rc<Asset> {
-    fn from(value: AssetRef) -> Self {
-        value.0
-    }
-}
-
-impl Deref for AssetRef {
-    type Target = Asset;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
