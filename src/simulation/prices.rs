@@ -86,7 +86,7 @@ impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
 }
 
 /// Sets of prices calculated from dispatch results
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Prices {
     /// Commodity market prices calculated according to user-specified strategies
     pub market: PriceMap,
