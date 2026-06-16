@@ -859,7 +859,7 @@ fn select_best_assets(
         )?;
 
         // Sort by investment priority and discard non-feasible options
-        sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
+        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
         // Check if there are any remaining options. If not, we cannot meet demand, so have to bail
         // out.
@@ -872,12 +872,14 @@ fn select_best_assets(
 
             bail!(
                 "No feasible investment options left for \
-                commodity '{}', region '{}', year '{}', agent '{}' after appraisal.\n\
+                commodity '{}', region '{}', year '{}', agent '{}' after appraisal. \
+                {} non-feasible options were not considered.\n\
                 Remaining unmet demand (time_slice : flow):\n{}",
                 &commodity.id,
                 region_id,
                 year,
                 agent.id,
+                num_nonfeasible,
                 remaining_demands.join("\n")
             );
         }
