@@ -47,9 +47,9 @@ pub struct RunOpts {
     /// Whether to write additional information to CSV files
     #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
     pub debug_model: Option<bool>,
-    /// Whether to skip copying input files to the output folder
-    #[arg(long)]
-    pub no_copy_input_files: bool,
+    /// Whether to copy input files to the output folder
+    #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
+    pub copy_input_files: Option<bool>,
 }
 
 /// Options for the `graph` command
@@ -139,14 +139,14 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     // These settings can be overridden by command-line arguments
-    if let Some(opt) = opts.debug_model {
-        settings.debug_model = opt;
-    }
     if opts.overwrite {
         settings.overwrite = true;
     }
-    if opts.no_copy_input_files {
-        settings.copy_input_files = false;
+    if let Some(opt) = opts.debug_model {
+        settings.debug_model = opt;
+    }
+    if let Some(opt) = opts.copy_input_files {
+        settings.copy_input_files = opt;
     }
 
     // Get path to output folder
