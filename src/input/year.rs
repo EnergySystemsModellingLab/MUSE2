@@ -1,5 +1,5 @@
 //! Code for working with years.
-use super::{is_sorted_and_unique, is_sorted_and_unique_with, parse_range_parts, partition};
+use super::{is_sorted_and_unique, is_sorted_and_unique_with, parse_range_parts};
 use anyhow::{Context, Result, bail, ensure};
 use itertools::Itertools;
 use std::ops::RangeInclusive;
@@ -51,7 +51,7 @@ pub fn parse_year_str(s: &str, valid_years: &[u32]) -> Result<Vec<u32>> {
     let ranges: Vec<_> = s
         .split(';')
         .map(|s| {
-            let (start, end) = partition(s, "..").unwrap_or((s, s));
+            let (start, end) = s.split_once("..").unwrap_or((s, s));
             parse_range_parts(
                 start,
                 end,

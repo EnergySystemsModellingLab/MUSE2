@@ -30,7 +30,7 @@ use region::read_regions;
 mod time_slice;
 use time_slice::read_time_slice_info;
 mod range;
-use range::{parse_range, parse_range_parts, partition};
+use range::{parse_range, parse_range_parts};
 mod year;
 use year::parse_year_str;
 
