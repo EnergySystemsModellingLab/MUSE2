@@ -45,9 +45,8 @@ pub struct RunOpts {
     #[arg(long)]
     pub overwrite: bool,
     /// Whether to write additional information to CSV files
-    #[arg(long)]
-    pub debug_model: bool,
-
+    #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
+    pub debug_model: Option<bool>,
     /// Whether to skip copying input files to the output folder
     #[arg(long)]
     pub no_copy_input_files: bool,
@@ -140,8 +139,8 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     // These settings can be overridden by command-line arguments
-    if opts.debug_model {
-        settings.debug_model = true;
+    if let Some(opt) = opts.debug_model {
+        settings.debug_model = opt;
     }
     if opts.overwrite {
         settings.overwrite = true;
