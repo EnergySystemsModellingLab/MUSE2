@@ -664,7 +664,7 @@ fn collect_investment_limits_for_candidates(
 }
 
 /// Get the best assets for meeting demand for the given commodity
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
@@ -752,6 +752,7 @@ fn select_best_assets(
         log_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
 
         let best_output = outputs_for_opts.into_iter().next().unwrap();
+        let is_valid = best_output.metric.is_some();
 
         // Log the selected asset
         debug!(
@@ -768,6 +769,11 @@ fn select_best_assets(
             &mut remaining_candidate_capacity,
             &mut best_assets,
         );
+
+        if !is_valid {
+            warn!("Selected non-feasible option! Demand may not be met");
+            break;
+        }
 
         demand = best_output.unmet_demand;
         round += 1;

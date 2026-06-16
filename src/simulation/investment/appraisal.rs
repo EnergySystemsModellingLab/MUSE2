@@ -335,24 +335,24 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// and newer assets are preferred over older ones. The function does not guarantee that all ties
 /// will be resolved.
 ///
-/// Before sorting, outputs are filtered to exclude entries with invalid metrics (i.e. `None`), so
-/// the length of the returned vector may be less than the input.
-///
-/// # Returns
-///
-/// Returns the number of non-feasible assets which were removed.
-pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
-    let old_len = outputs.len();
-    outputs.retain(|output| output.metric.is_some());
-    let num_nonfeasible = old_len - outputs.len();
-
-    outputs.sort_by(|output1, output2| match output1.compare_metric(output2) {
-        // If equal, we fall back on comparing asset properties
-        Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
-        cmp => cmp,
+/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which excludes entries
+/// with invalid metrics (e.g. `None`) as well as zero capacity. This avoids meaningless or `NaN`
+/// appraisal metrics that could cause the program to panic, so the length of the returned vector
+/// may be less than the input.
+pub fn sort_and_filter_appraisal_outputs(outputs: &mut [AppraisalOutput]) {
+    // **HACK**: Retain non-feasible options, but keep at end of vec
+    outputs.sort_by(|output1, output2| {
+        match (output1.metric.is_some(), output2.metric.is_some()) {
+            (true, true) => {
+                match output1.compare_metric(output2) {
+                    // If equal, we fall back on comparing asset properties
+                    Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
+                    cmp => cmp,
+                }
+            }
+            (a, b) => a.cmp(&b).reverse(),
+        }
     });
-
-    num_nonfeasible
 }
 
 /// Counts the number of top appraisal outputs in a sorted slice that are indistinguishable
@@ -364,7 +364,8 @@ pub fn count_equal_and_best_appraisal_outputs(outputs: &[AppraisalOutput]) -> us
     outputs[1..]
         .iter()
         .take_while(|output| {
-            output.compare_metric(&outputs[0]).is_eq()
+            output.metric.is_some()
+                && output.compare_metric(&outputs[0]).is_eq()
                 && compare_asset_fallback(&output.asset, &outputs[0].asset).is_eq()
         })
         .count()
