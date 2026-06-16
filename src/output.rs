@@ -388,12 +388,7 @@ impl DebugDataWriter {
             map.entry((asset, time_slice)).or_default().2 = Some(column_dual);
         }
 
-        for (asset, time_slice, activity, activity_dual, column_dual) in
-            map.iter()
-                .map(|(&(agent, ts), &(activity, activity_dual, column_dual))| {
-                    (agent, ts, activity, activity_dual, column_dual)
-                })
-        {
+        for ((asset, time_slice), (activity, activity_dual, column_dual)) in map {
             let row = DispatchRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
@@ -629,10 +624,7 @@ impl DataWriter {
     ///
     /// For divisible asset groups, a single row is emitted per group (using the parent asset's
     /// metadata).
-    pub fn write_assets<'a, I>(&mut self, assets: I) -> Result<()>
-    where
-        I: Iterator<Item = &'a AssetRef>,
-    {
+    pub fn write_assets(&mut self, assets: &[AssetRef]) -> Result<()> {
         let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
         for asset in assets {
             if let Some(parent) = asset.parent() {
@@ -653,10 +645,11 @@ impl DataWriter {
     ///
     /// This file is appended to on each invocation. For divisible asset groups, a single row is
     /// emitted per group with the total capacity.
-    pub fn write_asset_capacities<'a, I>(&mut self, milestone_year: u32, assets: I) -> Result<()>
-    where
-        I: Iterator<Item = &'a AssetRef>,
-    {
+    pub fn write_asset_capacities(
+        &mut self,
+        milestone_year: u32,
+        assets: &[AssetRef],
+    ) -> Result<()> {
         let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
         for asset in assets {
             if let Some(parent) = asset.parent() {
@@ -774,7 +767,7 @@ mod tests {
         // Write an asset
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
-            writer.write_assets(assets.iter()).unwrap();
+            writer.write_assets(&assets).unwrap();
             writer.flush().unwrap();
         }
 
@@ -798,7 +791,7 @@ mod tests {
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
             writer
-                .write_asset_capacities(milestone_year, assets.iter())
+                .write_asset_capacities(milestone_year, &assets)
                 .unwrap();
             writer.flush().unwrap();
         }
@@ -824,11 +817,11 @@ mod tests {
     #[rstest]
     fn write_assets_divisible_group_deduplicated(asset_divisible: Asset) {
         let milestone_year = asset_divisible.commission_year();
-        let mut pool = AssetPool::new();
+        let mut assets = AssetPool::new();
         let mut user_assets = vec![asset_divisible.into()];
 
         // Commission a divisible asset so the active pool contains multiple children in one group
-        let commissioned = pool
+        let commissioned = assets
             .commission_new(milestone_year, &mut user_assets)
             .to_vec();
         assert!(commissioned.len() > 1);
@@ -838,7 +831,7 @@ mod tests {
         // Write all active assets: divisible children should collapse to one group row
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
-            writer.write_assets(pool.iter()).unwrap();
+            writer.write_assets(&assets).unwrap();
             writer.flush().unwrap();
         }
 
@@ -861,11 +854,11 @@ mod tests {
     #[rstest]
     fn write_asset_capacities_divisible_group_deduplicated(asset_divisible: Asset) {
         let milestone_year = asset_divisible.commission_year();
-        let mut pool = AssetPool::new();
+        let mut assets = AssetPool::new();
         let mut user_assets = vec![asset_divisible.into()];
 
         // Commission a divisible asset so we get several children under one parent/group
-        let commissioned = pool
+        let commissioned = assets
             .commission_new(milestone_year, &mut user_assets)
             .to_vec();
         assert!(commissioned.len() > 1);
@@ -876,7 +869,7 @@ mod tests {
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
             writer
-                .write_asset_capacities(milestone_year, pool.iter())
+                .write_asset_capacities(milestone_year, &assets)
                 .unwrap();
             writer.flush().unwrap();
         }
