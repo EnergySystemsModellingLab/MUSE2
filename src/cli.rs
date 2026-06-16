@@ -3,7 +3,7 @@ use crate::graph::save_commodity_graphs_for_model;
 use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
 use crate::output::{copy_input_files, create_output_directory, get_graphs_dir, get_output_dir};
-use crate::settings::Settings;
+use crate::settings::{Settings, SettingsOverrides};
 use ::log::{info, warn};
 use anyhow::{Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
@@ -41,15 +41,9 @@ pub struct RunOpts {
     /// Directory for output files
     #[arg(short, long)]
     pub output_dir: Option<PathBuf>,
-    /// Whether to overwrite the output directory if it already exists
-    #[arg(long)]
-    pub overwrite: bool,
-    /// Whether to write additional information to CSV files
-    #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
-    pub debug_model: Option<bool>,
-    /// Whether to copy input files to the output folder
-    #[arg(long, value_name = "BOOL", num_args = 0..=1, default_missing_value = "true")]
-    pub copy_input_files: Option<bool>,
+    /// Settings that can be overridden on the command line
+    #[command(flatten)]
+    pub overrides: SettingsOverrides,
 }
 
 /// Options for the `graph` command
@@ -59,8 +53,8 @@ pub struct GraphOpts {
     #[arg(short, long)]
     pub output_dir: Option<PathBuf>,
     /// Whether to overwrite the output directory if it already exists
-    #[arg(long)]
-    pub overwrite: bool,
+    #[arg(long, value_name = "BOOL", num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    pub overwrite: Option<bool>,
 }
 
 /// The available commands.
@@ -138,16 +132,8 @@ pub fn run_cli() -> Result<()> {
 pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
-    // These settings can be overridden by command-line arguments
-    if opts.overwrite {
-        settings.overwrite = true;
-    }
-    if let Some(opt) = opts.debug_model {
-        settings.debug_model = opt;
-    }
-    if let Some(opt) = opts.copy_input_files {
-        settings.copy_input_files = opt;
-    }
+    // Command-line arguments take precedence over the settings file
+    settings.apply_overrides(&opts.overrides);
 
     // Get path to output folder
     let pathbuf: PathBuf;
@@ -219,9 +205,11 @@ pub fn handle_validate_command(model_path: &Path) -> Result<()> {
 pub fn handle_save_graphs_command(model_path: &Path, opts: &GraphOpts) -> Result<()> {
     let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
-    if opts.overwrite {
-        settings.overwrite = true;
-    }
+    // Command-line arguments take precedence over the settings file
+    settings.apply_overrides(&SettingsOverrides {
+        overwrite: opts.overwrite,
+        ..Default::default()
+    });
 
     // Get path to output folder
     let pathbuf: PathBuf;
