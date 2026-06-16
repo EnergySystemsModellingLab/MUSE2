@@ -71,6 +71,22 @@ macro_rules! base_unit_struct {
                 Dimensionless(self.0 / rhs.0)
             }
         }
+        impl std::ops::Mul<Dimensionless> for $name {
+            type Output = $name;
+            fn mul(self, rhs: Dimensionless) -> $name {
+                $name(self.0 * rhs.0)
+            }
+        }
+        impl std::ops::MulAssign<Dimensionless> for $name {
+            fn mul_assign(&mut self, rhs: Dimensionless) {
+                self.0 *= rhs.0;
+            }
+        }
+        impl std::ops::DivAssign<Dimensionless> for $name {
+            fn div_assign(&mut self, rhs: Dimensionless) {
+                self.0 /= rhs.0;
+            }
+        }
         impl float_cmp::ApproxEq for $name {
             type Margin = float_cmp::F64Margin;
             fn approx_eq<T: Into<Self::Margin>>(self, other: Self, margin: T) -> bool {
@@ -167,14 +183,6 @@ macro_rules! base_unit_struct {
 // Define Dimensionless first
 base_unit_struct!(Dimensionless, derive_more::From, derive_more::Into);
 
-impl Mul for Dimensionless {
-    type Output = Dimensionless;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Dimensionless(self.0 * rhs.0)
-    }
-}
-
 impl Dimensionless {
     /// Raises this dimensionless number to the power of `rhs`.
     pub fn powi(self, rhs: i32) -> Self {
@@ -187,12 +195,6 @@ macro_rules! unit_struct {
     ($name:ident) => {
         base_unit_struct!($name);
 
-        impl std::ops::Mul<Dimensionless> for $name {
-            type Output = $name;
-            fn mul(self, rhs: Dimensionless) -> $name {
-                $name(self.0 * rhs.0)
-            }
-        }
         impl std::ops::Mul<$name> for Dimensionless {
             type Output = $name;
             fn mul(self, rhs: $name) -> $name {
