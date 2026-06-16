@@ -12,7 +12,7 @@ use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCa
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::rc::Rc;
@@ -826,6 +826,18 @@ fn select_best_assets(
             &demand,
         )?;
 
+        let outputs_for_opts = appraise_nondispatched_options_if_needed(
+            model,
+            prices,
+            commodity,
+            region_id,
+            objective_type,
+            &demand,
+            &remaining_candidate_capacity,
+            year,
+            outputs_for_opts,
+        )?;
+
         // Sort, filter and select the best feasible option
         let best_output =
             select_best_option(outputs_for_opts, commodity, agent, region_id, &demand, year)?;
@@ -909,6 +921,91 @@ fn appraise_all_options(
     }
 
     Ok(outputs_for_opts)
+}
+
+/// Re-appraise options with increased prices, if all remaining options failed to dispatch.
+///
+/// This is done incrementally, with higher prices trialled until a limit is reached.
+#[allow(clippy::too_many_arguments)]
+fn appraise_nondispatched_options_if_needed(
+    model: &Model,
+    prices: &Prices,
+    commodity: &Commodity,
+    region_id: &RegionID,
+    objective_type: ObjectiveType,
+    demand: &DemandMap,
+    remaining_candidate_capacity: &HashMap<AssetRef, AssetCapacity>,
+    year: u32,
+    outputs: Vec<AppraisalOutput>,
+) -> Result<Vec<AppraisalOutput>> {
+    if !model.parameters.allow_investment_in_nondispatched_options
+        || !outputs.iter().any(|output| !output.is_valid())
+    {
+        // NB: Also returns if outputs is empty
+        return Ok(outputs);
+    }
+
+    warn!(
+        "The only remaining options failed to dispatch (count: {}). Trying again with increased prices.",
+        outputs.len()
+    );
+
+    let mut new_prices = prices.clone();
+    let mut current_inc = model.parameters.nondispatched_option_price_increment;
+    let max_inc = model.parameters.nondispatched_option_price_increase_max;
+    loop {
+        debug!(
+            "Retrying appraisal with price increase of {}%",
+            (current_inc.value() * 100.0).round()
+        );
+
+        // Increment prices for commodity of interest
+        for time_slice in model.time_slice_info.iter_ids() {
+            let key = (commodity.id.clone(), region_id.clone(), time_slice.clone());
+            new_prices.shadow[&key] = prices.shadow[&key] * (current_inc + Dimensionless(1.0));
+        }
+
+        let opt_assets = outputs
+            .iter()
+            .map(|output| output.asset.clone())
+            .collect_vec();
+        let coefficients = calculate_coefficients_for_assets(
+            model,
+            &objective_type,
+            &opt_assets,
+            &new_prices,
+            year,
+        );
+        let outputs = appraise_all_options(
+            model,
+            &opt_assets,
+            commodity,
+            objective_type,
+            &coefficients,
+            demand,
+            remaining_candidate_capacity,
+        )?;
+
+        // If one of the options dispatched, we can return
+        let valid_count = outputs.iter().filter(|output| output.is_valid()).count();
+        if valid_count > 0 {
+            info!(
+                "{} options dispatched after increasing price by {}%",
+                valid_count,
+                (100.0 * current_inc.value()).round()
+            );
+            return Ok(outputs);
+        }
+
+        let new_inc = current_inc + model.parameters.nondispatched_option_price_increment;
+        ensure!(
+            new_inc <= max_inc,
+            "No options dispatched. Final price increase: {}%",
+            (100.0 * current_inc.value()).round()
+        );
+
+        current_inc = new_inc;
+    }
 }
 
 /// Determine the maximum capacity that can be invested in a candidate asset this round.
