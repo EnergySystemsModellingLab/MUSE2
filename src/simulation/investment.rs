@@ -981,7 +981,7 @@ mod tests {
         ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessParameterMap,
     };
     use crate::region::RegionID;
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
     use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
@@ -1067,6 +1067,68 @@ mod tests {
         // Time slice 1: demand (4.0) / (activity_limit (0.2) * coeff (1.0)) = 20.0
         // Time slice 2: skipped due to zero activity limit
         // Maximum = 20.0
+        assert_eq!(result, Capacity(20.0));
+    }
+
+    #[rstest]
+    fn get_demand_limiting_capacity_uses_coarser_limits(
+        time_slice_info2: TimeSliceInfo,
+        svd_commodity: Commodity,
+        mut process: Process,
+    ) {
+        let (time_slice1, time_slice2) =
+            time_slice_info2.time_slices.keys().collect_tuple().unwrap();
+
+        // Configure a 1:1 activity-to-flow relationship.
+        let commodity_rc = Rc::new(svd_commodity);
+        let process_flow = ProcessFlow {
+            commodity: Rc::clone(&commodity_rc),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+
+        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        process.flows = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+
+        // Fine-grained limits imply a capacity requirement of 5:
+        //   TS1: 5 / 1 = 5
+        //   TS2: 5 / 1 = 5
+        //
+        // The annual limit implies:
+        //   (5 + 5) / 0.5 = 20
+        //
+        // The function should return the larger value.
+        let limits = HashMap::from([
+            (
+                TimeSliceSelection::Single(time_slice1.clone()),
+                Dimensionless(0.0)..=Dimensionless(1.0),
+            ),
+            (
+                TimeSliceSelection::Single(time_slice2.clone()),
+                Dimensionless(0.0)..=Dimensionless(1.0),
+            ),
+            (
+                TimeSliceSelection::Annual,
+                Dimensionless(0.0)..=Dimensionless(0.5),
+            ),
+        ]);
+
+        process.activity_limits = process_activity_limits_map(
+            process.regions.clone(),
+            ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap(),
+        );
+
+        let asset = asset(process);
+
+        let demand = indexmap! {
+            time_slice1.clone() => Flow(5.0),
+            time_slice2.clone() => Flow(5.0),
+        };
+
+        let result =
+            get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
+
         assert_eq!(result, Capacity(20.0));
     }
 
