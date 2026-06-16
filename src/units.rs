@@ -54,6 +54,11 @@ macro_rules! base_unit_struct {
             Serialize,
             derive_more::Add,
             derive_more::Sub,
+            derive_more::AddAssign,
+            derive_more::SubAssign,
+            derive_more::Neg,
+            derive_more::Sum,
+            derive_more::Display,
             derive_more::FromStr,
         )]
         pub struct $name(pub f64);
@@ -64,36 +69,10 @@ macro_rules! base_unit_struct {
                 Dimensionless(self.0 / rhs.0)
             }
         }
-        impl std::iter::Sum for $name {
-            fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-                iter.fold($name(0.0), |a, b| $name(a.0 + b.0))
-            }
-        }
-        impl AddAssign for $name {
-            fn add_assign(&mut self, other: Self) {
-                self.0 += other.0;
-            }
-        }
-        impl SubAssign for $name {
-            fn sub_assign(&mut self, other: Self) {
-                self.0 -= other.0;
-            }
-        }
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", self.0)
-            }
-        }
         impl float_cmp::ApproxEq for $name {
             type Margin = float_cmp::F64Margin;
             fn approx_eq<T: Into<Self::Margin>>(self, other: Self, margin: T) -> bool {
                 self.0.approx_eq(other.0, margin)
-            }
-        }
-        impl std::ops::Neg for $name {
-            type Output = $name;
-            fn neg(self) -> $name {
-                $name(-self.0)
             }
         }
         impl $name {
