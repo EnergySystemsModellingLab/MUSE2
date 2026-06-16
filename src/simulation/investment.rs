@@ -571,7 +571,19 @@ where
     })
 }
 
-/// Get the maximum required capacity across time slices
+/// Returns the minimum installed capacity required for `asset` to satisfy the demand that it can
+/// potentially serve, accounting for its activity constraints.
+///
+/// The returned value is the maximum capacity requirement implied by any time-slice selection,
+/// since constraints at coarser aggregation levels (e.g. seasonal or annual limits) can require
+/// more capacity than constraints at the finest time-slice level.
+///
+/// Demand is evaluated using the commodity's balance level. Demand within a balance bucket is
+/// treated as fungible: if the asset is capable of operating in any constituent time slice of a
+/// bucket, then all demand in that bucket is considered serviceable by the asset.
+///
+/// Selections whose maximum supply is zero are ignored. Such selections would otherwise imply an
+/// infinite capacity requirement and therefore provide no useful lower bound.
 fn get_demand_limiting_capacity(
     time_slice_info: &TimeSliceInfo,
     asset: &Asset,
@@ -583,8 +595,6 @@ fn get_demand_limiting_capacity(
     let mut demand_cache: HashMap<_, Flow> = HashMap::new();
 
     // Calculate demand-limiting capacity at each timeslice level and take the max.
-    // This is necessary because process availability limits at the seasonal/annual level may
-    // necessitate higher capacity that activity limits at the time slice level.
     for level in TimeSliceLevel::iter() {
         for selection in time_slice_info.iter_selections_at_level(level) {
             // Maximum supply within this selection according to the asset's activity limits.
