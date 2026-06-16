@@ -59,6 +59,23 @@ properties:
       investment cycle. Changing the value of this parameter is potentially dangerous,
       so it requires setting `please_give_me_broken_results` to true.
     default: 1e-12
+  nondispatched_option_price_increment:
+    type: number
+    default: 0.1
+    description: |
+      How much to try increasing prices by when all investment options have failed to dispatch.
+
+      This will be done repeatedly until the limit defined in `nondispatched_option_price_max` is
+      reached. Represents a proportion of the original price.
+  nondispatched_option_price_increase_max:
+    type: number
+    default: 1.0
+    description: |
+      Maximum price increase as proportion of original for non-dispatched options, before investment
+      is aborted.
+
+      For example, if this value is set to 1.0, investment will be aborted when prices are 2x the
+      original.
   highs:
     type: object
     description: |

@@ -100,6 +100,21 @@ pub struct ModelParameters {
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
     pub remaining_demand_absolute_tolerance: Flow,
+    /// Whether to allow investment in non-disptached options.
+    ///
+    /// This is done by increasing the price until at least one option dispatches.
+    pub allow_investment_in_nondispatched_options: bool,
+    /// How much to try increasing prices by when all investment options have failed to dispatch.
+    ///
+    /// This will be done repeatedly until the limit defined in `nondispatched_option_price_max` is
+    /// reached. Represents a proportion of the original price.
+    pub nondispatched_option_price_increment: Dimensionless,
+    /// Maximum price increase as proportion of original for non-dispatched options, before
+    /// investment is aborted.
+    ///
+    /// For example, if this value is set to 1.0, investment will be aborted when prices are 2x the
+    /// original.
+    pub nondispatched_option_price_increase_max: Dimensionless,
     /// Options for the HiGHS solver.
     ///
     /// For a full list of options, see [the HiGHS documentation].
@@ -125,6 +140,9 @@ impl Default for ModelParameters {
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+            allow_investment_in_nondispatched_options: false,
+            nondispatched_option_price_increment: Dimensionless(0.1),
+            nondispatched_option_price_increase_max: Dimensionless(1.0),
             highs: HighsOptions::default(),
         }
     }
@@ -275,6 +293,51 @@ fn check_capacity_margin(value: Dimensionless) -> Result<()> {
     Ok(())
 }
 
+/// Check that the `allow_investment_in_nondispatched_options` parameter is valid
+fn check_allow_investment_in_nondispatched_options(
+    dangerous_options_enabled: bool,
+    value: bool,
+) -> Result<()> {
+    if value {
+        ensure!(
+            dangerous_options_enabled,
+            "Cannot enable allow_investment_in_nondispatched_options option without enabling \
+            {ALLOW_DANGEROUS_OPTION_NAME}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Check that the `nondispatched_option_price_increment` parameter is valid
+fn check_nondispatched_option_price_increment(value: Dimensionless) -> Result<()> {
+    ensure!(
+        value.is_finite() && value > Dimensionless(0.0),
+        "nondispatched_option_price_increment must be a finite number greater than zero"
+    );
+
+    Ok(())
+}
+
+/// Check that the `nondispatched_option_price_increase_max` parameter is valid
+fn check_nondispatched_option_price_increase_max(
+    value: Dimensionless,
+    nondispatched_option_price_increment: Dimensionless,
+) -> Result<()> {
+    ensure!(
+        value.is_finite() && value > Dimensionless(0.0),
+        "nondispatched_option_price_increment must be a finite number greater than zero"
+    );
+
+    ensure!(
+        value >= nondispatched_option_price_increment,
+        "nondispatched_option_price_increase_max parameter must be greater than or equal to \
+        nondispatched_option_price_increment"
+    );
+
+    Ok(())
+}
+
 /// Check the custom HiGHS options are valid.
 ///
 /// Note that we cannot know whether the options specified exist and are of the correct type until
@@ -350,6 +413,16 @@ impl ModelParameters {
         check_remaining_demand_absolute_tolerance(
             self.allow_dangerous_options,
             self.remaining_demand_absolute_tolerance,
+        )?;
+
+        check_allow_investment_in_nondispatched_options(
+            self.allow_dangerous_options,
+            self.allow_investment_in_nondispatched_options,
+        )?;
+        check_nondispatched_option_price_increment(self.nondispatched_option_price_increment)?;
+        check_nondispatched_option_price_increase_max(
+            self.nondispatched_option_price_increase_max,
+            self.nondispatched_option_price_increment,
         )?;
 
         check_highs_options(self.allow_dangerous_options, &self.highs)?;
