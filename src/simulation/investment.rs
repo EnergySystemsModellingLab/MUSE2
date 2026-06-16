@@ -1,6 +1,6 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::{Agent, AgentID};
+use crate::agent::{Agent, AgentID, ObjectiveType};
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
@@ -15,10 +15,11 @@ use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use std::rc::Rc;
 use strum::IntoEnumIterator;
 
 pub mod appraisal;
-use appraisal::coefficients::calculate_coefficients_for_assets;
+use appraisal::coefficients::{ObjectiveCoefficients, calculate_coefficients_for_assets};
 use appraisal::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
     sort_and_filter_appraisal_outputs,
@@ -784,12 +785,12 @@ fn select_best_assets(
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let objective_type = &agent.objectives[&year];
+    let objective_type = agent.objectives[&year];
     let mut remaining_candidate_capacity = investment_limits;
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
-        calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
+        calculate_coefficients_for_assets(model, &objective_type, &opt_assets, prices, year);
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
@@ -806,49 +807,16 @@ fn select_best_assets(
             region_id
         );
 
-        // Since all assets with the same `group_id` are identical, we only need to appraise one
-        // from each group.
-        let mut seen_groups = HashSet::new();
-
         // Appraise all options
-        let mut outputs_for_opts = Vec::new();
-        for asset in &opt_assets {
-            // Skip any assets from groups we've already seen
-            if let Some(group_id) = asset.group_id()
-                && !seen_groups.insert(group_id)
-            {
-                continue;
-            }
-
-            // For candidates, determine the maximum capacity that can be invested in this round.
-            // This is whichever is the smallest of the tranche size (based on demand limiting
-            // capacity before investment), the remaining available capacity for the candidate and
-            // the demand limiting capacity recalculated based on demand unserved by the other
-            // selected assets.
-            let max_capacity = (!asset.is_commissioned()).then(|| {
-                let tranche_capacity = asset
-                    .capacity()
-                    .apply_limit_factor(model.parameters.capacity_limit_factor);
-                let dlc = AssetCapacity::from_capacity(
-                    get_demand_limiting_capacity(&model.time_slice_info, asset, commodity, &demand),
-                    asset.unit_size(),
-                );
-                let remaining_capacity = remaining_candidate_capacity[asset];
-
-                tranche_capacity.min(dlc).min(remaining_capacity)
-            });
-
-            let output = appraise_investment(
-                model,
-                asset,
-                max_capacity,
-                commodity,
-                objective_type,
-                &coefficients[asset],
-                &demand,
-            )?;
-            outputs_for_opts.push(output);
-        }
+        let outputs_for_opts = appraise_all_options(
+            model,
+            &opt_assets,
+            commodity,
+            objective_type,
+            &coefficients,
+            &demand,
+            &remaining_candidate_capacity,
+        )?;
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
@@ -858,36 +826,9 @@ fn select_best_assets(
             &demand,
         )?;
 
-        // Sort by investment priority and discard non-feasible options
-        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
-
-        // Check if there are any remaining options. If not, we cannot meet demand, so have to bail
-        // out.
-        if outputs_for_opts.is_empty() {
-            let remaining_demands: Vec<_> = demand
-                .iter()
-                .filter(|(_, flow)| **flow > Flow(0.0))
-                .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
-                .collect();
-
-            bail!(
-                "No feasible investment options left for \
-                commodity '{}', region '{}', year '{}', agent '{}' after appraisal. \
-                {} non-feasible options were not considered.\n\
-                Remaining unmet demand (time_slice : flow):\n{}",
-                &commodity.id,
-                region_id,
-                year,
-                agent.id,
-                num_nonfeasible,
-                remaining_demands.join("\n")
-            );
-        }
-
-        // Warn if there are multiple equally good assets
-        log_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
-
-        let best_output = outputs_for_opts.into_iter().next().unwrap();
+        // Sort, filter and select the best feasible option
+        let best_output =
+            select_best_option(outputs_for_opts, commodity, agent, region_id, &demand, year)?;
 
         // Log the selected asset
         debug!(
@@ -921,6 +862,125 @@ fn select_best_assets(
     }
 
     Ok(best_assets)
+}
+
+/// Appraise every distinct investment option for the current round.
+///
+/// Since all assets with the same `group_id` are identical, only one asset from each group is
+/// appraised.
+fn appraise_all_options(
+    model: &Model,
+    opt_assets: &[AssetRef],
+    commodity: &Commodity,
+    objective_type: ObjectiveType,
+    coefficients: &HashMap<AssetRef, Rc<ObjectiveCoefficients>>,
+    demand: &DemandMap,
+    remaining_candidate_capacity: &HashMap<AssetRef, AssetCapacity>,
+) -> Result<Vec<AppraisalOutput>> {
+    let mut seen_groups = HashSet::new();
+
+    let mut outputs_for_opts = Vec::new();
+    for asset in opt_assets {
+        // Skip any assets from groups we've already seen
+        if let Some(group_id) = asset.group_id()
+            && !seen_groups.insert(group_id)
+        {
+            continue;
+        }
+
+        let max_capacity = get_max_candidate_capacity(
+            model,
+            asset,
+            commodity,
+            demand,
+            remaining_candidate_capacity,
+        );
+
+        let output = appraise_investment(
+            model,
+            asset,
+            max_capacity,
+            commodity,
+            &objective_type,
+            &coefficients[asset],
+            demand,
+        )?;
+        outputs_for_opts.push(output);
+    }
+
+    Ok(outputs_for_opts)
+}
+
+/// Determine the maximum capacity that can be invested in a candidate asset this round.
+///
+/// This is whichever is the smallest of the tranche size (based on demand limiting capacity before
+/// investment), the remaining available capacity for the candidate and the demand limiting capacity
+/// recalculated based on demand unserved by the other selected assets. Returns `None` for assets
+/// that are already commissioned.
+fn get_max_candidate_capacity(
+    model: &Model,
+    asset: &AssetRef,
+    commodity: &Commodity,
+    demand: &DemandMap,
+    remaining_candidate_capacity: &HashMap<AssetRef, AssetCapacity>,
+) -> Option<AssetCapacity> {
+    if asset.is_commissioned() {
+        return None;
+    }
+
+    let tranche_capacity = asset
+        .capacity()
+        .apply_limit_factor(model.parameters.capacity_limit_factor);
+    let dlc = AssetCapacity::from_capacity(
+        get_demand_limiting_capacity(&model.time_slice_info, asset, commodity, demand),
+        asset.unit_size(),
+    );
+    let remaining_capacity = remaining_candidate_capacity[asset];
+
+    Some(tranche_capacity.min(dlc).min(remaining_capacity))
+}
+
+/// Select the best feasible option from a round's appraisal outputs.
+///
+/// Sorts by investment priority and discards non-feasible options, returning an error if none
+/// remain. Also warns if multiple options are equally good.
+fn select_best_option(
+    mut outputs: Vec<AppraisalOutput>,
+    commodity: &Commodity,
+    agent: &Agent,
+    region_id: &RegionID,
+    demand: &DemandMap,
+    year: u32,
+) -> Result<AppraisalOutput> {
+    // Sort by investment priority and discard non-feasible options
+    let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);
+
+    // Check if there are any remaining options. If not, we cannot meet demand, so have to bail out.
+    if outputs.is_empty() {
+        let remaining_demands: Vec<_> = demand
+            .iter()
+            .filter(|(_, flow)| **flow > Flow(0.0))
+            .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
+            .collect();
+
+        bail!(
+            "No feasible investment options left for \
+            commodity '{}', region '{}', year '{}', agent '{}' after appraisal. \
+            {} non-feasible options were not considered.\n\
+            Remaining unmet demand (time_slice : flow):\n{}",
+            &commodity.id,
+            region_id,
+            year,
+            agent.id,
+            num_nonfeasible,
+            remaining_demands.join("\n")
+        );
+    }
+
+    // Warn if there are multiple equally good assets
+    log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);
+
+    Ok(outputs.into_iter().next().unwrap())
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
