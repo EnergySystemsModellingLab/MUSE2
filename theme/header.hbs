@@ -31,3 +31,26 @@
 <div id="version-banner">
   This is the <strong>&nbsp;development version&nbsp;</strong> of the MUSE2 documentation.
 </div>
+
+<script>
+  (function () {
+    var match = /\/release\/(v[\d.]+)\//.exec(window.location.pathname);
+    if (!match) return;
+
+    var version = match[1];
+    var banner = document.getElementById("version-banner");
+
+    banner.innerHTML =
+      "You are viewing docs for <strong>\u00a0" + version + "\u00a0</strong> of MUSE2. " +
+      "This is not the latest version.";
+
+    banner.style.backgroundColor = "#f8d7da";
+    banner.style.borderBottomColor = "#f5c2c7";
+    banner.style.color = "#842029";
+
+    // Override the !important colour rule by injecting a higher-specificity style
+    var s = document.createElement("style");
+    s.textContent = "#version-banner, #version-banner * { color: #842029 !important; }";
+    document.head.appendChild(s);
+  })();
+</script>
