@@ -345,7 +345,7 @@ impl Asset {
         lb..=ub
     }
 
-    /// Get the activity limits for this asset for a given time slice selection
+    /// Get the activity limits per unit of capacity for this asset for a given time slice selection
     pub fn get_activity_per_capacity_limits_for_selection(
         &self,
         time_slice_selection: &TimeSliceSelection,
