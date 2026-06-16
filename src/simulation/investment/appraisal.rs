@@ -272,7 +272,7 @@ fn calculate_lcox(
         results.capacity.total_capacity(),
         coefficients.capacity_coefficient,
         &results.activity,
-        &coefficients.activity_coefficients,
+        &coefficients.market_costs,
     );
 
     Ok(AppraisalOutput::new(
@@ -314,10 +314,10 @@ fn calculate_npv(
     );
 
     let profitability_index = profitability_index(
-        results.capacity.total_capacity(),
+        max_capacity.total_capacity(),
         annual_fixed_cost,
         &results.activity,
-        &coefficients.activity_coefficients,
+        &coefficients.market_costs,
     );
 
     Ok(AppraisalOutput::new(
@@ -576,6 +576,7 @@ mod tests {
         Rc::new(ObjectiveCoefficients {
             capacity_coefficient: MoneyPerCapacity(0.0),
             activity_coefficients: IndexMap::new(),
+            market_costs: IndexMap::new(),
             unmet_demand_coefficient: MoneyPerFlow(0.0),
         })
     }

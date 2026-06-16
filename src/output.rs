@@ -4,9 +4,9 @@ use crate::asset::{Asset, AssetGroupID, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
 use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
+use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{
     Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow,
@@ -709,7 +709,7 @@ impl DataWriter {
     }
 
     /// Write commodity prices to a CSV file
-    pub fn write_prices(&mut self, milestone_year: u32, prices: &CommodityPrices) -> Result<()> {
+    pub fn write_prices(&mut self, milestone_year: u32, prices: &PriceMap) -> Result<()> {
         for (commodity_id, region_id, time_slice, price) in prices.iter() {
             let row = CommodityPriceRow {
                 milestone_year,
@@ -940,7 +940,7 @@ mod tests {
     fn write_prices(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
         let milestone_year = 2020;
         let price = MoneyPerFlow(42.0);
-        let mut prices = CommodityPrices::default();
+        let mut prices = PriceMap::default();
         prices.insert(&commodity_id, &region_id, &time_slice, price);
 
         let dir = tempdir().unwrap();

@@ -401,6 +401,7 @@ pub fn time_slice_info2() -> TimeSliceInfo {
 #[fixture]
 pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
     let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
+    let market_costs = indexmap! { time_slice.clone() => MoneyPerActivity(0.4) };
     let activity = indexmap! { time_slice.clone() => Activity(10.0) };
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
     AppraisalOutput {
@@ -409,6 +410,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         coefficients: Rc::new(ObjectiveCoefficients {
             capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
+            market_costs,
             unmet_demand_coefficient: MoneyPerFlow(10000.0),
         }),
         activity,

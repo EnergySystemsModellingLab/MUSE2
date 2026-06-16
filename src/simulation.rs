@@ -3,7 +3,7 @@ use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
-use crate::simulation::prices::calculate_prices;
+use crate::simulation::prices::{Prices, calculate_prices};
 use crate::units::Capacity;
 use anyhow::{Context, Result};
 use log::info;
@@ -15,7 +15,7 @@ use optimisation::{DispatchRun, FlowMap};
 pub mod investment;
 use investment::perform_agent_investment;
 pub mod prices;
-pub use prices::CommodityPrices;
+pub use prices::PriceMap;
 
 /// Run the simulation.
 ///
@@ -52,12 +52,12 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
-    let (flow_map, mut prices) =
+    let (mut prices, flow_map) =
         run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
 
     // Write results of dispatch optimisation to file
     writer.write_flows(year, &flow_map)?;
-    writer.write_prices(year, &prices)?;
+    writer.write_prices(year, &prices.market)?;
 
     while let Some(year) = year_iter.next() {
         info!("Milestone year: {year}");
@@ -85,12 +85,12 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
-            let (_flow_map, new_prices) =
+            let (new_prices, ..) =
                 run_dispatch_for_year(model, &selected_assets, &candidates, year, &mut writer)?;
 
             // Check if prices have converged using time slice-weighted averages
-            let prices_stable = prices.within_tolerance_weighted(
-                &new_prices,
+            let prices_stable = prices.market.within_tolerance_weighted(
+                &new_prices.market,
                 model.parameters.price_tolerance,
                 &model.time_slice_info,
             );
@@ -139,12 +139,12 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
-        let (flow_map, new_prices) =
+        let (new_prices, flow_map) =
             run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;
-        writer.write_prices(year, &new_prices)?;
+        writer.write_prices(year, &new_prices.market)?;
 
         // Prices for the next year
         prices = new_prices;
@@ -162,7 +162,7 @@ fn run_dispatch_for_year(
     candidates: &[AssetRef],
     year: u32,
     writer: &mut DataWriter,
-) -> Result<(FlowMap, CommodityPrices)> {
+) -> Result<(Prices, FlowMap)> {
     // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
     // flows (i.e. all are zero)
     let (solution_existing, flow_map) = (!assets.is_empty())
@@ -194,7 +194,7 @@ fn run_dispatch_for_year(
         .transpose()?
         .unwrap_or_default();
 
-    Ok((flow_map, prices))
+    Ok((prices, flow_map))
 }
 
 /// Create candidate assets for all potential processes in a specified year

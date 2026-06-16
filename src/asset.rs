@@ -6,7 +6,7 @@ use crate::process::{
     ActivityLimits, FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter,
 };
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
@@ -401,7 +401,7 @@ impl Asset {
     /// If a price is missing, it is assumed to be zero.
     pub fn get_revenue_from_flows(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
@@ -412,7 +412,7 @@ impl Asset {
     /// If a price is missing, it is assumed to be zero.
     pub fn get_revenue_from_flows_excluding_primary(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         let excluded_commodity = self.primary_output().map(|flow| &flow.commodity.id);
@@ -427,7 +427,7 @@ impl Asset {
     /// If a price is missing, there is assumed to be no cost.
     pub fn get_input_cost_from_prices(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         // Revenues of input flows are negative costs, so we negate the result
@@ -442,7 +442,7 @@ impl Asset {
     /// be zero.
     fn get_revenue_from_flows_with_filter<F>(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
         mut filter_for_flows: F,
     ) -> MoneyPerActivity
@@ -466,7 +466,7 @@ impl Asset {
     /// Includes levies, flow costs, costs of inputs and variable operating costs
     fn get_generic_activity_cost(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
@@ -499,7 +499,7 @@ impl Asset {
     /// - Production levies and flow costs for the specific SED/SVD output commodity
     pub fn iter_marginal_costs_with_filter<'a>(
         &'a self,
-        prices: &'a CommodityPrices,
+        prices: &'a PriceMap,
         year: u32,
         time_slice: &'a TimeSliceID,
         filter: impl Fn(&CommodityID) -> bool + 'a,
@@ -546,7 +546,7 @@ impl Asset {
     /// See `iter_marginal_costs_with_filter` for details.
     pub fn iter_marginal_costs<'a>(
         &'a self,
-        prices: &'a CommodityPrices,
+        prices: &'a PriceMap,
         year: u32,
         time_slice: &'a TimeSliceID,
     ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
@@ -1297,7 +1297,7 @@ mod tests {
             Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2020).unwrap();
 
         // Set input prices
-        let mut input_prices = CommodityPrices::default();
+        let mut input_prices = PriceMap::default();
         input_prices.insert(&commodity_rc.id, &region_id, &time_slice, MoneyPerFlow(3.0));
 
         // Call function
