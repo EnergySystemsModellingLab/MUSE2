@@ -227,13 +227,13 @@ impl Display for TimeSliceSelection {
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
     #[string = "daynight"]
-    DayNight = 0,
+    DayNight,
     /// Whole seasons
     #[string = "season"]
-    Season = 1,
+    Season,
     /// The whole year
     #[string = "annual"]
-    Annual = 2,
+    Annual,
 }
 
 impl TimeSliceLevel {
