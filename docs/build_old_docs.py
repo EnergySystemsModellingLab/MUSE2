@@ -72,6 +72,9 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
     # Apply patches, if any
     apply_patches_for_release(release, release_path)
 
+    # Copy current theme into the release worktree so theme is consistent
+    shutil.copytree(REPO_ROOT / "theme", release_path / "theme", dirs_exist_ok=True)
+
     # Build docs
     sp.run(("just", f"{release_path!s}/build-docs"), check=True)
 
