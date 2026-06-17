@@ -78,12 +78,6 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> Path:
     # Build docs
     sp.run(("just", f"{release_path!s}/build-docs"), check=True)
 
-    # Patch versions.html to redirect to main versions page
-    with (release_path / "book" / "versions.html").open("w", encoding="utf-8") as f:
-        f.write(f"""<head>
-    <meta http-equiv="Refresh" content="0; URL={DOCS_SITE_ROOT}/versions.html" />
-</head>""")
-
     # Move to output directory
     release_outdir = outdir / release
     print(f"Copying to {release_outdir}")
