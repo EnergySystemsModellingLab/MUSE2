@@ -214,6 +214,14 @@ mod tests {
             commission_year: 2010,
             max_decommission_year: Some(2005),
         })]
+    #[case(AssetRaw { // Bad max_decommission_year: equal to commission_year
+            agent_id: "agent1".into(),
+            process_id: "process1".into(),
+            region_id: "GBR".into(),
+            capacity: Capacity(1.0),
+            commission_year: 2010,
+            max_decommission_year: Some(2010),
+        })]
     fn read_assets_from_iter_invalid(
         #[case] asset: AssetRaw,
         agent_ids: IndexSet<AgentID>,
