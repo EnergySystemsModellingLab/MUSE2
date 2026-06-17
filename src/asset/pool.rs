@@ -8,7 +8,7 @@ use std::cmp::min;
 #[derive(Default, derive_more::Deref)]
 pub struct AssetPool {
     /// The pool of active assets, sorted by ID
-    #[deref(forward)]
+    #[deref]
     assets: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
@@ -20,11 +20,6 @@ impl AssetPool {
     /// Create a new empty [`AssetPool`]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Get the active pool as a slice of [`AssetRef`]s
-    pub fn as_slice(&self) -> &[AssetRef] {
-        &self.assets
     }
 
     /// Commission new assets for the specified milestone year from the input data.
