@@ -10,8 +10,8 @@ use std::marker::PhantomData;
 
 /// A trait for ID types
 pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + Debug + From<String> {
-    /// Get the name of this type of ID (e.g. "commodity ID", "region ID" etc.)
-    fn get_type_name() -> &'static str;
+    /// The name of this type of ID (e.g. "commodity ID", "region ID" etc.)
+    const TYPE_NAME: &'static str;
 }
 
 macro_rules! define_id_type {
@@ -65,9 +65,7 @@ macro_rules! define_id_type {
         }
 
         impl crate::id::ID for $name {
-            fn get_type_name() -> &'static str {
-                $type_name
-            }
+            const TYPE_NAME: &'static str = $type_name;
         }
 
         impl $name {
@@ -103,7 +101,7 @@ pub(crate) use define_id_getter;
 
 /// Indicates that the specified ID was not found in a given collection
 #[derive(Debug, derive_more::Display)]
-#[display("Unknown {} '{missing_id}'", T::get_type_name())]
+#[display("Unknown {} '{missing_id}'", T::TYPE_NAME)]
 pub struct MissingIDError<T: ID> {
     missing_id: String,
     _phantom: PhantomData<fn() -> T>,
