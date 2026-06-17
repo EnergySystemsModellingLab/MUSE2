@@ -9,7 +9,6 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
-use serde_string_enum::DeserializeLabeledStringEnum;
 use std::iter;
 
 define_id_type! {Season, "season"}
@@ -191,26 +190,16 @@ impl TimeSliceSelection {
 }
 
 /// The time granularity for a particular operation
-#[derive(
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Copy,
-    Clone,
-    Debug,
-    DeserializeLabeledStringEnum,
-    strum::EnumIter,
-)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Deserialize, strum::EnumIter)]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
-    #[string = "daynight"]
+    #[serde(rename = "daynight")]
     DayNight,
     /// Whole seasons
-    #[string = "season"]
+    #[serde(rename = "season")]
     Season,
     /// The whole year
-    #[string = "annual"]
+    #[serde(rename = "annual")]
     Annual,
 }
 
