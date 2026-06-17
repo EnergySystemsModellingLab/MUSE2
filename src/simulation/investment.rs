@@ -621,7 +621,9 @@ fn get_demand_limiting_capacity(
             // any timeslice in the bucket, all demand in that bucket is considered
             // serviceable.
             let demand_selection_level = level.max(commodity.time_slice_level);
-            let demand_selection = selection.containing_selection_at_level(demand_selection_level);
+            let demand_selection = selection
+                .containing_selection_at_level(demand_selection_level)
+                .unwrap();
             let serviceable_demand_for_selection = *demand_cache
                 .entry(demand_selection.clone())
                 .or_insert_with(|| {

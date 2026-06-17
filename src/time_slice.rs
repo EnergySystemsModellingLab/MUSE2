@@ -95,14 +95,15 @@ impl TimeSliceSelection {
     }
 
     /// Get the [`TimeSliceSelection`] containing this selection at the specified level.
-    pub fn containing_selection_at_level(&self, level: TimeSliceLevel) -> TimeSliceSelection {
-        assert!(
-            level >= self.level(),
-            "Cannot get containing selection at finer level"
-        );
+    pub fn containing_selection_at_level(
+        &self,
+        level: TimeSliceLevel,
+    ) -> Option<TimeSliceSelection> {
+        if level < self.level() {
+            return None;
+        }
 
         let mut selection = self.clone();
-
         while selection.level() < level {
             selection = match selection {
                 TimeSliceSelection::Single(time_slice_id) => {
@@ -113,7 +114,7 @@ impl TimeSliceSelection {
             };
         }
 
-        selection
+        Some(selection)
     }
 
     /// Iterate over the subset of time slices in this selection
