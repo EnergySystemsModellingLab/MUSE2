@@ -4,7 +4,6 @@ use super::optimisation::Variable;
 use crate::asset::{AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::Flow;
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
@@ -54,13 +53,14 @@ pub fn add_demand_constraints(
     activity_vars: &IndexMap<TimeSliceID, Variable>,
 ) {
     for ts_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level) {
-        let mut demand_for_ts_selection = Flow(0.0);
-        let mut terms = Vec::new();
-        for (time_slice, _) in ts_selection.iter(time_slice_info) {
-            demand_for_ts_selection += demand[time_slice];
-            let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
-            terms.push((activity_vars[time_slice], flow_coeff.value()));
-        }
+        let demand_for_ts_selection = demand[&ts_selection];
+        let terms: Vec<_> = ts_selection
+            .iter(time_slice_info)
+            .map(|(time_slice, _)| {
+                let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+                (activity_vars[time_slice], flow_coeff.value())
+            })
+            .collect();
         problem.add_row(0.0..=demand_for_ts_selection.value(), terms);
     }
 }
