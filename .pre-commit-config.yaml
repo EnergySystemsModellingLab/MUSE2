@@ -60,17 +60,13 @@ repos:
         args: [--fix]
       - id: ruff-format
         types_or: [python]
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.9.1
-    hooks:
-      - id: nbstripout
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
       - id: codespell
         args: [--ignore-words, .codespell_ignore.txt]
         exclude: \.svg$
-  - repo: https://github.com/EnergySystemsModellingLab/cffconvert
+  - repo: https://github.com/ImperialCollegeLondon/cffconvert
     rev: 2.1.0
     hooks:
       - id: validate-cff
