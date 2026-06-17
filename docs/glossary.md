@@ -31,8 +31,8 @@ historical base year.
 
 <!-- markdownlint-disable-next-line MD033 -->
 **Commodity:** A substance (e.g. CO<sub>2</sub>) or form of energy (e.g. electricity) that can be
-produced and/or consumed by *Process*es* in the model. A *Service Demand* is a type of commodity
-that is defined at the end point of the system.
+produced and/or consumed by *Process*es in the model. A *Service Demand* is a type of commodity that
+is defined at the end point of the system.
 
 **Commodity Levy:** Represents a tax, levy or other external cost on a commodity. Levies can be
 applied to all commodity production (sum of output of all processes for that commodity), net

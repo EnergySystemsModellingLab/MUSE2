@@ -3,6 +3,7 @@ use super::{AssetID, AssetRef, AssetState, UserAsset};
 use itertools::Itertools;
 use log::warn;
 use std::cmp::min;
+use std::ops::Deref;
 use std::slice;
 
 /// The active pool of [`super::Asset`]s
@@ -196,6 +197,14 @@ impl AssetPool {
             _ => panic!("Active pool should only contain commissioned assets"),
         });
         &self.assets[new_start..]
+    }
+}
+
+impl Deref for AssetPool {
+    type Target = [AssetRef];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
     }
 }
 
