@@ -19,7 +19,7 @@ use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -183,7 +183,8 @@ impl VariableMap {
 
 /// Create a map of commodity flows for each asset's coeffs at every time slice
 fn create_flow_map<'a>(
-    existing_assets: &[AssetRef],
+    existing_assets_with_children: &[AssetRef],
+    existing_assets_with_parents: &HashSet<AssetRef>,
     time_slice_info: &TimeSliceInfo,
     activity: impl IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 ) -> FlowMap {
@@ -199,17 +200,29 @@ fn create_flow_map<'a>(
     }
 
     // Copy flows for each child asset
-    for asset in existing_assets {
-        if let Some(parent) = asset.parent() {
-            let n_units = Dimensionless(parent.num_children().unwrap() as f64);
-            for time_slice in time_slice_info.iter_ids() {
-                for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
-                    let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
-                    flows.insert(
-                        (asset.clone(), commodity_id.clone(), time_slice.clone()),
-                        flow / n_units,
-                    );
-                }
+    for asset in existing_assets_with_children {
+        let Some(parent) = asset.parent() else {
+            continue;
+        };
+
+        // We want the number of children that were included in **this** dispatch run, which may be
+        // less than the number of children that the parent has overall. `get_parent_or_self`
+        // creates "partial parents" in this case, which are available in
+        // `existing_assets_with_parents`.
+        let num_children_in_this_run = existing_assets_with_parents
+            .get(parent)
+            .unwrap()
+            .num_children()
+            .unwrap();
+        let n_units = Dimensionless(num_children_in_this_run as f64);
+
+        for time_slice in time_slice_info.iter_ids() {
+            for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
+                let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
+                flows.insert(
+                    (asset.clone(), commodity_id.clone(), time_slice.clone()),
+                    flow / n_units,
+                );
             }
         }
     }
@@ -683,7 +696,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         allow_unmet_demand: bool,
         input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
-        let parent_assets = get_parent_or_self(self.existing_assets);
+        let existing_assets_with_parents = get_parent_or_self(self.existing_assets);
 
         // Set up problem
         let mut problem = Problem::default();
@@ -691,7 +704,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &mut problem,
             self.model,
             input_prices,
-            &parent_assets,
+            &existing_assets_with_parents,
             self.candidate_assets,
             self.year,
         );
@@ -703,9 +716,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Check flexible capacity assets is a subset of existing assets
+        let existing_assets_with_parents_set: HashSet<_> =
+            existing_assets_with_parents.iter().cloned().collect();
         for asset in self.flexible_capacity_assets {
             assert!(
-                parent_assets.contains(asset),
+                existing_assets_with_parents_set.contains(asset),
                 "Flexible capacity assets must be a subset of existing assets. Offending asset: {asset:?}"
             );
         }
@@ -722,7 +737,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(parent_assets.iter(), self.candidate_assets.iter());
+        let all_assets = chain(
+            existing_assets_with_parents.iter(),
+            self.candidate_assets.iter(),
+        );
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
@@ -748,6 +766,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         };
         solution.flow_map.set(Some(create_flow_map(
             self.existing_assets,
+            &existing_assets_with_parents_set,
             &self.model.time_slice_info,
             solution.iter_activity(),
         )));
