@@ -345,6 +345,16 @@ impl Asset {
         lb..=ub
     }
 
+    /// Get the activity limits per unit of capacity for this asset for a given time slice selection
+    pub fn get_activity_per_capacity_limits_for_selection(
+        &self,
+        time_slice_selection: &TimeSliceSelection,
+    ) -> RangeInclusive<ActivityPerCapacity> {
+        let limits = self.activity_limits.get_limit(time_slice_selection);
+        let cap2act = self.process.capacity_to_activity;
+        (cap2act * *limits.start())..=(cap2act * *limits.end())
+    }
+
     /// Iterate over activity limits for this asset
     pub fn iter_activity_limits(
         &self,

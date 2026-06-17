@@ -94,6 +94,29 @@ impl TimeSliceSelection {
         }
     }
 
+    /// Get the [`TimeSliceSelection`] containing this selection at the specified level.
+    pub fn containing_selection_at_level(
+        &self,
+        level: TimeSliceLevel,
+    ) -> Option<TimeSliceSelection> {
+        if level < self.level() {
+            return None;
+        }
+
+        let mut selection = self.clone();
+        while selection.level() < level {
+            selection = match selection {
+                TimeSliceSelection::Single(time_slice_id) => {
+                    TimeSliceSelection::Season(time_slice_id.season.clone())
+                }
+                TimeSliceSelection::Season(_) => TimeSliceSelection::Annual,
+                TimeSliceSelection::Annual => unreachable!(),
+            };
+        }
+
+        Some(selection)
+    }
+
     /// Iterate over the subset of time slices in this selection
     pub fn iter<'a>(
         &'a self,
@@ -192,7 +215,15 @@ impl Display for TimeSliceSelection {
 
 /// The time granularity for a particular operation
 #[derive(
-    PartialEq, PartialOrd, Copy, Clone, Debug, DeserializeLabeledStringEnum, strum::EnumIter,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Copy,
+    Clone,
+    Debug,
+    DeserializeLabeledStringEnum,
+    strum::EnumIter,
 )]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately

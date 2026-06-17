@@ -10,8 +10,7 @@ asset_id,group_id,process_id,region_id,agent_id,commission_year
 8,,windturbine,R1,A1_PWR,2035
 9,,heatpump,R1,A1_RES,2040
 10,,windturbine,R1,A1_PWR,2040
-11,,gasCCGT,R1,A1_PWR,2040
-12,,heatpump,R1,A1_RES,2045
-13,,windturbine,R1,A1_PWR,2045
-14,,heatpump,R1,A1_RES,2050
-15,,windturbine,R1,A1_PWR,2050
+11,,heatpump,R1,A1_RES,2045
+12,,windturbine,R1,A1_PWR,2045
+13,,heatpump,R1,A1_RES,2050
+14,,windturbine,R1,A1_PWR,2050

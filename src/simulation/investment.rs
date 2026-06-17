@@ -7,14 +7,15 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
+use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use strum::IntoEnumIterator;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -570,7 +571,19 @@ where
     })
 }
 
-/// Get the maximum required capacity across time slices
+/// Returns the minimum installed capacity required for `asset` to satisfy the demand that it can
+/// potentially serve, accounting for its activity constraints.
+///
+/// The returned value is the maximum capacity requirement implied by any time-slice selection,
+/// since constraints at coarser aggregation levels (e.g. seasonal or annual limits) can require
+/// more capacity than constraints at the finest time-slice level.
+///
+/// Demand is evaluated using the commodity's balance level. Demand within a balance bucket is
+/// treated as fungible: if the asset is capable of operating in any constituent time slice of a
+/// bucket, then all demand in that bucket is considered serviceable by the asset.
+///
+/// Selections whose maximum supply is zero are ignored. Such selections would otherwise imply an
+/// infinite capacity requirement and therefore provide no useful lower bound.
 fn get_demand_limiting_capacity(
     time_slice_info: &TimeSliceInfo,
     asset: &Asset,
@@ -579,23 +592,62 @@ fn get_demand_limiting_capacity(
 ) -> Capacity {
     let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
     let mut capacity = Capacity(0.0);
+    let mut demand_cache: HashMap<_, Flow> = HashMap::new();
 
-    for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
-    {
-        let demand_for_selection: Flow = time_slice_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| demand[time_slice])
-            .sum();
+    // Calculate demand-limiting capacity at each timeslice level and take the max.
+    for level in TimeSliceLevel::iter() {
+        for selection in time_slice_info.iter_selections_at_level(level) {
+            // Maximum supply within this selection according to the asset's activity limits.
+            let max_supply_for_selection = *asset
+                .get_activity_per_capacity_limits_for_selection(&selection)
+                .end()
+                * coeff;
 
-        // Calculate max capacity required for this time slice selection
-        // For commodities with a coarse time slice level, we have to allow the possibility that all
-        // of the demand gets served by production in a single time slice
-        for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
-            let max_flow_per_cap =
-                *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
-            if max_flow_per_cap != FlowPerCapacity(0.0) {
-                capacity = capacity.max(demand_for_selection / max_flow_per_cap);
+            // Selections with zero supply would imply infinite demand-limiting capacity,
+            // so they do not contribute to the maximum.
+            if max_supply_for_selection == FlowPerCapacity(0.0) {
+                continue;
             }
+
+            // Serviceable demand within this selection.
+            //
+            // Demand is effectively grouped into balance buckets at the commodity's
+            // balance level. A balance bucket contributes if:
+            //   1. The bucket is contained within this selection, and
+            //   2. The asset can operate in at least one constituent timeslice
+            //      within that bucket.
+            //
+            // Demand within a balance bucket is fungible, so if the asset can serve
+            // any timeslice in the bucket, all demand in that bucket is considered
+            // serviceable.
+            let demand_selection_level = level.max(commodity.time_slice_level);
+            let demand_selection = selection
+                .containing_selection_at_level(demand_selection_level)
+                .unwrap();
+            let serviceable_demand_for_selection = *demand_cache
+                .entry(demand_selection.clone())
+                .or_insert_with(|| {
+                    demand_selection
+                        .iter_at_level(time_slice_info, commodity.time_slice_level)
+                        .unwrap()
+                        .filter(|(bucket, _)| {
+                            bucket.iter(time_slice_info).any(|(ts, _)| {
+                                *asset.get_activity_per_capacity_limits(ts).end()
+                                    > ActivityPerCapacity(0.0)
+                            })
+                        })
+                        .map(|(bucket, _)| {
+                            bucket
+                                .iter(time_slice_info)
+                                .map(|(ts, _)| demand[ts])
+                                .sum::<Flow>()
+                        })
+                        .sum()
+                });
+
+            // Calculate demand-limiting capacity for this selection and take the
+            // maximum across all selections.
+            capacity = capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
         }
     }
 
@@ -931,7 +983,7 @@ mod tests {
         ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessParameterMap,
     };
     use crate::region::RegionID;
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
     use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
@@ -1017,6 +1069,68 @@ mod tests {
         // Time slice 1: demand (4.0) / (activity_limit (0.2) * coeff (1.0)) = 20.0
         // Time slice 2: skipped due to zero activity limit
         // Maximum = 20.0
+        assert_eq!(result, Capacity(20.0));
+    }
+
+    #[rstest]
+    fn get_demand_limiting_capacity_uses_coarser_limits(
+        time_slice_info2: TimeSliceInfo,
+        svd_commodity: Commodity,
+        mut process: Process,
+    ) {
+        let (time_slice1, time_slice2) =
+            time_slice_info2.time_slices.keys().collect_tuple().unwrap();
+
+        // Configure a 1:1 activity-to-flow relationship.
+        let commodity_rc = Rc::new(svd_commodity);
+        let process_flow = ProcessFlow {
+            commodity: Rc::clone(&commodity_rc),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+
+        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        process.flows = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+
+        // Fine-grained limits imply a capacity requirement of 5:
+        //   TS1: 5 / 1 = 5
+        //   TS2: 5 / 1 = 5
+        //
+        // The annual limit implies:
+        //   (5 + 5) / 0.5 = 20
+        //
+        // The function should return the larger value.
+        let limits = HashMap::from([
+            (
+                TimeSliceSelection::Single(time_slice1.clone()),
+                Dimensionless(0.0)..=Dimensionless(1.0),
+            ),
+            (
+                TimeSliceSelection::Single(time_slice2.clone()),
+                Dimensionless(0.0)..=Dimensionless(1.0),
+            ),
+            (
+                TimeSliceSelection::Annual,
+                Dimensionless(0.0)..=Dimensionless(0.5),
+            ),
+        ]);
+
+        process.activity_limits = process_activity_limits_map(
+            process.regions.clone(),
+            ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap(),
+        );
+
+        let asset = asset(process);
+
+        let demand = indexmap! {
+            time_slice1.clone() => Flow(5.0),
+            time_slice2.clone() => Flow(5.0),
+        };
+
+        let result =
+            get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
+
         assert_eq!(result, Capacity(20.0));
     }
 
