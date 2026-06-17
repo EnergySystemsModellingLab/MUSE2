@@ -44,7 +44,7 @@ pub trait UnitType:
 }
 
 macro_rules! base_unit_struct {
-    ($name:ident) => {
+    ($name:ident $(, $extra_derive:path)* $(,)?) => {
         /// A basic unit type wrapper around an `f64` scalar value.
         #[derive(
             Debug,
@@ -61,6 +61,7 @@ macro_rules! base_unit_struct {
             derive_more::Sum,
             derive_more::Display,
             derive_more::FromStr,
+            $($extra_derive,)*
         )]
         pub struct $name(pub f64);
 
@@ -164,19 +165,7 @@ macro_rules! base_unit_struct {
 }
 
 // Define Dimensionless first
-base_unit_struct!(Dimensionless);
-
-// Add extra methods for Dimensionless
-impl From<f64> for Dimensionless {
-    fn from(val: f64) -> Self {
-        Self(val)
-    }
-}
-impl From<Dimensionless> for f64 {
-    fn from(val: Dimensionless) -> Self {
-        val.0
-    }
-}
+base_unit_struct!(Dimensionless, derive_more::From, derive_more::Into);
 
 impl Mul for Dimensionless {
     type Output = Dimensionless;
