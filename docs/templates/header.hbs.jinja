@@ -1,0 +1,173 @@
+<style>
+  :root { --banner-height: 36px; }
+
+  #version-banner {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--banner-height);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875em;
+    box-sizing: border-box;
+    padding: 0 16px;
+  }
+
+  #version-widget {
+    position: fixed;
+    bottom: 0;
+    right: 1rem;
+    z-index: 9999;
+    font-size: 0.85em;
+    font-family: sans-serif;
+  }
+
+  #version-widget:hover #version-list,
+  #version-widget:focus-within #version-list {
+    max-height: 300px;
+  }
+
+  #version-widget:hover #version-arrow,
+  #version-widget:focus-within #version-arrow {
+    transform: rotate(180deg);
+  }
+
+  #version-label {
+    display: block;
+    background: #0c3547;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px 4px 0 0;
+    cursor: default;
+    user-select: none;
+  }
+
+  #version-arrow {
+    display: inline-block;
+    transition: transform 0.2s ease;
+  }
+
+  #version-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #222;
+    border: 1px solid #ccc;
+    border-bottom: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease;
+  }
+
+  #version-list li {
+    padding: 6px 12px;
+    white-space: nowrap;
+    border-bottom: 1px solid #eee;
+  }
+
+  #version-list a {
+    color: #0c3547;
+    text-decoration: none;
+  }
+
+  #version-list a:hover {
+    text-decoration: underline;
+  }
+</style>
+
+<div id="version-banner"></div>
+
+<div id="version-widget">
+  <ul id="version-list"></ul>
+  <span id="version-label">docs: <span id="version-label-text"></span> <span id="version-arrow">&#x25b2;</span></span>
+</div>
+
+<script>
+  (function () {
+    var path = window.location.pathname;
+    var banner = document.getElementById("version-banner");
+    var labelText = document.getElementById("version-label-text");
+    var list = document.getElementById("version-list");
+
+    var isStable = /\/release\/stable\//.test(path);
+    var versionMatch = /\/release\/(v[\d.]+)\//.exec(path);
+    var isDev = !isStable && !versionMatch;
+    var currentVersion = isDev ? "development" : isStable ? "stable" : versionMatch[1];
+
+    // Set widget label
+    labelText.textContent = currentVersion;
+
+    // Build version list
+    var pathToRoot = "{% raw %}{{path_to_root}}{% endraw %}";
+    var versions = [
+      { label: "development" },
+      { label: "stable" },
+{%- for release in releases %}
+      { label: "{{ release }}" },
+{%- endfor %}
+    ];
+
+    function hrefFor(label) {
+      if (isDev) {
+        if (label === "development") return pathToRoot;
+        if (label === "stable") return pathToRoot + "release/stable/index.html";
+        return pathToRoot + "release/" + label + "/index.html";
+      }
+
+      if (isStable) {
+        if (label === "development") return pathToRoot + "../../index.html";
+        if (label === "stable") return pathToRoot;
+        return pathToRoot + "../" + label + "/index.html";
+      }
+
+      // Old versioned docs (e.g. /release/v2.0.0/)
+      if (label === "development") return pathToRoot + "../../index.html";
+      if (label === "stable") return pathToRoot + "../stable/index.html";
+      return pathToRoot + "../" + label + "/index.html";
+    }
+
+    versions.forEach(function (v) {
+      var li = document.createElement("li");
+      if (v.label === currentVersion) {
+        li.innerHTML = "<strong>" + v.label + "</strong>";
+      } else {
+        var a = document.createElement("a");
+        a.href = hrefFor(v.label);
+        a.textContent = v.label;
+        li.appendChild(a);
+      }
+      list.appendChild(li);
+    });
+
+    // Banner (not shown for stable)
+    if (isStable) return;
+
+    if (isDev) {
+      banner.innerHTML =
+        "This is the <strong>\u00a0development version\u00a0</strong> of the MUSE2 documentation. " +
+        "For older releases, use the version selector in the bottom right corner of this page.";
+      banner.style.backgroundColor = "#fff3cd";
+      banner.style.borderBottom = "1px solid #ffc107";
+      banner.style.color = "#664d03";
+    } else {
+      var version = versionMatch[1];
+      banner.innerHTML =
+        "You are viewing docs for <strong>\u00a0" + version + "\u00a0</strong> of MUSE2. " +
+        "For newer releases, use the version selector in the bottom right corner of this page.";
+      banner.style.backgroundColor = "#f8d7da";
+      banner.style.borderBottom = "1px solid #f5c2c7";
+      banner.style.color = "#842029";
+    }
+
+    banner.style.display = "flex";
+
+    var s = document.createElement("style");
+    s.textContent =
+      "body { padding-top: var(--banner-height); }" +
+      "#mdbook-menu-bar.sticky { top: var(--banner-height) !important; }" +
+      "#mdbook-sidebar { top: var(--banner-height) !important; height: calc(100vh - var(--banner-height)) !important; }";
+    document.head.appendChild(s);
+  })();
+</script>
