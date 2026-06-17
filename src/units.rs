@@ -3,7 +3,7 @@ use float_cmp::{ApproxEq, F64Margin};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::iter::Sum;
-use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 use std::str::FromStr;
 
 /// A trait encompassing most of the functionality of unit types
@@ -17,6 +17,7 @@ pub trait UnitType:
     + Add
     + Sub
     + Div
+    + Neg
     + Mul<Dimensionless, Output = Self>
     + AddAssign
     + SubAssign
