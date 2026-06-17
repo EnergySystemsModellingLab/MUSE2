@@ -5,19 +5,6 @@ use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
 
-/// Try to divide a string into two parts at the specified delimiter.
-///
-/// # Returns
-///
-/// - `None` if `delimiter` is not present
-/// - `Some` tuple of the two strings if it is
-pub fn partition<'a>(s: &'a str, delimiter: &str) -> Option<(&'a str, &'a str)> {
-    let idx = s.find(delimiter)?;
-
-    #[allow(clippy::string_slice)]
-    Some((&s[..idx], &s[idx + delimiter.len()..]))
-}
-
 /// Parse a range from an input string, using values in `limits` as defaults.
 ///
 /// Start and end values must be a type that is parseable from a string. Ranges are inclusive.
@@ -33,7 +20,7 @@ where
     T: FromStr + Copy + PartialOrd + Display,
     <T as FromStr>::Err: Error + Sync + Send + 'static,
 {
-    let (start, end) = partition(s, "..").context(
+    let (start, end) = s.split_once("..").context(
         "Range must be in the form [start]..[end] (where [start] and [end] can be empty)",
     )?;
     parse_range_parts(start, end, limits.clone(), *limits.start(), *limits.end())
@@ -110,22 +97,6 @@ where
 mod tests {
     use super::*;
     use rstest::rstest;
-
-    #[rstest]
-    #[case("1,2", ",", Some(("1","2")))]
-    #[case("hello world", " ", Some(("hello", "world")))]
-    #[case("a..b", "..", Some(("a","b")))]
-    #[case("a", "", Some(("", "a")))]
-    #[case("", "", Some(("", "")))]
-    #[case("a..b", "c", None)]
-    #[case("🙂😐😞", "😐", Some(("🙂", "😞")))]
-    fn partition_works(
-        #[case] input: &str,
-        #[case] delim: &str,
-        #[case] expected: Option<(&str, &str)>,
-    ) {
-        assert_eq!(partition(input, delim), expected);
-    }
 
     #[rstest]
     #[case("1..2", 1..=2)]

@@ -3,13 +3,12 @@ use super::{AssetID, AssetRef, AssetState, UserAsset};
 use itertools::Itertools;
 use log::warn;
 use std::cmp::min;
-use std::ops::Deref;
-use std::slice;
 
 /// The active pool of [`super::Asset`]s
-#[derive(Default)]
+#[derive(Default, derive_more::Deref)]
 pub struct AssetPool {
     /// The pool of active assets, sorted by ID
+    #[deref]
     assets: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
@@ -21,11 +20,6 @@ impl AssetPool {
     /// Create a new empty [`AssetPool`]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Get the active pool as a slice of [`AssetRef`]s
-    pub fn as_slice(&self) -> &[AssetRef] {
-        &self.assets
     }
 
     /// Commission new assets for the specified milestone year from the input data.
@@ -145,12 +139,6 @@ impl AssetPool {
         Some(&self.assets[idx])
     }
 
-    /// Iterate over active assets
-    #[allow(clippy::iter_without_into_iter)]
-    pub fn iter(&self) -> slice::Iter<'_, AssetRef> {
-        self.assets.iter()
-    }
-
     /// Return current active pool and clear
     pub fn take(&mut self) -> Vec<AssetRef> {
         std::mem::take(&mut self.assets)
@@ -197,14 +185,6 @@ impl AssetPool {
             _ => panic!("Active pool should only contain commissioned assets"),
         });
         &self.assets[new_start..]
-    }
-}
-
-impl Deref for AssetPool {
-    type Target = [AssetRef];
-
-    fn deref(&self) -> &Self::Target {
-        self.as_slice()
     }
 }
 

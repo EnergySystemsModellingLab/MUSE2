@@ -21,7 +21,6 @@ use itertools::{chain, iproduct};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::fmt;
 use std::ops::Range;
 
 mod constraints;
@@ -381,18 +380,14 @@ impl Solution<'_> {
 }
 
 /// Defines the possible errors that can occur when running the solver
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum ModelError {
     /// An optimal solution could not be found
+    #[display("Could not find optimal result: {_0:?}")]
     NonOptimal(HighsModelStatus),
     /// Another error occurred
+    #[display("{_0}")]
     Other(anyhow::Error),
-}
-
-impl From<anyhow::Error> for ModelError {
-    fn from(value: anyhow::Error) -> Self {
-        Self::Other(value)
-    }
 }
 
 impl ModelError {
@@ -401,17 +396,6 @@ impl ModelError {
         match self {
             ModelError::NonOptimal(status) => anyhow!("Could not find optimal result: {status:?}"),
             ModelError::Other(error) => error,
-        }
-    }
-}
-
-impl fmt::Display for ModelError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ModelError::NonOptimal(status) => {
-                write!(f, "Could not find optimal result: {status:?}")
-            }
-            ModelError::Other(error) => error.fmt(f),
         }
     }
 }
@@ -467,7 +451,7 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 
     match solved.status() {
         HighsModelStatus::Optimal => Ok(solved),
-        status => Err(ModelError::NonOptimal(status)),
+        status => Err(status.into()),
     }
 }
 

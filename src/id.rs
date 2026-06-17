@@ -10,8 +10,8 @@ use std::marker::PhantomData;
 
 /// A trait for ID types
 pub trait ID: Eq + Hash + Borrow<str> + Clone + Display + Debug + From<String> {
-    /// Get the name of this type of ID (e.g. "commodity ID", "region ID" etc.)
-    fn get_type_name() -> &'static str;
+    /// The name of this type of ID (e.g. "commodity ID", "region ID" etc.)
+    const TYPE_NAME: &'static str;
 }
 
 macro_rules! define_id_type {
@@ -19,6 +19,7 @@ macro_rules! define_id_type {
         #[derive(
             Clone,
             derive_more::Display,
+            derive_more::From,
             std::hash::Hash,
             PartialOrd,
             Ord,
@@ -28,23 +29,12 @@ macro_rules! define_id_type {
             serde::Serialize,
         )]
         /// An ID type (e.g. `AgentID`, `CommodityID`, etc.)
+        #[from(forward)]
         pub struct $name(pub std::rc::Rc<str>);
 
         impl std::borrow::Borrow<str> for $name {
             fn borrow(&self) -> &str {
                 &self.0
-            }
-        }
-
-        impl From<&str> for $name {
-            fn from(s: &str) -> Self {
-                $name(std::rc::Rc::from(s))
-            }
-        }
-
-        impl From<String> for $name {
-            fn from(s: String) -> Self {
-                $name(std::rc::Rc::from(s))
             }
         }
 
@@ -75,9 +65,7 @@ macro_rules! define_id_type {
         }
 
         impl crate::id::ID for $name {
-            fn get_type_name() -> &'static str {
-                $type_name
-            }
+            const TYPE_NAME: &'static str = $type_name;
         }
 
         impl $name {
@@ -112,7 +100,8 @@ macro_rules! define_id_getter {
 pub(crate) use define_id_getter;
 
 /// Indicates that the specified ID was not found in a given collection
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display)]
+#[display("Unknown {} '{missing_id}'", T::TYPE_NAME)]
 pub struct MissingIDError<T: ID> {
     missing_id: String,
     _phantom: PhantomData<fn() -> T>,
@@ -125,12 +114,6 @@ impl<T: ID> MissingIDError<T> {
             missing_id: missing_id.to_string(),
             _phantom: std::marker::PhantomData,
         }
-    }
-}
-
-impl<T: ID> Display for MissingIDError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unknown {} '{}'", T::get_type_name(), self.missing_id)
     }
 }
 
