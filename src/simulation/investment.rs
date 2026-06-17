@@ -819,12 +819,8 @@ fn select_best_assets(
         )?;
 
         // Save appraisal results
-        writer.write_appraisal_debug_info(
-            year,
-            &format!("{} {} round {}", &commodity.id, &agent.id, round),
-            &outputs_for_opts,
-            &demand,
-        )?;
+        let run_description = format!("{} {} round {}", &commodity.id, &agent.id, round);
+        writer.write_appraisal_debug_info(year, &run_description, &outputs_for_opts, &demand)?;
 
         let outputs_for_opts = appraise_nondispatched_options_if_needed(
             model,
@@ -836,6 +832,8 @@ fn select_best_assets(
             &remaining_candidate_capacity,
             year,
             outputs_for_opts,
+            &run_description,
+            writer,
         )?;
 
         // Sort, filter and select the best feasible option
@@ -937,6 +935,8 @@ fn appraise_nondispatched_options_if_needed(
     remaining_candidate_capacity: &HashMap<AssetRef, AssetCapacity>,
     year: u32,
     outputs: Vec<AppraisalOutput>,
+    run_description: &str,
+    writer: &mut DataWriter,
 ) -> Result<Vec<AppraisalOutput>> {
     if !model.parameters.allow_investment_in_nondispatched_options
         || !outputs.iter().any(|output| !output.is_valid())
@@ -984,6 +984,14 @@ fn appraise_nondispatched_options_if_needed(
             &coefficients,
             demand,
             remaining_candidate_capacity,
+        )?;
+
+        // Save appraisal results
+        writer.write_appraisal_debug_info(
+            year,
+            &format!("{run_description}; price increase: {current_inc}"),
+            &outputs,
+            demand,
         )?;
 
         // If one of the options dispatched, we can return
