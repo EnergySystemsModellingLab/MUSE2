@@ -89,22 +89,15 @@ impl AppraisalOutput {
     /// possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
         assert!(
-            self.is_valid() && other.is_valid(),
+            self.metric.is_some() && other.metric.is_some(),
             "Cannot compare non-valid outputs"
         );
 
-        // We've already checked the metrics aren't `None` in `is_valid`
+        // We've already checked the metrics aren't `None`
         self.metric
             .as_ref()
             .unwrap()
             .compare(other.metric.as_ref().unwrap().as_ref())
-    }
-
-    /// Whether this [`AppraisalOutput`] is a valid output.
-    ///
-    /// Specifically, it checks whether the metric is a valid value (not `None`).
-    pub fn is_valid(&self) -> bool {
-        self.metric.is_some()
     }
 }
 
@@ -342,17 +335,15 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// and newer assets are preferred over older ones. The function does not guarantee that all ties
 /// will be resolved.
 ///
-/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which excludes entries
-/// with invalid metrics (e.g. `None`) as well as zero capacity. This avoids meaningless or `NaN`
-/// appraisal metrics that could cause the program to panic, so the length of the returned vector
-/// may be less than the input.
+/// Before sorting, outputs are filtered to exclude entries with invalid metrics (i.e. `None`), so
+/// the length of the returned vector may be less than the input.
 ///
 /// # Returns
 ///
 /// Returns the number of non-feasible assets which were removed.
 pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
     let old_len = outputs.len();
-    outputs.retain(AppraisalOutput::is_valid);
+    outputs.retain(|output| output.metric.is_some());
     let num_nonfeasible = old_len - outputs.len();
 
     outputs.sort_by(|output1, output2| match output1.compare_metric(output2) {
