@@ -37,7 +37,8 @@ struct ProcessRaw {
     start_year: Option<u32>,
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
-    unit_size: Option<Capacity>,
+    capacity_granularity: Capacity,
+    is_divisible: bool,
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -146,14 +147,12 @@ where
             .capacity_to_activity
             .unwrap_or(ActivityPerCapacity(1.0));
 
-        // Validate unit_size
-        if process_raw.unit_size.is_some() {
-            ensure!(
-                process_raw.unit_size > Some(Capacity(0.0)),
-                "Error in process {}: unit_size must be > 0 or None",
-                process_raw.id
-            );
-        }
+        // Validate capacity_granularity
+        ensure!(
+            process_raw.capacity_granularity > Capacity(0.0),
+            "Error in process {}: capacity_granularity must be > 0",
+            process_raw.id
+        );
 
         // Validate capacity_to_activity
         ensure!(
@@ -173,7 +172,11 @@ where
             primary_output,
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
-            unit_size: process_raw.unit_size,
+            unit_size: process_raw
+                .is_divisible
+                .then_some(process_raw.capacity_granularity),
+            capacity_granularity: process_raw.capacity_granularity,
+            is_divisible: process_raw.is_divisible,
         };
 
         ensure!(

@@ -15,13 +15,6 @@ properties:
     default: 0.0001
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
-  capacity_limit_factor:
-    type: number
-    description: A factor which constrains the maximum capacity given to candidate assets
-    default: 0.1
-    notes: |
-      This is the proportion of the maximum required capacity across time slices (for a given
-      asset/commodity etc. combination).
   value_of_lost_load:
     type: number
     description: The cost applied to unmet demand

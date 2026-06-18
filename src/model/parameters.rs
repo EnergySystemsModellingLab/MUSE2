@@ -4,9 +4,7 @@
 //! `model.toml` configuration used by the model. Validation functions ensure sensible numeric
 //! ranges and invariants for runtime use.
 use crate::asset::check_capacity_valid_for_asset;
-use crate::input::{
-    deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
-};
+use crate::input::{input_err_msg, is_sorted_and_unique, read_toml};
 use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
@@ -77,11 +75,6 @@ pub struct ModelParameters {
     ///
     /// Don't change unless you know what you're doing.
     pub candidate_asset_capacity: Capacity,
-    /// Affects the maximum capacity that can be given to a newly created asset.
-    ///
-    /// It is the proportion of maximum capacity that could be required across time slices.
-    #[serde(deserialize_with = "deserialise_proportion_nonzero")]
-    pub capacity_limit_factor: Dimensionless,
     /// The cost applied to unmet demand.
     ///
     /// Currently this only applies to the LCOX appraisal.
@@ -118,7 +111,6 @@ impl Default for ModelParameters {
             // Default values for optional parameters
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
-            capacity_limit_factor: Dimensionless(0.1),
             value_of_lost_load: MoneyPerFlow(1e9),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
@@ -327,8 +319,6 @@ impl ModelParameters {
 
         // milestone_years
         check_milestone_years(&self.milestone_years)?;
-
-        // capacity_limit_factor already validated with deserialise_proportion_nonzero
 
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)

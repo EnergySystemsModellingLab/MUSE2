@@ -486,7 +486,7 @@ impl DebugDataWriter {
                 asset_id: result.asset.id(),
                 process_id: result.asset.process_id().clone(),
                 region_id: result.asset.region_id().clone(),
-                capacity: result.capacity.total_capacity(),
+                capacity: result.asset.capacity().total_capacity(),
                 metric: result.metric.as_ref().map(|m| m.value()),
             };
             self.appraisal_results_writer.serialize(row)?;

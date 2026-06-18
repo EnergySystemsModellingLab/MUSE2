@@ -2,7 +2,6 @@
 use super::DemandMap;
 use super::ObjectiveCoefficients;
 use super::constraints::{add_activity_constraints, add_demand_constraints};
-use crate::asset::AssetCapacity;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
@@ -50,13 +49,12 @@ fn add_activity_vars(
 fn add_constraints(
     problem: &mut Problem,
     asset: &AssetRef,
-    max_capacity: AssetCapacity,
     commodity: &Commodity,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
 ) {
-    add_activity_constraints(problem, asset, max_capacity, activity_vars, time_slice_info);
+    add_activity_constraints(problem, asset, activity_vars, time_slice_info);
     add_demand_constraints(
         problem,
         asset,
@@ -111,7 +109,6 @@ fn compute_unmet_demand(
 pub fn perform_optimisation(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
@@ -124,7 +121,6 @@ pub fn perform_optimisation(
     add_constraints(
         &mut problem,
         asset,
-        max_capacity,
         commodity,
         &activity_vars,
         demand,

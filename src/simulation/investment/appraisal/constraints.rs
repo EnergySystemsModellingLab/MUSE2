@@ -1,7 +1,7 @@
 //! Constraints for the optimisation problem.
 use super::DemandMap;
 use super::optimisation::Variable;
-use crate::asset::{AssetCapacity, AssetRef};
+use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::Flow;
@@ -18,11 +18,10 @@ use indexmap::IndexMap;
 pub fn add_activity_constraints(
     problem: &mut Problem,
     asset: &AssetRef,
-    max_capacity: AssetCapacity,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
     time_slice_info: &TimeSliceInfo,
 ) {
-    let capacity = max_capacity.total_capacity();
+    let capacity = asset.capacity().total_capacity();
     for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
         let limits = (capacity * *limits.start()).value()..=(capacity * *limits.end()).value();
 

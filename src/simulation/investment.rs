@@ -7,15 +7,14 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
-use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
-use strum::IntoEnumIterator;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -284,16 +283,8 @@ fn select_assets_for_single_market(
         );
 
         // Existing and candidate assets from which to choose
-        let opt_assets = get_asset_options(
-            &model.time_slice_info,
-            existing_assets,
-            &demand_portion_for_market,
-            agent,
-            commodity,
-            region_id,
-            year,
-        )
-        .collect::<Vec<_>>();
+        let opt_assets = get_asset_options(existing_assets, agent, commodity, region_id, year)
+            .collect::<Vec<_>>();
 
         // Calculate investment limits for candidate assets
         let investment_limits =
@@ -571,94 +562,9 @@ where
     })
 }
 
-/// Returns the minimum installed capacity required for `asset` to satisfy the demand that it can
-/// potentially serve, accounting for its activity constraints.
-///
-/// The returned value is the maximum capacity requirement implied by any time-slice selection,
-/// since constraints at coarser aggregation levels (e.g. seasonal or annual limits) can require
-/// more capacity than constraints at the finest time-slice level.
-///
-/// Demand is evaluated using the commodity's balance level. Demand within a balance bucket is
-/// treated as fungible: if the asset is capable of operating in any constituent time slice of a
-/// bucket, then all demand in that bucket is considered serviceable by the asset.
-///
-/// Selections whose maximum supply is zero are ignored. Such selections would otherwise imply an
-/// infinite capacity requirement and therefore provide no useful lower bound.
-fn get_demand_limiting_capacity(
-    time_slice_info: &TimeSliceInfo,
-    asset: &Asset,
-    commodity: &Commodity,
-    demand: &DemandMap,
-) -> Capacity {
-    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
-    let mut capacity = Capacity(0.0);
-    let mut demand_cache: HashMap<_, Flow> = HashMap::new();
-
-    // Calculate demand-limiting capacity at each timeslice level and take the max.
-    for level in TimeSliceLevel::iter() {
-        for selection in time_slice_info.iter_selections_at_level(level) {
-            // Maximum supply within this selection according to the asset's activity limits.
-            let max_supply_for_selection = *asset
-                .get_activity_per_capacity_limits_for_selection(&selection)
-                .end()
-                * coeff;
-
-            // Selections with zero supply would imply infinite demand-limiting capacity,
-            // so they do not contribute to the maximum.
-            if max_supply_for_selection == FlowPerCapacity(0.0) {
-                continue;
-            }
-
-            // Serviceable demand within this selection.
-            //
-            // Demand is effectively grouped into balance buckets at the commodity's
-            // balance level. A balance bucket contributes if:
-            //   1. The bucket is contained within this selection, and
-            //   2. The asset can operate in at least one constituent timeslice
-            //      within that bucket.
-            //
-            // Demand within a balance bucket is fungible, so if the asset can serve
-            // any timeslice in the bucket, all demand in that bucket is considered
-            // serviceable.
-            let demand_selection_level = level.max(commodity.time_slice_level);
-            let demand_selection = selection
-                .containing_selection_at_level(demand_selection_level)
-                .unwrap();
-            let serviceable_demand_for_selection = *demand_cache
-                .entry(demand_selection.clone())
-                .or_insert_with(|| {
-                    demand_selection
-                        .iter_at_level(time_slice_info, commodity.time_slice_level)
-                        .unwrap()
-                        .filter(|(bucket, _)| {
-                            bucket.iter(time_slice_info).any(|(ts, _)| {
-                                *asset.get_activity_per_capacity_limits(ts).end()
-                                    > ActivityPerCapacity(0.0)
-                            })
-                        })
-                        .map(|(bucket, _)| {
-                            bucket
-                                .iter(time_slice_info)
-                                .map(|(ts, _)| demand[ts])
-                                .sum::<Flow>()
-                        })
-                        .sum()
-                });
-
-            // Calculate demand-limiting capacity for this selection and take the
-            // maximum across all selections.
-            capacity = capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
-        }
-    }
-
-    capacity
-}
-
 /// Get options from existing and potential assets for the given parameters
 fn get_asset_options<'a>(
-    time_slice_info: &'a TimeSliceInfo,
     all_existing_assets: &'a [AssetRef],
-    demand: &'a DemandMap,
     agent: &'a Agent,
     commodity: &'a Commodity,
     region_id: &'a RegionID,
@@ -673,16 +579,13 @@ fn get_asset_options<'a>(
         .cloned();
 
     // Get candidates assets which produce the commodity of interest
-    let candidate_assets =
-        get_candidate_assets(time_slice_info, demand, agent, region_id, commodity, year);
+    let candidate_assets = get_candidate_assets(agent, region_id, commodity, year);
 
     chain(existing_assets, candidate_assets)
 }
 
 /// Get candidate assets which produce a particular commodity for a given agent
 fn get_candidate_assets<'a>(
-    time_slice_info: &'a TimeSliceInfo,
-    demand: &'a DemandMap,
     agent: &'a Agent,
     region_id: &'a RegionID,
     commodity: &'a Commodity,
@@ -691,15 +594,13 @@ fn get_candidate_assets<'a>(
     agent
         .iter_search_space(region_id, &commodity.id, year)
         .map(move |process| {
-            let mut asset =
-                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
-                    .unwrap();
-
-            // Set capacity based on demand
-            // This will serve as the upper limit when appraising the asset
-            let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
-            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size());
-            asset.set_capacity(asset_capacity);
+            let asset = Asset::new_candidate(
+                process.clone(),
+                region_id.clone(),
+                process.capacity_granularity,
+                year,
+            )
+            .unwrap();
 
             asset.into()
         })
@@ -744,28 +645,20 @@ fn log_on_equal_appraisal_outputs(
 
 /// Calculate investment limits for an agent's candidate assets in a given year
 ///
-/// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
-/// meet demand), and any annual addition limits specified by the process (scaled according to the
-/// agent's portion of the commodity demand and the number of years elapsed since the previous
-/// milestone year).
+/// Investment limits are based on any annual addition limits specified by the process (scaled
+/// according to the agent's portion of the commodity demand and the number of years elapsed since
+/// the previous milestone year).
 fn calculate_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
 ) -> HashMap<AssetRef, AssetCapacity> {
-    // Calculate limits for each candidate asset
     opt_assets
         .iter()
         .filter(|asset| !asset.is_commissioned())
-        .map(|asset| {
-            // Start off with the demand-limiting capacity (pre-calculated when creating candidate)
-            let mut cap = asset.capacity();
-
-            // Cap by the addition limits of the process, if specified
-            if let Some(limit_capacity) = asset.max_installable_capacity(commodity_portion) {
-                cap = cap.min(limit_capacity);
-            }
-
-            (asset.clone(), cap)
+        .filter_map(|asset| {
+            asset
+                .max_installable_capacity(commodity_portion)
+                .map(|limit_capacity| (asset.clone(), limit_capacity))
         })
         .collect()
 }
@@ -820,28 +713,9 @@ fn select_best_assets(
                 continue;
             }
 
-            // For candidates, determine the maximum capacity that can be invested in this round.
-            // This is whichever is the smallest of the tranche size (based on demand limiting
-            // capacity before investment), the remaining available capacity for the candidate and
-            // the demand limiting capacity recalculated based on demand unserved by the other
-            // selected assets.
-            let max_capacity = (!asset.is_commissioned()).then(|| {
-                let tranche_capacity = asset
-                    .capacity()
-                    .apply_limit_factor(model.parameters.capacity_limit_factor);
-                let dlc = AssetCapacity::from_capacity(
-                    get_demand_limiting_capacity(&model.time_slice_info, asset, commodity, &demand),
-                    asset.unit_size(),
-                );
-                let remaining_capacity = remaining_candidate_capacity[asset];
-
-                tranche_capacity.min(dlc).min(remaining_capacity)
-            });
-
             let output = appraise_investment(
                 model,
                 asset,
-                max_capacity,
                 commodity,
                 objective_type,
                 &coefficients[asset],
@@ -884,13 +758,12 @@ fn select_best_assets(
             "Selected {} asset '{}' (capacity: {})",
             &best_output.asset.state(),
             &best_output.asset.process_id(),
-            best_output.capacity.total_capacity()
+            best_output.asset.capacity().total_capacity()
         );
 
         // Update the assets and remaining candidate capacity
         update_assets(
             best_output.asset,
-            best_output.capacity,
             &mut opt_assets,
             &mut remaining_candidate_capacity,
             &mut best_assets,
@@ -920,8 +793,7 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
-    mut best_asset: AssetRef,
-    capacity: AssetCapacity,
+    best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_candidate_capacity: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
@@ -933,27 +805,30 @@ fn update_assets(
             best_assets.push(best_asset);
         }
         AssetState::Candidate => {
-            // Remove this capacity from the available remaining capacity for this asset
-            let remaining_capacity = remaining_candidate_capacity.get_mut(&best_asset).unwrap();
-            *remaining_capacity = *remaining_capacity - capacity;
+            // Track remaining capacity for assets that have limits
+            if let Some(remaining_capacity) = remaining_candidate_capacity.get_mut(&best_asset) {
+                *remaining_capacity = *remaining_capacity - best_asset.capacity();
 
-            // If there's no capacity remaining, remove the asset from the options
-            if remaining_capacity.total_capacity() <= Capacity(0.0) {
-                let old_idx = opt_assets
-                    .iter()
-                    .position(|asset| *asset == best_asset)
-                    .unwrap();
-                opt_assets.swap_remove(old_idx);
-                remaining_candidate_capacity.remove(&best_asset);
+                // If there's no capacity remaining, remove the asset from the options
+                if remaining_capacity.total_capacity() <= Capacity(0.0) {
+                    let old_idx = opt_assets
+                        .iter()
+                        .position(|asset| *asset == best_asset)
+                        .unwrap();
+
+                    opt_assets.swap_remove(old_idx);
+                    remaining_candidate_capacity.remove(&best_asset);
+                }
             }
 
             if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset)
             {
                 // If the asset is already in the list of best assets, add the additional required capacity
-                existing_asset.make_mut().increase_capacity(capacity);
+                existing_asset
+                    .make_mut()
+                    .increase_capacity(best_asset.capacity());
             } else {
-                // Otherwise, update the capacity of the chosen asset and add it to the list of best assets
-                best_asset.make_mut().set_capacity(capacity);
+                // Otherwise add it to the list of best assets
                 best_assets.push(best_asset);
             }
         }
