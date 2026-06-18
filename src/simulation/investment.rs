@@ -839,8 +839,21 @@ fn update_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixture::{
+        asset, process, process_activity_limits_map, process_flows_map, process_parameter_map,
+        region_id,
+    };
+    use crate::process::{
+        Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessInvestmentConstraint,
+        ProcessInvestmentConstraintsMap, ProcessParameterMap,
+    };
+    use crate::region::RegionID;
     use crate::units::Dimensionless;
+    use crate::units::{ActivityPerCapacity, Capacity};
+    use indexmap::IndexSet;
     use rstest::{fixture, rstest};
+    use std::rc::Rc;
+    use std::slice::from_ref;
 
     #[rstest]
     fn collect_investment_limits_for_candidates_empty_list() {
@@ -849,32 +862,82 @@ mod tests {
     }
 
     #[fixture]
-    fn commissioned_asset() -> AssetRef {
-        todo!("Commissioned asset");
+    fn commissioned_asset(asset: Asset) -> AssetRef {
+        asset.into()
     }
 
     #[fixture]
-    fn non_commissioned_asset_without_limit() -> AssetRef {
-        todo!("Non-commissioned asset with max_installable_capacity() -> None");
+    fn uncommissioned_asset_without_limit(process: Process, region_id: RegionID) -> AssetRef {
+        Asset::new_candidate(Rc::new(process), region_id, Capacity(10.0), 2015)
+            .unwrap()
+            .into()
     }
 
     #[fixture]
-    fn non_commissioned_asset_with_limit() -> AssetRef {
-        todo!("Non-commissioned asset with max_installable_capacity() -> Some(...)");
+    fn uncommissioned_asset_with_limit(
+        region_id: RegionID,
+        process_activity_limits_map: ProcessActivityLimitsMap,
+        process_flows_map: ProcessFlowsMap,
+        process_parameter_map: ProcessParameterMap,
+    ) -> AssetRef {
+        let region_ids: IndexSet<RegionID> = [region_id.clone()].into();
+
+        let mut constraints = ProcessInvestmentConstraintsMap::new();
+
+        constraints.insert(
+            (region_id.clone(), 2015),
+            Rc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(Capacity(10.0)),
+            }),
+        );
+
+        let process = Process {
+            id: "constrained_process".into(),
+            description: String::new(),
+            years: 2010..=2020,
+            activity_limits: process_activity_limits_map,
+            flows: process_flows_map,
+            parameters: process_parameter_map,
+            regions: region_ids,
+            primary_output: None,
+            capacity_to_activity: ActivityPerCapacity(1.0),
+            investment_constraints: constraints,
+            capacity_granularity: Capacity(1.0),
+            is_divisible: false,
+        };
+
+        Asset::new_candidate(Rc::new(process), region_id, Capacity(15.0), 2015)
+            .unwrap()
+            .into()
     }
 
     #[rstest]
-    #[case::commissioned(commissioned_asset(), false)]
-    #[case::no_limit(non_commissioned_asset_without_limit(), false)]
-    #[case::with_limit(non_commissioned_asset_with_limit(), true)]
-    fn collect_investment_limits_for_candidates_filters_assets_correctly(
-        #[case] asset: AssetRef,
-        #[case] expected_in_result: bool,
-    ) {
+    fn commissioned_assets_are_excluded(commissioned_asset: AssetRef) {
         let result = collect_investment_limits_for_candidates(
-            std::slice::from_ref(&asset),
+            from_ref(&commissioned_asset),
             Dimensionless(1.0),
         );
-        assert_eq!(result.contains_key(&asset), expected_in_result);
+
+        assert!(!result.contains_key(&commissioned_asset));
+    }
+
+    #[rstest]
+    fn candidate_assets_without_limits_are_excluded(uncommissioned_asset_without_limit: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&uncommissioned_asset_without_limit),
+            Dimensionless(1.0),
+        );
+
+        assert!(!result.contains_key(&uncommissioned_asset_without_limit));
+    }
+
+    #[rstest]
+    fn candidate_assets_with_limits_are_included(uncommissioned_asset_with_limit: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&uncommissioned_asset_with_limit),
+            Dimensionless(1.0),
+        );
+
+        assert!(result.contains_key(&uncommissioned_asset_with_limit));
     }
 }
