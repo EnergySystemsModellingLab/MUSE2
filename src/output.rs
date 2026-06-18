@@ -1183,7 +1183,7 @@ mod tests {
             asset_id: None,
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
-            capacity: Capacity(42.0),
+            capacity: Capacity(2.0),
             metric: Some(4.14),
         };
         let records: Vec<AppraisalResultsRow> =
