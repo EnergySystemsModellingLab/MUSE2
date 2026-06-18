@@ -42,7 +42,8 @@ fields:
     type: boolean
     description:
       Whether the process is commissioned as a set of individual units of size
-      `capacity_granularity` (true) or as a single indivisible unit (false). If true, assets are
+      `capacity_granularity` (true), which can be decommissioned individually, or as a single
+      indivisible unit (false) which must be decommissioned in one go. If true, assets are
       divided into n = ceil(C / G) equal units, where C is overall capacity and G is
       `capacity_granularity` (i.e. rounding up the number of units, which may result in a total
       capacity greater than C, if C is not an exact multiple of G).
