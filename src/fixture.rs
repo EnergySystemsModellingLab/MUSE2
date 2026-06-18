@@ -4,7 +4,7 @@ use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
     DecisionRule,
 };
-use crate::asset::{Asset, AssetCapacity, AssetPool, AssetRef};
+use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::commodity::{
     Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
 };
@@ -212,7 +212,8 @@ pub fn asset(process: Process) -> Asset {
 
 #[fixture]
 pub fn asset_divisible(mut process: Process) -> Asset {
-    process.unit_size = Some(Capacity(4.0));
+    process.capacity_granularity = Capacity(4.0);
+    process.is_divisible = true;
     Asset::new_ready(
         "agent1".into(),
         Rc::new(process),
@@ -321,7 +322,8 @@ pub fn process(
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
         investment_constraints: process_investment_constraints,
-        unit_size: None,
+        capacity_granularity: Capacity(1.0),
+        is_divisible: false,
     }
 }
 
@@ -406,7 +408,6 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
     AppraisalOutput {
         asset: AssetRef::from(asset),
-        capacity: AssetCapacity::Continuous(Capacity(42.0)),
         coefficients: Rc::new(ObjectiveCoefficients {
             activity_coefficients,
             market_costs,

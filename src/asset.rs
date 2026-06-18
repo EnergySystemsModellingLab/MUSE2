@@ -1404,7 +1404,8 @@ mod tests {
         #[case] unit_size: Capacity,
         #[case] n_expected_children: usize,
     ) {
-        process.unit_size = Some(unit_size);
+        process.capacity_granularity = unit_size;
+        process.is_divisible = true;
         let asset = AssetRef::from(
             Asset::new_ready(
                 "agent1".into(),
@@ -1442,10 +1443,7 @@ mod tests {
 
     #[rstest]
     fn into_for_each_child_nondivisible(asset: Asset) {
-        assert!(
-            asset.process.unit_size.is_none(),
-            "Asset should be non-divisible"
-        );
+        assert!(!asset.process.is_divisible, "Asset should be non-divisible");
 
         let asset = AssetRef::from(asset);
         let mut count = 0;

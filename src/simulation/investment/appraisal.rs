@@ -581,7 +581,6 @@ mod tests {
             .zip(metrics)
             .map(|(asset, metric)| AppraisalOutput {
                 asset: AssetRef::from(asset),
-                capacity: AssetCapacity::Continuous(Capacity(10.0)),
                 coefficients: objective_coeffs(),
                 activity: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
@@ -896,41 +895,11 @@ mod tests {
         );
     }
 
-    /// Test that appraisal outputs with zero capacity are filtered out during sorting.
-    #[rstest]
-    fn appraisal_sort_filters_zero_capacity_outputs(asset: Asset) {
-        let metric = LCOXMetric::new(MoneyPerActivity(1.0));
-        let metrics = [
-            Box::new(metric.clone()),
-            Box::new(metric.clone()),
-            Box::new(metric),
-        ];
-
-        // Create outputs with zero capacity
-        let mut outputs: Vec<AppraisalOutput> = metrics
-            .into_iter()
-            .map(|metric| AppraisalOutput {
-                asset: AssetRef::from(asset.clone()),
-                capacity: AssetCapacity::Continuous(Capacity(0.0)),
-                coefficients: objective_coeffs(),
-                activity: IndexMap::new(),
-                unmet_demand: IndexMap::new(),
-                metric: Some(metric),
-            })
-            .collect();
-
-        sort_and_filter_appraisal_outputs(&mut outputs);
-
-        // All zero capacity outputs should be filtered out
-        assert_eq!(outputs.len(), 0);
-    }
-
     /// Test that appraisal outputs with an invalid metric are filtered out
     #[rstest]
     fn appraisal_sort_filters_invalid_metric(asset: Asset) {
         let output = AppraisalOutput {
             asset: AssetRef::from(asset),
-            capacity: AssetCapacity::Continuous(Capacity(1.0)), // non-zero capacity
             coefficients: objective_coeffs(),
             activity: IndexMap::new(),
             unmet_demand: IndexMap::new(),

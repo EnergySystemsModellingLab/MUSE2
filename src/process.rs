@@ -83,7 +83,7 @@ impl Process {
     /// For divisible processes, this will be `capacity_granularity`. For indivisible processes,
     /// this will be None.
     pub fn unit_size(&self) -> Option<Capacity> {
-        self.is_divisible.then(|| self.capacity_granularity)
+        self.is_divisible.then_some(self.capacity_granularity)
     }
 }
 
