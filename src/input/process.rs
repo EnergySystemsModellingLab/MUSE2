@@ -8,7 +8,7 @@ use crate::process::{
 };
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
-use crate::units::{ActivityPerCapacity, Capacity};
+use crate::units::{Activity, ActivityPerCapacity, Capacity};
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::IndexSet;
 use log::warn;
@@ -37,8 +37,8 @@ struct ProcessRaw {
     start_year: Option<u32>,
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
-    capacity_granularity: Capacity,
-    is_divisible: bool,
+    capacity_granularity: Option<Capacity>,
+    is_divisible: Option<bool>,
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -147,17 +147,25 @@ where
             .capacity_to_activity
             .unwrap_or(ActivityPerCapacity(1.0));
 
-        // Validate capacity_granularity
+        // Validate capacity_to_activity
         ensure!(
-            process_raw.capacity_granularity > Capacity(0.0),
-            "Error in process {}: capacity_granularity must be > 0",
+            capacity_to_activity > ActivityPerCapacity(0.0),
+            "Error in process {}: capacity_to_activity must be > 0",
             process_raw.id
         );
 
-        // Validate capacity_to_activity
+        // is_divisible defaults to false if not specified
+        let is_divisible = process_raw.is_divisible.unwrap_or(false);
+
+        // Capacity granularity defaults to 10 / capacity_to_activity if not specified
+        let capacity_granularity = process_raw
+            .capacity_granularity
+            .unwrap_or_else(|| Activity(10.0) / capacity_to_activity);
+
+        // Validate capacity_granularity
         ensure!(
-            capacity_to_activity >= ActivityPerCapacity(0.0),
-            "Error in process {}: capacity_to_activity must be >= 0",
+            capacity_granularity > Capacity(0.0),
+            "Error in process {}: capacity_granularity must be > 0",
             process_raw.id
         );
 
@@ -172,8 +180,8 @@ where
             primary_output,
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
-            capacity_granularity: process_raw.capacity_granularity,
-            is_divisible: process_raw.is_divisible,
+            capacity_granularity,
+            is_divisible,
         };
 
         ensure!(

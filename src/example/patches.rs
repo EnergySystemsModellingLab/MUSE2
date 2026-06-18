@@ -57,8 +57,15 @@ fn get_all_patches() -> PatchMap {
                 "simple",
                 vec![
                     FilePatch::new("processes.csv")
-                        .with_deletion("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,")
-                        .with_addition("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,1000"),
+                        .with_replacement(&[
+                            "id,description,regions,primary_output,start_year,end_year,capacity_to_activity,is_divisible",
+                            "GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,",
+                            "GASPRC,Gas processing,all,GASNAT,2020,2040,1.0,",
+                            "WNDFRM,Wind farm,all,ELCTRI,2020,2040,31.54,",
+                            "GASCGT,Gas combined cycle turbine,all,ELCTRI,2020,2040,31.54,",
+                            "RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,true",
+                            "RELCHP,Heat pump,all,RSHEAT,2020,2040,1.0,",
+                        ]),
                 ],
                 None,
             ),
