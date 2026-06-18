@@ -70,17 +70,20 @@ pub struct Process {
     /// This controls whether this process is commissioned as a set of individual units of size
     /// `capacity_granularity` (true) or as a single indivisible unit (false).
     pub is_divisible: bool,
-    /// Capacity of the units making up divisible assets, if applicable.
-    ///
-    /// For divisible processes, this is set to `capacity_granularity`. For indivisible processes,
-    /// this is set to None.
-    pub unit_size: Option<Capacity>,
 }
 
 impl Process {
     /// Whether the process can be commissioned in a given year
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
+    }
+
+    /// Capacity of the units making up divisible assets, if applicable.
+    ///
+    /// For divisible processes, this will be `capacity_granularity`. For indivisible processes,
+    /// this will be None.
+    pub fn unit_size(&self) -> Option<Capacity> {
+        self.is_divisible.then(|| self.capacity_granularity)
     }
 }
 

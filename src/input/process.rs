@@ -172,9 +172,6 @@ where
             primary_output,
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
-            unit_size: process_raw
-                .is_divisible
-                .then_some(process_raw.capacity_granularity),
             capacity_granularity: process_raw.capacity_granularity,
             is_divisible: process_raw.is_divisible,
         };

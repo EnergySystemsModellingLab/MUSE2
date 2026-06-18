@@ -136,7 +136,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         Self::new_with_state(
             AssetState::Candidate,
             process,
@@ -190,7 +190,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         Self::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -216,7 +216,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         Self::new_with_state(
             AssetState::Commissioned {
                 id: AssetID(0),
@@ -988,7 +988,7 @@ impl UserAsset {
         max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         let asset = Asset::new_with_state(
             AssetState::Ready {
                 agent_id,
