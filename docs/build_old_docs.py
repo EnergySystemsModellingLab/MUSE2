@@ -108,7 +108,9 @@ def build_old_docs() -> None:
 
             # Copy latest release into stable dir
             if i == 0:
-                shutil.copytree(release_outdir, outdir / "stable")
+                stable_dir = outdir / "stable"
+                shutil.rmtree(stable_dir, ignore_errors=True)
+                shutil.copytree(release_outdir, stable_dir)
 
 
 if __name__ == "__main__":
