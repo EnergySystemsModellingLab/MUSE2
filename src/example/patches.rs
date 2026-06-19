@@ -77,7 +77,7 @@ fn get_all_patches() -> PatchMap {
             ),
         ),
         (
-            // The circularity example with objective type set to NPV for all agents
+            // The circularity example with Agent A0_ELC's objective type set to NPV
             "circularity_npv",
             PatchInfo::new(
                 "circularity",
