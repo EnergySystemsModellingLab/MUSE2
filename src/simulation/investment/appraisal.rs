@@ -88,22 +88,20 @@ impl AppraisalOutput {
     ///
     /// This is done firstly on the basis of the metrics, falling back on comparing assets (see
     /// [`compare_asset_fallback`]) if these are approximately equal (as determined by the
-    /// [`approx_eq!`] macro).
+    /// [`approx_eq!`] macro). Valid outputs are sorted before invalid ones.
     ///
     /// The reason for using an approximate comparison for metrics is because different CPU
     /// architectures may lead to subtly different values for the comparison metrics and if the
     /// value is very similar to another, then it can lead to different decisions being made,
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
-    ///
-    /// # Panics
-    ///
-    /// Panics if either `self` or `other` are not valid.
     pub fn compare(&self, other: &Self) -> Ordering {
-        assert!(
-            self.is_valid() && other.is_valid(),
-            "Cannot compare non-valid outputs"
-        );
+        // Valid outputs are sorted before invalid ones
+        let valid1 = self.is_valid();
+        let valid2 = other.is_valid();
+        if !valid1 || !valid2 {
+            return valid1.cmp(&valid2).reverse();
+        }
 
         // We've already checked the metrics aren't `None` in `is_valid`
         match self
