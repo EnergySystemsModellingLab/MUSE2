@@ -108,7 +108,7 @@ This sequence is the **reverse** of the investment order. This ensures that the 
 commodities (from upstream markets) are calculated and known before they are consumed as inputs by
 downstream processes evaluating marginal or full cost pricing.
 
-## Price Calculation Loop (Cycles)
+## Circularities
 
 When the energy system includes circular commodity flows (e.g., electricity producing hydrogen,
 which then generates electricity), the resulting cyclic dependencies are resolved as follows:
