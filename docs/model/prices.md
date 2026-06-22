@@ -124,4 +124,4 @@ re-evaluating each market in the cycle in reverse order (starting with those
 furthest from commodities downstream of the SCC) to propagate the feedback effects through the
 circular markets. -->
 
-[Capital Recovery Factor]: (https://homerenergy.com/products/pro/docs/latest/capital_recovery_factor.html)
+[Capital Recovery Factor]: https://homerenergy.com/products/pro/docs/latest/capital_recovery_factor.html
