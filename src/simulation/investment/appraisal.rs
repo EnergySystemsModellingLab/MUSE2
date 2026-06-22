@@ -83,25 +83,39 @@ impl AppraisalOutput {
             coefficients,
         }
     }
-    /// Compare this appraisal to another on the basis of the comparison metric.
+
+    /// Compare this appraisal to another.
     ///
-    /// Note that if the metrics are approximately equal (as determined by the [`approx_eq!`] macro)
-    /// then [`Ordering::Equal`] is returned. The reason for this is because different CPU
+    /// This is done firstly on the basis of the metrics, falling back on comparing assets (see
+    /// [`compare_asset_fallback`]) if these are approximately equal (as determined by the
+    /// [`approx_eq!`] macro).
+    ///
+    /// The reason for using an approximate comparison for metrics is because different CPU
     /// architectures may lead to subtly different values for the comparison metrics and if the
     /// value is very similar to another, then it can lead to different decisions being made,
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
-    pub fn compare_metric(&self, other: &Self) -> Ordering {
+    ///
+    /// # Panics
+    ///
+    /// Panics if either `self` or `other` are not valid.
+    pub fn compare(&self, other: &Self) -> Ordering {
         assert!(
             self.is_valid() && other.is_valid(),
             "Cannot compare non-valid outputs"
         );
 
         // We've already checked the metrics aren't `None` in `is_valid`
-        self.metric
+        match self
+            .metric
             .as_ref()
             .unwrap()
             .compare(other.metric.as_ref().unwrap().as_ref())
+        {
+            // If equal, we fall back on comparing asset properties
+            Ordering::Equal => compare_asset_fallback(&self.asset, &other.asset),
+            cmp => cmp,
+        }
     }
 
     /// Whether this [`AppraisalOutput`] is a valid output.
@@ -382,11 +396,7 @@ pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> 
     outputs.retain(AppraisalOutput::is_valid);
     let num_nonfeasible = old_len - outputs.len();
 
-    outputs.sort_by(|output1, output2| match output1.compare_metric(output2) {
-        // If equal, we fall back on comparing asset properties
-        Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
-        cmp => cmp,
-    });
+    outputs.sort_by(AppraisalOutput::compare);
 
     num_nonfeasible
 }
@@ -399,10 +409,7 @@ pub fn count_equal_and_best_appraisal_outputs(outputs: &[AppraisalOutput]) -> us
     }
     outputs[1..]
         .iter()
-        .take_while(|output| {
-            output.compare_metric(&outputs[0]).is_eq()
-                && compare_asset_fallback(&output.asset, &outputs[0].asset).is_eq()
-        })
+        .take_while(|output| output.compare(&outputs[0]).is_eq())
         .count()
 }
 
