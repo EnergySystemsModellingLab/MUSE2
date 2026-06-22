@@ -81,16 +81,11 @@ fn get_all_patches() -> PatchMap {
             "circularity_npv",
             PatchInfo::new(
                 "circularity",
-                vec![FilePatch::new("agent_objectives.csv").with_replacement(&[
-                    "agent_id,years,objective_type,decision_weight,decision_lexico_order",
-                    "A0_OAG,all,lcox,,",
-                    "A0_ELC,all,npv,,",
-                    "A0_RES,all,lcox,,",
-                    "A0_TRA,all,lcox,,",
-                    "A0_BPD,all,lcox,,",
-                    "A0_BPL,all,lcox,,",
-                    "A0_REF,all,lcox,,",
-                ])],
+                vec![
+                    FilePatch::new("agent_objectives.csv")
+                        .with_deletion("A0_ELC,all,lcox,,")
+                        .with_addition("A0_ELC,all,npv,,"),
+                ],
                 None,
             ),
         ),
