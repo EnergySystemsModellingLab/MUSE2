@@ -20,7 +20,7 @@ type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 ///
 /// Steps:
 /// 1. Initialise an `InvestmentGraph` from the set of original `CommodityGraph`s for the given
-///    year, filtering to only include SVD/SED commodities and primary edges. `CommodityGraph`s from
+///    year, filtering to only include SVD/SED commodities. `CommodityGraph`s from
 ///    all regions are combined into a single `InvestmentGraph`. TODO: at present there can be no
 ///    edges between regions; in future we will want to implement trade as edges between regions,
 ///    but this will have no impact on the following steps.
@@ -59,9 +59,9 @@ fn solve_investment_order_for_year(
 
 /// Initialise an `InvestmentGraph` for the given year from a set of `CommodityGraph`s
 ///
-/// Commodity graphs for each region are first filtered to only include SVD/SED commodities and
-/// primary edges. Each commodity node is then added to a global investment graph as an
-/// `InvestmentSet::Single`, with edges preserved from the original commodity graphs.
+/// Commodity graphs for each region are first filtered to only include SVD/SED commodities. Each
+/// commodity node is then added to a global investment graph as an `InvestmentSet::Single`, with
+/// edges preserved from the original commodity graphs.
 fn init_investment_graph_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     year: u32,
@@ -71,7 +71,7 @@ fn init_investment_graph_for_year(
 
     // Iterate over the graphs for the given year
     for ((region_id, _), graph) in graphs.iter().filter(|((_, y), _)| *y == year) {
-        // Filter the graph to only include SVD/SED commodities and primary edges
+        // Filter the graph to only include SVD/SED commodities
         let filtered = graph.filter_map(
             |_, n| match n {
                 GraphNode::Commodity(cid) => {
@@ -84,7 +84,7 @@ fn init_investment_graph_for_year(
                 }
                 _ => None,
             },
-            |_, e| matches!(e, GraphEdge::Primary(_)).then_some(e.clone()),
+            |_, e| Some(e.clone()),
         );
 
         // Add nodes to the combined graph
