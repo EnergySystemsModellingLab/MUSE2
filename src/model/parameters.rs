@@ -100,6 +100,8 @@ pub struct ModelParameters {
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
     pub remaining_demand_absolute_tolerance: Flow,
+    /// Whether to allow investment in non-dispatched options.
+    pub allow_investment_in_non_dispatched_options: bool,
     /// Options for the HiGHS solver.
     ///
     /// For a full list of options, see [the HiGHS documentation].
@@ -125,6 +127,7 @@ impl Default for ModelParameters {
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+            allow_investment_in_non_dispatched_options: true,
             highs: HighsOptions::default(),
         }
     }

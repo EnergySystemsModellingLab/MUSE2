@@ -59,6 +59,11 @@ properties:
       investment cycle. Changing the value of this parameter is potentially dangerous,
       so it requires setting `please_give_me_broken_results` to true.
     default: 1e-12
+  allow_investment_in_non_dispatched_options:
+    type: boolean
+    description: |
+      Whether to allow investment in non-dispatched options.
+    default: true
   highs:
     type: object
     description: |
