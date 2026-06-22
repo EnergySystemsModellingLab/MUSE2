@@ -84,7 +84,31 @@ impl AppraisalOutput {
         }
     }
 
-    /// Compare this appraisal to another.
+    /// Whether this [`AppraisalOutput`] is a valid output.
+    ///
+    /// Specifically, it checks whether the metric is a valid value (not `None`) and that the
+    /// calculated capacity is greater than zero.
+    pub fn is_valid(&self) -> bool {
+        self.metric.is_some() && self.capacity.total_capacity() > Capacity(0.0)
+    }
+}
+
+impl PartialEq for AppraisalOutput {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for AppraisalOutput {}
+
+impl PartialOrd for AppraisalOutput {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AppraisalOutput {
+    /// Compare this appraisal output to another.
     ///
     /// This is done firstly on the basis of the metrics, falling back on comparing assets (see
     /// [`compare_asset_fallback`]) if these are approximately equal (as determined by the
@@ -95,33 +119,20 @@ impl AppraisalOutput {
     /// value is very similar to another, then it can lead to different decisions being made,
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
-    pub fn compare(&self, other: &Self) -> Ordering {
-        // Valid outputs are sorted before invalid ones
-        let valid1 = self.is_valid();
-        let valid2 = other.is_valid();
-        if !valid1 || !valid2 {
-            return valid1.cmp(&valid2).reverse();
-        }
+    fn cmp(&self, other: &Self) -> Ordering {
+        // First, try comparing based on metrics
+        let metric_cmp = match (&self.metric, &other.metric) {
+            // If both are valid, delegate to the metric's `compare()` method
+            (Some(a), Some(b)) => a.compare(&**b),
+            // Otherwise, sort valid before invalid metrics
+            (a, b) => a.is_some().cmp(&b.is_some()).reverse(),
+        };
 
-        // We've already checked the metrics aren't `None` in `is_valid`
-        match self
-            .metric
-            .as_ref()
-            .unwrap()
-            .compare(other.metric.as_ref().unwrap().as_ref())
-        {
-            // If equal, we fall back on comparing asset properties
+        // If the metrics are approximately equal or both `None`, fall back on comparing assets
+        match metric_cmp {
             Ordering::Equal => compare_asset_fallback(&self.asset, &other.asset),
             cmp => cmp,
         }
-    }
-
-    /// Whether this [`AppraisalOutput`] is a valid output.
-    ///
-    /// Specifically, it checks whether the metric is a valid value (not `None`) and that the
-    /// calculated capacity is greater than zero.
-    pub fn is_valid(&self) -> bool {
-        self.metric.is_some() && self.capacity.total_capacity() > Capacity(0.0)
     }
 }
 
@@ -394,7 +405,7 @@ pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> 
     outputs.retain(AppraisalOutput::is_valid);
     let num_nonfeasible = old_len - outputs.len();
 
-    outputs.sort_by(AppraisalOutput::compare);
+    outputs.sort();
 
     num_nonfeasible
 }
@@ -407,7 +418,7 @@ pub fn count_equal_and_best_appraisal_outputs(outputs: &[AppraisalOutput]) -> us
     }
     outputs[1..]
         .iter()
-        .take_while(|output| output.compare(&outputs[0]).is_eq())
+        .take_while(|output| *output == &outputs[0])
         .count()
 }
 
