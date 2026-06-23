@@ -96,8 +96,9 @@ activity limit).
 ### Time Slice Aggregation
 
 For commodities defined at coarser time slice levels (e.g. seasonal or annual), prices are
-calculated by weighting asset costs across time slices by activity (or activity limits
-for candidates) to yield a flat price for the season/year.
+calculated by weighting asset costs across time slices by activity to yield a flat price for the
+season/year. For candidates, or assets with zero activity across the selection, upper activity
+limits are used as weights.
 
 ## Price Calculation Order
 
