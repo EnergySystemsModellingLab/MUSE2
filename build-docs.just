@@ -44,7 +44,7 @@ header:
 
 # Move the dev docs to the same level as the old docs
 move-dev: header book
-    @echo Moving dev docs to release/dev
+    @echo Moving dev docs to /dev
     @uv run docs/move_dev_docs.py
 
 # Build documentation for previous releases
