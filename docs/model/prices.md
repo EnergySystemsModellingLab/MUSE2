@@ -33,11 +33,11 @@ shared between outputs according to output flow coefficients.
 
 #### Generic Activity Cost
 
-The generic activity cost comprises all operating expenditures and input purchases not associated
-with specific SED/SVD outputs:
-\\[
-\text{GenericActivityCost} = \text{VariableOperatingCost} + \text{InputPurchases} + \sum \text{GenericLevies}
-\\]
+The generic activity cost comprises all operating expenditures, input purchases, and flow costs/levies
+not associated with specific SED/SVD outputs:
+\[
+\text{GenericActivityCost} = \text{VariableOperatingCost} + \text{InputPurchases} + \sum \text{GenericFlowCosts}
+\]
 
 This is shared equally over all SED/SVD outputs in proportion to their output coefficients to
 compute a generic cost per unit of output flow:
