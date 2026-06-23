@@ -9,10 +9,10 @@ use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use strum::IntoEnumIterator;
@@ -861,25 +861,27 @@ fn select_best_assets(
         // Sort by investment priority and discard non-feasible options
         sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
-        // Check if there are any remaining options. If not, we cannot meet demand, so have to bail
-        // out.
+        // If none of the remaining options are feasible, we terminate the loop. We may still be
+        // able to meet the full demands with assets selected so far, so we continue anyway with a
+        // warning.
         if outputs_for_opts.is_empty() {
             let remaining_demands: Vec<_> = demand
                 .iter()
                 .filter(|(_, flow)| **flow > Flow(0.0))
                 .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
                 .collect();
-
-            bail!(
-                "No feasible investment options left for \
-                commodity '{}', region '{}', year '{}', agent '{}' after appraisal.\n\
-                Remaining unmet demand (time_slice : flow):\n{}",
+            warn!(
+                "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
+                year '{}', agent '{}'. No additional profitable investments were identified. \
+                The unmet demand reported below may still be satisfied during the full system \
+                dispatch:\n{}",
                 &commodity.id,
                 region_id,
                 year,
                 agent.id,
                 remaining_demands.join("\n")
             );
+            break;
         }
 
         // Warn if there are multiple equally good assets
