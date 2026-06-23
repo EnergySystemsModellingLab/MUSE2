@@ -853,12 +853,8 @@ fn select_best_assets(
         }
 
         // Save appraisal results
-        writer.write_appraisal_debug_info(
-            year,
-            &format!("{} {} round {}", &commodity.id, &agent.id, round),
-            &outputs_for_opts,
-            &demand,
-        )?;
+        let run_description = format!("{} {} round {}", &commodity.id, &agent.id, round);
+        writer.write_appraisal_debug_info(year, &run_description, &outputs_for_opts, &demand)?;
 
         if model.parameters.allow_investment_in_non_dispatched_options
             && !outputs_for_opts
@@ -876,6 +872,13 @@ fn select_best_assets(
                 &coefficients,
                 &demand,
             );
+
+            writer.write_appraisal_debug_info(
+                year,
+                &format!("{run_description}; max activity"),
+                &outputs_for_opts,
+                &demand,
+            )?;
         }
 
         // Sort by investment priority and discard non-feasible options
