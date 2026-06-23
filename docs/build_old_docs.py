@@ -10,7 +10,6 @@ from tempfile import TemporaryDirectory
 
 from release import get_releases
 
-DOCS_SITE_ROOT = "https://energysystemsmodellinglab.github.io/MUSE2"
 REPO_ROOT = Path(__file__).parent.parent.absolute()
 DOCS_DIR = REPO_ROOT / "docs"
 
