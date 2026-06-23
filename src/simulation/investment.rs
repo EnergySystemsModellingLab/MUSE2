@@ -1,6 +1,6 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::{Agent, AgentID};
+use crate::agent::{Agent, AgentID, ObjectiveType};
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
@@ -12,16 +12,17 @@ use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCa
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use std::rc::Rc;
 use strum::IntoEnumIterator;
 
 pub mod appraisal;
-use appraisal::coefficients::calculate_coefficients_for_assets;
+use appraisal::coefficients::{ObjectiveCoefficients, calculate_coefficients_for_assets};
 use appraisal::{
-    AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
-    sort_and_filter_appraisal_outputs,
+    AppraisalOutput, appraise_investment, appraise_investment_assuming_max_activity,
+    count_equal_and_best_appraisal_outputs, sort_and_filter_appraisal_outputs,
 };
 
 /// A map of demand across time slices for a specific market
@@ -772,6 +773,7 @@ fn calculate_investment_limits_for_candidates(
 
 /// Get the best assets for meeting demand for the given commodity
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
@@ -858,6 +860,24 @@ fn select_best_assets(
             &demand,
         )?;
 
+        if model.parameters.allow_investment_in_non_dispatched_options
+            && !outputs_for_opts
+                .iter()
+                .any(|output| output.metric.is_some())
+        {
+            warn!(
+                "None of the investment options dispatched. Reappraising assuming maximum activity."
+            );
+            outputs_for_opts = reappraise_outputs_assuming_max_activity(
+                &outputs_for_opts,
+                &model.time_slice_info,
+                commodity,
+                *objective_type,
+                &coefficients,
+                &demand,
+            );
+        }
+
         // Sort by investment priority and discard non-feasible options
         let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
@@ -926,6 +946,45 @@ fn select_best_assets(
 /// Check whether there is any remaining demand that is unmet in any time slice
 fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool {
     demand.values().any(|flow| *flow > absolute_tolerance)
+}
+
+/// Reappraise the specified outputs assuming max activity in each time slice
+fn reappraise_outputs_assuming_max_activity(
+    outputs: &[AppraisalOutput],
+    time_slice_info: &TimeSliceInfo,
+    commodity: &Commodity,
+    objective_type: ObjectiveType,
+    coefficients: &HashMap<AssetRef, Rc<ObjectiveCoefficients>>,
+    demand: &DemandMap,
+) -> Vec<AppraisalOutput> {
+    // Since all assets with the same `group_id` are identical, we only need to appraise one
+    // from each group.
+    let mut seen_groups = HashSet::new();
+
+    let mut new_outputs = Vec::new();
+    for output in outputs {
+        let asset = &output.asset;
+
+        // Skip any assets from groups we've already seen
+        if let Some(group_id) = asset.group_id()
+            && !seen_groups.insert(group_id)
+        {
+            continue;
+        }
+
+        let new_output = appraise_investment_assuming_max_activity(
+            time_slice_info,
+            asset,
+            output.capacity,
+            commodity,
+            objective_type,
+            &coefficients[asset],
+            demand,
+        );
+        new_outputs.push(new_output);
+    }
+
+    new_outputs
 }
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets

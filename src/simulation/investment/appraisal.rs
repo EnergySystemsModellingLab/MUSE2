@@ -5,8 +5,8 @@ use crate::asset::{Asset, AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
-use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Money, MoneyPerActivity};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+use crate::units::{Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -307,10 +307,9 @@ fn calculate_npv(
         highs::Sense::Maximise,
     )?;
 
-    let annual_fixed_cost = annual_fixed_cost(asset);
     let profitability_index = profitability_index(
         max_capacity.total_capacity(),
-        annual_fixed_cost,
+        annual_fixed_cost(asset),
         &results.activity,
         &coefficients.market_costs,
     );
@@ -345,6 +344,110 @@ pub fn appraise_investment(
         ObjectiveType::NetPresentValue => calculate_npv,
     };
     appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
+}
+
+/// Computes remaining unmet demand per time slice.
+///
+/// For each time-slice selection at the commodity's balance level, the selection-level residual
+/// (`demand_total - supply_total`, clamped to zero) is divided equally across the time slices in
+/// the selection.
+///
+/// The exact per-time-slice distribution is arbitrary: all downstream consumers sum values back up
+/// to the selection level before using them (e.g. the next round's demand constraint, and
+/// `is_any_remaining_demand`), so only the selection-level total needs to be correct.
+fn compute_unmet_demand(
+    demand: &DemandMap,
+    activity: &IndexMap<TimeSliceID, Activity>,
+    commodity: &Commodity,
+    asset: &Asset,
+    time_slice_info: &TimeSliceInfo,
+) -> DemandMap {
+    let mut unmet_demand = DemandMap::new();
+    let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+    for ts_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level) {
+        let time_slices: Vec<_> = ts_selection.iter(time_slice_info).collect();
+        let demand_for_selection: Flow = time_slices.iter().map(|(ts, _)| demand[*ts]).sum();
+        let supply_for_selection: Flow = time_slices
+            .iter()
+            .map(|(ts, _)| activity[*ts] * flow_coeff)
+            .sum();
+
+        #[allow(clippy::cast_precision_loss)]
+        let unmet_per_slice = (demand_for_selection - supply_for_selection).max(Flow(0.0))
+            / Dimensionless(time_slices.len() as f64);
+        for (time_slice, _) in &time_slices {
+            unmet_demand.insert((*time_slice).clone(), unmet_per_slice);
+        }
+    }
+    unmet_demand
+}
+
+/// Get the maximum allowed activity per time slice for an asset
+fn iter_max_activity_per_time_slice(
+    asset: &Asset,
+    capacity: Capacity,
+    time_slice_info: &TimeSliceInfo,
+) -> impl Iterator<Item = (TimeSliceID, Activity)> {
+    time_slice_info.iter_ids().cloned().map(move |time_slice| {
+        let max_act = *asset.get_activity_per_capacity_limits(&time_slice).end();
+        (time_slice, max_act * capacity)
+    })
+}
+
+/// Appraise an investment assuming maximum activity in every time slice
+pub fn appraise_investment_assuming_max_activity(
+    time_slice_info: &TimeSliceInfo,
+    asset: &AssetRef,
+    capacity: AssetCapacity,
+    commodity: &Commodity,
+    objective_type: ObjectiveType,
+    coefficients: &Rc<ObjectiveCoefficients>,
+    demand: &DemandMap,
+) -> AppraisalOutput {
+    let activity =
+        iter_max_activity_per_time_slice(asset, capacity.total_capacity(), time_slice_info)
+            .collect();
+    let unmet_demand = compute_unmet_demand(demand, &activity, commodity, asset, time_slice_info);
+
+    let results = ResultsMap {
+        capacity,
+        activity,
+        unmet_demand,
+    };
+    match objective_type {
+        ObjectiveType::LevelisedCostOfX => {
+            let cost_index = lcox(
+                capacity.total_capacity(),
+                coefficients.capacity_coefficient,
+                &results.activity,
+                &coefficients.market_costs,
+            );
+
+            AppraisalOutput::new(
+                asset.clone(),
+                capacity,
+                results,
+                cost_index.map(LCOXMetric::new),
+                coefficients.clone(),
+            )
+        }
+        ObjectiveType::NetPresentValue => {
+            let profitability_index = profitability_index(
+                capacity.total_capacity(),
+                annual_fixed_cost(asset),
+                &results.activity,
+                &coefficients.market_costs,
+            );
+
+            AppraisalOutput::new(
+                asset.clone(),
+                capacity,
+                results,
+                Some(NPVMetric::new(profitability_index)),
+                coefficients.clone(),
+            )
+        }
+    }
 }
 
 /// Compare assets as a fallback if metrics are equal.
