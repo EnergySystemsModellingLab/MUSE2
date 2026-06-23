@@ -57,6 +57,11 @@ pub fn profitability_index(
     activity: &IndexMap<TimeSliceID, Activity>,
     activity_surpluses: &IndexMap<TimeSliceID, MoneyPerActivity>,
 ) -> ProfitabilityIndex {
+    assert!(
+        annual_fixed_cost >= MoneyPerCapacity(0.0),
+        "The current NPV calculation does not support negative annual fixed costs"
+    );
+
     // Calculate the annualised fixed costs
     let annualised_fixed_cost = annual_fixed_cost * capacity;
 

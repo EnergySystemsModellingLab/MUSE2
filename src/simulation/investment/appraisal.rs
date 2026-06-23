@@ -6,7 +6,7 @@ use crate::commodity::Commodity;
 use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Money, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity, Money, MoneyPerActivity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -308,11 +308,6 @@ fn calculate_npv(
     )?;
 
     let annual_fixed_cost = annual_fixed_cost(asset);
-    assert!(
-        annual_fixed_cost >= MoneyPerCapacity(0.0),
-        "The current NPV calculation does not support negative annual fixed costs"
-    );
-
     let profitability_index = profitability_index(
         max_capacity.total_capacity(),
         annual_fixed_cost,
@@ -414,7 +409,7 @@ mod tests {
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity, MoneyPerFlow};
+    use crate::units::{Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow};
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
     use std::rc::Rc;
