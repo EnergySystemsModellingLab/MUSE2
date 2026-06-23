@@ -224,9 +224,9 @@ Accounting for annual utilisation:
 
 Accounting for the output coefficient:
 
-\\[
-\text{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 6836756722
-\\]
+\[
+\text{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 4.6836756722
+\]
 
 The full cost is:
 
