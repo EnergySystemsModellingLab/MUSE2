@@ -129,5 +129,113 @@ re-evaluating each market in the cycle in reverse order (starting with those
 furthest from commodities downstream of the SCC) to propagate the feedback effects through the
 circular markets. -->
 
+<!-- markdownlint-disable MD024 -->
+## Example
+
+The following example demonstrates the calculation of full-cost prices for two commodities using the
+`full` pricing strategy.
+
+### GASPRD
+
+In this scenario, GASPRD is produced by a single GASDRV asset. This asset produces 1 unit of GASPRD
+per unit of activity, along with 5.113 units of CO₂ emissions. Suppose an annual utilisation
+of 0.20786471743 (based on dispatch results).
+
+#### Marginal Cost
+
+The asset incurs a CO₂ levy (0.04/unit) and a variable operating cost of 2.0:
+
+\\[
+\text{MarginalCost}_{\text{GASPRD}} = ( 5.113 \times 0.04) + 2.0 = 2.20452
+\\]
+
+#### Full Cost
+
+Using a lifetime of 25 years, a discount rate of 10%, annual fixed costs of 0.3 per unit capacity,
+and a total capital cost of 10 per unit capacity:
+
+\\[
+\text{CRF} = 0.11016807219
+\\]
+
+\\[
+\text{AnnualFixedCostPerCapacity} = (10 \times 0.11016807219 + 0.3) = 1.4016807219
+\\]
+
+Accounting for annual utilisation:
+
+\\[
+\text{AnnualFixedCostPerActivity} = \frac{1.4016807219}{0.20786471743} = 6.7432354044
+\\]
+
+Accounting for the output coefficient:
+
+\\[
+\text{AnnualFixedCostPerOutput} = \frac{6.7432354044}{1} = 6.7432354044
+\\]
+
+The full cost is:
+
+\\[
+\text{FullCost}_{\text{GASPRD}} = 2.20452 + 6.7432354044 = 8.9477554044
+\\]
+
+### GASNAT
+
+Following on from the above scenario, GASNAT is produced by a single GASPRC asset, which consumes
+GASPRD as an input fuel. This asset consumes 1.05 units of GASPRD and produces 1 unit of GASNAT
+per unit of activity, along with 2.5565 units of CO₂ emissions. Suppose an annual utilisation
+of 0.2094885671 (based on dispatch results).
+
+#### Marginal Cost
+
+The asset incurs a CO₂ levy (0.04/unit), a variable operating cost of 0.5 and fuel purchases:
+
+\\[
+\text{CO2Levy} = 2.5565 \times 0.04 = 0.10226
+\\]
+
+\\[
+\text{InputPurchases} = 8.9477554044 \times 1.05 = 9.39514317462
+\\]
+
+\\[
+\text{MarginalCost}_{\text{GASNAT}} = 0.10226 + 0.5 + 9.39514317462 = 9.99740317462
+\\]
+
+#### Full Cost
+
+Using the same lifetime and discount rate, along with annual fixed costs of 0.21 per unit capacity,
+and a total capital cost of 7 per unit capacity:
+
+\\[
+\text{CRF} = 0.11016807219
+\\]
+
+\\[
+\text{AnnualFixedCostPerCapacity} = (7 \times 0.11016807219 + 0.21) = 0.98117650533
+\\]
+
+Accounting for annual utilisation:
+
+\\[
+\text{AnnualFixedCostPerActivity} = \frac{0.98117650533}{0.2094885671} = 4.6836756722
+\\]
+
+Accounting for the output coefficient:
+
+\\[
+\text{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 6836756722
+\\]
+
+The full cost is:
+
+\\[
+\text{FullCost}_{\text{GASNAT}} = 9.99740317462 + 4.6836756722 = 14.6810788468
+\\]
+
+This example illustrates the sequential nature of price calculation: the GASPRD price is
+calculated first and then used as an input cost when calculating the GASNAT price.
+
 [Capital Recovery Factor]: https://homerenergy.com/products/pro/docs/latest/capital_recovery_factor.html
 [`commodities.csv`]: ../file_formats/input_files#commoditiescsv
