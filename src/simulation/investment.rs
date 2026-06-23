@@ -872,7 +872,7 @@ fn select_best_assets(
                 .collect();
             warn!(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
-                year '{}', agent '{}'. No additional profitable investments were identified. \
+                year '{}', agent '{}'. No additional feasible investments were identified. \
                 The unmet demand reported below may still be satisfied during the full system \
                 dispatch:\n{}",
                 &commodity.id,
