@@ -13,7 +13,9 @@ REPO_ROOT = DOCS_DIR.parent
 
 def generate_header_hbs() -> None:
     """Write the theme/header.hbs file."""
-    path = REPO_ROOT / "theme" / "header.hbs"
+    theme_dir = REPO_ROOT / "theme"
+    theme_dir.mkdir(parents=True, exist_ok=True)
+    path = theme_dir / "header.hbs"
     print(f"Writing {path}")
     env = Environment(loader=FileSystemLoader(DOCS_DIR / "templates"))
     template = env.get_template("header.hbs.jinja")
