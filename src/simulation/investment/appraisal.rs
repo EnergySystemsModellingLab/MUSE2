@@ -83,11 +83,6 @@ impl AppraisalOutput {
             coefficients,
         }
     }
-
-    /// Whether this [`AppraisalOutput`] is a valid output
-    pub fn is_valid(&self) -> bool {
-        self.metric.is_some()
-    }
 }
 
 impl PartialEq for AppraisalOutput {
@@ -395,17 +390,14 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// and newer assets are preferred over older ones. The function does not guarantee that all ties
 /// will be resolved.
 ///
-/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which excludes entries
-/// with invalid metrics (e.g. `None`) as well as zero capacity. This avoids meaningless or `NaN`
-/// appraisal metrics that could cause the program to panic, so the length of the returned vector
-/// may be less than the input.
+/// Before sorting, outputs where the asset failed to dispatch are excluded.
 ///
 /// # Returns
 ///
 /// Returns the number of non-feasible assets which were removed.
 pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
     let old_len = outputs.len();
-    outputs.retain(AppraisalOutput::is_valid);
+    outputs.retain(|output| output.metric.is_some());
     let num_nonfeasible = old_len - outputs.len();
 
     outputs.sort();
