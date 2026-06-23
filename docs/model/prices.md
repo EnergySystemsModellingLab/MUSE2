@@ -7,7 +7,7 @@ market prices.
 
 ## Pricing Strategies
 
-Each commodity is configured with a specific `pricing_strategy` via `commodities.csv`.
+Each commodity is configured with a specific `pricing_strategy` via [`commodities.csv`].
 The options are:
 
 - **`marginal`**: Prices are set to the marginal cost of the highest-cost active asset producing the
@@ -126,3 +126,4 @@ furthest from commodities downstream of the SCC) to propagate the feedback effec
 circular markets. -->
 
 [Capital Recovery Factor]: https://homerenergy.com/products/pro/docs/latest/capital_recovery_factor.html
+[`commodities.csv`]: ../file_formats/input_files#commoditiescsv
