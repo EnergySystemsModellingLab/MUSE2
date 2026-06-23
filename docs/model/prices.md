@@ -238,4 +238,4 @@ This example illustrates the sequential nature of price calculation: the GASPRD 
 calculated first and then used as an input cost when calculating the GASNAT price.
 
 [Capital Recovery Factor]: https://homerenergy.com/products/pro/docs/latest/capital_recovery_factor.html
-[`commodities.csv`]: ../file_formats/input_files#commoditiescsv
+[`commodities.csv`]: ../file_formats/input_files.md#commoditiescsv
