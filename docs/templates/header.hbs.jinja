@@ -90,53 +90,48 @@
     var labelText = document.getElementById("version-label-text");
     var list = document.getElementById("version-list");
 
-    var isStable = /\/release\/stable\//.test(path);
     var versionMatch = /\/release\/(v[\d.]+)\//.exec(path);
-    var isDev = !isStable && !versionMatch;
-    var currentVersion = isDev ? "development" : isStable ? "stable" : versionMatch[1];
-
-    // Set widget label
-    labelText.textContent = currentVersion;
+    var isDev = !versionMatch;
+    var currentVersion = isDev ? "development" : versionMatch[1];
+    var isStable = false;
 
     // Build version list
     var pathToRoot = "{% raw %}{{path_to_root}}{% endraw %}";
     var versions = [
-      { label: "development" },
-      { label: "stable" },
+      { label: "development", stable: false },
 {%- for release in releases %}
-      { label: "{{ release }}" },
+      { label: "{{ release.label }}", stable: {{ release.stable|lower }} },
 {%- endfor %}
     ];
 
     function hrefFor(label) {
       if (isDev) {
         if (label === "development") return pathToRoot;
-        if (label === "stable") return pathToRoot + "release/stable/index.html";
         return pathToRoot + "release/" + label + "/index.html";
       }
-
-      if (isStable) {
-        if (label === "development") return pathToRoot + "../../index.html";
-        if (label === "stable") return pathToRoot;
-        return pathToRoot + "../" + label + "/index.html";
-      }
-
       // Old versioned docs (e.g. /release/v2.0.0/)
       if (label === "development") return pathToRoot + "../../index.html";
-      if (label === "stable") return pathToRoot + "../stable/index.html";
       return pathToRoot + "../" + label + "/index.html";
     }
 
     versions.forEach(function (v) {
       var li = document.createElement("li");
-    if (v.label === currentVersion) {
-      var strong = document.createElement("strong");
-      strong.textContent = v.label;
-      li.appendChild(strong);
-    } else {
+
+      versionLabel = v.stable ? v.label + " (stable)" : v.label;
+
+      if (v.label === currentVersion) {
+        // Determine if current version is the stable release
+        isStable = v.stable;
+        // Set widget label
+        labelText.textContent = versionLabel;
+
+        var strong = document.createElement("strong");
+        strong.textContent = versionLabel;
+        li.appendChild(strong);
+      } else {
         var a = document.createElement("a");
         a.href = hrefFor(v.label);
-        a.textContent = v.label;
+        a.textContent = versionLabel;
         li.appendChild(a);
       }
       list.appendChild(li);

@@ -17,7 +17,10 @@ def generate_header_hbs() -> None:
     print(f"Writing {path}")
     env = Environment(loader=FileSystemLoader(DOCS_DIR / "templates"))
     template = env.get_template("header.hbs.jinja")
-    out = template.render(releases=get_releases())
+    releases = [
+        {"label": release, "stable": i == 0} for i, release in enumerate(get_releases())
+    ]
+    out = template.render(releases=releases)
 
     with path.open("w", encoding="utf-8") as f:
         f.write(out)

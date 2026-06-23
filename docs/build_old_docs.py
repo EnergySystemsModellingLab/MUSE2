@@ -64,7 +64,7 @@ def apply_patches_for_release(release: str, repo_path: Path) -> None:
         sp.run(("git", "-C", str(repo_path), "am", str(patch_path)), check=True)
 
 
-def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> Path:
+def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
     """Build documentation for a given release."""
     print(f"Building docs for {release}")
     release_path = add_worktree_for_release(repo_path, release)
@@ -83,8 +83,6 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> Path:
     print(f"Copying to {release_outdir}")
     shutil.move((release_path / "book"), release_outdir)
 
-    return release_outdir
-
 
 def build_old_docs() -> None:
     """Build documentation for previous releases."""
@@ -98,13 +96,7 @@ def build_old_docs() -> None:
 
         # Generate documentation for each previous release
         for i, release in enumerate(get_releases()):
-            release_outdir = build_docs_for_release(release, repo_path, outdir)
-
-            # Copy latest release into stable dir
-            if i == 0:
-                stable_dir = outdir / "stable"
-                shutil.rmtree(stable_dir, ignore_errors=True)
-                shutil.copytree(release_outdir, stable_dir)
+            build_docs_for_release(release, repo_path, outdir)
 
 
 if __name__ == "__main__":
