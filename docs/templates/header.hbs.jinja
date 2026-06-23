@@ -92,27 +92,17 @@
 
     var versionMatch = /\/release\/(v[\d.]+)\//.exec(path);
     var isDev = !versionMatch;
-    var currentVersion = isDev ? "development" : versionMatch[1];
+    var currentVersion = isDev ? "dev" : versionMatch[1];
     var isStable = false;
 
     // Build version list
     var pathToRoot = "{% raw %}{{path_to_root}}{% endraw %}";
     var versions = [
-      { label: "development", stable: false },
+      { label: "dev", stable: false },
 {%- for release in releases %}
       { label: "{{ release.label }}", stable: {{ release.stable|lower }} },
 {%- endfor %}
     ];
-
-    function hrefFor(label) {
-      if (isDev) {
-        if (label === "development") return pathToRoot;
-        return pathToRoot + "release/" + label + "/index.html";
-      }
-      // Old versioned docs (e.g. /release/v2.0.0/)
-      if (label === "development") return pathToRoot + "../../index.html";
-      return pathToRoot + "../" + label + "/index.html";
-    }
 
     versions.forEach(function (v) {
       var li = document.createElement("li");
@@ -130,7 +120,7 @@
         li.appendChild(strong);
       } else {
         var a = document.createElement("a");
-        a.href = hrefFor(v.label);
+        a.href = pathToRoot + "../" + v.label + "/index.html";
         a.textContent = versionLabel;
         li.appendChild(a);
       }
