@@ -39,8 +39,7 @@
     color: #fff;
     padding: 6px 12px;
     border-radius: 4px 4px 0 0;
-    cursor: default;
-    user-select: none;
+    cursor: pointer;
   }
 
   #version-arrow {
@@ -80,8 +79,8 @@
 <div id="version-banner" role="status" aria-live="polite"></div>
 
 <div id="version-widget">
-  <ul id="version-list" aria-label="Change version list" aria-haspopup="true"></ul>
-  <span id="version-label">docs: <span id="version-label-text"></span> <span id="version-arrow">&#x25b2;</span></span>
+  <ul id="version-list" aria-label="Documentation versions"></ul>
+  <span id="version-label" tabindex="0" role="button" aria-haspopup="listbox" aria-controls="version-list">docs: <span id="version-label-text"></span> <span id="version-arrow">&#x25b2;</span></span>
 </div>
 
 <script>
@@ -130,9 +129,11 @@
 
     versions.forEach(function (v) {
       var li = document.createElement("li");
-      if (v.label === currentVersion) {
-        li.innerHTML = "<strong>" + v.label + "</strong>";
-      } else {
+    if (v.label === currentVersion) {
+      var strong = document.createElement("strong");
+      strong.textContent = v.label;
+      li.appendChild(strong);
+    } else {
         var a = document.createElement("a");
         a.href = hrefFor(v.label);
         a.textContent = v.label;
