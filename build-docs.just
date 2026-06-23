@@ -43,7 +43,7 @@ header:
     @uv run docs/generate_header.py
 
 # Build documentation for previous releases
-old:
+old: header
     @# Clean output dir
     @rm -rf book/release
 
