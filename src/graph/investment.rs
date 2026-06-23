@@ -80,7 +80,7 @@ fn init_investment_graph_for_year(
                         kind,
                         CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
                     )
-                    .then_some(GraphNode::Commodity(cid.clone()))
+                    .then(|| GraphNode::Commodity(cid.clone()))
                 }
                 _ => None,
             },
