@@ -90,7 +90,7 @@
     var labelText = document.getElementById("version-label-text");
     var list = document.getElementById("version-list");
 
-    var versionMatch = /\/release\/(v[\d.]+)\//.exec(path);
+    var versionMatch = /\/(v[\d.]+)\//.exec(path);
     var isDev = !versionMatch;
     var currentVersion = isDev ? "dev" : versionMatch[1];
     var isStable = false;

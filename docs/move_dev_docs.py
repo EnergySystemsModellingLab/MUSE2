@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# A script to move the development docs into a release/dev directory
+# A script to move the development docs into a /dev directory
 
 import shutil
 from pathlib import Path
@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).parent.parent.absolute()
 def move_to_dev() -> None:
     """Build documentation for previous releases."""
     bookdir = REPO_ROOT / "book"
-    outdir = REPO_ROOT / "book" / "release" / "dev"
+    outdir = REPO_ROOT / "book" / "dev"
 
     with TemporaryDirectory() as tmpdir:
         # Move book to temporary directory
@@ -27,7 +27,7 @@ def move_to_dev() -> None:
         f.write(f"""<head>
     <meta
         http-equiv="Refresh"
-        content="0; URL={DOCS_SITE_ROOT}/release/{get_releases()[0]}/index.html"
+        content="0; URL={DOCS_SITE_ROOT}/{get_releases()[0]}/"
     />
 </head>""")
 
