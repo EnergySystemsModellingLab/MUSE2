@@ -89,9 +89,12 @@ The final full cost of output commodity \\( c \\) is:
 ### Candidate asset fallback
 
 For cost-based strategies (`marginal`, `marginal_average`, `full`, `full_average`), if no active
-producers exist, these fall back to the candidate asset with the lowest marginal/full cost,
-calculated assuming full utilisation (i.e. assuming annual activity equals the maximum annual
-activity limit).
+producers exist in the current year, prices are calculated by looking at candidate assets for
+investment in the following milestone year. Prices are set by the candidate asset with the lowest
+marginal/full cost, calculated assuming full utilisation (i.e. assuming annual activity equals the
+maximum annual activity limit).
+
+In the final milestone year, prices for commodities with no active producer are omitted.
 
 ### Time Slice Aggregation
 
@@ -117,8 +120,9 @@ which then generates electricity), the resulting cyclic dependencies are resolve
 1. **Initial Seeding:** Cyclic markets are seeded with their shadow prices.
 2. **Sequential Evaluation:** Commodities in the cycle are evaluated in sequence, starting with
 those furthest upstream relative to the rest of the system (i.e., furthest from the commodities
-downstream of the SCC). Price calculations use newly updated market prices for commodities already
-evaluated in the sequence, and fall back to the seeded shadow prices for any not yet evaluated.
+downstream of the SCC), and working down. Marginal cost calculations use newly updated prices for
+input commodities already evaluated in the sequence, and fall back to the seeded shadow prices for
+any not yet evaluated, which may occur due to circular dependencies.
 <!-- Currently a hidden option, TBD whether we want to open this up: -->
 <!-- 2. **Iterative Refinement:** An iterative loop runs for a fixed number of iterations,
 re-evaluating each market in the cycle in reverse order (starting with those
