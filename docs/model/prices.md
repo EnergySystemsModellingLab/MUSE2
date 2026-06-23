@@ -14,7 +14,8 @@ The options are:
 commodity.
 - **`marginal_average`**: Prices are set to the output-weighted average marginal cost across all
 active assets.
-- **`full`**: Prices are set to the full cost (marginal cost + annual fixed/capital costs) of the highest-cost active asset producing the commodity.
+- **`full`**: Prices are set to the full cost (marginal cost + annual fixed/capital costs) of the
+highest-cost active asset producing the commodity.
 - **`shadow`**: Prices are taken directly from the shadow prices (dual values) of the commodity
 balance constraints in the dispatch optimisation.
 - **`scarcity`**: Prices are set to the shadow price plus the highest activity dual of the assets
