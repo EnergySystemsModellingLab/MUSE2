@@ -238,13 +238,13 @@ fn order_sccs(
 ) {
     const EXTERNAL_BIAS: f64 = 0.1;
 
-    // Map each investment set back to the node index in the original graph so we can inspect edges.
+    // Map each market set back to the node index in the original graph so we can inspect edges.
     let node_lookup: HashMap<MarketSet, NodeIndex> = original_graph
         .node_indices()
         .map(|idx| (original_graph.node_weight(idx).unwrap().clone(), idx))
         .collect();
 
-    // Work through each SCC; groups with just one investment set don't need to be ordered.
+    // Work through each SCC; groups with just one market set don't need to be ordered.
     for group in condensed_graph.node_indices() {
         let scc = condensed_graph.node_weight_mut(group).unwrap();
         let n = scc.len();
@@ -252,7 +252,7 @@ fn order_sccs(
             continue;
         }
 
-        // Capture current order and resolve each investment set back to its original graph index.
+        // Capture current order and resolve each market set back to its original graph index.
         let original_order = scc.clone();
         let original_indices = original_order
             .iter()
@@ -387,7 +387,7 @@ fn order_sccs(
     }
 }
 
-/// Compute layers of investment sets from the topological order
+/// Compute layers of market sets from the topological order
 ///
 /// This function works by computing the rank of each node in the graph based on the longest path
 /// from any root node to that node. Any nodes with the same rank are independent and can be solved
@@ -397,9 +397,9 @@ fn order_sccs(
 /// This function computes the ranks of each node, groups nodes by rank, and then produces a final
 /// ordered Vec of `MarketSet`s which gives the order in which to solve the investment decisions.
 ///
-/// Investment sets with the same rank (i.e., can be solved in parallel) are grouped into
-/// `MarketSet::Layer`. Investment sets that are alone in their rank remain as-is (i.e. either
-/// `Single` or `Cycle`). `Layer`s can contain a mix of `Single` and `Cycle` investment sets.
+/// Market sets with the same rank (i.e., can be solved in parallel) are grouped into
+/// `MarketSet::Layer`. Market sets that are alone in their rank remain as-is (i.e. either
+/// `Single` or `Cycle`). `Layer`s can contain a mix of `Single` and `Cycle` market sets.
 ///
 /// For example, given the following graph:
 ///
@@ -569,7 +569,7 @@ mod tests {
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Expected order: C, B, A (leaf nodes first)
-        // No cycles or layers, so all investment sets should be `Single`
+        // No cycles or layers, so all market sets should be `Single`
         assert_eq!(result.len(), 3);
         assert_eq!(result[0], MarketSet::Single(("C".into(), "GBR".into())));
         assert_eq!(result[1], MarketSet::Single(("B".into(), "GBR".into())));
@@ -596,7 +596,7 @@ mod tests {
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
-        // Should be a single `Cycle` investment set containing both commodities
+        // Should be a single `Cycle` market set containing both commodities
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
