@@ -865,21 +865,11 @@ fn select_best_assets(
         // able to meet the full demands with assets selected so far, so we continue anyway with a
         // warning.
         if outputs_for_opts.is_empty() {
-            let remaining_demands: Vec<_> = demand
-                .iter()
-                .filter(|(_, flow)| **flow > Flow(0.0))
-                .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
-                .collect();
             warn!(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
                 year '{}', agent '{}'. No additional feasible investments were identified. \
-                The unmet demand reported below may still be satisfied during the full system \
-                dispatch:\n{}",
-                &commodity.id,
-                region_id,
-                year,
-                agent.id,
-                remaining_demands.join("\n")
+                This unmet demand may still be satisfied during the full system dispatch.",
+                &commodity.id, region_id, year, agent.id,
             );
             break;
         }
