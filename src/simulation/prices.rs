@@ -5,7 +5,7 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::simulation::investment::InvestmentSet;
+use crate::simulation::market::InvestmentSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
