@@ -3,7 +3,7 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::simulation::market::InvestmentSet;
+use crate::simulation::market::MarketSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
@@ -139,7 +139,7 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
 
 /// Calculate prices for the markets in an investment set, updating `market_prices`.
 fn price_investment_set(
-    investment_set: &InvestmentSet,
+    investment_set: &MarketSet,
     model: &Model,
     solution: &Solution,
     year: u32,
@@ -148,7 +148,7 @@ fn price_investment_set(
     market_prices: &mut PriceMap,
 ) {
     match investment_set {
-        InvestmentSet::Single(market) => {
+        MarketSet::Single(market) => {
             price_markets(
                 model,
                 solution,
@@ -159,7 +159,7 @@ fn price_investment_set(
                 market_prices,
             );
         }
-        InvestmentSet::Cycle(markets) => {
+        MarketSet::Cycle(markets) => {
             price_cycle(
                 model,
                 solution,
@@ -170,7 +170,7 @@ fn price_investment_set(
                 market_prices,
             );
         }
-        InvestmentSet::Layer(investment_sets) => {
+        MarketSet::Layer(investment_sets) => {
             for set in investment_sets {
                 price_investment_set(
                     set,
