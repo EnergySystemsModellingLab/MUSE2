@@ -2,7 +2,7 @@
 export RUSTDOCFLAGS := "-D warnings"
 
 # Build all documentation, except old docs
-all: cli-help file-format examples versions book api
+all: cli-help file-format examples header book api
 
 # Build all documentation, including old docs
 all_with_old: all old
@@ -37,13 +37,13 @@ examples:
     @echo Building docs for examples
     @uv run docs/generate_example_docs.py
 
-# Build TOC for old versions
-versions:
-    @echo Building TOC for old versions of documentation
-    @uv run docs/generate_versions_docs.py
+# Generate theme file for version banner and widget for docs
+header:
+    @echo Generating theme/header.hbs
+    @uv run docs/generate_header.py
 
 # Build documentation for previous releases
-old:
+old: header
     @# Clean output dir
     @rm -rf book/release
 

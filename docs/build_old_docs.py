@@ -10,7 +10,6 @@ from tempfile import TemporaryDirectory
 
 from release import get_releases
 
-DOCS_SITE_ROOT = "https://energysystemsmodellinglab.github.io/MUSE2"
 REPO_ROOT = Path(__file__).parent.parent.absolute()
 DOCS_DIR = REPO_ROOT / "docs"
 
@@ -72,14 +71,11 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
     # Apply patches, if any
     apply_patches_for_release(release, release_path)
 
+    # Copy current theme into the release worktree so theme is consistent
+    shutil.copytree(REPO_ROOT / "theme", release_path / "theme", dirs_exist_ok=True)
+
     # Build docs
     sp.run(("just", f"{release_path!s}/build-docs"), check=True)
-
-    # Patch versions.html to redirect to main versions page
-    with (release_path / "book" / "versions.html").open("w", encoding="utf-8") as f:
-        f.write(f"""<head>
-    <meta http-equiv="Refresh" content="0; URL={DOCS_SITE_ROOT}/versions.html" />
-</head>""")
 
     # Move to output directory
     release_outdir = outdir / release
@@ -98,7 +94,7 @@ def build_old_docs() -> None:
         clone_repo_to(repo_path)
 
         # Generate documentation for each previous release
-        for release in get_releases():
+        for i, release in enumerate(get_releases()):
             build_docs_for_release(release, repo_path, outdir)
 
 
