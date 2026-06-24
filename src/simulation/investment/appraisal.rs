@@ -61,7 +61,7 @@ pub struct AppraisalOutput {
     pub unmet_demand: DemandMap,
     /// The comparison metric to compare investment decisions
     pub metric: Option<Box<dyn MetricTrait>>,
-    /// Capacity and activity coefficients used in the appraisal
+    /// Activity coefficients and market costs used in the appraisal
     pub coefficients: Rc<ObjectiveCoefficients>,
 }
 

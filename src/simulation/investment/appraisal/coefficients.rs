@@ -10,11 +10,12 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// Map storing cost coefficients for an asset.
+/// Per-time-slice cost coefficients for an asset.
 ///
-/// These coefficients are calculated according to the agent's `ObjectiveType` and are used by
-/// the investment appraisal routines. The map contains the per-capacity and per-activity cost
-/// coefficients used in the appraisal optimisation, together with the unmet-demand penalty.
+/// These coefficients are calculated according to the agent's `ObjectiveType` and are used by the
+/// investment appraisal routines. They comprise the activity coefficients (revenue minus operating
+/// cost, derived from shadow prices) used in the appraisal optimisation, together with the market
+/// costs (derived from market prices).
 #[derive(Clone)]
 pub struct ObjectiveCoefficients {
     /// Cost per unit of activity in each time slice
@@ -25,14 +26,17 @@ pub struct ObjectiveCoefficients {
 
 /// Calculates cost coefficients for a set of assets for a given objective type.
 ///
-/// Activity coefficients are revenue (including primary output) minus operating cost; a small
-/// positive epsilon is added to activity coefficients so that assets with near-zero net value still
-/// appear in dispatch. Capacity costs and unmet-demand penalties are set to zero for the NPV
-/// objective. These activity coefficients are calculated using shadow prices.
+/// Returns a map from each asset to its [`ObjectiveCoefficients`], which holds a per-time-slice
+/// activity coefficient and market cost.
 ///
-/// For NPV, "market costs" are calculated in the same way, except thew prices used are market
-/// prices. For LCOX, a slightly different calculation is performed: the sign is inverted (as it
-/// represents a cost) and the primary output (commodity of interest) is excluded.
+/// Activity coefficients are revenue from flows (including the primary output) minus operating
+/// cost, calculated using shadow prices. A small positive epsilon is added to each activity
+/// coefficient so that assets with near-zero net value still appear in dispatch.
+///
+/// Market costs are calculated using market prices rather than shadow prices. For NPV they use the
+/// same revenue-minus-operating-cost calculation as the activity coefficients. For LCOX the sign is
+/// inverted (as the value represents a cost) and the primary output (commodity of interest) is
+/// excluded.
 pub fn calculate_coefficients_for_assets(
     model: &Model,
     objective_type: &ObjectiveType,

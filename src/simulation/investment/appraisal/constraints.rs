@@ -12,12 +12,9 @@ use indexmap::IndexMap;
 ///
 /// Constrains the activity variables to be within the asset's activity limits.
 ///
-/// The behaviour depends on whether the asset is commissioned or a candidate:
-/// - For a commissioned asset, the activity limits have fixed bounds based on the asset's (fixed)
-///   capacity.
-/// - For a candidate asset, the activity limits depend on the capacity of the asset, which is
-///   itself variable. The constraints are therefore applied to both the capacity and activity
-///   variables. We need separate constraints for the upper and lower bounds.
+/// The asset's per-capacity activity limits are scaled by the fixed `max_capacity` to give
+/// absolute bounds, and a single bounded constraint is added per time-slice selection covering the
+/// sum of activity in that selection.
 pub fn add_activity_constraints(
     problem: &mut Problem,
     asset: &AssetRef,

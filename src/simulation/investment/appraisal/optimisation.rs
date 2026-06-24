@@ -105,9 +105,9 @@ fn compute_unmet_demand(
 
 /// Performs optimisation for an asset, given the coefficients and demand.
 ///
-/// Will either maximise or minimise the objective function, depending on the `sense` parameter.
-/// The optimisation will use continuous or integer capacity variables depending on whether the
-/// asset has a defined unit size.
+/// Maximises the objective function over the activity variables, holding the asset's capacity
+/// fixed at `max_capacity`. Capacity is not a decision variable; the activity bounds are derived
+/// from `max_capacity` by the activity constraints.
 pub fn perform_optimisation(
     model: &Model,
     asset: &AssetRef,
