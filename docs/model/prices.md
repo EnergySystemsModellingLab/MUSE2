@@ -137,7 +137,7 @@ The following example demonstrates the calculation of full-cost prices for two c
 
 In this scenario, GASPRD is produced by a single GASDRV asset. This asset produces 1 unit of GASPRD
 per unit of activity, along with 5.113 units of CO₂ emissions. Suppose an annual utilisation
-of 0.20786471743 (based on dispatch results).
+of 0.20786471743 units of activity per unit of capacity (based on dispatch results).
 
 #### Marginal Cost
 
@@ -161,19 +161,16 @@ and a total capital cost of 10 per unit capacity:
 \\]
 
 Accounting for annual utilisation:
-
 \\[
 \text{AnnualFixedCostPerActivity} = \frac{1.4016807219}{0.20786471743} = 6.7432354044
 \\]
 
 Accounting for the output coefficient:
-
 \\[
 \text{AnnualFixedCostPerOutput} = \frac{6.7432354044}{1} = 6.7432354044
 \\]
 
 The full cost is:
-
 \\[
 \text{FullCost}_{\text{GASPRD}} = 2.20452 + 6.7432354044 = 8.9477554044
 \\]
@@ -183,7 +180,7 @@ The full cost is:
 Following on from the above scenario, GASNAT is produced by a single GASPRC asset, which consumes
 GASPRD as an input fuel. This asset consumes 1.05 units of GASPRD and produces 1 unit of GASNAT
 per unit of activity, along with 2.5565 units of CO₂ emissions. Suppose an annual utilisation
-of 0.2094885671 (based on dispatch results).
+of 0.2094885671 units of activity per unit of capacity (based on dispatch results).
 
 #### Marginal Cost
 
@@ -215,19 +212,16 @@ and a total capital cost of 7 per unit capacity:
 \\]
 
 Accounting for annual utilisation:
-
 \\[
 \text{AnnualFixedCostPerActivity} = \frac{0.98117650533}{0.2094885671} = 4.6836756722
 \\]
 
 Accounting for the output coefficient:
-
 \[
 \text{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 4.6836756722
 \]
 
 The full cost is:
-
 \\[
 \text{FullCost}_{\text{GASNAT}} = 9.99740317462 + 4.6836756722 = 14.6810788468
 \\]
