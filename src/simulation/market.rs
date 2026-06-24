@@ -29,26 +29,26 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
 /// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
-pub enum InvestmentSet {
+pub enum MarketSet {
     /// Assets are selected for a single market using `select_assets_for_single_market`
     Single((CommodityID, RegionID)),
     /// Assets are selected for a group of markets which forms a cycle.
     /// Experimental: handled by `select_assets_for_cycle` and guarded by the broken options
     /// parameter.
     Cycle(Vec<(CommodityID, RegionID)>),
-    /// Assets are selected for a layer of independent `InvestmentSet`s
-    Layer(Vec<InvestmentSet>),
+    /// Assets are selected for a layer of independent `MarketSet`s
+    Layer(Vec<MarketSet>),
 }
 
-impl InvestmentSet {
-    /// Recursively iterate over all markets contained in this `InvestmentSet`.
+impl MarketSet {
+    /// Recursively iterate over all markets contained in this `MarketSet`.
     pub fn iter_markets<'a>(
         &'a self,
     ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
-            InvestmentSet::Single(market) => Box::new(std::iter::once(market)),
-            InvestmentSet::Cycle(markets) => Box::new(markets.iter()),
-            InvestmentSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_markets())),
+            MarketSet::Single(market) => Box::new(std::iter::once(market)),
+            MarketSet::Cycle(markets) => Box::new(markets.iter()),
+            MarketSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_markets())),
         }
     }
 
@@ -78,7 +78,7 @@ impl InvestmentSet {
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
-            InvestmentSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
+            MarketSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
                 model,
                 commodity_id,
                 region_id,
@@ -88,7 +88,7 @@ impl InvestmentSet {
                 prices,
                 writer,
             ),
-            InvestmentSet::Cycle(markets) => {
+            MarketSet::Cycle(markets) => {
                 debug!("Starting investment for cycle '{self}'");
                 select_assets_for_cycle(
                     model,
@@ -110,7 +110,7 @@ impl InvestmentSet {
                     )
                 })
             }
-            InvestmentSet::Layer(investment_sets) => {
+            MarketSet::Layer(investment_sets) => {
                 debug!("Starting asset selection for layer '{self}'");
                 let mut all_assets = Vec::new();
                 for investment_set in investment_sets {
@@ -133,20 +133,20 @@ impl InvestmentSet {
     }
 }
 
-impl Display for InvestmentSet {
+impl Display for MarketSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvestmentSet::Single((commodity_id, region_id)) => {
+            MarketSet::Single((commodity_id, region_id)) => {
                 write!(f, "{commodity_id}|{region_id}")
             }
-            InvestmentSet::Cycle(markets) => {
+            MarketSet::Cycle(markets) => {
                 write!(
                     f,
                     "({})",
                     markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ")
                 )
             }
-            InvestmentSet::Layer(ids) => {
+            MarketSet::Layer(ids) => {
                 write!(f, "[{}]", ids.iter().join(", "))
             }
         }
