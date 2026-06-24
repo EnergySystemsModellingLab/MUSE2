@@ -4,7 +4,7 @@ use crate::asset::UserAsset;
 use crate::commodity::{CommodityID, CommodityMap};
 use crate::process::ProcessMap;
 use crate::region::{Region, RegionID, RegionMap};
-use crate::simulation::investment::InvestmentSet;
+use crate::simulation::market::InvestmentSet;
 use crate::time_slice::TimeSliceInfo;
 use std::collections::HashMap;
 use std::path::PathBuf;

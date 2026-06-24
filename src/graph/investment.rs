@@ -2,7 +2,7 @@
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
-use crate::simulation::investment::InvestmentSet;
+use crate::simulation::market::InvestmentSet;
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
 use log::warn;
