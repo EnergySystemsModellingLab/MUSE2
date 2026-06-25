@@ -33,9 +33,9 @@ shared between outputs according to output flow coefficients.
 
 The generic activity cost comprises all operating expenditures, input purchases, and flow costs/levies
 not associated with specific SED/SVD outputs:
-\[
+\\[
 \text{GenericActivityCost} = \text{VariableOperatingCost} + \text{InputPurchases} + \sum \text{GenericFlowCosts}
-\]
+\\]
 
 This is shared equally over all SED/SVD outputs in proportion to their output coefficients to
 compute a generic cost per unit of output flow:
@@ -77,7 +77,7 @@ SVD}} \text{OutputCoefficient}_c}
 \\]
 
 *Note: this only works if all output commodities are measured in the same energy units (e.g. PJ).
-For this reason, MUSE disallows processes that have output commodities with differing units.*
+For this reason, MUSE2 disallows processes that have output commodities with differing units.*
 
 The final full cost of output commodity \\( c \\) is:
 \\[
