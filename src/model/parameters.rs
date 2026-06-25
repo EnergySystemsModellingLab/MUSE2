@@ -5,7 +5,7 @@
 //! ranges and invariants for runtime use.
 use crate::asset::check_capacity_valid_for_asset;
 use crate::input::{input_err_msg, is_sorted_and_unique, read_toml};
-use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
+use crate::units::{Activity, Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 use log::warn;
@@ -93,6 +93,8 @@ pub struct ModelParameters {
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
     pub remaining_demand_absolute_tolerance: Flow,
+    /// Factor used to define the default `capacity_granularity` for processes
+    pub default_capacity_granularity_factor: Activity,
     /// Options for the HiGHS solver.
     ///
     /// For a full list of options, see [the HiGHS documentation].
@@ -117,6 +119,7 @@ impl Default for ModelParameters {
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+            default_capacity_granularity_factor: Activity(10.0),
             highs: HighsOptions::default(),
         }
     }
@@ -267,6 +270,15 @@ fn check_capacity_margin(value: Dimensionless) -> Result<()> {
     Ok(())
 }
 
+fn check_default_capacity_granularity_factor(value: Activity) -> Result<()> {
+    ensure!(
+        value.is_finite() && value > Activity(0.0),
+        "default_capacity_granularity_factor must be a finite number greater than zero"
+    );
+
+    Ok(())
+}
+
 /// Check the custom HiGHS options are valid.
 ///
 /// Note that we cannot know whether the options specified exist and are of the correct type until
@@ -323,6 +335,10 @@ impl ModelParameters {
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
             .context("Invalid value for candidate_asset_capacity")?;
+
+        // default_capacity_granularity_factor
+        check_default_capacity_granularity_factor(self.default_capacity_granularity_factor)
+            .context("Invalid value for default_capacity_granularity_factor")?;
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;

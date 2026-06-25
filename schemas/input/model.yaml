@@ -15,6 +15,13 @@ properties:
     default: 0.0001
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
+  default_capacity_granularity_factor:
+    type: number
+    description: Factor used to define the default `capacity_granularity`
+    default: 10
+    notes: |
+      For processes where `capacity_granularity` is unspecified, the default value is calculated as
+      `default_capacity_granularity_factor / capacity_to_activity`.
   value_of_lost_load:
     type: number
     description: The cost applied to unmet demand

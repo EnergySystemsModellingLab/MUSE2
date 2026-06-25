@@ -61,8 +61,15 @@ pub fn read_processes(
     region_ids: &IndexSet<RegionID>,
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
+    default_capacity_granularity_factor: Activity,
 ) -> Result<ProcessMap> {
-    let mut processes = read_processes_file(model_dir, milestone_years, region_ids, commodities)?;
+    let mut processes = read_processes_file(
+        model_dir,
+        milestone_years,
+        region_ids,
+        commodities,
+        default_capacity_granularity_factor,
+    )?;
     let mut activity_limits = read_process_availabilities(model_dir, &processes, time_slice_info)?;
     let mut flows = read_process_flows(model_dir, &mut processes, commodities, milestone_years)?;
     let mut parameters = read_process_parameters(model_dir, &processes, milestone_years)?;
@@ -89,11 +96,18 @@ fn read_processes_file(
     milestone_years: &[u32],
     region_ids: &IndexSet<RegionID>,
     commodities: &CommodityMap,
+    default_capacity_granularity_factor: Activity,
 ) -> Result<ProcessMap> {
     let file_path = model_dir.join(PROCESSES_FILE_NAME);
     let processes_csv = read_csv(&file_path)?;
-    read_processes_file_from_iter(processes_csv, milestone_years, region_ids, commodities)
-        .with_context(|| input_err_msg(&file_path))
+    read_processes_file_from_iter(
+        processes_csv,
+        milestone_years,
+        region_ids,
+        commodities,
+        default_capacity_granularity_factor,
+    )
+    .with_context(|| input_err_msg(&file_path))
 }
 
 fn read_processes_file_from_iter<I>(
@@ -101,6 +115,7 @@ fn read_processes_file_from_iter<I>(
     milestone_years: &[u32],
     region_ids: &IndexSet<RegionID>,
     commodities: &CommodityMap,
+    default_capacity_granularity_factor: Activity,
 ) -> Result<ProcessMap>
 where
     I: Iterator<Item = ProcessRaw>,
@@ -157,10 +172,11 @@ where
         // is_divisible defaults to false if not specified
         let is_divisible = process_raw.is_divisible.unwrap_or(false);
 
-        // Capacity granularity defaults to 10 / capacity_to_activity if not specified
+        // Capacity granularity defaults to
+        // `default_capacity_granularity_factor / capacity_to_activity` if not specified
         let capacity_granularity = process_raw
             .capacity_granularity
-            .unwrap_or_else(|| Activity(10.0) / capacity_to_activity);
+            .unwrap_or_else(|| default_capacity_granularity_factor / capacity_to_activity);
 
         // Validate capacity_granularity
         ensure!(

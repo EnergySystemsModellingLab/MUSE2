@@ -37,7 +37,8 @@ fields:
     description:
       The minimum capacity increment that can be invested in for this process. Reducing this value
       allows for more precise capacities, but can slow down the simulation.
-    notes: Must be >0. Optional (defaults to 10 / capacity_to_activity).
+    notes: Must be >0. Optional (defaults to
+      default_capacity_granularity_factor / capacity_to_activity).
   - name: is_divisible
     type: boolean
     description:
