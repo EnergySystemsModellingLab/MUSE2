@@ -859,7 +859,7 @@ fn select_best_assets(
         )?;
 
         // Sort by investment priority and discard non-feasible options
-        sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
+        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
         // If none of the remaining options are feasible, we terminate the loop. We may still be
         // able to meet the full demands with assets selected so far, so we continue anyway with a
@@ -867,9 +867,9 @@ fn select_best_assets(
         if outputs_for_opts.is_empty() {
             warn!(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
-                year '{}', agent '{}'. No additional feasible investments were identified. \
+                year '{}', agent '{}'. {} non-feasible investments were not considered. \
                 This unmet demand may still be satisfied during the full system dispatch.",
-                &commodity.id, region_id, year, agent.id,
+                &commodity.id, region_id, year, agent.id, num_nonfeasible
             );
             break;
         }

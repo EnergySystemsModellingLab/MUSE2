@@ -551,14 +551,46 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,peak.day,5.8665369
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,peak.peak,5.8665369
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,peak.evening,5.8665369
-2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.night,2.5119800000000003
-2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.day,2.5119800000000003
-2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.peak,2.5119800000000003
-2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.evening,2.5119800000000003
+2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,summer.evening,0.30200000000000005
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,autumn.night,5.8665369
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,autumn.day,5.8665369
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,autumn.peak,5.8665369
 2040,ironing out iteration 0; post RSHEAT|GBR investment,RSHEAT,GBR,autumn.evening,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,winter.night,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,winter.day,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,winter.peak,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,winter.evening,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,peak.night,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,peak.day,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,peak.peak,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,peak.evening,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,summer.evening,0.30200000000000005
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,autumn.night,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,autumn.day,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,autumn.peak,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,RSHEAT,GBR,autumn.evening,5.8665369
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,winter.night,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,winter.day,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,winter.peak,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,winter.evening,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,peak.night,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,peak.day,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,peak.peak,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,peak.evening,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,summer.night,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,summer.day,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,summer.peak,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,summer.evening,0.4
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,autumn.night,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,autumn.day,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,autumn.peak,7.993308999999999
+2040,ironing out iteration 0; post ELCTRI|GBR investment,ELCTRI,GBR,autumn.evening,7.993308999999999
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,winter.night,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,winter.day,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,winter.peak,5.8665369
@@ -567,14 +599,30 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,peak.day,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,peak.peak,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,peak.evening,5.8665369
-2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.night,3.2045790000000003
-2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.day,3.2045790000000003
-2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.peak,3.2045790000000003
-2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.evening,3.2045790000000003
+2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,summer.evening,0.30200000000000005
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,autumn.night,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,autumn.day,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,autumn.peak,5.8665369
 2040,ironing out iteration 0; post GASNAT|GBR investment,RSHEAT,GBR,autumn.evening,5.8665369
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,winter.night,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,winter.day,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,winter.peak,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,winter.evening,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,peak.night,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,peak.day,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,peak.peak,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,peak.evening,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,summer.night,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,summer.day,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,summer.peak,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,summer.evening,0.4
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,autumn.night,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,autumn.day,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,autumn.peak,7.993308999999999
+2040,ironing out iteration 0; post GASNAT|GBR investment,ELCTRI,GBR,autumn.evening,7.993308999999999
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,winter.night,2.9170059999999998
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,winter.day,2.9170059999999998
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,winter.peak,2.9170059999999998
@@ -583,10 +631,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,peak.day,2.9170059999999998
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,peak.peak,2.9170059999999998
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,peak.evening,2.9170059999999998
-2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.night,0.60226
-2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.day,0.60226
-2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.peak,0.60226
-2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.evening,0.60226
+2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.night,-0.0
+2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.day,-0.0
+2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,autumn.night,2.9170059999999998
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,autumn.day,2.9170059999999998
 2040,ironing out iteration 0; post GASNAT|GBR investment,GASNAT,GBR,autumn.peak,2.9170059999999998
@@ -599,14 +647,30 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,peak.day,5.8665369
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,peak.peak,5.8665369
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,peak.evening,5.8665369
-2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.night,5.8665369
-2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.day,5.8665369
-2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.peak,5.8665369
-2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.evening,5.8665369
+2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,summer.evening,0.30200000000000005
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,autumn.night,5.8665369
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,autumn.day,5.8665369
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,autumn.peak,5.8665369
 2040,ironing out iteration 0; post GASPRD|GBR investment,RSHEAT,GBR,autumn.evening,5.8665369
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.night,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.day,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.peak,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,winter.evening,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.night,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.day,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.peak,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,peak.evening,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,summer.night,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,summer.day,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,summer.peak,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,summer.evening,0.4
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,autumn.night,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,autumn.day,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,autumn.peak,7.993308999999999
+2040,ironing out iteration 0; post GASPRD|GBR investment,ELCTRI,GBR,autumn.evening,7.993308999999999
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,winter.night,2.9170059999999998
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,winter.day,2.9170059999999998
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,winter.peak,2.9170059999999998
@@ -615,10 +679,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,peak.day,2.9170059999999998
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,peak.peak,2.9170059999999998
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,peak.evening,2.9170059999999998
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.night,2.9170059999999998
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.day,2.9170059999999998
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.peak,2.9170059999999998
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.evening,2.9170059999999998
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.night,-0.0
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.day,-0.0
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,autumn.night,2.9170059999999998
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,autumn.day,2.9170059999999998
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASNAT,GBR,autumn.peak,2.9170059999999998
@@ -631,10 +695,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,peak.day,2.20452
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,peak.peak,2.20452
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,peak.evening,2.20452
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.night,2.20452
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.day,2.20452
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.peak,2.20452
-2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.evening,2.20452
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.night,-0.0
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.day,-0.0
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,autumn.night,2.20452
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,autumn.day,2.20452
 2040,ironing out iteration 0; post GASPRD|GBR investment,GASPRD,GBR,autumn.peak,2.20452
@@ -647,10 +711,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; final without candidates,GASPRD,GBR,peak.day,2.20452
 2040,ironing out iteration 0; final without candidates,GASPRD,GBR,peak.peak,2.20452
 2040,ironing out iteration 0; final without candidates,GASPRD,GBR,peak.evening,2.20452
-2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.night,2.20452
-2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.day,2.20452
-2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.peak,2.20452
-2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.evening,2.20452
+2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.night,-0.0
+2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.day,-0.0
+2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; final without candidates,GASPRD,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; final without candidates,GASPRD,GBR,autumn.night,2.20452
 2040,ironing out iteration 0; final without candidates,GASPRD,GBR,autumn.day,2.20452
 2040,ironing out iteration 0; final without candidates,GASPRD,GBR,autumn.peak,2.20452
@@ -663,14 +727,30 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,peak.day,2.9170059999999998
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,peak.peak,2.9170059999999998
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,peak.evening,2.9170059999999998
-2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.night,2.9170059999999998
-2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.day,2.9170059999999998
-2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.peak,2.9170059999999998
-2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.evening,2.9170059999999998
+2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.night,-0.0
+2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.day,-0.0
+2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; final without candidates,GASNAT,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,autumn.night,2.9170059999999998
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,autumn.day,2.9170059999999998
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,autumn.peak,2.9170059999999998
 2040,ironing out iteration 0; final without candidates,GASNAT,GBR,autumn.evening,2.9170059999999998
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.night,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.day,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.peak,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,winter.evening,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.night,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.day,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.peak,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,peak.evening,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,summer.night,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,summer.day,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,summer.peak,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,summer.evening,0.4
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,autumn.night,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,autumn.day,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,autumn.peak,7.993308999999999
+2040,ironing out iteration 0; final without candidates,ELCTRI,GBR,autumn.evening,7.993308999999999
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,winter.night,5.8665369
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,winter.day,5.8665369
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,winter.peak,5.8665369
@@ -679,10 +759,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,peak.day,5.8665369
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,peak.peak,5.8665369
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,peak.evening,5.8665369
-2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.night,5.8665369
-2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.day,5.8665369
-2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.peak,5.8665369
-2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.evening,5.8665369
+2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,summer.evening,0.30200000000000005
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,autumn.night,5.8665369
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,autumn.day,5.8665369
 2040,ironing out iteration 0; final without candidates,RSHEAT,GBR,autumn.peak,5.8665369
@@ -695,10 +775,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; final with candidates,GASPRD,GBR,peak.day,2.20452
 2040,ironing out iteration 0; final with candidates,GASPRD,GBR,peak.peak,2.20452
 2040,ironing out iteration 0; final with candidates,GASPRD,GBR,peak.evening,2.20452
-2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.night,2.20452
-2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.day,2.20452
-2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.peak,2.20452
-2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.evening,2.20452
+2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.night,-0.0
+2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.day,-0.0
+2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; final with candidates,GASPRD,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; final with candidates,GASPRD,GBR,autumn.night,2.20452
 2040,ironing out iteration 0; final with candidates,GASPRD,GBR,autumn.day,2.20452
 2040,ironing out iteration 0; final with candidates,GASPRD,GBR,autumn.peak,2.20452
@@ -711,30 +791,30 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,peak.day,2.9170059999999998
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,peak.peak,2.9170059999999998
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,peak.evening,2.9170059999999998
-2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.night,2.9170059999999998
-2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.day,2.9170059999999998
-2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.peak,2.9170059999999998
-2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.evening,2.9170059999999998
+2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.night,-0.0
+2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.day,-0.0
+2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.peak,-0.0
+2040,ironing out iteration 0; final with candidates,GASNAT,GBR,summer.evening,-0.0
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,autumn.night,2.9170059999999998
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,autumn.day,2.9170059999999998
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,autumn.peak,2.9170059999999998
 2040,ironing out iteration 0; final with candidates,GASNAT,GBR,autumn.evening,2.9170059999999998
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,winter.night,0.4
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,winter.night,7.993308999999999
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,winter.day,0.4
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,winter.peak,0.4
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,winter.evening,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.night,0.4
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.night,7.993308999999999
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.day,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.peak,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.evening,0.4
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.peak,7.993308999999999
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,peak.evening,7.993308999999999
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,summer.night,0.4
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,summer.day,0.4
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,summer.peak,0.4
 2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,summer.evening,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.night,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.day,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.peak,0.4
-2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.evening,0.4
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.night,7.993308999999999
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.day,7.993308999999999
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.peak,7.993308999999999
+2040,ironing out iteration 0; final with candidates,ELCTRI,GBR,autumn.evening,7.993308999999999
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,winter.night,5.8665369
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,winter.day,5.8665369
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,winter.peak,5.8665369
@@ -743,10 +823,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,peak.day,5.8665369
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,peak.peak,5.8665369
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,peak.evening,5.8665369
-2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.night,5.8665369
-2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.day,5.8665369
-2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.peak,5.8665369
-2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.evening,5.8665369
+2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.evening,0.30200000000000005
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,autumn.night,5.8665369
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,autumn.day,5.8665369
 2040,ironing out iteration 0; final with candidates,RSHEAT,GBR,autumn.peak,5.8665369
@@ -759,10 +839,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,final without candidates,GASPRD,GBR,peak.day,2.20452
 2040,final without candidates,GASPRD,GBR,peak.peak,2.20452
 2040,final without candidates,GASPRD,GBR,peak.evening,2.20452
-2040,final without candidates,GASPRD,GBR,summer.night,2.20452
-2040,final without candidates,GASPRD,GBR,summer.day,2.20452
-2040,final without candidates,GASPRD,GBR,summer.peak,2.20452
-2040,final without candidates,GASPRD,GBR,summer.evening,2.20452
+2040,final without candidates,GASPRD,GBR,summer.night,-0.0
+2040,final without candidates,GASPRD,GBR,summer.day,-0.0
+2040,final without candidates,GASPRD,GBR,summer.peak,-0.0
+2040,final without candidates,GASPRD,GBR,summer.evening,-0.0
 2040,final without candidates,GASPRD,GBR,autumn.night,2.20452
 2040,final without candidates,GASPRD,GBR,autumn.day,2.20452
 2040,final without candidates,GASPRD,GBR,autumn.peak,2.20452
@@ -775,14 +855,30 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,final without candidates,GASNAT,GBR,peak.day,2.9170059999999998
 2040,final without candidates,GASNAT,GBR,peak.peak,2.9170059999999998
 2040,final without candidates,GASNAT,GBR,peak.evening,2.9170059999999998
-2040,final without candidates,GASNAT,GBR,summer.night,2.9170059999999998
-2040,final without candidates,GASNAT,GBR,summer.day,2.9170059999999998
-2040,final without candidates,GASNAT,GBR,summer.peak,2.9170059999999998
-2040,final without candidates,GASNAT,GBR,summer.evening,2.9170059999999998
+2040,final without candidates,GASNAT,GBR,summer.night,-0.0
+2040,final without candidates,GASNAT,GBR,summer.day,-0.0
+2040,final without candidates,GASNAT,GBR,summer.peak,-0.0
+2040,final without candidates,GASNAT,GBR,summer.evening,-0.0
 2040,final without candidates,GASNAT,GBR,autumn.night,2.9170059999999998
 2040,final without candidates,GASNAT,GBR,autumn.day,2.9170059999999998
 2040,final without candidates,GASNAT,GBR,autumn.peak,2.9170059999999998
 2040,final without candidates,GASNAT,GBR,autumn.evening,2.9170059999999998
+2040,final without candidates,ELCTRI,GBR,winter.night,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,winter.day,0.4
+2040,final without candidates,ELCTRI,GBR,winter.peak,0.4
+2040,final without candidates,ELCTRI,GBR,winter.evening,0.4
+2040,final without candidates,ELCTRI,GBR,peak.night,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,peak.day,0.4
+2040,final without candidates,ELCTRI,GBR,peak.peak,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,peak.evening,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,summer.night,0.4
+2040,final without candidates,ELCTRI,GBR,summer.day,0.4
+2040,final without candidates,ELCTRI,GBR,summer.peak,0.4
+2040,final without candidates,ELCTRI,GBR,summer.evening,0.4
+2040,final without candidates,ELCTRI,GBR,autumn.night,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,autumn.day,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,autumn.peak,7.993308999999999
+2040,final without candidates,ELCTRI,GBR,autumn.evening,7.993308999999999
 2040,final without candidates,RSHEAT,GBR,winter.night,5.8665369
 2040,final without candidates,RSHEAT,GBR,winter.day,5.8665369
 2040,final without candidates,RSHEAT,GBR,winter.peak,5.8665369
@@ -791,10 +887,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2040,final without candidates,RSHEAT,GBR,peak.day,5.8665369
 2040,final without candidates,RSHEAT,GBR,peak.peak,5.8665369
 2040,final without candidates,RSHEAT,GBR,peak.evening,5.8665369
-2040,final without candidates,RSHEAT,GBR,summer.night,5.8665369
-2040,final without candidates,RSHEAT,GBR,summer.day,5.8665369
-2040,final without candidates,RSHEAT,GBR,summer.peak,5.8665369
-2040,final without candidates,RSHEAT,GBR,summer.evening,5.8665369
+2040,final without candidates,RSHEAT,GBR,summer.night,0.30200000000000005
+2040,final without candidates,RSHEAT,GBR,summer.day,0.30200000000000005
+2040,final without candidates,RSHEAT,GBR,summer.peak,0.30200000000000005
+2040,final without candidates,RSHEAT,GBR,summer.evening,0.30200000000000005
 2040,final without candidates,RSHEAT,GBR,autumn.night,5.8665369
 2040,final without candidates,RSHEAT,GBR,autumn.day,5.8665369
 2040,final without candidates,RSHEAT,GBR,autumn.peak,5.8665369

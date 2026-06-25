@@ -21,7 +21,7 @@ use crate::simulation::investment::appraisal::{
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
+    MoneyPerCapacity, MoneyPerCapacityPerYear, Year,
 };
 use anyhow::Result;
 use indexmap::indexmap;
@@ -75,7 +75,7 @@ pub(crate) use patch_and_validate_simple;
 /// Check whether validation succeeds for simple example with patches
 macro_rules! assert_validate_ok_simple {
     ($file_patches:expr) => {
-        assert!(crate::fixture::patch_and_validate_simple!($file_patches).is_ok())
+        crate::fixture::patch_and_validate_simple!($file_patches).unwrap();
     };
 }
 pub(crate) use assert_validate_ok_simple;
@@ -116,7 +116,7 @@ pub(crate) use patch_and_run_simple;
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! assert_patched_runs_ok_simple {
     ($file_patches:expr) => {
-        assert!(crate::fixture::patch_and_run_simple!($file_patches).is_ok())
+        crate::fixture::patch_and_run_simple!($file_patches).unwrap();
     };
 }
 pub(crate) use assert_patched_runs_ok_simple;
@@ -408,10 +408,8 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
         asset: AssetRef::from(asset),
         capacity: AssetCapacity::Continuous(Capacity(42.0)),
         coefficients: Rc::new(ObjectiveCoefficients {
-            capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
             market_costs,
-            unmet_demand_coefficient: MoneyPerFlow(10000.0),
         }),
         activity,
         unmet_demand,

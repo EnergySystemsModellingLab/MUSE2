@@ -8,9 +8,7 @@ use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
-use crate::units::{
-    Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow,
-};
+use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
@@ -261,7 +259,6 @@ struct AppraisalResultsRow {
     process_id: ProcessID,
     region_id: RegionID,
     capacity: Capacity,
-    capacity_coefficient: MoneyPerCapacity,
     metric: Option<f64>,
 }
 
@@ -490,7 +487,6 @@ impl DebugDataWriter {
                 process_id: result.asset.process_id().clone(),
                 region_id: result.asset.region_id().clone(),
                 capacity: result.capacity.total_capacity(),
-                capacity_coefficient: result.coefficients.capacity_coefficient,
                 metric: result.metric.as_ref().map(|m| m.value()),
             };
             self.appraisal_results_writer.serialize(row)?;
@@ -1188,7 +1184,6 @@ mod tests {
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             capacity: Capacity(42.0),
-            capacity_coefficient: MoneyPerCapacity(2.14),
             metric: Some(4.14),
         };
         let records: Vec<AppraisalResultsRow> =

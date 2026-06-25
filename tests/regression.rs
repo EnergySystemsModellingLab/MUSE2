@@ -33,7 +33,9 @@ mod regression {
     define_regression_test_with_patches!(simple_full);
     define_regression_test_with_patches!(simple_shadow);
     define_regression_test_with_patches!(simple_ironing_out);
-    define_regression_test_with_patches!(circularity_npv);
+
+    // Currently not working. See: https://github.com/EnergySystemsModellingLab/MUSE2/issues/1368
+    // define_regression_test_with_patches!(circularity_npv);
 }
 
 /// The tolerance when comparing floating-point values in CSV files

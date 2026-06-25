@@ -17,6 +17,7 @@ ready to be released, carry out the following steps:
 ## New features
 
 - Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver ([#1276])
+- Implement a new appraisal approach for the LCOX objective type ([#1319])
 
 ## Breaking changes
 
@@ -36,4 +37,5 @@ ready to be released, carry out the following steps:
 [#1276]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1276
 [#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
 [#1293]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1293
+[#1319]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1319
 [#1349]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1349
