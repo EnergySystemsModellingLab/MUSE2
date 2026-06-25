@@ -69,10 +69,10 @@ pub fn perform_agent_investment(
     // markets that have been seen so far.
     let mut seen_markets = Vec::new();
 
-    // Iterate over investment sets in the investment order for this year
-    for investment_set in investment_order {
-        // Select assets for this investment set
-        let selected_assets = investment_set.select_assets(
+    // Iterate over market sets in the investment order for this year
+    for market_set in investment_order {
+        // Select assets for this market set
+        let selected_assets = market_set.select_assets(
             model,
             year,
             &net_demand,
@@ -84,7 +84,7 @@ pub fn perform_agent_investment(
         )?;
 
         // Update our list of seen markets
-        for market in investment_set.iter_markets() {
+        for market in market_set.iter_markets() {
             seen_markets.push(market.clone());
         }
 
@@ -92,7 +92,7 @@ pub fn perform_agent_investment(
         // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
         if selected_assets.is_empty() {
-            debug!("No assets selected for '{investment_set}'");
+            debug!("No assets selected for '{market_set}'");
             continue;
         }
 
@@ -102,14 +102,14 @@ pub fn perform_agent_investment(
         // Perform dispatch optimisation with assets that have been selected so far
         // **TODO**: presumably we only need to do this for selected_assets, as assets added in
         // previous iterations should not change
-        debug!("Running post-investment dispatch for '{investment_set}'");
+        debug!("Running post-investment dispatch for '{market_set}'");
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
         let solution = DispatchRun::new(model, &all_selected_assets, year)
             .with_market_balance_subset(&seen_markets)
             .with_input_prices(&prices.shadow)
-            .run(&format!("post {investment_set} investment"), writer)?;
+            .run(&format!("post {market_set} investment"), writer)?;
 
         // Update demand map with flows from newly added assets
         update_net_demand_map(

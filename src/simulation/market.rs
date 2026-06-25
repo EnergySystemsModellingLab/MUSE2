@@ -44,7 +44,7 @@ impl MarketSet {
         }
     }
 
-    /// Selects assets for this investment set variant and passes through the shared
+    /// Selects assets for this market set variant and passes through the shared
     /// context needed by single-market, cycle, or layered selection.
     ///
     /// # Arguments
@@ -55,7 +55,7 @@ impl MarketSet {
     /// * `existing_assets` – Assets already commissioned in the system.
     /// * `prices` – Commodity price assumptions to use when valuing investments.
     /// * `seen_markets` – Markets for which investments have already been settled.
-    /// * `previously_selected_assets` – Assets chosen in earlier investment sets.
+    /// * `previously_selected_assets` – Assets chosen in earlier market sets.
     /// * `writer` – Data sink used to log optimisation artefacts.
     #[allow(clippy::too_many_arguments)]
     pub fn select_assets(
