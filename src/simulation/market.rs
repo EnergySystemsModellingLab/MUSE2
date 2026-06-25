@@ -1,31 +1,24 @@
 //! Code for creating sets of markets.
 use super::optimisation::DispatchRun;
 use crate::agent::Agent;
-use crate::asset::{AssetRef, AssetState};
-use crate::commodity::CommodityID;
+use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
+use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
+use crate::simulation::investment::{
+    AllDemandMap, DemandMap, get_demand_limiting_capacity, select_best_assets,
+    update_net_demand_map,
+};
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Dimensionless, Flow};
+use crate::time_slice::TimeSliceInfo;
+use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
-use itertools::Itertools;
+use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::HashMap;
 use std::fmt::Display;
-
-use crate::simulation::investment::{
-    collect_investment_limits_for_candidates, get_asset_options, select_best_assets,
-    update_net_demand_map,
-};
-
-/// A map of demand across time slices for a specific market
-type DemandMap = IndexMap<TimeSliceID, Flow>;
-
-/// Demand for a given combination of commodity, region and time slice
-type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 
 /// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
@@ -150,6 +143,89 @@ impl Display for MarketSet {
             }
         }
     }
+}
+
+/// Investment limits are based on any annual addition limits specified by the process, scaled
+/// according to the agent's portion of the commodity demand and the number of years elapsed since
+/// the previous milestone year.
+pub fn collect_investment_limits_for_candidates(
+    opt_assets: &[AssetRef],
+    commodity_portion: Dimensionless,
+) -> HashMap<AssetRef, AssetCapacity> {
+    opt_assets
+        .iter()
+        .filter(|asset| !asset.is_commissioned())
+        .filter_map(|asset| {
+            asset
+                .max_installable_capacity(commodity_portion)
+                .map(|limit_capacity| (asset.clone(), limit_capacity))
+        })
+        .collect()
+}
+
+/// Get candidate assets which produce a particular commodity for a given agent
+///
+/// Capacities of candidate assets are set to the demand-limiting capacity for the given market,
+/// scaled by the `capacity_limit_factor`.
+fn get_candidate_assets<'a>(
+    time_slice_info: &'a TimeSliceInfo,
+    demand: &'a DemandMap,
+    agent: &'a Agent,
+    region_id: &'a RegionID,
+    commodity: &'a Commodity,
+    year: u32,
+    capacity_limit_factor: Dimensionless,
+) -> impl Iterator<Item = AssetRef> + 'a {
+    agent
+        .iter_search_space(region_id, &commodity.id, year)
+        .map(move |process| {
+            let mut asset =
+                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
+                    .unwrap();
+
+            // Set capacity based on demand
+            // This will serve as the upper limit when appraising the asset
+            let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
+            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size())
+                .apply_limit_factor(capacity_limit_factor);
+            asset.set_capacity(asset_capacity);
+
+            asset.into()
+        })
+}
+
+/// Get options from existing and potential assets for the given parameters
+#[allow(clippy::too_many_arguments)]
+fn get_asset_options<'a>(
+    time_slice_info: &'a TimeSliceInfo,
+    all_existing_assets: &'a [AssetRef],
+    demand: &'a DemandMap,
+    agent: &'a Agent,
+    commodity: &'a Commodity,
+    region_id: &'a RegionID,
+    year: u32,
+    capacity_limit_factor: Dimensionless,
+) -> impl Iterator<Item = AssetRef> + 'a {
+    // Get existing assets which produce the commodity of interest
+    let existing_assets = all_existing_assets
+        .iter()
+        .filter_agent(&agent.id)
+        .filter_region(region_id)
+        .filter_primary_producers_of(&commodity.id)
+        .cloned();
+
+    // Get candidates assets which produce the commodity of interest
+    let candidate_assets = get_candidate_assets(
+        time_slice_info,
+        demand,
+        agent,
+        region_id,
+        commodity,
+        year,
+        capacity_limit_factor,
+    );
+
+    chain(existing_assets, candidate_assets)
 }
 
 /// Select assets for a single market in a given year
@@ -399,4 +475,110 @@ where
 
         Some((agent, *portion))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::AgentID;
+    use crate::fixture::{
+        agent_id, process, process_activity_limits_map, process_flows_map,
+        process_investment_constraints, process_parameter_map, region_id,
+    };
+    use crate::process::{
+        Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessInvestmentConstraint,
+        ProcessInvestmentConstraintsMap, ProcessParameterMap,
+    };
+    use crate::region::RegionID;
+    use crate::units::Dimensionless;
+    use crate::units::{ActivityPerCapacity, Capacity};
+    use indexmap::IndexSet;
+    use rstest::rstest;
+    use std::rc::Rc;
+
+
+    #[rstest]
+    fn collect_investment_limits_for_candidates_empty_list() {
+        let result = collect_investment_limits_for_candidates(&[], Dimensionless(1.0));
+        assert!(result.is_empty());
+    }
+
+    #[fixture]
+    fn commissioned_asset(asset: Asset) -> AssetRef {
+        asset.into()
+    }
+
+    #[fixture]
+    fn uncommissioned_asset_without_limit(process: Process, region_id: RegionID) -> AssetRef {
+        Asset::new_candidate(Rc::new(process), region_id, Capacity(10.0), 2015)
+            .unwrap()
+            .into()
+    }
+
+    #[fixture]
+    fn uncommissioned_asset_with_limit(
+        region_id: RegionID,
+        process_activity_limits_map: ProcessActivityLimitsMap,
+        process_flows_map: ProcessFlowsMap,
+        process_parameter_map: ProcessParameterMap,
+    ) -> AssetRef {
+        let region_ids: IndexSet<RegionID> = [region_id.clone()].into();
+
+        let mut constraints = ProcessInvestmentConstraintsMap::new();
+
+        constraints.insert(
+            (region_id.clone(), 2015),
+            Rc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(Capacity(10.0)),
+            }),
+        );
+
+        let process = Process {
+            id: "constrained_process".into(),
+            description: String::new(),
+            years: 2010..=2020,
+            activity_limits: process_activity_limits_map,
+            flows: process_flows_map,
+            parameters: process_parameter_map,
+            regions: region_ids,
+            primary_output: None,
+            capacity_to_activity: ActivityPerCapacity(1.0),
+            investment_constraints: constraints,
+            unit_size: None,
+        };
+
+        Asset::new_candidate(Rc::new(process), region_id, Capacity(15.0), 2015)
+            .unwrap()
+            .into()
+    }
+
+    #[rstest]
+    fn commissioned_assets_are_excluded(commissioned_asset: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&commissioned_asset),
+            Dimensionless(1.0),
+        );
+
+        assert!(!result.contains_key(&commissioned_asset));
+    }
+
+    #[rstest]
+    fn candidate_assets_without_limits_are_excluded(uncommissioned_asset_without_limit: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&uncommissioned_asset_without_limit),
+            Dimensionless(1.0),
+        );
+
+        assert!(!result.contains_key(&uncommissioned_asset_without_limit));
+    }
+
+    #[rstest]
+    fn candidate_assets_with_limits_are_included(uncommissioned_asset_with_limit: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&uncommissioned_asset_with_limit),
+            Dimensionless(1.0),
+        );
+
+        assert!(result.contains_key(&uncommissioned_asset_with_limit));
+    }
 }
