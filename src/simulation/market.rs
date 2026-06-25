@@ -30,13 +30,12 @@ type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 /// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum MarketSet {
-    /// Assets are selected for a single market using `select_assets_for_single_market`
+    /// Assets are selected for a single market using [`select_assets_for_single_market`]
     Single((CommodityID, RegionID)),
     /// Assets are selected for a group of markets which forms a cycle.
-    /// Experimental: handled by `select_assets_for_cycle` and guarded by the broken options
-    /// parameter.
+    /// Experimental: handled by [`select_assets_for_cycle`]. May not work in every case.
     Cycle(Vec<(CommodityID, RegionID)>),
-    /// Assets are selected for a layer of independent `MarketSet`s
+    /// Assets are selected for a layer of independent [`MarketSet`]s
     Layer(Vec<MarketSet>),
 }
 
