@@ -88,8 +88,13 @@ other.
 *Service Demands* or specific *Commodity* production. For example, the residential sector, the power
 sector, etc.
 
-**Service Demand:** A Service Demand is a type of commodity that is consumed at the boundary of the
-modelled system. For example, tonne-kilometers of road freight, PJ of useful heat demand, etc.
+**Service Demand (SVD):** A Service Demand is a type of commodity that is consumed at the boundary
+of the modelled system. For example, tonne-kilometers of road freight, PJ of useful heat demand,
+etc.
+
+**Supply Equals Demand (SED):**: An SED commodity is a type of commodity that is both consumed and
+produced by processes in the system. In fully resolved systems, supply of these commodities is
+constrained to be equal to or greater than demand.
 
 **Discount Rate:** The discount rate used to calculate any process-specific agent economic
 objectives that require a discount rate. For example, Equivalent Annual Cost, Net Present Value,
