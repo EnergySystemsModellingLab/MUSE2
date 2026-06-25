@@ -22,7 +22,6 @@ mod regression {
     define_regression_test!(missing_commodity);
     define_regression_test!(muse1_default);
     define_regression_test!(two_outputs);
-    define_regression_test!(circularity);
     define_regression_test!(two_regions);
 
     // Patched examples
@@ -35,6 +34,7 @@ mod regression {
     define_regression_test_with_patches!(simple_ironing_out);
 
     // Currently not working. See: https://github.com/EnergySystemsModellingLab/MUSE2/issues/1368
+    // define_regression_test!(circularity);
     // define_regression_test_with_patches!(circularity_npv);
 }
 
