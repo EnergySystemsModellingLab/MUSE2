@@ -1,9 +1,9 @@
 //! Code for calculating commodity prices used by the simulation.
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
-use crate::input::try_insert;
 use crate::model::Model;
 use crate::region::RegionID;
+use crate::simulation::investment::InvestmentSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
@@ -11,6 +11,9 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
+
+/// Number of iterations to perform when calculating prices for cyclically-dependent markets.
+const N_CYCLE_ITERATIONS: i32 = 1;
 
 /// Weighted average accumulator for `MoneyPerFlow` prices.
 #[derive(Clone, Copy, Debug)]
@@ -82,6 +85,15 @@ impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
     }
 }
 
+/// Sets of prices calculated from dispatch results
+#[derive(Default)]
+pub struct Prices {
+    /// Commodity market prices calculated according to user-specified strategies
+    pub market: PriceMap,
+    /// Commodity shadow prices
+    pub shadow: PriceMap,
+}
+
 /// Calculate commodity prices.
 ///
 /// Calculate prices for each commodity/region/time-slice according to the commodity's configured
@@ -95,134 +107,254 @@ impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
 ///
 /// # Returns
 ///
-/// A `CommodityPrices` mapping `(commodity, region, time_slice)` to `MoneyPerFlow` representing
-/// endogenous prices computed from the optimisation solution.
-pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<CommodityPrices> {
+/// Market prices for commodities as well as shadow prices.
+pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result<Prices> {
     // Collect shadow prices for all SED/SVD commodities
-    let shadow_prices = CommodityPrices::from_iter(solution.iter_commodity_balance_duals());
+    let shadow_prices = PriceMap::from_iter(solution.iter_commodity_balance_duals());
 
     // Set up empty prices map
-    let mut result = CommodityPrices::default();
+    let mut market_prices = PriceMap::default();
 
     // Lazily computed only if at least one FullCost market is encountered.
     let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
 
-    // Get investment order for the year - prices will be calculated in the reverse of this order
-    let investment_order = &model.investment_order[&year];
+    // Iterate over investment sets in reverse order
+    for investment_set in model.investment_order[&year].iter().rev() {
+        price_investment_set(
+            investment_set,
+            model,
+            solution,
+            year,
+            &shadow_prices,
+            &mut annual_activities,
+            &mut market_prices,
+        );
+    }
 
-    // Iterate over investment sets in reverse order. Markets within the same set can be priced
-    // simultaneously, since they are independent (apart from Cycle sets when using cost-based
-    // pricing strategies, which get flagged at the validation stage).
-    for investment_set in investment_order.iter().rev() {
-        // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
-        // For now, commodities use a single strategy for all regions, but this may change in the future.
-        let mut pricing_sets = HashMap::new();
-        for (commodity_id, region_id) in investment_set.iter_markets() {
-            let commodity = &model.commodities[commodity_id];
-            if commodity.pricing_strategy == PricingStrategy::Unpriced {
-                continue;
-            }
-            pricing_sets
-                .entry(&commodity.pricing_strategy)
-                .or_insert_with(HashSet::new)
-                .insert((commodity_id.clone(), region_id.clone()));
+    Ok(Prices {
+        market: market_prices,
+        shadow: shadow_prices,
+    })
+}
+
+/// Calculate prices for the markets in an investment set, updating `market_prices`.
+fn price_investment_set(
+    investment_set: &InvestmentSet,
+    model: &Model,
+    solution: &Solution,
+    year: u32,
+    shadow_prices: &PriceMap,
+    annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
+    market_prices: &mut PriceMap,
+) {
+    match investment_set {
+        InvestmentSet::Single(market) => {
+            price_markets(
+                model,
+                solution,
+                year,
+                std::slice::from_ref(market),
+                shadow_prices,
+                annual_activities,
+                market_prices,
+            );
         }
+        InvestmentSet::Cycle(markets) => {
+            price_cycle(
+                model,
+                solution,
+                year,
+                markets,
+                shadow_prices,
+                annual_activities,
+                market_prices,
+            );
+        }
+        InvestmentSet::Layer(investment_sets) => {
+            for set in investment_sets {
+                price_investment_set(
+                    set,
+                    model,
+                    solution,
+                    year,
+                    shadow_prices,
+                    annual_activities,
+                    market_prices,
+                );
+            }
+        }
+    }
+}
 
-        // Add prices for shadow-priced commodities
-        if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
-            for (commodity_id, region_id, time_slice) in shadow_prices.keys() {
-                if shadow_set.contains(&(commodity_id.clone(), region_id.clone())) {
-                    let price = shadow_prices
-                        .get(commodity_id, region_id, time_slice)
-                        .unwrap();
-                    result.insert(commodity_id, region_id, time_slice, price);
+/// Calculate prices for a collection of independent markets and insert them into `market_prices`.
+///
+/// `market_prices` serves as both the source of input prices (prices of input commodities from
+/// upstream markets already computed) and the destination for newly computed prices.
+///
+/// # Arguments
+///
+/// * `model` - The model
+/// * `solution` - Solution to dispatch optimisation
+/// * `year` - The year for which prices are being calculated
+/// * `markets` - The markets to calculate prices for
+/// * `shadow_prices` - Shadow prices for all commodities
+/// * `annual_activities` - Optional map of annual activities for all assets, used for full cost
+///   pricing. If not provided, it will be calculated on demand if at least one market uses full
+///   cost pricing.
+/// * `market_prices` - In-progress map of calculated prices, which will be extended with the newly
+///   calculated prices for these markets
+fn price_markets(
+    model: &Model,
+    solution: &Solution,
+    year: u32,
+    markets: &[(CommodityID, RegionID)],
+    shadow_prices: &PriceMap,
+    annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
+    market_prices: &mut PriceMap,
+) {
+    // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
+    // For now, commodities use a single strategy for all regions, but this may change in the future.
+    let mut pricing_sets = HashMap::new();
+    for (commodity_id, region_id) in markets {
+        let commodity = &model.commodities[commodity_id];
+        if commodity.pricing_strategy == PricingStrategy::Unpriced {
+            continue;
+        }
+        pricing_sets
+            .entry(&commodity.pricing_strategy)
+            .or_insert_with(HashSet::new)
+            .insert((commodity_id.clone(), region_id.clone()));
+    }
+
+    // Add prices for shadow-priced commodities
+    if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
+        for (commodity_id, region_id) in shadow_set {
+            for time_slice in model.time_slice_info.iter_ids() {
+                if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
+                    market_prices.insert(commodity_id, region_id, time_slice, shadow_price);
                 }
             }
         }
+    }
 
-        // Add prices for scarcity-adjusted commodities
-        if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
-            add_scarcity_adjusted_prices(
-                solution.iter_activity_duals(),
-                &shadow_prices,
-                &mut result,
-                scarcity_set,
-            );
-        }
+    // Add prices for scarcity-adjusted commodities
+    if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
+        add_scarcity_adjusted_prices(
+            solution.iter_activity_duals(),
+            shadow_prices,
+            market_prices,
+            scarcity_set,
+        );
+    }
 
-        // Add prices for marginal cost commodities
-        if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
-            add_marginal_cost_prices(
-                solution.iter_activity_for_existing(),
-                solution.iter_activity_keys_for_candidates(),
-                &mut result,
-                year,
-                marginal_set,
-                &model.commodities,
-                &model.time_slice_info,
-            );
-        }
+    // Add prices for marginal cost commodities
+    if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
+        add_marginal_cost_prices(
+            solution.iter_activity_for_existing(),
+            solution.iter_activity_keys_for_candidates(),
+            market_prices,
+            year,
+            marginal_set,
+            &model.commodities,
+            &model.time_slice_info,
+        );
+    }
 
-        // Add prices for marginal average commodities
-        if let Some(marginal_avg_set) = pricing_sets.get(&PricingStrategy::MarginalCostAverage) {
-            add_marginal_cost_average_prices(
-                solution.iter_activity_for_existing(),
-                solution.iter_activity_keys_for_candidates(),
-                &mut result,
-                year,
-                marginal_avg_set,
-                &model.commodities,
-                &model.time_slice_info,
-            );
-        }
+    // Add prices for marginal average commodities
+    if let Some(marginal_avg_set) = pricing_sets.get(&PricingStrategy::MarginalCostAverage) {
+        add_marginal_cost_average_prices(
+            solution.iter_activity_for_existing(),
+            solution.iter_activity_keys_for_candidates(),
+            market_prices,
+            year,
+            marginal_avg_set,
+            &model.commodities,
+            &model.time_slice_info,
+        );
+    }
 
-        // Add prices for full cost commodities
-        if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
-            let annual_activities = annual_activities.get_or_insert_with(|| {
-                calculate_annual_activities(solution.iter_activity_for_existing())
-            });
-            add_full_cost_prices(
-                solution.iter_activity_for_existing(),
-                solution.iter_activity_keys_for_candidates(),
-                annual_activities,
-                &mut result,
-                year,
-                fullcost_set,
-                &model.commodities,
-                &model.time_slice_info,
-            );
-        }
+    // Add prices for full cost commodities
+    if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
+        let annual_activities = annual_activities.get_or_insert_with(|| {
+            calculate_annual_activities(solution.iter_activity_for_existing())
+        });
+        add_full_cost_prices(
+            solution.iter_activity_for_existing(),
+            solution.iter_activity_keys_for_candidates(),
+            annual_activities,
+            market_prices,
+            year,
+            fullcost_set,
+            &model.commodities,
+            &model.time_slice_info,
+        );
+    }
 
-        // Add prices for full average commodities
-        if let Some(full_avg_set) = pricing_sets.get(&PricingStrategy::FullCostAverage) {
-            let annual_activities = annual_activities.get_or_insert_with(|| {
-                calculate_annual_activities(solution.iter_activity_for_existing())
-            });
-            add_full_cost_average_prices(
-                solution.iter_activity_for_existing(),
-                solution.iter_activity_keys_for_candidates(),
-                annual_activities,
-                &mut result,
-                year,
-                full_avg_set,
-                &model.commodities,
-                &model.time_slice_info,
-            );
+    // Add prices for full average commodities
+    if let Some(full_avg_set) = pricing_sets.get(&PricingStrategy::FullCostAverage) {
+        let annual_activities = annual_activities.get_or_insert_with(|| {
+            calculate_annual_activities(solution.iter_activity_for_existing())
+        });
+        add_full_cost_average_prices(
+            solution.iter_activity_for_existing(),
+            solution.iter_activity_keys_for_candidates(),
+            annual_activities,
+            market_prices,
+            year,
+            full_avg_set,
+            &model.commodities,
+            &model.time_slice_info,
+        );
+    }
+}
+
+/// Calculate prices for a set of cyclically-dependent markets, updating `market_prices`.
+///
+/// Markets should be ordered in the input slice according to the direction of dependencies
+/// (downstream markets first) as solved by `order_sccs`.  Prices are calculated in the reverse of
+/// this order (i.e. upstream markets first), with an iterative loop to allow for feedback between
+/// markets.
+fn price_cycle(
+    model: &Model,
+    solution: &Solution,
+    year: u32,
+    markets: &[(CommodityID, RegionID)],
+    shadow_prices: &PriceMap,
+    annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
+    market_prices: &mut PriceMap,
+) {
+    // Seed the markets with shadow prices
+    for (commodity_id, region_id) in markets {
+        for time_slice in model.time_slice_info.iter_ids() {
+            if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
+                market_prices.insert(commodity_id, region_id, time_slice, shadow_price);
+            }
         }
     }
 
-    // Return the completed prices map
-    Ok(result)
+    // Iterate over the markets for a fixed number of iterations, updating prices each time
+    for _ in 0..N_CYCLE_ITERATIONS {
+        // Price markets in reverse order (i.e. upstream markets first)
+        for market in markets.iter().rev() {
+            price_markets(
+                model,
+                solution,
+                year,
+                std::slice::from_ref(market),
+                shadow_prices,
+                annual_activities,
+                market_prices,
+            );
+        }
+    }
 }
 
 /// A map relating commodity ID + region + time slice to current price (endogenous)
 #[derive(Default, Clone)]
-pub struct CommodityPrices(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
+pub struct PriceMap(IndexMap<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>);
 
-impl CommodityPrices {
-    /// Insert a price for the given commodity, region and time slice.
-    ///
-    /// Panics if a price for the given key already exists.
+impl PriceMap {
+    /// Insert/update a price for the given commodity, region and time slice.
     pub fn insert(
         &mut self,
         commodity_id: &CommodityID,
@@ -231,23 +363,11 @@ impl CommodityPrices {
         price: MoneyPerFlow,
     ) {
         let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
-        try_insert(&mut self.0, &key, price).unwrap();
+        self.0.insert(key, price);
     }
 
-    /// Extend the prices map, panic if any key already exists
-    pub fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow)>,
-    {
-        for (key, price) in iter {
-            try_insert(&mut self.0, &key, price).unwrap();
-        }
-    }
-
-    /// Extend this map by applying each selection-level price to all time slices
+    /// Extend/update this map by applying each selection-level price to all time slices
     /// contained in that selection.
-    ///
-    /// Panics if any individual commodity/region/time slice key already exists in the map.
     fn extend_selection_prices(
         &mut self,
         group_prices: &IndexMap<(CommodityID, RegionID, TimeSliceSelection), MoneyPerFlow>,
@@ -355,9 +475,7 @@ impl CommodityPrices {
     }
 }
 
-impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>
-    for CommodityPrices
-{
+impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)> for PriceMap {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
@@ -371,11 +489,11 @@ impl<'a> FromIterator<(&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerF
                 )
             })
             .collect();
-        CommodityPrices(map)
+        Self(map)
     }
 }
 
-impl IntoIterator for CommodityPrices {
+impl IntoIterator for PriceMap {
     type Item = ((CommodityID, RegionID, TimeSliceID), MoneyPerFlow);
     type IntoIter = indexmap::map::IntoIter<(CommodityID, RegionID, TimeSliceID), MoneyPerFlow>;
 
@@ -390,12 +508,12 @@ impl IntoIterator for CommodityPrices {
 ///
 /// * `activity_duals` - Iterator over activity duals from optimisation solution
 /// * `shadow_prices` - Shadow prices for all commodities
-/// * `existing_prices` - Existing prices map to extend with scarcity-adjusted prices
+/// * `market_prices` - Existing prices map to extend with scarcity-adjusted prices
 /// * `markets_to_price` - Set of markets to calculate scarcity-adjusted prices for
 fn add_scarcity_adjusted_prices<'a, I>(
     activity_duals: I,
-    shadow_prices: &CommodityPrices,
-    existing_prices: &mut CommodityPrices,
+    shadow_prices: &PriceMap,
+    market_prices: &mut PriceMap,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
 ) where
     I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
@@ -434,7 +552,7 @@ fn add_scarcity_adjusted_prices<'a, I>(
         // highest_dual is in units of MoneyPerActivity, and shadow_price is in MoneyPerFlow, but
         // this is correct according to Adam
         let scarcity_price = shadow_price + MoneyPerFlow(highest_dual.value());
-        existing_prices.insert(commodity, region, time_slice, scarcity_price);
+        market_prices.insert(commodity, region, time_slice, scarcity_price);
     }
 }
 
@@ -482,7 +600,7 @@ fn add_scarcity_adjusted_prices<'a, I>(
 /// * `activity_for_existing` - Iterator over `(asset, time_slice, activity)` from optimisation
 ///   solution for existing assets
 /// * `activity_keys_for_candidates` - Iterator over `(asset, time_slice)` for candidate assets
-/// * `existing_prices` - Existing prices to use as inputs and extend. This is expected to include
+/// * `market_prices` - Existing prices to use as inputs and extend. This is expected to include
 ///   prices from all markets upstream of the markets we are calculating for.
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate marginal prices for
@@ -491,7 +609,7 @@ fn add_scarcity_adjusted_prices<'a, I>(
 fn add_marginal_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
-    existing_prices: &mut CommodityPrices,
+    market_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -504,7 +622,7 @@ fn add_marginal_cost_prices<'a, I, J>(
     let mut group_prices: IndexMap<_, _> = iter_existing_asset_max_prices(
         activity_for_existing,
         markets_to_price,
-        existing_prices,
+        market_prices,
         year,
         commodities,
         &PricingStrategy::MarginalCost,
@@ -518,7 +636,7 @@ fn add_marginal_cost_prices<'a, I, J>(
     let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
-        existing_prices,
+        market_prices,
         &priced_groups,
         year,
         commodities,
@@ -529,7 +647,7 @@ fn add_marginal_cost_prices<'a, I, J>(
     group_prices.extend(cand_group_prices);
 
     // Expand selection-level prices to individual time slices and add to the main prices map
-    existing_prices.extend_selection_prices(&group_prices, time_slice_info);
+    market_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
 /// Calculate prices as the maximum cost across existing assets, using either a marginal cost or
@@ -543,7 +661,7 @@ fn add_marginal_cost_prices<'a, I, J>(
 ///
 /// * `activity_for_existing` - Iterator over (asset, time slice, activity) tuples for existing assets
 /// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
-/// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
+/// * `market_prices` - Current commodity prices (used to calculate marginal costs)
 /// * `year` - Year for which prices are being calculated
 /// * `commodities` - Commodity map
 /// * `pricing_strategy` - Pricing strategy, either `MarginalCost` or `FullCost`
@@ -557,7 +675,7 @@ fn add_marginal_cost_prices<'a, I, J>(
 fn iter_existing_asset_max_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
+    market_prices: &PriceMap,
     year: u32,
     commodities: &CommodityMap,
     pricing_strategy: &PricingStrategy,
@@ -610,7 +728,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            existing_prices,
+            market_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -667,7 +785,7 @@ where
 ///
 /// * `activity_keys_for_candidates` - Iterator over (asset, time slice) tuples for candidate assets
 /// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
-/// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
+/// * `market_prices` - Current commodity prices (used to calculate marginal costs)
 /// * `priced_groups` - Set of (commodity, region, time slice selection) groups that have already
 ///   been priced using existing assets, so should be skipped when looking at candidates
 /// * `year` - Year for which prices are being calculated
@@ -682,7 +800,7 @@ where
 fn iter_candidate_asset_min_prices<'a, I>(
     activity_keys_for_candidates: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
+    market_prices: &PriceMap,
     priced_groups: &HashSet<(CommodityID, RegionID, TimeSliceSelection)>,
     year: u32,
     commodities: &CommodityMap,
@@ -737,7 +855,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            existing_prices,
+            market_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -802,7 +920,7 @@ where
 fn add_marginal_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
-    existing_prices: &mut CommodityPrices,
+    market_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -815,7 +933,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     let mut group_prices: IndexMap<_, _> = iter_existing_asset_average_prices(
         activity_for_existing,
         markets_to_price,
-        existing_prices,
+        market_prices,
         year,
         commodities,
         &PricingStrategy::MarginalCost,
@@ -829,7 +947,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
-        existing_prices,
+        market_prices,
         &priced_groups,
         year,
         commodities,
@@ -840,7 +958,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
     group_prices.extend(cand_group_prices);
 
     // Expand selection-level prices to individual time slices and add to the main prices map
-    existing_prices.extend_selection_prices(&group_prices, time_slice_info);
+    market_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
 /// Calculate prices as the load-weighted average cost across existing assets, using either a
@@ -854,7 +972,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
 ///
 /// * `activity_for_existing` - Iterator over (asset, time slice, activity) tuples for existing assets
 /// * `markets_to_price` - Set of (commodity, region) pairs to attempt to price
-/// * `existing_prices` - Current commodity prices (used to calculate marginal costs)
+/// * `market_prices` - Current commodity prices (used to calculate marginal costs)
 /// * `year` - Year for which prices are being calculated
 /// * `commodities` - Commodity map
 /// * `pricing_strategy` - Pricing strategy, either `MarginalCost` or `FullCost`
@@ -868,7 +986,7 @@ fn add_marginal_cost_average_prices<'a, I, J>(
 fn iter_existing_asset_average_prices<'a, I>(
     activity_for_existing: I,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
-    existing_prices: &CommodityPrices,
+    market_prices: &PriceMap,
     year: u32,
     commodities: &CommodityMap,
     pricing_strategy: &PricingStrategy,
@@ -921,7 +1039,7 @@ where
 
         // Iterate over the marginal costs for commodities we need prices for
         for (commodity_id, marginal_cost) in asset.iter_marginal_costs_with_filter(
-            existing_prices,
+            market_prices,
             year,
             time_slice,
             |cid: &CommodityID| markets_to_price.contains(&(cid.clone(), region_id.clone())),
@@ -1038,7 +1156,7 @@ where
 /// * `activity_for_existing` - Iterator over `(asset, time_slice, activity)` from optimisation
 ///   solution for existing assets
 /// * `activity_keys_for_candidates` - Iterator over `(asset, time_slice)` for candidate assets
-/// * `existing_prices` - Existing prices to use as inputs and extend. This is expected to include
+/// * `market_prices` - Existing prices to use as inputs and extend. This is expected to include
 ///   prices from all markets upstream of the markets we are calculating for.
 /// * `year` - The year for which prices are being calculated
 /// * `markets_to_price` - Set of markets to calculate full cost prices for
@@ -1049,7 +1167,7 @@ fn add_full_cost_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
-    existing_prices: &mut CommodityPrices,
+    market_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -1062,7 +1180,7 @@ fn add_full_cost_prices<'a, I, J>(
     let mut group_prices: IndexMap<_, _> = iter_existing_asset_max_prices(
         activity_for_existing,
         markets_to_price,
-        existing_prices,
+        market_prices,
         year,
         commodities,
         &PricingStrategy::FullCost,
@@ -1076,7 +1194,7 @@ fn add_full_cost_prices<'a, I, J>(
     let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
-        existing_prices,
+        market_prices,
         &priced_groups,
         year,
         commodities,
@@ -1087,7 +1205,7 @@ fn add_full_cost_prices<'a, I, J>(
     group_prices.extend(cand_group_prices);
 
     // Expand selection-level prices to individual time slices and add to the main prices map
-    existing_prices.extend_selection_prices(&group_prices, time_slice_info);
+    market_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
 /// Calculate full cost prices for a set of commodities using a load-weighted average across
@@ -1103,7 +1221,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     activity_for_existing: I,
     activity_keys_for_candidates: J,
     annual_activities: &HashMap<AssetRef, Activity>,
-    existing_prices: &mut CommodityPrices,
+    market_prices: &mut PriceMap,
     year: u32,
     markets_to_price: &HashSet<(CommodityID, RegionID)>,
     commodities: &CommodityMap,
@@ -1116,7 +1234,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     let mut group_prices: IndexMap<_, _> = iter_existing_asset_average_prices(
         activity_for_existing,
         markets_to_price,
-        existing_prices,
+        market_prices,
         year,
         commodities,
         &PricingStrategy::FullCost,
@@ -1129,7 +1247,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     let cand_group_prices = iter_candidate_asset_min_prices(
         activity_keys_for_candidates,
         markets_to_price,
-        existing_prices,
+        market_prices,
         &priced_groups,
         year,
         commodities,
@@ -1140,7 +1258,7 @@ fn add_full_cost_average_prices<'a, I, J>(
     group_prices.extend(cand_group_prices);
 
     // Expand selection-level prices to individual time slices and add to the main prices map
-    existing_prices.extend_selection_prices(&group_prices, time_slice_info);
+    market_prices.extend_selection_prices(&group_prices, time_slice_info);
 }
 
 #[cfg(test)]
@@ -1224,7 +1342,7 @@ mod tests {
     }
 
     fn assert_price_approx(
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         commodity: &CommodityID,
         region: &RegionID,
         time_slice: &TimeSliceID,
@@ -1253,8 +1371,8 @@ mod tests {
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
-        let mut prices1 = CommodityPrices::default();
-        let mut prices2 = CommodityPrices::default();
+        let mut prices1 = PriceMap::default();
+        let mut prices2 = PriceMap::default();
 
         // Set up two price sets for a single commodity/region/time slice
         let commodity = CommodityID::new("test_commodity");
@@ -1275,7 +1393,7 @@ mod tests {
         time_slice_info: TimeSliceInfo,
         time_slice: TimeSliceID,
     ) {
-        let mut prices = CommodityPrices::default();
+        let mut prices = PriceMap::default();
 
         // Insert a price
         prices.insert(&commodity_id, &region_id, &time_slice, MoneyPerFlow(100.0));
@@ -1329,8 +1447,8 @@ mod tests {
             Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2015u32)
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
-        let existing_prices =
-            CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
+        let mut prices =
+            PriceMap::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
         let mut markets = HashSet::new();
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
@@ -1342,7 +1460,6 @@ mod tests {
         let existing = vec![(&asset_ref, &time_slice, Activity(1.0))];
         let candidates = Vec::new();
 
-        let mut prices = existing_prices.clone();
         add_marginal_cost_prices(
             existing.into_iter(),
             candidates.into_iter(),
@@ -1412,8 +1529,8 @@ mod tests {
             Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(4.0), 2015u32)
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
-        let existing_prices =
-            CommodityPrices::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
+        let mut prices =
+            PriceMap::from_iter(vec![(&a.id, &region_id, &time_slice, MoneyPerFlow(1.0))]);
         let mut markets = HashSet::new();
         markets.insert((b.id.clone(), region_id.clone()));
         markets.insert((c.id.clone(), region_id.clone()));
@@ -1428,7 +1545,6 @@ mod tests {
         let mut annual_activities = HashMap::new();
         annual_activities.insert(asset_ref.clone(), Activity(2.0));
 
-        let mut prices = existing_prices.clone();
         add_full_cost_prices(
             existing.into_iter(),
             candidates.into_iter(),

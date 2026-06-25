@@ -6,15 +6,16 @@ use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Context, Result, bail, ensure};
+use crate::simulation::prices::Prices;
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
+use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
-use log::debug;
+use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use strum::IntoEnumIterator;
 
 pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
@@ -74,7 +75,7 @@ impl InvestmentSet {
         year: u32,
         demand: &AllDemandMap,
         existing_assets: &[AssetRef],
-        prices: &CommodityPrices,
+        prices: &Prices,
         seen_markets: &[(CommodityID, RegionID)],
         previously_selected_assets: &[AssetRef],
         writer: &mut DataWriter,
@@ -173,7 +174,7 @@ pub fn perform_agent_investment(
     model: &Model,
     year: u32,
     existing_assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &Prices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
@@ -181,7 +182,7 @@ pub fn perform_agent_investment(
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
 
     // Keep a list of all the assets selected
-    // This includes Commissioned assets that are selected for retention, and new Selected assets
+    // This includes Commissioned assets that are selected for retention, and new Ready assets
     let mut all_selected_assets = Vec::new();
 
     let investment_order = &model.investment_order[&year];
@@ -234,7 +235,7 @@ pub fn perform_agent_investment(
         // their prices using external values so that they don't appear free
         let solution = DispatchRun::new(model, &all_selected_assets, year)
             .with_market_balance_subset(&seen_markets)
-            .with_input_prices(prices)
+            .with_input_prices(&prices.shadow)
             .run(&format!("post {investment_set} investment"), writer)?;
 
         // Update demand map with flows from newly added assets
@@ -259,7 +260,7 @@ fn select_assets_for_single_market(
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &Prices,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let commodity = &model.commodities[commodity_id];
@@ -321,7 +322,7 @@ fn select_assets_for_single_market(
 /// market in turn.
 ///
 /// Dispatch optimisation is performed after each market is visited to rebalance demand.
-/// While dispatching, newly selected (`Selected`) assets are given flexible capacity (bounded by
+/// While dispatching, newly selected (`Ready`) assets are given flexible capacity (bounded by
 /// `capacity_margin`) so small demand shifts caused by later markets can be absorbed. After all
 /// markets have been visited once, the final set of assets is returned, applying any capacity
 /// adjustments from the final full-system dispatch optimisation.
@@ -338,7 +339,7 @@ fn select_assets_for_cycle(
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &Prices,
     seen_markets: &[(CommodityID, RegionID)],
     previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
@@ -376,23 +377,25 @@ fn select_assets_for_cycle(
         let mut markets_to_balance = seen_markets.to_vec();
         markets_to_balance.extend_from_slice(&markets[0..=idx]);
 
-        // We allow all `Selected` state assets to have flexible capacity
+        // We allow all `Ready` state assets to have flexible capacity
         let flexible_capacity_assets: Vec<_> = assets_for_cycle_flat
             .iter()
-            .filter(|asset| matches!(asset.state(), AssetState::Selected { .. }))
+            .filter(|asset| matches!(asset.state(), AssetState::Ready { .. }))
             .cloned()
             .collect();
 
         // Retrieve installable capacity limits for flexible capacity assets.
-        let key = (commodity_id.clone(), year);
         let mut agent_share_cache = HashMap::new();
         let capacity_limits = flexible_capacity_assets
             .iter()
             .filter_map(|asset| {
                 let agent_id = asset.agent_id().unwrap();
+                let commodity_id = asset.primary_output_commodity().unwrap();
                 let agent_share = *agent_share_cache
-                    .entry(agent_id.clone())
-                    .or_insert_with(|| model.agents[agent_id].commodity_portions[&key]);
+                    .entry((agent_id, commodity_id))
+                    .or_insert_with(|| {
+                        model.agents[agent_id].commodity_portions[&(commodity_id.clone(), year)]
+                    });
                 asset
                     .max_installable_capacity(agent_share)
                     .map(|max_capacity| (asset.clone(), max_capacity))
@@ -568,7 +571,19 @@ where
     })
 }
 
-/// Get the maximum required capacity across time slices
+/// Returns the minimum installed capacity required for `asset` to satisfy the demand that it can
+/// potentially serve, accounting for its activity constraints.
+///
+/// The returned value is the maximum capacity requirement implied by any time-slice selection,
+/// since constraints at coarser aggregation levels (e.g. seasonal or annual limits) can require
+/// more capacity than constraints at the finest time-slice level.
+///
+/// Demand is evaluated using the commodity's balance level. Demand within a balance bucket is
+/// treated as fungible: if the asset is capable of operating in any constituent time slice of a
+/// bucket, then all demand in that bucket is considered serviceable by the asset.
+///
+/// Selections whose maximum supply is zero are ignored. Such selections would otherwise imply an
+/// infinite capacity requirement and therefore provide no useful lower bound.
 fn get_demand_limiting_capacity(
     time_slice_info: &TimeSliceInfo,
     asset: &Asset,
@@ -577,23 +592,62 @@ fn get_demand_limiting_capacity(
 ) -> Capacity {
     let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
     let mut capacity = Capacity(0.0);
+    let mut demand_cache: HashMap<_, Flow> = HashMap::new();
 
-    for time_slice_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level)
-    {
-        let demand_for_selection: Flow = time_slice_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| demand[time_slice])
-            .sum();
+    // Calculate demand-limiting capacity at each timeslice level and take the max.
+    for level in TimeSliceLevel::iter() {
+        for selection in time_slice_info.iter_selections_at_level(level) {
+            // Maximum supply within this selection according to the asset's activity limits.
+            let max_supply_for_selection = *asset
+                .get_activity_per_capacity_limits_for_selection(&selection)
+                .end()
+                * coeff;
 
-        // Calculate max capacity required for this time slice selection
-        // For commodities with a coarse time slice level, we have to allow the possibility that all
-        // of the demand gets served by production in a single time slice
-        for (time_slice, _) in time_slice_selection.iter(time_slice_info) {
-            let max_flow_per_cap =
-                *asset.get_activity_per_capacity_limits(time_slice).end() * coeff;
-            if max_flow_per_cap != FlowPerCapacity(0.0) {
-                capacity = capacity.max(demand_for_selection / max_flow_per_cap);
+            // Selections with zero supply would imply infinite demand-limiting capacity,
+            // so they do not contribute to the maximum.
+            if max_supply_for_selection == FlowPerCapacity(0.0) {
+                continue;
             }
+
+            // Serviceable demand within this selection.
+            //
+            // Demand is effectively grouped into balance buckets at the commodity's
+            // balance level. A balance bucket contributes if:
+            //   1. The bucket is contained within this selection, and
+            //   2. The asset can operate in at least one constituent timeslice
+            //      within that bucket.
+            //
+            // Demand within a balance bucket is fungible, so if the asset can serve
+            // any timeslice in the bucket, all demand in that bucket is considered
+            // serviceable.
+            let demand_selection_level = level.max(commodity.time_slice_level);
+            let demand_selection = selection
+                .containing_selection_at_level(demand_selection_level)
+                .unwrap();
+            let serviceable_demand_for_selection = *demand_cache
+                .entry(demand_selection.clone())
+                .or_insert_with(|| {
+                    demand_selection
+                        .iter_at_level(time_slice_info, commodity.time_slice_level)
+                        .unwrap()
+                        .filter(|(bucket, _)| {
+                            bucket.iter(time_slice_info).any(|(ts, _)| {
+                                *asset.get_activity_per_capacity_limits(ts).end()
+                                    > ActivityPerCapacity(0.0)
+                            })
+                        })
+                        .map(|(bucket, _)| {
+                            bucket
+                                .iter(time_slice_info)
+                                .map(|(ts, _)| demand[ts])
+                                .sum::<Flow>()
+                        })
+                        .sum()
+                });
+
+            // Calculate demand-limiting capacity for this selection and take the
+            // maximum across all selections.
+            capacity = capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
         }
     }
 
@@ -635,7 +689,7 @@ fn get_candidate_assets<'a>(
     year: u32,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
-        .iter_possible_producers_of(region_id, &commodity.id, year)
+        .iter_search_space(region_id, &commodity.id, year)
         .map(move |process| {
             let mut asset =
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
@@ -725,7 +779,7 @@ fn select_best_assets(
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
-    prices: &CommodityPrices,
+    prices: &Prices,
     mut demand: DemandMap,
     year: u32,
     writer: &mut DataWriter,
@@ -804,28 +858,20 @@ fn select_best_assets(
             &demand,
         )?;
 
-        // Sort by investment priority and discord non-feasible options
-        sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
+        // Sort by investment priority and discard non-feasible options
+        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
 
-        // Check if there are any remaining options. If not, we cannot meet demand, so have to bail
-        // out.
+        // If none of the remaining options are feasible, we terminate the loop. We may still be
+        // able to meet the full demands with assets selected so far, so we continue anyway with a
+        // warning.
         if outputs_for_opts.is_empty() {
-            let remaining_demands: Vec<_> = demand
-                .iter()
-                .filter(|(_, flow)| **flow > Flow(0.0))
-                .map(|(time_slice, flow)| format!("{} : {:e}", time_slice, flow.value()))
-                .collect();
-
-            bail!(
-                "No feasible investment options left for \
-                commodity '{}', region '{}', year '{}', agent '{}' after appraisal.\n\
-                Remaining unmet demand (time_slice : flow):\n{}",
-                &commodity.id,
-                region_id,
-                year,
-                agent.id,
-                remaining_demands.join("\n")
+            warn!(
+                "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
+                year '{}', agent '{}'. {} non-feasible investments were not considered. \
+                This unmet demand may still be satisfied during the full system dispatch.",
+                &commodity.id, region_id, year, agent.id, num_nonfeasible
             );
+            break;
         }
 
         // Warn if there are multiple equally good assets
@@ -854,7 +900,7 @@ fn select_best_assets(
         round += 1;
     }
 
-    // Convert Candidate assets to Selected
+    // Convert Candidate assets to Ready
     // At this point we also assign the agent ID to the asset
     for asset in &mut best_assets {
         if let AssetState::Candidate = asset.state() {
@@ -929,7 +975,7 @@ mod tests {
         ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessParameterMap,
     };
     use crate::region::RegionID;
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo};
+    use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
     use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
@@ -1015,6 +1061,68 @@ mod tests {
         // Time slice 1: demand (4.0) / (activity_limit (0.2) * coeff (1.0)) = 20.0
         // Time slice 2: skipped due to zero activity limit
         // Maximum = 20.0
+        assert_eq!(result, Capacity(20.0));
+    }
+
+    #[rstest]
+    fn get_demand_limiting_capacity_uses_coarser_limits(
+        time_slice_info2: TimeSliceInfo,
+        svd_commodity: Commodity,
+        mut process: Process,
+    ) {
+        let (time_slice1, time_slice2) =
+            time_slice_info2.time_slices.keys().collect_tuple().unwrap();
+
+        // Configure a 1:1 activity-to-flow relationship.
+        let commodity_rc = Rc::new(svd_commodity);
+        let process_flow = ProcessFlow {
+            commodity: Rc::clone(&commodity_rc),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+
+        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
+        process.flows = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+
+        // Fine-grained limits imply a capacity requirement of 5:
+        //   TS1: 5 / 1 = 5
+        //   TS2: 5 / 1 = 5
+        //
+        // The annual limit implies:
+        //   (5 + 5) / 0.5 = 20
+        //
+        // The function should return the larger value.
+        let limits = HashMap::from([
+            (
+                TimeSliceSelection::Single(time_slice1.clone()),
+                Dimensionless(0.0)..=Dimensionless(1.0),
+            ),
+            (
+                TimeSliceSelection::Single(time_slice2.clone()),
+                Dimensionless(0.0)..=Dimensionless(1.0),
+            ),
+            (
+                TimeSliceSelection::Annual,
+                Dimensionless(0.0)..=Dimensionless(0.5),
+            ),
+        ]);
+
+        process.activity_limits = process_activity_limits_map(
+            process.regions.clone(),
+            ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap(),
+        );
+
+        let asset = asset(process);
+
+        let demand = indexmap! {
+            time_slice1.clone() => Flow(5.0),
+            time_slice2.clone() => Flow(5.0),
+        };
+
+        let result =
+            get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
+
         assert_eq!(result, Capacity(20.0));
     }
 

@@ -1,0 +1,10 @@
+[project]
+name = "muse2-docs"
+version = "2.1.0"
+description = "Define dependencies for building MUSE2 docs"
+requires-python = ">=3.12"
+dependencies = [
+    "jinja2>=3.1.6",
+    "pyyaml>=6.0.3",
+    "table2md>=1.1.0"
+]

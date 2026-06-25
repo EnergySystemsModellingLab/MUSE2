@@ -11,6 +11,20 @@ const EXAMPLE_NAME: &str = "simple";
 const MODEL_DIR: &str = "examples/simple";
 const PATCH_EXAMPLE_NAME: &str = "simple_divisible";
 
+/// Test the `help` command
+#[test]
+fn check_help_command() {
+    assert!(
+        get_muse2_stdout(&["help"]).contains(
+            format!(
+                "https://energysystemsmodellinglab.github.io/MUSE2/release/v{}/",
+                env!("CARGO_PKG_VERSION")
+            )
+            .as_str()
+        )
+    );
+}
+
 /// Test the `run` command
 #[test]
 fn check_run_command() {
@@ -70,6 +84,22 @@ fn check_example_info_command() {
     assert!(!get_muse2_stdout(&["example", "info", EXAMPLE_NAME]).is_empty());
 }
 
+#[test]
+fn check_no_copy_input_files_flag() {
+    let tempdir = tempdir().unwrap();
+    let output_dir = tempdir.path().join("results");
+    assert_muse2_runs(&[
+        "run",
+        MODEL_DIR,
+        "--output-dir",
+        &output_dir.to_string_lossy(),
+        "--no-copy-input-files",
+    ]);
+
+    // Check that input files were not copied to the output directory
+    assert!(!output_dir.join("input").exists());
+}
+
 /// Test the `example extract`
 #[rstest]
 #[case(true)]
@@ -93,4 +123,14 @@ fn check_example_extract_command(#[case] patch: bool) {
     );
 }
 
-// NB: `example run` is covered by regression tests
+/// Test the `example run` command with no additional flags
+#[test]
+fn check_example_run_command() {
+    let tmp = tempdir().unwrap();
+    let output_dir = tmp.path().join("out");
+    let output_dir_str = output_dir.to_string_lossy();
+
+    assert_muse2_runs(&["example", "run", "simple", "--output-dir", &output_dir_str]);
+}
+
+// NB: `example run` extra flags are covered by regression tests

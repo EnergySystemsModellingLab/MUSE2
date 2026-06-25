@@ -3,14 +3,14 @@ use super::super::{deserialise_proportion_nonzero, input_err_msg, read_csv, try_
 use crate::agent::{AgentCommodityPortionsMap, AgentID, AgentMap};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::id::IDCollection;
+use crate::input::parse_year_str;
 use crate::region::RegionID;
 use crate::units::Dimensionless;
-use crate::year::parse_year_str;
 use anyhow::{Context, Result, ensure};
 use float_cmp::approx_eq;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 const AGENT_COMMODITIES_FILE_NAME: &str = "agent_commodity_portions.csv";
@@ -112,10 +112,24 @@ fn validate_agent_commodity_portions(
     region_ids: &IndexSet<RegionID>,
     milestone_years: &[u32],
 ) -> Result<()> {
-    // CHECK 1: Each specified commodity must have data for all years
+    // CHECK 1: Commodities of type OTH are not invested in, so should not be included in portions
     for (id, portions) in agent_commodity_portions {
-        // Colate set of commodities for this agent
-        let commodity_ids: HashSet<_> = portions.keys().map(|(id, _)| id).collect();
+        // Collate set of commodities for this agent
+        let commodity_ids: IndexSet<_> = portions.keys().map(|(id, _)| id).collect();
+
+        // Check that none of these commodities are of type OTH
+        for commodity_id in commodity_ids {
+            ensure!(
+                commodities[commodity_id].kind != CommodityType::Other,
+                "Agent {id} contains portion for commodity {commodity_id} which is of type OTH"
+            );
+        }
+    }
+
+    // CHECK 2: Each specified commodity must have data for all years
+    for (id, portions) in agent_commodity_portions {
+        // Collate set of commodities for this agent
+        let commodity_ids: IndexSet<_> = portions.keys().map(|(id, _)| id).collect();
 
         // Check that each commodity has data for all milestone years
         for commodity_id in commodity_ids {
@@ -128,12 +142,12 @@ fn validate_agent_commodity_portions(
         }
     }
 
-    // CHECK 2: Total portions for each commodity/year/region must sum to 1
+    // CHECK 3: Total portions for each commodity/year/region must sum to 1
     // First step is to create a map with the key as (commodity_id, year, region_id), and the value
     // as the sum of the portions for that key across all agents
-    let mut summed_portions = HashMap::new();
+    let mut summed_portions = IndexMap::new();
     for (id, agent_commodity_portions) in agent_commodity_portions {
-        let agent = agents.get(id).context("Invalid agent ID")?;
+        let agent = &agents[id];
         for ((commodity_id, year), portion) in agent_commodity_portions {
             for region in region_ids {
                 if agent.regions.contains(region) {
@@ -158,7 +172,7 @@ fn validate_agent_commodity_portions(
         );
     }
 
-    // CHECK 3: All commodities of SVD or SED type must be covered for all regions and years
+    // CHECK 4: All commodities of SVD or SED type must be covered for all regions and years
     // This checks the same summed_portions map as above, just checking the keys
     // We first need to create a list of SVD and SED commodities to check against
     let svd_and_sed_commodities = commodities
@@ -191,49 +205,42 @@ fn validate_agent_commodity_portions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{Agent, AgentObjectiveMap, AgentSearchSpaceMap, DecisionRule};
-    use crate::commodity::{
-        Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
+    use crate::commodity::{Commodity, CommodityID};
+    use crate::fixture::{
+        agents, assert_error, other_commodity, region_ids, sed_commodity, svd_commodity,
     };
-    use crate::time_slice::TimeSliceLevel;
     use indexmap::IndexMap;
+    use rstest::{fixture, rstest};
     use std::rc::Rc;
 
-    #[test]
-    fn validate_agent_commodity_portions_works() {
-        let region_ids = IndexSet::from([RegionID::new("region1"), RegionID::new("region2")]);
-        let milestone_years = [2020];
-        let agents = IndexMap::from([(
-            AgentID::new("agent1"),
-            Agent {
-                id: "agent1".into(),
-                description: "An agent".into(),
-                commodity_portions: AgentCommodityPortionsMap::new(),
-                search_space: AgentSearchSpaceMap::new(),
-                decision_rule: DecisionRule::Single,
-                regions: region_ids.clone(),
-                objectives: AgentObjectiveMap::new(),
-            },
-        )]);
-        let mut commodities = IndexMap::from([(
-            CommodityID::new("commodity1"),
-            Rc::new(Commodity {
-                id: "commodity1".into(),
-                description: "A commodity".into(),
-                kind: CommodityType::SupplyEqualsDemand,
-                time_slice_level: TimeSliceLevel::Annual,
-                pricing_strategy: PricingStrategy::Shadow,
-                levies_prod: CommodityLevyMap::new(),
-                levies_cons: CommodityLevyMap::new(),
-                demand: DemandMap::new(),
-                units: "PJ".into(),
-            }),
-        )]);
+    #[fixture]
+    fn milestone_years() -> [u32; 1] {
+        [2020]
+    }
 
-        // Valid case
+    #[fixture]
+    fn commodities(svd_commodity: Commodity, other_commodity: Commodity) -> CommodityMap {
+        IndexMap::from([
+            ("commodity1".into(), Rc::new(svd_commodity)),
+            ("other_commodity".into(), Rc::new(other_commodity)),
+        ])
+    }
+
+    #[fixture]
+    fn agent_commodity_portions() -> HashMap<AgentID, AgentCommodityPortionsMap> {
         let mut map = AgentCommodityPortionsMap::new();
         map.insert(("commodity1".into(), 2020), Dimensionless(1.0));
-        let agent_commodity_portions = HashMap::from([("agent1".into(), map)]);
+        HashMap::from([("agent1".into(), map)])
+    }
+
+    #[rstest]
+    fn validate_agent_commodity_portions_valid_case(
+        agent_commodity_portions: HashMap<AgentID, AgentCommodityPortionsMap>,
+        agents: AgentMap,
+        commodities: CommodityMap,
+        region_ids: IndexSet<RegionID>,
+        milestone_years: [u32; 1],
+    ) {
         validate_agent_commodity_portions(
             &agent_commodity_portions,
             &agents,
@@ -242,46 +249,98 @@ mod tests {
             &milestone_years,
         )
         .unwrap();
+    }
 
-        // Invalid case: portions do not sum to 1
-        let mut map_v2 = AgentCommodityPortionsMap::new();
-        map_v2.insert(("commodity1".into(), 2020), Dimensionless(0.5));
-        let agent_commodities_v2 = HashMap::from([("agent1".into(), map_v2)]);
-        assert!(
-            validate_agent_commodity_portions(
-                &agent_commodities_v2,
-                &agents,
-                &commodities,
-                &region_ids,
-                &milestone_years
-            )
-            .is_err()
-        );
-
-        // Invalid case: SED commodity without associated commodity portions
-        commodities.insert(
-            CommodityID::new("commodity2"),
-            Rc::new(Commodity {
-                id: "commodity2".into(),
-                description: "Another commodity".into(),
-                kind: CommodityType::SupplyEqualsDemand,
-                time_slice_level: TimeSliceLevel::Annual,
-                pricing_strategy: PricingStrategy::Shadow,
-                levies_prod: CommodityLevyMap::new(),
-                levies_cons: CommodityLevyMap::new(),
-                demand: DemandMap::new(),
-                units: "PJ".into(),
-            }),
-        );
-        assert!(
+    #[rstest]
+    fn validate_agent_commodity_portions_other_type_commodity(
+        mut agent_commodity_portions: HashMap<AgentID, AgentCommodityPortionsMap>,
+        agents: AgentMap,
+        commodities: CommodityMap,
+        region_ids: IndexSet<RegionID>,
+        milestone_years: [u32; 1],
+    ) {
+        // Invalid case: includes commodity of type Other
+        agent_commodity_portions
+            .get_mut(&AgentID::new("agent1"))
+            .unwrap()
+            .insert(("other_commodity".into(), 2020), Dimensionless(0.5));
+        assert_error!(
             validate_agent_commodity_portions(
                 &agent_commodity_portions,
                 &agents,
                 &commodities,
                 &region_ids,
                 &milestone_years
-            )
-            .is_err()
+            ),
+            "Agent agent1 contains portion for commodity other_commodity which is of type OTH"
+        );
+    }
+
+    #[rstest]
+    fn validate_agent_commodity_portions_missing_year(
+        agent_commodity_portions: HashMap<AgentID, AgentCommodityPortionsMap>,
+        agents: AgentMap,
+        commodities: CommodityMap,
+        region_ids: IndexSet<RegionID>,
+    ) {
+        let milestone_years = [2020, 2030];
+        assert_error!(
+            validate_agent_commodity_portions(
+                &agent_commodity_portions,
+                &agents,
+                &commodities,
+                &region_ids,
+                &milestone_years,
+            ),
+            "Agent agent1 does not have data for commodity commodity1 in year 2030"
+        );
+    }
+
+    #[rstest]
+    fn validate_agent_commodity_portions_dont_sum_to_one(
+        mut agent_commodity_portions: HashMap<AgentID, AgentCommodityPortionsMap>,
+        agents: AgentMap,
+        commodities: CommodityMap,
+        region_ids: IndexSet<RegionID>,
+        milestone_years: [u32; 1],
+    ) {
+        // Invalid case: portions do not sum to 1
+        agent_commodity_portions
+            .get_mut(&AgentID::new("agent1"))
+            .unwrap()
+            .insert(("commodity1".into(), 2020), Dimensionless(0.5));
+        assert_error!(
+            validate_agent_commodity_portions(
+                &agent_commodity_portions,
+                &agents,
+                &commodities,
+                &region_ids,
+                &milestone_years,
+            ),
+            "Commodity commodity1 in year 2020 and region GBR does not sum to 1.0"
+        );
+    }
+
+    #[rstest]
+    fn validate_agent_commodity_portions_missing_portions(
+        agent_commodity_portions: HashMap<AgentID, AgentCommodityPortionsMap>,
+        agents: AgentMap,
+        mut commodities: CommodityMap,
+        region_ids: IndexSet<RegionID>,
+        milestone_years: [u32; 1],
+        sed_commodity: Commodity,
+    ) {
+        // Invalid case: SED commodity without associated commodity portions
+        commodities.insert(CommodityID::new("sed_commodity"), Rc::new(sed_commodity));
+        assert_error!(
+            validate_agent_commodity_portions(
+                &agent_commodity_portions,
+                &agents,
+                &commodities,
+                &region_ids,
+                &milestone_years
+            ),
+            "Commodity sed_commodity in year 2020 and region GBR is not covered"
         );
     }
 }

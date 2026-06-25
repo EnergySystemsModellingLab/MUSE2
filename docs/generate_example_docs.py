@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# dependencies = [
-#     "jinja2",
-# ]
-# ///
 #
 # A script to generate documentation for the different examples from README.txt files.
 

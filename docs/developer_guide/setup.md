@@ -9,7 +9,7 @@ To develop MUSE2 locally you will need the following components:
 Optional requirements:
 
 - [Just] (recommended)
-- [uv] (required for [pre-commit] and file format documentation)
+- [uv] (required for file format documentation)
 
 You can either install the necessary developer tools locally on your machine manually (a bare metal
 installation) or use the provided [development container]. Bare metal installation should generally
@@ -25,12 +25,11 @@ We provide a [justfile] for some common developer tasks.
 [HiGHS]: https://highs.dev/
 [Just]: https://github.com/casey/just
 [uv]: https://docs.astral.sh/uv/
-[pre-commit]: https://pre-commit.com/
 [development container]: https://devcontainers.github.io/
 [Docker]: https://www.docker.com/
 [Visual Studio Code]: https://code.visualstudio.com/
 [GitHub Codespaces]: https://github.com/features/codespaces
-[justfile]: ../../justfile
+[justfile]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/justfile
 
 ## Installing tools
 
@@ -91,21 +90,30 @@ The source code will now be available in a folder named `MUSE2`.
 
 ## Pre-Commit hooks
 
-We use [pre-commit] to automatically run a number of hooks for this repository when a new Git
-commit is made. You can run `pre-commit` via our `justfile`, provided you have `uv` installed.
+We use [`prek`] to automatically run a number of hooks for this repository when a new Git
+commit is made. `prek` is a Rust rewrite of the [`pre-commit`] tool (which you can use instead, if
+you prefer).
 
-You can enable `pre-commit` for this repository with:
+`prek` can be installed via `cargo`:
 
 ```sh
-just pre-commit install
+cargo install --locked prek
+```
+
+You can enable `prek` for this repository with:
+
+```sh
+prek install
 ```
 
 Thereafter, a series of checks should be run every time you commit with Git. In addition, the
-`pre-commit` hooks are also run as part of the CI pipeline.
+pre-commit hooks are also run as part of the CI pipeline.
 
 Note: you may get errors due to the [`clippy`] hook failing. In this case, you may be able to
 automatically fix them by running `cargo clipfix` (which we have defined as an alias in
 [`.cargo/config.toml`]).
 
+[`prek`]: https://prek.j178.dev/
+[`pre-commit`]: https://pre-commit.com/
 [`clippy`]: https://doc.rust-lang.org/clippy
 [`.cargo/config.toml`]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/.cargo/config.toml

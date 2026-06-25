@@ -21,7 +21,7 @@ use crate::simulation::investment::appraisal::{
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerCapacityPerYear, MoneyPerFlow, Year,
+    MoneyPerCapacity, MoneyPerCapacityPerYear, Year,
 };
 use anyhow::Result;
 use indexmap::indexmap;
@@ -47,7 +47,14 @@ pub(crate) use assert_error;
 ///
 /// If the patched model cannot be built, for whatever reason, this function will panic.
 pub(crate) fn build_patched_simple_tempdir(file_patches: Vec<FilePatch>) -> tempfile::TempDir {
-    ModelPatch::from_example("simple")
+    build_patched_tempdir("simple", file_patches)
+}
+
+pub(crate) fn build_patched_tempdir(
+    base_example: &str,
+    file_patches: Vec<FilePatch>,
+) -> tempfile::TempDir {
+    ModelPatch::from_example(base_example)
         .with_file_patches(file_patches)
         .build_to_tempdir()
         .unwrap()
@@ -68,7 +75,7 @@ pub(crate) use patch_and_validate_simple;
 /// Check whether validation succeeds for simple example with patches
 macro_rules! assert_validate_ok_simple {
     ($file_patches:expr) => {
-        assert!(crate::fixture::patch_and_validate_simple!($file_patches).is_ok())
+        crate::fixture::patch_and_validate_simple!($file_patches).unwrap();
     };
 }
 pub(crate) use assert_validate_ok_simple;
@@ -109,7 +116,7 @@ pub(crate) use patch_and_run_simple;
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! assert_patched_runs_ok_simple {
     ($file_patches:expr) => {
-        assert!(crate::fixture::patch_and_run_simple!($file_patches).is_ok())
+        crate::fixture::patch_and_run_simple!($file_patches).unwrap();
     };
 }
 pub(crate) use assert_patched_runs_ok_simple;
@@ -193,7 +200,7 @@ pub fn asset(process: Process) -> Asset {
     let region_id: RegionID = "GBR".into();
     let agent_id = "agent1".into();
     let commission_year = 2015;
-    Asset::new_future(
+    Asset::new_ready(
         agent_id,
         process.into(),
         region_id,
@@ -206,7 +213,7 @@ pub fn asset(process: Process) -> Asset {
 #[fixture]
 pub fn asset_divisible(mut process: Process) -> Asset {
     process.unit_size = Some(Capacity(4.0));
-    Asset::new_future(
+    Asset::new_ready(
         "agent1".into(),
         Rc::new(process),
         "GBR".into(),
@@ -324,7 +331,7 @@ pub fn processes(process: Process) -> ProcessMap {
 }
 
 #[fixture]
-pub fn agents() -> AgentMap {
+pub fn agents(region_ids: IndexSet<RegionID>) -> AgentMap {
     iter::once((
         "agent1".into(),
         Agent {
@@ -333,7 +340,7 @@ pub fn agents() -> AgentMap {
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
             decision_rule: DecisionRule::Single,
-            regions: IndexSet::new(),
+            regions: region_ids,
             objectives: AgentObjectiveMap::new(),
         },
     ))
@@ -394,15 +401,15 @@ pub fn time_slice_info2() -> TimeSliceInfo {
 #[fixture]
 pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
     let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
+    let market_costs = indexmap! { time_slice.clone() => MoneyPerActivity(0.4) };
     let activity = indexmap! { time_slice.clone() => Activity(10.0) };
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
     AppraisalOutput {
         asset: AssetRef::from(asset),
         capacity: AssetCapacity::Continuous(Capacity(42.0)),
         coefficients: Rc::new(ObjectiveCoefficients {
-            capacity_coefficient: MoneyPerCapacity(2.14),
             activity_coefficients,
-            unmet_demand_coefficient: MoneyPerFlow(10000.0),
+            market_costs,
         }),
         activity,
         unmet_demand,

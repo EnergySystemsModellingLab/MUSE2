@@ -1,100 +1,70 @@
 //! Calculation of cost coefficients for investment tools.
-use super::costs::annual_fixed_cost;
 use crate::agent::ObjectiveType;
 use crate::asset::AssetRef;
 use crate::model::Model;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
+use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{MoneyPerActivity, MoneyPerCapacity, MoneyPerFlow};
+use crate::units::MoneyPerActivity;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// Map storing cost coefficients for an asset.
+/// Per-time-slice cost coefficients for an asset.
 ///
-/// These coefficients are calculated according to the agent's `ObjectiveType` and are used by
-/// the investment appraisal routines. The map contains the per-capacity and per-activity cost
-/// coefficients used in the appraisal optimisation, together with the unmet-demand penalty.
+/// These coefficients are calculated according to the agent's `ObjectiveType` and are used by the
+/// investment appraisal routines. They comprise the activity coefficients (revenue minus operating
+/// cost, derived from shadow prices) used in the appraisal optimisation, together with the market
+/// costs (derived from market prices).
 #[derive(Clone)]
 pub struct ObjectiveCoefficients {
-    /// Cost per unit of capacity
-    pub capacity_coefficient: MoneyPerCapacity,
     /// Cost per unit of activity in each time slice
     pub activity_coefficients: IndexMap<TimeSliceID, MoneyPerActivity>,
-    /// Unmet demand coefficient
-    pub unmet_demand_coefficient: MoneyPerFlow,
+    /// Market costs associated with asset for each time slice
+    pub market_costs: IndexMap<TimeSliceID, MoneyPerActivity>,
 }
 
 /// Calculates cost coefficients for a set of assets for a given objective type.
+///
+/// Returns a map from each asset to its [`ObjectiveCoefficients`], which holds a per-time-slice
+/// activity coefficient and market cost.
+///
+/// Activity coefficients are revenue from flows (including the primary output) minus operating
+/// cost, calculated using shadow prices. A small positive epsilon is added to each activity
+/// coefficient so that assets with near-zero net value still appear in dispatch.
+///
+/// Market costs are calculated using market prices rather than shadow prices. For NPV they use the
+/// same revenue-minus-operating-cost calculation as the activity coefficients. For LCOX the sign is
+/// inverted (as the value represents a cost) and the primary output (commodity of interest) is
+/// excluded.
 pub fn calculate_coefficients_for_assets(
     model: &Model,
     objective_type: &ObjectiveType,
     assets: &[AssetRef],
-    prices: &CommodityPrices,
+    prices: &Prices,
     year: u32,
 ) -> HashMap<AssetRef, Rc<ObjectiveCoefficients>> {
     assets
         .iter()
         .map(|asset| {
-            let coefficient = match objective_type {
-                ObjectiveType::LevelisedCostOfX => calculate_coefficients_for_lcox(
-                    asset,
-                    &model.time_slice_info,
-                    prices,
-                    model.parameters.value_of_lost_load,
-                    year,
-                ),
-                ObjectiveType::NetPresentValue => {
-                    calculate_coefficients_for_npv(asset, &model.time_slice_info, prices, year)
-                }
-            };
+            let coefficient = calculate_coefficients_for_asset(
+                asset,
+                objective_type,
+                &model.time_slice_info,
+                prices,
+                year,
+            );
             (asset.clone(), Rc::new(coefficient))
         })
         .collect()
 }
 
-/// Calculates the cost coefficients for LCOX.
-///
-/// For LCOX the activity coefficient is calculated as operating cost minus revenue from
-/// non-primary flows. The unmet demand coefficient is set from the model parameter
-/// `value_of_lost_load`.
-pub fn calculate_coefficients_for_lcox(
+/// Calculates cost coefficients for a single asset
+pub fn calculate_coefficients_for_asset(
     asset: &AssetRef,
+    objective_type: &ObjectiveType,
     time_slice_info: &TimeSliceInfo,
-    prices: &CommodityPrices,
-    value_of_lost_load: MoneyPerFlow,
-    year: u32,
-) -> ObjectiveCoefficients {
-    // Capacity coefficient
-    let capacity_coefficient = annual_fixed_cost(asset);
-
-    // Activity coefficients
-    let mut activity_coefficients = IndexMap::new();
-    for time_slice in time_slice_info.iter_ids() {
-        let coefficient = calculate_activity_coefficient_for_lcox(asset, time_slice, prices, year);
-        activity_coefficients.insert(time_slice.clone(), coefficient);
-    }
-
-    // Unmet demand coefficient
-    let unmet_demand_coefficient = value_of_lost_load;
-
-    ObjectiveCoefficients {
-        capacity_coefficient,
-        activity_coefficients,
-        unmet_demand_coefficient,
-    }
-}
-
-/// Calculates the cost coefficients for NPV.
-///
-/// For NPV the activity coefficient is revenue (including primary output) minus operating
-/// cost; a small positive epsilon is added to activity coefficients so that assets with
-/// near-zero net value still appear in dispatch. Capacity costs and unmet-demand penalties
-/// are set to zero for the NPV objective.
-pub fn calculate_coefficients_for_npv(
-    asset: &AssetRef,
-    time_slice_info: &TimeSliceInfo,
-    prices: &CommodityPrices,
+    prices: &Prices,
     year: u32,
 ) -> ObjectiveCoefficients {
     // Small constant added to each activity coefficient to ensure break-even/slightly negative
@@ -103,56 +73,62 @@ pub fn calculate_coefficients_for_npv(
 
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
+    let mut market_costs = IndexMap::new();
     for time_slice in time_slice_info.iter_ids() {
-        let coefficient = calculate_activity_coefficient_for_npv(asset, time_slice, prices, year);
+        // Get the operating cost of the asset. This includes the variable operating cost, levies and
+        // flow costs, but excludes costs/revenues from commodity consumption/production.
+        let operating_cost = asset.get_operating_cost(year, time_slice);
+
+        let coefficient =
+            calculate_asset_revenues(asset, operating_cost, time_slice, &prices.shadow);
         activity_coefficients.insert(
             time_slice.clone(),
             coefficient + EPSILON_ACTIVITY_COEFFICIENT,
         );
-    }
 
-    // Unmet demand coefficient (we don't apply a cost to unmet demand, so we set this to zero)
-    let unmet_demand_coefficient = MoneyPerFlow(0.0);
+        let market_cost = match objective_type {
+            ObjectiveType::LevelisedCostOfX => {
+                calculate_asset_costs_for_lcox(asset, operating_cost, time_slice, &prices.market)
+            }
+            ObjectiveType::NetPresentValue => {
+                calculate_asset_revenues(asset, operating_cost, time_slice, &prices.market)
+            }
+        };
+        market_costs.insert(time_slice.clone(), market_cost);
+    }
 
     ObjectiveCoefficients {
-        capacity_coefficient: MoneyPerCapacity(0.0),
         activity_coefficients,
-        unmet_demand_coefficient,
+        market_costs,
     }
 }
 
-/// Calculate a single activity coefficient for the LCOX objective for a given time slice.
-fn calculate_activity_coefficient_for_lcox(
+/// Calculate the revenue from all flows minus operating cost
+fn calculate_asset_revenues(
     asset: &AssetRef,
+    operating_cost: MoneyPerActivity,
     time_slice: &TimeSliceID,
-    prices: &CommodityPrices,
-    year: u32,
+    prices: &PriceMap,
 ) -> MoneyPerActivity {
-    // Get the operating cost of the asset. This includes the variable operating cost, levies and
-    // flow costs, but excludes costs/revenues from commodity consumption/production.
-    let operating_cost = asset.get_operating_cost(year, time_slice);
-
-    // Revenue from flows excluding the primary output
-    let revenue_from_flows = asset.get_revenue_from_flows_excluding_primary(prices, time_slice);
-
-    // The activity coefficient is the operating cost minus the revenue from non-primary flows
-    operating_cost - revenue_from_flows
-}
-
-/// Calculate a single activity coefficient for the NPV objective for a given time slice.
-fn calculate_activity_coefficient_for_npv(
-    asset: &AssetRef,
-    time_slice: &TimeSliceID,
-    prices: &CommodityPrices,
-    year: u32,
-) -> MoneyPerActivity {
-    // Get the operating cost of the asset. This includes the variable operating cost, levies and
-    // flow costs, but excludes costs/revenues from commodity consumption/production.
-    let operating_cost = asset.get_operating_cost(year, time_slice);
-
     // Revenue from flows including the primary output
     let revenue_from_flows = asset.get_revenue_from_flows(prices, time_slice);
 
     // The activity coefficient is the revenue from flows minus the operating cost (net revenue)
     revenue_from_flows - operating_cost
+}
+
+/// Calculate asset costs for LCOX objective.
+///
+/// Excludes revenues from the primary output (commodity of interest).
+fn calculate_asset_costs_for_lcox(
+    asset: &AssetRef,
+    operating_cost: MoneyPerActivity,
+    time_slice: &TimeSliceID,
+    prices: &PriceMap,
+) -> MoneyPerActivity {
+    // Revenue from flows excluding the primary output
+    let revenue_from_flows = asset.get_revenue_from_flows_excluding_primary(prices, time_slice);
+
+    // The activity coefficient is the operating cost minus the revenue from non-primary flows
+    operating_cost - revenue_from_flows
 }

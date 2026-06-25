@@ -6,7 +6,7 @@ use crate::process::{
     ActivityLimits, FlowDirection, Process, ProcessFlow, ProcessID, ProcessParameter,
 };
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
@@ -20,7 +20,7 @@ use std::cell::Cell;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter;
-use std::ops::{Deref, RangeInclusive};
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 mod capacity;
@@ -62,15 +62,13 @@ pub struct AssetGroupID(u32);
 
 /// The state of an asset
 ///
-/// New assets are created as either `Future` or `Candidate` assets. `Future` assets (which are
-/// specified in the input data) have a fixed capacity and capital costs already accounted for,
-/// whereas `Candidate` assets capital costs are not yet accounted for, and their capacity is
-/// determined by the investment algorithm.
+/// New assets are created as either `Ready` or `Candidate` assets. `Ready` assets from the input
+/// data have a fixed capacity and capital costs already accounted for, whereas `Candidate` assets'
+/// capital costs are not yet accounted for, and their capacity is determined by the investment
+/// algorithm.
 ///
-/// `Future` and `Candidate` assets can be converted to `Commissioned` assets by calling
-/// the `commission` method (or via pool operations that commission future/selected assets).
-///
-/// `Commissioned` assets can be decommissioned by calling `decommission`.
+/// `Ready` assets can be converted to `Commissioned` assets by calling the `commission` method (or
+/// via pool operations that commission ready assets).
 #[derive(Clone, Debug, PartialEq, strum::Display)]
 pub enum AssetState {
     /// The asset has been commissioned
@@ -86,24 +84,12 @@ pub enum AssetState {
         /// All divided assets have a parent, which tracks the total capacity across the children.
         parent: Option<AssetRef>,
     },
-    /// The asset has been decommissioned
-    Decommissioned {
-        /// The ID of the asset
-        id: AssetID,
-        /// The ID of the agent that owned the asset
-        agent_id: AgentID,
-        /// The year the asset was decommissioned
-        decommission_year: u32,
-    },
-    /// The asset is planned for commissioning in the future
-    Future {
-        /// The ID of the agent that will own the asset
-        agent_id: AgentID,
-    },
-    /// The asset has been selected for investment, but not yet confirmed
-    Selected {
+    /// The asset is ready for investment, but not yet confirmed
+    Ready {
         /// The ID of the agent that would own the asset
         agent_id: AgentID,
+        /// The reason why this asset is due to be commissioned
+        commission_reason: &'static str,
     },
     /// The asset is a parent of other assets.
     ///
@@ -192,51 +178,12 @@ impl Asset {
         }
     }
 
-    /// Create a new future asset
-    pub fn new_future_with_max_decommission(
-        agent_id: AgentID,
-        process: Rc<Process>,
-        region_id: RegionID,
-        capacity: Capacity,
-        commission_year: u32,
-        max_decommission_year: Option<u32>,
-    ) -> Result<Self> {
-        check_capacity_valid_for_asset(capacity)?;
-        let unit_size = process.unit_size;
-        Self::new_with_state(
-            AssetState::Future { agent_id },
-            process,
-            region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
-            commission_year,
-            max_decommission_year,
-        )
-    }
-
-    /// Create a new future asset
-    pub fn new_future(
-        agent_id: AgentID,
-        process: Rc<Process>,
-        region_id: RegionID,
-        capacity: Capacity,
-        commission_year: u32,
-    ) -> Result<Self> {
-        Self::new_future_with_max_decommission(
-            agent_id,
-            process,
-            region_id,
-            capacity,
-            commission_year,
-            None,
-        )
-    }
-
-    /// Create a new selected asset
+    /// Create a new ready asset
     ///
-    /// This is only used for testing. In the real program, Selected assets can only be created from
+    /// This is only used for testing. In the real program, Ready assets can only be created from
     /// Candidate assets by calling `select_candidate_for_investment`.
     #[cfg(test)]
-    fn new_selected(
+    pub fn new_ready(
         agent_id: AgentID,
         process: Rc<Process>,
         region_id: RegionID,
@@ -245,7 +192,10 @@ impl Asset {
     ) -> Result<Self> {
         let unit_size = process.unit_size;
         Self::new_with_state(
-            AssetState::Selected { agent_id },
+            AssetState::Ready {
+                agent_id,
+                commission_reason: "selected",
+            },
             process,
             region_id,
             AssetCapacity::from_capacity(capacity, unit_size),
@@ -395,6 +345,16 @@ impl Asset {
         lb..=ub
     }
 
+    /// Get the activity limits per unit of capacity for this asset for a given time slice selection
+    pub fn get_activity_per_capacity_limits_for_selection(
+        &self,
+        time_slice_selection: &TimeSliceSelection,
+    ) -> RangeInclusive<ActivityPerCapacity> {
+        let limits = self.activity_limits.get_limit(time_slice_selection);
+        let cap2act = self.process.capacity_to_activity;
+        (cap2act * *limits.start())..=(cap2act * *limits.end())
+    }
+
     /// Iterate over activity limits for this asset
     pub fn iter_activity_limits(
         &self,
@@ -451,7 +411,7 @@ impl Asset {
     /// If a price is missing, it is assumed to be zero.
     pub fn get_revenue_from_flows(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         self.get_revenue_from_flows_with_filter(prices, time_slice, |_| true)
@@ -462,7 +422,7 @@ impl Asset {
     /// If a price is missing, it is assumed to be zero.
     pub fn get_revenue_from_flows_excluding_primary(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         let excluded_commodity = self.primary_output().map(|flow| &flow.commodity.id);
@@ -477,7 +437,7 @@ impl Asset {
     /// If a price is missing, there is assumed to be no cost.
     pub fn get_input_cost_from_prices(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
         // Revenues of input flows are negative costs, so we negate the result
@@ -492,7 +452,7 @@ impl Asset {
     /// be zero.
     fn get_revenue_from_flows_with_filter<F>(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         time_slice: &TimeSliceID,
         mut filter_for_flows: F,
     ) -> MoneyPerActivity
@@ -516,7 +476,7 @@ impl Asset {
     /// Includes levies, flow costs, costs of inputs and variable operating costs
     fn get_generic_activity_cost(
         &self,
-        prices: &CommodityPrices,
+        prices: &PriceMap,
         year: u32,
         time_slice: &TimeSliceID,
     ) -> MoneyPerActivity {
@@ -549,7 +509,7 @@ impl Asset {
     /// - Production levies and flow costs for the specific SED/SVD output commodity
     pub fn iter_marginal_costs_with_filter<'a>(
         &'a self,
-        prices: &'a CommodityPrices,
+        prices: &'a PriceMap,
         year: u32,
         time_slice: &'a TimeSliceID,
         filter: impl Fn(&CommodityID) -> bool + 'a,
@@ -596,7 +556,7 @@ impl Asset {
     /// See `iter_marginal_costs_with_filter` for details.
     pub fn iter_marginal_costs<'a>(
         &'a self,
-        prices: &'a CommodityPrices,
+        prices: &'a PriceMap,
         year: u32,
         time_slice: &'a TimeSliceID,
     ) -> Box<dyn Iterator<Item = (CommodityID, MoneyPerFlow)> + 'a> {
@@ -676,6 +636,11 @@ impl Asset {
             .map(|commodity_id| &self.flows[commodity_id])
     }
 
+    /// Get the primary output commodity (if any) for this asset
+    pub fn primary_output_commodity(&self) -> Option<&CommodityID> {
+        self.process.primary_output.as_ref()
+    }
+
     /// Whether this asset has been commissioned
     pub fn is_commissioned(&self) -> bool {
         matches!(&self.state, AssetState::Commissioned { .. })
@@ -684,16 +649,6 @@ impl Asset {
     /// Get the commission year for this asset
     pub fn commission_year(&self) -> u32 {
         self.commission_year
-    }
-
-    /// Get the decommission year for this asset
-    pub fn decommission_year(&self) -> Option<u32> {
-        match &self.state {
-            AssetState::Decommissioned {
-                decommission_year, ..
-            } => Some(*decommission_year),
-            _ => None,
-        }
     }
 
     /// Get the region ID for this asset
@@ -714,9 +669,7 @@ impl Asset {
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
-            AssetState::Commissioned { id, .. } | AssetState::Decommissioned { id, .. } => {
-                Some(*id)
-            }
+            AssetState::Commissioned { id, .. } => Some(*id),
             _ => None,
         }
     }
@@ -763,9 +716,7 @@ impl Asset {
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
             AssetState::Commissioned { agent_id, .. }
-            | AssetState::Decommissioned { agent_id, .. }
-            | AssetState::Future { agent_id }
-            | AssetState::Selected { agent_id }
+            | AssetState::Ready { agent_id, .. }
             | AssetState::Parent { agent_id, .. } => Some(agent_id),
             AssetState::Candidate => None,
         }
@@ -781,14 +732,11 @@ impl Asset {
         self.capacity().total_capacity()
     }
 
-    /// Set the capacity for this asset (only for Candidate or Selected assets)
+    /// Set the capacity for this asset (only for Candidate or Ready assets)
     pub fn set_capacity(&mut self, capacity: AssetCapacity) {
         assert!(
-            matches!(
-                self.state,
-                AssetState::Candidate | AssetState::Selected { .. }
-            ),
-            "set_capacity can only be called on Candidate or Selected assets"
+            matches!(self.state, AssetState::Candidate | AssetState::Ready { .. }),
+            "set_capacity can only be called on Candidate or Ready assets"
         );
         assert!(
             capacity.total_capacity() >= Capacity(0.0),
@@ -835,7 +783,7 @@ impl Asset {
     }
 
     /// Decommission this asset
-    fn decommission(&mut self, decommission_year: u32, reason: &str) {
+    fn decommission(&mut self, reason: &str) {
         let (id, agent_id, parent) = match &self.state {
             AssetState::Commissioned {
                 id,
@@ -857,27 +805,23 @@ impl Asset {
         if let Some(parent) = parent {
             parent.decrement_unit_count();
         }
-
-        self.state = AssetState::Decommissioned {
-            id,
-            agent_id,
-            decommission_year: decommission_year.min(self.max_decommission_year()),
-        };
     }
 
     /// Commission the asset.
     ///
-    /// Only assets with an [`AssetState`] of `Future` or `Selected` can be commissioned. If the
-    /// asset's state is something else, this function will panic.
+    /// Only assets with an [`AssetState`] of `Ready` can be commissioned. If the asset's state is
+    /// something else, this function will panic.
     ///
     /// # Arguments
     ///
     /// * `id` - The ID to give the newly commissioned asset
-    /// * `reason` - The reason for commissioning (included in log)
     /// * `parent` - The parent asset, if this is a child asset
-    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>, reason: &str) {
-        let agent_id = match &self.state {
-            AssetState::Future { agent_id } | AssetState::Selected { agent_id } => agent_id,
+    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>) {
+        let (agent_id, reason) = match &self.state {
+            AssetState::Ready {
+                agent_id,
+                commission_reason,
+            } => (agent_id, commission_reason),
             state => panic!("Assets with state {state} cannot be commissioned"),
         };
         debug!(
@@ -896,14 +840,17 @@ impl Asset {
         };
     }
 
-    /// Select a Candidate asset for investment, converting it to a Selected state
+    /// Select a Candidate asset for investment, converting it to a Ready state
     pub fn select_candidate_for_investment(&mut self, agent_id: AgentID) {
         assert!(
             self.state == AssetState::Candidate,
             "select_candidate_for_investment can only be called on Candidate assets"
         );
         check_capacity_valid_for_asset(self.total_capacity()).unwrap();
-        self.state = AssetState::Selected { agent_id };
+        self.state = AssetState::Ready {
+            agent_id,
+            commission_reason: "selected",
+        };
     }
 
     /// Set the year this asset was mothballed
@@ -1026,6 +973,49 @@ pub fn check_region_year_valid_for_process(
     Ok(())
 }
 
+/// An asset defined by the user in the assets input file
+#[derive(Clone, Debug, PartialEq, derive_more::Deref, derive_more::Into)]
+pub struct UserAsset(#[deref(forward)] AssetRef);
+
+impl UserAsset {
+    /// Create a new [`UserAsset`]
+    pub fn new(
+        agent_id: AgentID,
+        process: Rc<Process>,
+        region_id: RegionID,
+        capacity: Capacity,
+        commission_year: u32,
+        max_decommission_year: Option<u32>,
+    ) -> Result<Self> {
+        check_capacity_valid_for_asset(capacity)?;
+        let unit_size = process.unit_size;
+        let asset = Asset::new_with_state(
+            AssetState::Ready {
+                agent_id,
+                commission_reason: "user input",
+            },
+            process,
+            region_id,
+            AssetCapacity::from_capacity(capacity, unit_size),
+            commission_year,
+            max_decommission_year,
+        )?;
+
+        Ok(Self(asset.into()))
+    }
+}
+
+#[cfg(test)]
+impl From<Asset> for UserAsset {
+    fn from(asset: Asset) -> Self {
+        assert!(
+            matches!(asset.state, AssetState::Ready { .. }),
+            "User assets must be in Ready state"
+        );
+        Self(asset.into())
+    }
+}
+
 /// Whether the specified value is a valid capacity for an asset
 pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     ensure!(
@@ -1040,8 +1030,8 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
 /// [`AssetRef`] implements equality, ordering, and hashing using an [`AssetID`], if available, but
 /// otherwise using a combination of other fields which should be unique at all the relevant points
 /// in the simulation.
-#[derive(Clone, Debug)]
-pub struct AssetRef(Rc<Asset>);
+#[derive(Clone, Debug, derive_more::Deref, derive_more::From, derive_more::Into)]
+pub struct AssetRef(#[deref(forward)] Rc<Asset>);
 
 impl AssetRef {
     /// Make a mutable reference to the underlying [`Asset`]
@@ -1075,17 +1065,14 @@ impl AssetRef {
     /// When the asset has a discrete capacity, each of the children will be made up of a single
     /// unit of the original asset's unit size.
     ///
-    /// Panics if this asset's state is not `Future` or `Selected`.
+    /// Panics if this asset's state is not `Ready`.
     fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
     where
         F: FnMut(Option<&AssetRef>, AssetRef),
     {
         assert!(
-            matches!(
-                self.state,
-                AssetState::Future { .. } | AssetState::Selected { .. }
-            ),
-            "Assets with state {} cannot be divided. Only Future or Selected assets can be divided",
+            matches!(self.state, AssetState::Ready { .. }),
+            "Assets with state {} cannot be divided. Only Ready assets can be divided",
             self.state
         );
 
@@ -1151,29 +1138,9 @@ impl AssetRef {
     }
 }
 
-impl From<Rc<Asset>> for AssetRef {
-    fn from(value: Rc<Asset>) -> Self {
-        Self(value)
-    }
-}
-
 impl From<Asset> for AssetRef {
     fn from(value: Asset) -> Self {
         Self::from(Rc::new(value))
-    }
-}
-
-impl From<AssetRef> for Rc<Asset> {
-    fn from(value: AssetRef) -> Self {
-        value.0
-    }
-}
-
-impl Deref for AssetRef {
-    type Target = Asset;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -1265,8 +1232,8 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple, asset,
-        asset_divisible, process, process_activity_limits_map, process_flows_map, region_id,
+        agent_id, assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple,
+        asset, asset_divisible, process, process_activity_limits_map, process_flows_map, region_id,
         svd_commodity, time_slice, time_slice_info,
     };
     use crate::patch::FilePatch;
@@ -1306,61 +1273,13 @@ mod tests {
             Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2020).unwrap();
 
         // Set input prices
-        let mut input_prices = CommodityPrices::default();
+        let mut input_prices = PriceMap::default();
         input_prices.insert(&commodity_rc.id, &region_id, &time_slice, MoneyPerFlow(3.0));
 
         // Call function
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
         // Should be -coeff * price = -(-2.0) * 3.0 = 6.0
         assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
-    }
-
-    #[rstest]
-    #[case(Capacity(0.01))]
-    #[case(Capacity(0.5))]
-    #[case(Capacity(1.0))]
-    #[case(Capacity(100.0))]
-    fn asset_new_valid(process: Process, #[case] capacity: Capacity) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("GBR".into());
-        let asset = Asset::new_future(agent_id, process.into(), region_id, capacity, 2015).unwrap();
-        assert!(asset.id().is_none());
-    }
-
-    #[rstest]
-    #[case(Capacity(0.0))]
-    #[case(Capacity(-0.01))]
-    #[case(Capacity(-1.0))]
-    #[case(Capacity(f64::NAN))]
-    #[case(Capacity(f64::INFINITY))]
-    #[case(Capacity(f64::NEG_INFINITY))]
-    fn asset_new_invalid_capacity(process: Process, #[case] capacity: Capacity) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("GBR".into());
-        assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, capacity, 2015),
-            "Capacity must be a finite, positive number"
-        );
-    }
-
-    #[rstest]
-    fn asset_new_invalid_commission_year(process: Process) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("GBR".into());
-        assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, Capacity(1.0), 2007),
-            "Process process1 does not operate in the year 2007"
-        );
-    }
-
-    #[rstest]
-    fn asset_new_invalid_region(process: Process) {
-        let agent_id = AgentID("agent1".into());
-        let region_id = RegionID("FRA".into());
-        assert_error!(
-            Asset::new_future(agent_id, process.into(), region_id, Capacity(1.0), 2015),
-            "Process process1 does not operate in region FRA"
-        );
     }
 
     #[fixture]
@@ -1382,7 +1301,7 @@ mod tests {
 
     #[fixture]
     fn asset_with_activity_limits(process_with_activity_limits: Process) -> Asset {
-        Asset::new_future(
+        Asset::new_ready(
             "agent1".into(),
             Rc::new(process_with_activity_limits),
             "GBR".into(),
@@ -1405,6 +1324,76 @@ mod tests {
     }
 
     #[rstest]
+    #[case(Capacity(0.01))]
+    #[case(Capacity(0.5))]
+    #[case(Capacity(1.0))]
+    #[case(Capacity(100.0))]
+    fn user_asset_new_valid(
+        agent_id: AgentID,
+        process: Process,
+        region_id: RegionID,
+        #[case] capacity: Capacity,
+    ) {
+        let asset =
+            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None).unwrap();
+        assert!(asset.id().is_none());
+    }
+
+    #[rstest]
+    #[case(Capacity(0.0))]
+    #[case(Capacity(-0.01))]
+    #[case(Capacity(-1.0))]
+    #[case(Capacity(f64::NAN))]
+    #[case(Capacity(f64::INFINITY))]
+    #[case(Capacity(f64::NEG_INFINITY))]
+    fn user_asset_new_invalid_capacity(
+        agent_id: AgentID,
+        process: Process,
+        region_id: RegionID,
+        #[case] capacity: Capacity,
+    ) {
+        assert_error!(
+            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None),
+            "Capacity must be a finite, positive number"
+        );
+    }
+
+    #[rstest]
+    fn user_asset_new_invalid_commission_year(
+        agent_id: AgentID,
+        process: Process,
+        region_id: RegionID,
+    ) {
+        assert_error!(
+            UserAsset::new(
+                agent_id,
+                process.into(),
+                region_id,
+                Capacity(1.0),
+                2007,
+                None
+            ),
+            "Process process1 does not operate in the year 2007"
+        );
+    }
+
+    #[rstest]
+    fn user_asset_new_invalid_region(agent_id: AgentID, process: Process) {
+        let region_id = RegionID("FRA".into());
+        assert_error!(
+            UserAsset::new(
+                agent_id,
+                process.into(),
+                region_id,
+                Capacity(1.0),
+                2015,
+                None
+            ),
+            "Process process1 does not operate in region FRA"
+        );
+    }
+
+    #[rstest]
     #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
     #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
     #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
@@ -1417,7 +1406,7 @@ mod tests {
     ) {
         process.unit_size = Some(unit_size);
         let asset = AssetRef::from(
-            Asset::new_future(
+            Asset::new_ready(
                 "agent1".into(),
                 Rc::new(process),
                 "GBR".into(),
@@ -1528,121 +1517,18 @@ mod tests {
 
     #[rstest]
     fn asset_commission(process: Process) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset1 = Asset::new_future(
+        // Test successful commissioning of Ready asset
+        let mut asset = Asset::new_ready(
             "agent1".into(),
-            Rc::clone(&process_rc),
+            process.into(),
             "GBR".into(),
             Capacity(1.0),
             2020,
         )
         .unwrap();
-        asset1.commission(AssetID(1), None, "");
-        assert!(asset1.is_commissioned());
-        assert_eq!(asset1.id(), Some(AssetID(1)));
-
-        // Test successful commissioning of Selected asset
-        let mut asset2 = Asset::new_selected(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-        )
-        .unwrap();
-        asset2.commission(AssetID(2), None, "");
-        assert!(asset2.is_commissioned());
-        assert_eq!(asset2.id(), Some(AssetID(2)));
-    }
-
-    #[rstest]
-    #[case::commission_during_process_lifetime(2024, 2024)]
-    #[case::decommission_after_process_lifetime_ends(2026, 2025)]
-    fn asset_decommission(
-        #[case] requested_decommission_year: u32,
-        #[case] expected_decommission_year: u32,
-        process: Process,
-    ) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset = Asset::new_future(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-        )
-        .unwrap();
-        asset.commission(AssetID(1), None, "");
+        asset.commission(AssetID(2), None);
         assert!(asset.is_commissioned());
-        assert_eq!(asset.id(), Some(AssetID(1)));
-
-        // Test successful decommissioning
-        asset.decommission(requested_decommission_year, "");
-        assert!(!asset.is_commissioned());
-        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
-    }
-
-    #[rstest]
-    #[case::decommission_after_predefined_max_year(2026, 2025, Some(2025))]
-    #[case::decommission_before_predefined_max_year(2024, 2024, Some(2025))]
-    #[case::decommission_during_process_lifetime_end_no_max_year(2024, 2024, None)]
-    #[case::decommission_after_process_lifetime_end_no_max_year(2026, 2025, None)]
-    fn asset_decommission_with_max_decommission_year_predefined(
-        #[case] requested_decommission_year: u32,
-        #[case] expected_decommission_year: u32,
-        #[case] max_decommission_year: Option<u32>,
-        process: Process,
-    ) {
-        // Test successful commissioning of Future asset
-        let process_rc = Rc::new(process);
-        let mut asset = Asset::new_future_with_max_decommission(
-            "agent1".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(1.0),
-            2020,
-            max_decommission_year,
-        )
-        .unwrap();
-        asset.commission(AssetID(1), None, "");
-        assert!(asset.is_commissioned());
-        assert_eq!(asset.id(), Some(AssetID(1)));
-
-        // Test successful decommissioning
-        asset.decommission(requested_decommission_year, "");
-        assert!(!asset.is_commissioned());
-        assert_eq!(asset.decommission_year(), Some(expected_decommission_year));
-    }
-
-    #[rstest]
-    fn asset_decommission_divisible(asset_divisible: Asset) {
-        let asset = AssetRef::from(asset_divisible);
-        let original_capacity = asset.capacity();
-
-        // Commission children
-        let mut children = Vec::new();
-        let mut next_id = 0;
-        asset.into_for_each_child(&mut 0, |parent, mut child| {
-            child
-                .make_mut()
-                .commission(AssetID(next_id), parent.cloned(), "");
-            next_id += 1;
-            children.push(child);
-        });
-
-        let parent = children[0].parent().unwrap().clone();
-        assert_eq!(parent.capacity(), original_capacity);
-        children[0].make_mut().decommission(2020, "");
-
-        let AssetCapacity::Discrete(original_units, original_unit_size) = original_capacity else {
-            panic!("Capacity type should be discrete");
-        };
-        assert_eq!(
-            parent.capacity(),
-            AssetCapacity::Discrete(original_units - 1, original_unit_size)
-        );
+        assert_eq!(asset.id(), Some(AssetID(2)));
     }
 
     #[rstest]
@@ -1650,15 +1536,7 @@ mod tests {
     fn commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), None, "");
-    }
-
-    #[rstest]
-    #[should_panic(expected = "Cannot decommission an asset that hasn't been commissioned")]
-    fn decommission_wrong_state(process: Process) {
-        let mut asset =
-            Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.decommission(2025, "");
+        asset.commission(AssetID(1), None);
     }
 
     #[test]

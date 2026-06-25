@@ -1,21 +1,23 @@
 //! This module defines various unit types and their conversions.
-
 use float_cmp::{ApproxEq, F64Margin};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::iter::Sum;
-use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
+use std::str::FromStr;
 
 /// A trait encompassing most of the functionality of unit types
 pub trait UnitType:
     fmt::Debug
     + Copy
+    + FromStr
     + PartialEq
     + PartialOrd
     + Serialize
     + Add
     + Sub
     + Div
+    + Neg
     + Mul<Dimensionless, Output = Self>
     + AddAssign
     + SubAssign
@@ -42,7 +44,7 @@ pub trait UnitType:
 }
 
 macro_rules! base_unit_struct {
-    ($name:ident) => {
+    ($name:ident $(, $extra_derive:path)* $(,)?) => {
         /// A basic unit type wrapper around an `f64` scalar value.
         #[derive(
             Debug,
@@ -53,6 +55,13 @@ macro_rules! base_unit_struct {
             Serialize,
             derive_more::Add,
             derive_more::Sub,
+            derive_more::AddAssign,
+            derive_more::SubAssign,
+            derive_more::Neg,
+            derive_more::Sum,
+            derive_more::Display,
+            derive_more::FromStr,
+            $($extra_derive,)*
         )]
         pub struct $name(pub f64);
 
@@ -62,36 +71,26 @@ macro_rules! base_unit_struct {
                 Dimensionless(self.0 / rhs.0)
             }
         }
-        impl std::iter::Sum for $name {
-            fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-                iter.fold($name(0.0), |a, b| $name(a.0 + b.0))
+        impl std::ops::Mul<Dimensionless> for $name {
+            type Output = $name;
+            fn mul(self, rhs: Dimensionless) -> $name {
+                $name(self.0 * rhs.0)
             }
         }
-        impl AddAssign for $name {
-            fn add_assign(&mut self, other: Self) {
-                self.0 += other.0;
+        impl std::ops::MulAssign<Dimensionless> for $name {
+            fn mul_assign(&mut self, rhs: Dimensionless) {
+                self.0 *= rhs.0;
             }
         }
-        impl SubAssign for $name {
-            fn sub_assign(&mut self, other: Self) {
-                self.0 -= other.0;
-            }
-        }
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", self.0)
+        impl std::ops::DivAssign<Dimensionless> for $name {
+            fn div_assign(&mut self, rhs: Dimensionless) {
+                self.0 /= rhs.0;
             }
         }
         impl float_cmp::ApproxEq for $name {
             type Margin = float_cmp::F64Margin;
             fn approx_eq<T: Into<Self::Margin>>(self, other: Self, margin: T) -> bool {
                 self.0.approx_eq(other.0, margin)
-            }
-        }
-        impl std::ops::Neg for $name {
-            type Output = $name;
-            fn neg(self) -> $name {
-                $name(-self.0)
             }
         }
         impl $name {
@@ -182,27 +181,7 @@ macro_rules! base_unit_struct {
 }
 
 // Define Dimensionless first
-base_unit_struct!(Dimensionless);
-
-// Add extra methods for Dimensionless
-impl From<f64> for Dimensionless {
-    fn from(val: f64) -> Self {
-        Self(val)
-    }
-}
-impl From<Dimensionless> for f64 {
-    fn from(val: Dimensionless) -> Self {
-        val.0
-    }
-}
-
-impl Mul for Dimensionless {
-    type Output = Dimensionless;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Dimensionless(self.0 * rhs.0)
-    }
-}
+base_unit_struct!(Dimensionless, derive_more::From, derive_more::Into);
 
 impl Dimensionless {
     /// Raises this dimensionless number to the power of `rhs`.
@@ -216,12 +195,6 @@ macro_rules! unit_struct {
     ($name:ident) => {
         base_unit_struct!($name);
 
-        impl std::ops::Mul<Dimensionless> for $name {
-            type Output = $name;
-            fn mul(self, rhs: Dimensionless) -> $name {
-                $name(self.0 * rhs.0)
-            }
-        }
         impl std::ops::Mul<$name> for Dimensionless {
             type Output = $name;
             fn mul(self, rhs: $name) -> $name {

@@ -368,7 +368,7 @@ mod tests {
                 &region_ids,
                 &time_slice_info,
             ),
-            "Unknown ID FRA found"
+            "Unknown region ID 'FRA'"
         );
     }
 
@@ -393,7 +393,7 @@ mod tests {
                 &region_ids,
                 &time_slice_info,
             ),
-            "'summer' is not a valid season"
+            "Unknown season 'summer'"
         );
     }
 

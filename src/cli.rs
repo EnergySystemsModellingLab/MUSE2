@@ -2,7 +2,7 @@
 use crate::graph::save_commodity_graphs_for_model;
 use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
-use crate::output::{create_output_directory, get_graphs_dir, get_output_dir};
+use crate::output::{copy_input_files, create_output_directory, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
 use ::log::{info, warn};
 use anyhow::{Context, Result};
@@ -17,7 +17,15 @@ use settings::SettingsSubcommands;
 
 /// The command line interface for the simulation.
 #[derive(Parser)]
-#[command(version, about)]
+#[command(
+    version,
+    about,
+    after_help = concat!(
+        "For more detailed documentation on this version of MUSE2, see: https://energysystemsmodellinglab.github.io/MUSE2/release/v",
+        env!("CARGO_PKG_VERSION"),
+        "/"
+    )
+)]
 struct Cli {
     /// The available commands.
     #[command(subcommand)]
@@ -39,6 +47,10 @@ pub struct RunOpts {
     /// Whether to write additional information to CSV files
     #[arg(long)]
     pub debug_model: bool,
+
+    /// Whether to skip copying input files to the output folder
+    #[arg(long)]
+    pub no_copy_input_files: bool,
 }
 
 /// Options for the `graph` command
@@ -134,6 +146,9 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     if opts.overwrite {
         settings.overwrite = true;
     }
+    if opts.no_copy_input_files {
+        settings.copy_input_files = false;
+    }
 
     // Get path to output folder
     let pathbuf: PathBuf;
@@ -152,13 +167,26 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
             )
         })?;
 
+    let model_path = model_path
+        .canonicalize()
+        .context("Failed to resolve model path.")?;
+    let model_name = model_path
+        .file_name()
+        .context("Model cannot be the root directory.")?
+        .to_str()
+        .context("Invalid chars in model directory name")?;
+
+    if settings.copy_input_files {
+        copy_input_files(&model_path, output_path, model_name)
+            .context("Failed to copy input files to output directory.")?;
+    }
     // Initialise program logger
     log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
 
     info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
 
     // Load the model to run
-    let model = load_model(model_path).context("Failed to load model.")?;
+    let model = load_model(&model_path).context("Failed to load model.")?;
     info!("Loaded model from {}", model_path.display());
     info!("Output folder: {}", output_path.display());
 

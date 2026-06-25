@@ -2,7 +2,7 @@
 //! assets.
 use crate::commodity::CommodityID;
 use crate::id::define_id_type;
-use crate::process::{FlowDirection, Process};
+use crate::process::Process;
 use crate::region::RegionID;
 use crate::units::Dimensionless;
 use indexmap::{IndexMap, IndexSet};
@@ -10,7 +10,7 @@ use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-define_id_type! {AgentID}
+define_id_type! {AgentID, "agent ID"}
 
 /// A map of [`Agent`]s, keyed by agent ID
 pub type AgentMap = IndexMap<AgentID, Agent>;
@@ -18,8 +18,8 @@ pub type AgentMap = IndexMap<AgentID, Agent>;
 /// A map of commodity portions for an agent, keyed by commodity and year
 pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
 
-/// A map for the agent's search space, keyed by commodity and year
-pub type AgentSearchSpaceMap = HashMap<(CommodityID, u32), Rc<Vec<Rc<Process>>>>;
+/// A map for the agent's search space, keyed by commodity, region, and year
+pub type AgentSearchSpaceMap = HashMap<(CommodityID, RegionID, u32), Rc<Vec<Rc<Process>>>>;
 
 /// A map of objectives for an agent, keyed by year.
 ///
@@ -48,19 +48,19 @@ pub struct Agent {
 
 impl Agent {
     /// Get all the processes in this agent's search space which produce the commodity in the given
-    /// year
-    pub fn iter_possible_producers_of<'a>(
-        &'a self,
+    /// region and year.
+    ///
+    /// # Panics
+    ///
+    /// If the agent does not operate in the given region or is not responsible for the given
+    /// commodity in the given year.
+    pub fn iter_search_space(
+        &self,
         region_id: &RegionID,
-        commodity_id: &'a CommodityID,
+        commodity_id: &CommodityID,
         year: u32,
-    ) -> impl Iterator<Item = &'a Rc<Process>> + use<'a> {
-        let flows_key = (region_id.clone(), year);
-        self.search_space[&(commodity_id.clone(), year)]
-            .iter()
-            .filter(move |process| {
-                process.flows[&flows_key][commodity_id].direction() == FlowDirection::Output
-            })
+    ) -> impl Iterator<Item = &Rc<Process>> {
+        self.search_space[&(commodity_id.clone(), region_id.clone(), year)].iter()
     }
 }
 

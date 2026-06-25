@@ -2,7 +2,7 @@
 use crate::graph::investment::solve_investment_order_for_model;
 use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
-use crate::id::{HasID, IDLike};
+use crate::id::{HasID, ID};
 use crate::model::{Model, ModelParameters};
 use crate::region::RegionID;
 use crate::units::UnitType;
@@ -29,6 +29,10 @@ mod region;
 use region::read_regions;
 mod time_slice;
 use time_slice::read_time_slice_info;
+mod range;
+use range::{parse_range, parse_range_parts};
+mod year;
+use year::parse_year_str;
 
 /// A trait which provides a method to insert a key and value into a map
 pub trait Insert<K, V> {
@@ -131,13 +135,13 @@ pub fn input_err_msg<P: AsRef<Path>>(file_path: P) -> String {
 ///
 /// As this function is only ever used for top-level CSV files (i.e. the ones which actually define
 /// the IDs for a given type), we use an ordered map to maintain the order in the input files.
-fn read_csv_id_file<T, ID: IDLike>(file_path: &Path) -> Result<IndexMap<ID, T>>
+fn read_csv_id_file<T, I: ID>(file_path: &Path) -> Result<IndexMap<I, T>>
 where
-    T: HasID<ID> + DeserializeOwned,
+    T: HasID<I> + DeserializeOwned,
 {
-    fn fill_and_validate_map<T, ID: IDLike>(file_path: &Path) -> Result<IndexMap<ID, T>>
+    fn fill_and_validate_map<T, I: ID>(file_path: &Path) -> Result<IndexMap<I, T>>
     where
-        T: HasID<ID> + DeserializeOwned,
+        T: HasID<I> + DeserializeOwned,
     {
         let mut map = IndexMap::new();
         for record in read_csv::<T>(file_path)? {
@@ -174,7 +178,20 @@ where
     T: PartialOrd + Clone,
     I: IntoIterator<Item = T>,
 {
-    iter.into_iter().tuple_windows().all(|(a, b)| a < b)
+    is_sorted_and_unique_with(iter, |a, b| a < b)
+}
+
+/// Check whether an iterator contains values that are sorted and unique, comparing with a custom
+/// function
+pub fn is_sorted_and_unique_with<T, I, F>(iter: I, mut less_than: F) -> bool
+where
+    T: Clone,
+    I: IntoIterator<Item = T>,
+    F: FnMut(&T, &T) -> bool,
+{
+    iter.into_iter()
+        .tuple_windows()
+        .all(|(a, b)| less_than(&a, &b))
 }
 
 /// Insert a key-value pair into a map implementing the `Insert` trait if the key does not
@@ -263,8 +280,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
     )?;
 
     // Solve investment order for each region/year
-    let investment_order =
-        solve_investment_order_for_model(&commodity_graphs, &commodities, years)?;
+    let investment_order = solve_investment_order_for_model(&commodity_graphs, &commodities, years);
 
     let model_path = model_dir
         .as_ref()

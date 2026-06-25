@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# dependencies = [
-#     "jinja2",
-#     "pyyaml",
-#     "table2md",
-# ]
-# ///
 #
 # A script to generate markdown documentation from table schemas. If invoked without any arguments,
 # it will generate all file format documentation. Alternatively, you can specify one or more type
@@ -32,7 +25,12 @@ INPUT_FILE_ORDER = {
     "Processes": ["processes", "process_*"],
 }
 OUTPUT_FILE_ORDER = {
-    "Main CSV output files": ["assets", "commodity_flows", "commodity_prices"]
+    "Main CSV output files": [
+        "assets",
+        "asset_capacities",
+        "commodity_flows",
+        "commodity_prices",
+    ]
 }
 
 sys.path.append(str(FILE_FORMAT_DOCS_DIR))
@@ -90,7 +88,7 @@ def main(options: Iterable[str]) -> None:
         except KeyError:
             print(f'Unknown option "{option}"')
         else:
-            (filename, txt) = fun(env)
+            filename, txt = fun(env)
             path = FILE_FORMAT_DOCS_DIR / filename
             print(f"Writing {path}")
             path.write_text(txt, encoding="utf-8")

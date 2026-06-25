@@ -10,14 +10,14 @@ use itertools::Itertools;
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use serde_string_enum::DeserializeLabeledStringEnum;
-use std::fmt::Display;
 use std::iter;
 
-define_id_type! {Season}
-define_id_type! {TimeOfDay}
+define_id_type! {Season, "season"}
+define_id_type! {TimeOfDay, "time of day"}
 
 /// An ID describing season and time of day
-#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug, derive_more::Display)]
+#[display("{season}.{time_of_day}")]
 pub struct TimeSliceID {
     /// The name of each season.
     pub season: Season,
@@ -37,12 +37,6 @@ impl From<&str> for TimeSliceID {
             season: season.into(),
             time_of_day: time_of_day.into(),
         }
-    }
-}
-
-impl Display for TimeSliceID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}", self.season, self.time_of_day)
     }
 }
 
@@ -74,13 +68,18 @@ impl Serialize for TimeSliceID {
 }
 
 /// Represents a time slice read from an input file, which can be all
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug, derive_more::From, derive_more::Display)]
 pub enum TimeSliceSelection {
     /// All year and all day
+    #[display("annual")]
     Annual,
     /// Only applies to one season
+    #[from]
+    #[display("{_0}")]
     Season(Season),
     /// Only applies to a single time slice
+    #[from]
+    #[display("{_0}")]
     Single(TimeSliceID),
 }
 
@@ -92,6 +91,29 @@ impl TimeSliceSelection {
             Self::Season(_) => TimeSliceLevel::Season,
             Self::Single(_) => TimeSliceLevel::DayNight,
         }
+    }
+
+    /// Get the [`TimeSliceSelection`] containing this selection at the specified level.
+    pub fn containing_selection_at_level(
+        &self,
+        level: TimeSliceLevel,
+    ) -> Option<TimeSliceSelection> {
+        if level < self.level() {
+            return None;
+        }
+
+        let mut selection = self.clone();
+        while selection.level() < level {
+            selection = match selection {
+                TimeSliceSelection::Single(time_slice_id) => {
+                    TimeSliceSelection::Season(time_slice_id.season.clone())
+                }
+                TimeSliceSelection::Season(_) => TimeSliceSelection::Annual,
+                TimeSliceSelection::Annual => unreachable!(),
+            };
+        }
+
+        Some(selection)
     }
 
     /// Iterate over the subset of time slices in this selection
@@ -168,31 +190,17 @@ impl TimeSliceSelection {
     }
 }
 
-impl From<TimeSliceID> for TimeSliceSelection {
-    fn from(value: TimeSliceID) -> Self {
-        Self::Single(value)
-    }
-}
-
-impl From<Season> for TimeSliceSelection {
-    fn from(value: Season) -> Self {
-        Self::Season(value)
-    }
-}
-
-impl Display for TimeSliceSelection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Annual => write!(f, "annual"),
-            Self::Season(season) => write!(f, "{season}"),
-            Self::Single(ts) => write!(f, "{ts}"),
-        }
-    }
-}
-
 /// The time granularity for a particular operation
 #[derive(
-    PartialEq, PartialOrd, Copy, Clone, Debug, DeserializeLabeledStringEnum, strum::EnumIter,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Copy,
+    Clone,
+    Debug,
+    DeserializeLabeledStringEnum,
+    strum::EnumIter,
 )]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
@@ -255,14 +263,8 @@ impl TimeSliceInfo {
             .split('.')
             .collect_tuple()
             .context("Time slice must be in the form season.time_of_day")?;
-        let season = self
-            .seasons
-            .get_id(season)
-            .with_context(|| format!("{season} is not a known season"))?;
-        let time_of_day = self
-            .times_of_day
-            .get_id(time_of_day)
-            .with_context(|| format!("{time_of_day} is not a known time of day"))?;
+        let season = self.seasons.get_id(season)?;
+        let time_of_day = self.times_of_day.get_id(time_of_day)?;
 
         Ok(TimeSliceID {
             season: season.clone(),
@@ -280,11 +282,7 @@ impl TimeSliceInfo {
             let time_slice = self.get_time_slice_id_from_str(time_slice)?;
             Ok(TimeSliceSelection::Single(time_slice))
         } else {
-            let season = self
-                .seasons
-                .get_id(time_slice)
-                .with_context(|| format!("'{time_slice}' is not a valid season"))?
-                .clone();
+            let season = self.seasons.get_id(time_slice)?.clone();
             Ok(TimeSliceSelection::Season(season))
         }
     }

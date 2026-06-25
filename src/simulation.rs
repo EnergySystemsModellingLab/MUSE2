@@ -3,7 +3,7 @@ use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
-use crate::simulation::prices::calculate_prices;
+use crate::simulation::prices::{Prices, calculate_prices};
 use crate::units::Capacity;
 use anyhow::{Context, Result};
 use log::info;
@@ -15,7 +15,7 @@ use optimisation::{DispatchRun, FlowMap};
 pub mod investment;
 use investment::perform_agent_investment;
 pub mod prices;
-pub use prices::CommodityPrices;
+pub use prices::PriceMap;
 
 /// Run the simulation.
 ///
@@ -28,7 +28,6 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
     let mut user_assets = model.user_assets.clone();
     let mut asset_pool = AssetPool::new(); // active assets
-    let mut decommissioned = Vec::new();
 
     // Iterate over milestone years
     let mut year_iter = model.iter_years().peekable();
@@ -37,10 +36,11 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     info!("Milestone year: {year}");
 
     // Commission assets for base year
-    asset_pool.commission_new(year, &mut user_assets);
+    let new_assets = asset_pool.commission_new(year, &mut user_assets);
 
     // Write assets to file
-    writer.write_assets(asset_pool.iter())?;
+    writer.write_assets(new_assets)?;
+    writer.write_asset_capacities(year, &asset_pool)?;
 
     // Gather candidates for the next year, if any
     let next_year = year_iter.peek().copied();
@@ -52,21 +52,21 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
-    let (flow_map, mut prices) =
-        run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
+    let (mut prices, flow_map) =
+        run_dispatch_for_year(model, &asset_pool, &candidates, year, &mut writer)?;
 
     // Write results of dispatch optimisation to file
     writer.write_flows(year, &flow_map)?;
-    writer.write_prices(year, &prices)?;
+    writer.write_prices(year, &prices.market)?;
 
     while let Some(year) = year_iter.next() {
         info!("Milestone year: {year}");
 
         // Decommission assets whose lifetime has passed
-        asset_pool.decommission_old(year, &mut decommissioned);
+        asset_pool.decommission_old(year);
 
         // Commission user-defined assets for this year
-        asset_pool.commission_new(year, &mut user_assets);
+        let mut new_assets = asset_pool.commission_new(year, &mut user_assets).to_vec();
 
         // Take all the active assets as a list of existing assets
         let existing_assets = asset_pool.take();
@@ -85,12 +85,12 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
-            let (_flow_map, new_prices) =
+            let (new_prices, ..) =
                 run_dispatch_for_year(model, &selected_assets, &candidates, year, &mut writer)?;
 
             // Check if prices have converged using time slice-weighted averages
-            let prices_stable = prices.within_tolerance_weighted(
-                &new_prices,
+            let prices_stable = prices.market.within_tolerance_weighted(
+                &new_prices.market,
                 model.parameters.price_tolerance,
                 &model.time_slice_info,
             );
@@ -118,19 +118,17 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             }
         };
 
-        // Add selected_assets to the active pool
-        asset_pool.extend(selected_assets);
+        // Add selected_assets to the active pool, receiving the newly commissioned ones
+        let newly_selected = asset_pool.extend(selected_assets);
+        new_assets.extend_from_slice(newly_selected);
 
         // Decommission unused assets
         asset_pool.mothball_unretained(existing_assets, year);
-        asset_pool.decommission_mothballed(
-            year,
-            model.parameters.mothball_years,
-            &mut decommissioned,
-        );
+        asset_pool.decommission_mothballed(year, model.parameters.mothball_years);
 
-        // Write assets
-        writer.write_assets(decommissioned.iter().chain(asset_pool.iter()))?;
+        // Write newly commissioned assets
+        writer.write_assets(&new_assets)?;
+        writer.write_asset_capacities(year, &asset_pool)?;
 
         // Gather candidates for the next year, if any
         let next_year = year_iter.peek().copied();
@@ -142,12 +140,12 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
-        let (flow_map, new_prices) =
-            run_dispatch_for_year(model, asset_pool.as_slice(), &candidates, year, &mut writer)?;
+        let (new_prices, flow_map) =
+            run_dispatch_for_year(model, &asset_pool, &candidates, year, &mut writer)?;
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;
-        writer.write_prices(year, &new_prices)?;
+        writer.write_prices(year, &new_prices.market)?;
 
         // Prices for the next year
         prices = new_prices;
@@ -165,7 +163,7 @@ fn run_dispatch_for_year(
     candidates: &[AssetRef],
     year: u32,
     writer: &mut DataWriter,
-) -> Result<(FlowMap, CommodityPrices)> {
+) -> Result<(Prices, FlowMap)> {
     // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
     // flows (i.e. all are zero)
     let (solution_existing, flow_map) = (!assets.is_empty())
@@ -197,7 +195,7 @@ fn run_dispatch_for_year(
         .transpose()?
         .unwrap_or_default();
 
-    Ok((flow_map, prices))
+    Ok((prices, flow_map))
 }
 
 /// Create candidate assets for all potential processes in a specified year

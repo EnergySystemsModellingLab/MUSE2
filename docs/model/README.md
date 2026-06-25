@@ -96,7 +96,7 @@ The workflow is structured as follows:
          elements downstream of the commodities of interest. Commodity prices for upstream/unknown
          inputs/outputs from assets serving the commodities of interest and assets downstream of the
          commodities of interest with unknown commodity prices (if any) are assumed to take on
-         commodity prices from the previous MSY. Care must be taken to avoid any double-counting of
+         shadow prices from the previous MSY. Care must be taken to avoid any double-counting of
          prices and e.g. commodity levies. Demand profiles for commodities of interest are recorded
          (\\( D[c,r,t] \\)).
 

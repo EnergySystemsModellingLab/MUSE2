@@ -17,15 +17,20 @@ else
     patch_examples=$(cargo -q run example list --patch)
 fi
 
+failed=0
+
 run_example() {
     example=$1
     shift 1  # allow for passing extra args
 
     echo Generating data for example: $example
 
-    env MUSE2_LOG_LEVEL=error MUSE2_USE_DEFAULT_SETTINGS=1 \
+    if ! env MUSE2_LOG_LEVEL=error MUSE2_USE_DEFAULT_SETTINGS=1 \
         cargo -q run example run -o "data/$example" "$example" \
-            --overwrite $@
+        --overwrite --no-copy-input-files $@; then
+        echo ERROR: Failed to run example "$example" > /dev/stderr
+        failed=1
+    fi
 }
 
 for example in $examples; do
@@ -41,3 +46,5 @@ done
 for example in $patch_examples; do
     run_example "$example" --patch
 done
+
+exit $failed

@@ -1,6 +1,6 @@
 //! Code for reading time slice info from a CSV file.
 use super::{
-    IDLike, check_values_sum_to_one_approx, deserialise_proportion_nonzero, input_err_msg, read_csv,
+    ID, check_values_sum_to_one_approx, deserialise_proportion_nonzero, input_err_msg, read_csv,
 };
 use crate::id::IDCollection;
 use crate::time_slice::{Season, TimeOfDay, TimeSliceID, TimeSliceInfo};
@@ -24,7 +24,7 @@ struct TimeSliceRaw {
 /// Get the specified ID in `set`, if present, inserting it if not.
 ///
 /// By returning an existing ID, we can avoid having extra copies.
-fn get_or_insert<T: IDLike>(id: T, set: &mut IndexSet<T>) -> T {
+fn get_or_insert<T: ID>(id: T, set: &mut IndexSet<T>) -> T {
     // Sadly there's no entry API for HashSets: https://github.com/rust-lang/rfcs/issues/1490
     if let Ok(id) = set.get_id(&id) {
         id.clone()

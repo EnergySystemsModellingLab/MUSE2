@@ -8,7 +8,7 @@ use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
-use crate::simulation::CommodityPrices;
+use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
@@ -19,9 +19,8 @@ use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::fmt;
 use std::ops::Range;
 
 mod constraints;
@@ -78,7 +77,7 @@ impl VariableMap {
     fn new_with_activity_vars(
         problem: &mut Problem,
         model: &Model,
-        input_prices: Option<&CommodityPrices>,
+        input_prices: Option<&PriceMap>,
         existing_assets: &[AssetRef],
         candidate_assets: &[AssetRef],
         year: u32,
@@ -183,7 +182,8 @@ impl VariableMap {
 
 /// Create a map of commodity flows for each asset's coeffs at every time slice
 fn create_flow_map<'a>(
-    existing_assets: &[AssetRef],
+    existing_assets_with_children: &[AssetRef],
+    existing_assets_with_parents: &HashSet<AssetRef>,
     time_slice_info: &TimeSliceInfo,
     activity: impl IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 ) -> FlowMap {
@@ -191,31 +191,40 @@ fn create_flow_map<'a>(
     // multiply this value by the flow coeffs to get commodity flows.
     let mut flows = FlowMap::new();
     for (asset, time_slice, activity) in activity {
-        let n_units = Dimensionless(asset.num_children().unwrap_or(1) as f64);
         for flow in asset.iter_flows() {
             let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
-            let flow_value = activity * flow.coeff / n_units;
+            let flow_value = activity * flow.coeff;
             flows.insert(flow_key, flow_value);
         }
     }
 
     // Copy flows for each child asset
-    for asset in existing_assets {
-        if let Some(parent) = asset.parent() {
+    for asset in existing_assets_with_children {
+        let Some(parent) = asset.parent() else {
+            continue;
+        };
+
+        // We want the number of children that were included in **this** dispatch run, which may be
+        // less than the number of children that the parent has overall. `get_parent_or_self`
+        // creates "partial parents" in this case, which are available in
+        // `existing_assets_with_parents`.
+        let num_children_in_this_run = existing_assets_with_parents
+            .get(parent)
+            .unwrap()
+            .num_children()
+            .unwrap();
+        let n_units = Dimensionless(num_children_in_this_run as f64);
+
+        for time_slice in time_slice_info.iter_ids() {
             for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
-                for time_slice in time_slice_info.iter_ids() {
-                    let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
-                    flows.insert(
-                        (asset.clone(), commodity_id.clone(), time_slice.clone()),
-                        flow,
-                    );
-                }
+                let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
+                flows.insert(
+                    (asset.clone(), commodity_id.clone(), time_slice.clone()),
+                    flow / n_units,
+                );
             }
         }
     }
-
-    // Remove all the parent assets
-    flows.retain(|(asset, _, _), _| !asset.is_parent());
 
     flows
 }
@@ -371,18 +380,14 @@ impl Solution<'_> {
 }
 
 /// Defines the possible errors that can occur when running the solver
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum ModelError {
     /// An optimal solution could not be found
+    #[display("Could not find optimal result: {_0:?}")]
     NonOptimal(HighsModelStatus),
     /// Another error occurred
+    #[display("{_0}")]
     Other(anyhow::Error),
-}
-
-impl From<anyhow::Error> for ModelError {
-    fn from(value: anyhow::Error) -> Self {
-        Self::Other(value)
-    }
 }
 
 impl ModelError {
@@ -391,17 +396,6 @@ impl ModelError {
         match self {
             ModelError::NonOptimal(status) => anyhow!("Could not find optimal result: {status:?}"),
             ModelError::Other(error) => error,
-        }
-    }
-}
-
-impl fmt::Display for ModelError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ModelError::NonOptimal(status) => {
-                write!(f, "Could not find optimal result: {status:?}")
-            }
-            ModelError::Other(error) => error.fmt(f),
         }
     }
 }
@@ -457,7 +451,7 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 
     match solved.status() {
         HighsModelStatus::Optimal => Ok(solved),
-        status => Err(ModelError::NonOptimal(status)),
+        status => Err(status.into()),
     }
 }
 
@@ -466,9 +460,9 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 /// Markets being balanced (i.e. with commodity balance constraints) will have prices calculated
 /// internally by the solver, so we need to remove them to prevent double-counting.
 fn filter_input_prices(
-    input_prices: &CommodityPrices,
+    input_prices: &PriceMap,
     markets_to_balance: &[(CommodityID, RegionID)],
-) -> CommodityPrices {
+) -> PriceMap {
     input_prices
         .iter()
         .filter(|(commodity_id, region_id, _, _)| {
@@ -526,7 +520,7 @@ pub struct DispatchRun<'model, 'run> {
     capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
-    input_prices: Option<&'run CommodityPrices>,
+    input_prices: Option<&'run PriceMap>,
     year: u32,
     capacity_margin: Dimensionless,
 }
@@ -584,7 +578,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Explicitly provide prices for certain input commodities
-    pub fn with_input_prices(self, input_prices: &'run CommodityPrices) -> Self {
+    pub fn with_input_prices(self, input_prices: &'run PriceMap) -> Self {
         Self {
             input_prices: Some(input_prices),
             ..self
@@ -670,7 +664,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_without_unmet_demand_variables(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
-        input_prices: Option<&CommodityPrices>,
+        input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
         self.run_internal(
             markets_to_balance,
@@ -684,9 +678,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
         allow_unmet_demand: bool,
-        input_prices: Option<&CommodityPrices>,
+        input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
-        let parent_assets = get_parent_or_self(self.existing_assets);
+        let existing_assets_with_parents = get_parent_or_self(self.existing_assets);
 
         // Set up problem
         let mut problem = Problem::default();
@@ -694,7 +688,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &mut problem,
             self.model,
             input_prices,
-            &parent_assets,
+            &existing_assets_with_parents,
             self.candidate_assets,
             self.year,
         );
@@ -706,9 +700,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Check flexible capacity assets is a subset of existing assets
+        let existing_assets_with_parents_set: HashSet<_> =
+            existing_assets_with_parents.iter().cloned().collect();
         for asset in self.flexible_capacity_assets {
             assert!(
-                parent_assets.contains(asset),
+                existing_assets_with_parents_set.contains(asset),
                 "Flexible capacity assets must be a subset of existing assets. Offending asset: {asset:?}"
             );
         }
@@ -725,7 +721,10 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(parent_assets.iter(), self.candidate_assets.iter());
+        let all_assets = chain(
+            existing_assets_with_parents.iter(),
+            self.candidate_assets.iter(),
+        );
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
@@ -751,6 +750,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         };
         solution.flow_map.set(Some(create_flow_map(
             self.existing_assets,
+            &existing_assets_with_parents_set,
             &self.model.time_slice_info,
             solution.iter_activity(),
         )));
@@ -772,7 +772,7 @@ fn add_activity_variables(
     problem: &mut Problem,
     variables: &mut ActivityVariableMap,
     time_slice_info: &TimeSliceInfo,
-    input_prices: Option<&CommodityPrices>,
+    input_prices: Option<&PriceMap>,
     assets: &[AssetRef],
     year: u32,
 ) -> Range<usize> {
@@ -803,10 +803,10 @@ fn add_capacity_variables(
     let start = problem.num_cols();
 
     for asset in assets {
-        // Can only have flexible capacity for `Selected` assets
+        // Can only have flexible capacity for `Ready` assets
         assert!(
-            matches!(asset.state(), AssetState::Selected { .. }),
-            "Flexible capacity can only be assigned to `Selected` type assets. Offending asset: {asset:?}"
+            matches!(asset.state(), AssetState::Ready { .. }),
+            "Flexible capacity can only be assigned to `Ready` type assets. Offending asset: {asset:?}"
         );
 
         let current_capacity = asset.capacity();
@@ -878,7 +878,7 @@ fn calculate_activity_coefficient(
     asset: &Asset,
     year: u32,
     time_slice: &TimeSliceID,
-    input_prices: Option<&CommodityPrices>,
+    input_prices: Option<&PriceMap>,
 ) -> MoneyPerActivity {
     let opex = asset.get_operating_cost(year, time_slice);
     if let Some(prices) = input_prices {

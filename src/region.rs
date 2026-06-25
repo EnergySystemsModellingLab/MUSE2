@@ -4,7 +4,7 @@ use anyhow::{Result, ensure};
 use indexmap::{IndexMap, IndexSet};
 use serde::Deserialize;
 
-define_id_type! {RegionID}
+define_id_type! {RegionID, "region ID"}
 
 /// A map of [`Region`]s, keyed by region ID
 pub type RegionMap = IndexMap<RegionID, Region>;

@@ -16,17 +16,26 @@ ready to be released, carry out the following steps:
 
 ## New features
 
-- Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver [#1276]
+- Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver ([#1276])
+- Implement a new appraisal approach for the LCOX objective type ([#1319])
 
 ## Breaking changes
 
 - Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average" ([#1281])
+- The `agent_search_space.csv` input file has been renamed to `agent_search_spaces.csv` for
+  consistency ([#1293])
 
 ## Bug fixes
 
 - Fix misleading warning message for assets decommissioned before simulation start ([#1259])
+- Fix parsing and validation of agent search space file ([#1293])
+- Use shadow prices rather than market prices for appraisal optimisations and dispatch runs during
+  investment ([#1349])
 
-[highs-opts-docs]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/custom_highs_options.html
+[highs-opts-docs]: ../developer_guide/custom_highs_options.md
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
-[#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
 [#1276]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1276
+[#1281]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1281
+[#1293]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1293
+[#1319]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1319
+[#1349]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1349

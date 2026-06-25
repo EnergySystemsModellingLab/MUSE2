@@ -1,0 +1,30 @@
+$schema: https://specs.frictionlessdata.io/schemas/table-schema.json
+description: Capacity of each asset at each milestone year during the simulation.
+
+fields:
+  - name: milestone_year
+    type: integer
+    description: The milestone year of the simulation
+  - name: asset_id
+    type: string
+    description: The ID of this asset
+    notes: |
+      Filled for non-divisible assets. Empty for divisible assets, which use `group_id` instead. See
+      the `assets.csv` output file for further information about assets.
+  - name: group_id
+    type: string
+    description: The group ID of this asset group
+    notes: |
+      Filled for divisible assets. Empty for non-divisible assets, which use `asset_id` instead. See
+      the `assets.csv` output file for further information about groups.
+  - name: capacity
+    type: number
+    description: The total capacity of the asset in this year
+    notes: |
+      For divisible assets, this is the total capacity across all active child assets
+      (i.e. unit size multiplied by the number of active units).
+  - name: num_units
+    type: integer
+    description: The number of active units making up the asset in this year
+    notes: |
+      For non-divisible assets, this is always blank.

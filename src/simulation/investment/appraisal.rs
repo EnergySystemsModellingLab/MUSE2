@@ -61,7 +61,7 @@ pub struct AppraisalOutput {
     pub unmet_demand: DemandMap,
     /// The comparison metric to compare investment decisions
     pub metric: Option<Box<dyn MetricTrait>>,
-    /// Capacity and activity coefficients used in the appraisal
+    /// Activity coefficients and market costs used in the appraisal
     pub coefficients: Rc<ObjectiveCoefficients>,
 }
 
@@ -258,26 +258,19 @@ fn calculate_lcox(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(
-        model,
-        asset,
-        max_capacity,
-        commodity,
-        coefficients,
-        demand,
-        highs::Sense::Minimise,
-    )?;
+    let results =
+        perform_optimisation(model, asset, max_capacity, commodity, coefficients, demand)?;
 
     let cost_index = lcox(
-        results.capacity.total_capacity(),
-        coefficients.capacity_coefficient,
+        max_capacity.total_capacity(),
+        annual_fixed_cost(asset),
         &results.activity,
-        &coefficients.activity_coefficients,
+        &coefficients.market_costs,
     );
 
     Ok(AppraisalOutput::new(
         asset.clone(),
-        results.capacity,
+        max_capacity,
         results,
         cost_index.map(LCOXMetric::new),
         coefficients.clone(),
@@ -297,15 +290,8 @@ fn calculate_npv(
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(
-        model,
-        asset,
-        max_capacity,
-        commodity,
-        coefficients,
-        demand,
-        highs::Sense::Maximise,
-    )?;
+    let results =
+        perform_optimisation(model, asset, max_capacity, commodity, coefficients, demand)?;
 
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
@@ -314,10 +300,10 @@ fn calculate_npv(
     );
 
     let profitability_index = profitability_index(
-        results.capacity.total_capacity(),
+        max_capacity.total_capacity(),
         annual_fixed_cost,
         &results.activity,
-        &coefficients.activity_coefficients,
+        &coefficients.market_costs,
     );
 
     Ok(AppraisalOutput::new(
@@ -373,13 +359,22 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// with invalid metrics (e.g. `None`) as well as zero capacity. This avoids meaningless or `NaN`
 /// appraisal metrics that could cause the program to panic, so the length of the returned vector
 /// may be less than the input.
-pub fn sort_and_filter_appraisal_outputs(outputs_for_opts: &mut Vec<AppraisalOutput>) {
-    outputs_for_opts.retain(AppraisalOutput::is_valid);
-    outputs_for_opts.sort_by(|output1, output2| match output1.compare_metric(output2) {
+///
+/// # Returns
+///
+/// Returns the number of non-feasible assets which were removed.
+pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
+    let old_len = outputs.len();
+    outputs.retain(AppraisalOutput::is_valid);
+    let num_nonfeasible = old_len - outputs.len();
+
+    outputs.sort_by(|output1, output2| match output1.compare_metric(output2) {
         // If equal, we fall back on comparing asset properties
         Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
         cmp => cmp,
     });
+
+    num_nonfeasible
 }
 
 /// Counts the number of top appraisal outputs in a sorted slice that are indistinguishable
@@ -405,7 +400,7 @@ mod tests {
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity, MoneyPerFlow};
+    use crate::units::{Money, MoneyPerActivity};
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
     use std::rc::Rc;
@@ -574,9 +569,8 @@ mod tests {
 
     fn objective_coeffs() -> Rc<ObjectiveCoefficients> {
         Rc::new(ObjectiveCoefficients {
-            capacity_coefficient: MoneyPerCapacity(0.0),
             activity_coefficients: IndexMap::new(),
-            unmet_demand_coefficient: MoneyPerFlow(0.0),
+            market_costs: IndexMap::new(),
         })
     }
 

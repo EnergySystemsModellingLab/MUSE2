@@ -9,7 +9,6 @@ use petgraph::Directed;
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
@@ -21,50 +20,35 @@ pub mod validate;
 /// A graph of commodity flows for a given region and year
 pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
 
-#[derive(Eq, PartialEq, Clone, Hash)]
+#[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
 /// A node in the commodity graph
 pub enum GraphNode {
     /// A node representing a commodity
+    #[display("{_0}")]
     Commodity(CommodityID),
     /// A source node for processes that have no inputs
+    #[display("SOURCE")]
     Source,
     /// A sink node for processes that have no outputs
+    #[display("SINK")]
     Sink,
     /// A demand node for commodities with service demands
+    #[display("DEMAND")]
     Demand,
 }
 
-impl Display for GraphNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GraphNode::Commodity(id) => write!(f, "{id}"),
-            GraphNode::Source => write!(f, "SOURCE"),
-            GraphNode::Sink => write!(f, "SINK"),
-            GraphNode::Demand => write!(f, "DEMAND"),
-        }
-    }
-}
-
-#[derive(Eq, PartialEq, Clone, Hash)]
+#[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
 /// An edge in the commodity graph
 pub enum GraphEdge {
     /// An edge representing a primary flow of a process
+    #[display("{_0}")]
     Primary(ProcessID),
     /// An edge representing a secondary (non-primary) flow of a process
+    #[display("{_0}")]
     Secondary(ProcessID),
     /// An edge representing a service demand
+    #[display("DEMAND")]
     Demand,
-}
-
-impl Display for GraphEdge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => {
-                write!(f, "{process_id}")
-            }
-            GraphEdge::Demand => write!(f, "DEMAND"),
-        }
-    }
 }
 
 /// Helper function to return a possible flow operating in the requested year
