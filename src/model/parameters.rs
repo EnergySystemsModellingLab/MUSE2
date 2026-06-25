@@ -119,7 +119,7 @@ impl Default for ModelParameters {
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
-            default_capacity_granularity_factor: Activity(10.0),
+            default_capacity_granularity_factor: Activity(100.0),
             highs: HighsOptions::default(),
         }
     }

@@ -18,7 +18,7 @@ properties:
   default_capacity_granularity_factor:
     type: number
     description: Factor used to define the default `capacity_granularity`
-    default: 10
+    default: 100
     notes: |
       For processes where `capacity_granularity` is unspecified, the default value is calculated as
       `default_capacity_granularity_factor / capacity_to_activity`.
