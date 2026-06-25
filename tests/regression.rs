@@ -175,12 +175,12 @@ fn render_normalised_diff(old_lines: &[String], new_lines: &[String]) -> String 
         out,
         "\nNote: line numbers and floats are approximate within tolerance: {FLOAT_CMP_TOLERANCE}."
     )
-    .expect("writing to String should not fail");
+    .unwrap();
     writeln!(
         out,
         "Small discrepancies are possible between the diff and the actual files."
     )
-    .expect("writing to String should not fail");
+    .unwrap();
 
     out
 }
@@ -213,21 +213,11 @@ fn normalise_tolerant_equivalents(
 
     let normalised1 = bins1
         .into_iter()
-        .map(|bin| {
-            bins.get(bin)
-                .expect("bin key should exist")
-                .canonical
-                .clone()
-        })
+        .map(|bin| bins[bin].canonical.clone())
         .collect();
     let normalised2 = bins2
         .into_iter()
-        .map(|bin| {
-            bins.get(bin)
-                .expect("bin key should exist")
-                .canonical
-                .clone()
-        })
+        .map(|bin| bins[bin].canonical.clone())
         .collect();
 
     (normalised1, normalised2)
