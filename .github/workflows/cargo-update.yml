@@ -1,0 +1,49 @@
+# Heavily borrows from
+# https://github.com/dora-rs/dora/blob/main/.github/workflows/cargo-update.yml
+
+name: Update Cargo.lock
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # To sync with dependabot
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cargo-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Update dependencies
+        run: cargo update
+
+      - name: Configure git
+        run: |
+          git config user.name "Cargo Updater"
+          git config user.email "cto@rust-lang.org"
+
+      - name: Create a branch for the update
+        run: |
+          git switch --force-create update-cargo-lock
+          git add Cargo.lock
+          git commit -m "chore: Update Cargo.lock"
+          git push origin update-cargo-lock --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Open a pull request using GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "chore: Update Cargo.lock" \
+            --body "Automated weekly update of Cargo.lock via \`cargo update\`." \
+            --base ${{ github.ref_name }} \
+            --head update-cargolock \
+            --label "dependencies" \
+            || gh pr edit --base main
