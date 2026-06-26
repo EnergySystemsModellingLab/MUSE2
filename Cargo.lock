@@ -936,7 +936,6 @@ dependencies = [
  "platform-info",
  "rstest",
  "serde",
- "serde_string_enum",
  "similar",
  "strum 0.28.0",
  "tempfile",
@@ -1373,19 +1372,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "serde_string_enum"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc057e156c7ee0eecf104019415e2089fe55f4e8fc92d49059bcb22548b97028"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde",
- "syn",
- "unicase",
 ]
 
 [[package]]
