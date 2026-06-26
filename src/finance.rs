@@ -2,7 +2,6 @@
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Dimensionless, Money, MoneyPerActivity, MoneyPerCapacity};
 use indexmap::IndexMap;
-use serde::Serialize;
 
 /// Calculates the capital recovery factor (CRF) for a given lifetime and discount rate.
 ///
@@ -29,52 +28,22 @@ pub fn annual_capital_cost(
     capital_cost * crf
 }
 
-/// Represents the profitability index of an investment
-/// in terms of its annualised components.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct ProfitabilityIndex {
-    /// The total annualised surplus of an asset
-    pub total_annualised_surplus: Money,
-    /// The total annualised fixed cost of an asset
-    pub annualised_fixed_cost: Money,
-}
-
-impl ProfitabilityIndex {
-    /// Calculates the value of the profitability index.
-    pub fn value(&self) -> Dimensionless {
-        assert!(
-            self.annualised_fixed_cost != Money(0.0),
-            "Annualised fixed cost cannot be zero when calculating profitability index."
-        );
-        self.total_annualised_surplus / self.annualised_fixed_cost
-    }
-}
-
-/// Calculates an annual profitability index based on capacity and activity.
-pub fn profitability_index(
+/// Calculates the SNAS (Specific Net Annualised Surplus) based on capacity and activity.
+///
+/// It is just the negative of the LCOX, although, unlike LCOX, it should be called with
+/// activity costs that INCLUDE the commodity of interest.
+pub fn snas(
     capacity: Capacity,
     annual_fixed_cost: MoneyPerCapacity,
     activity: &IndexMap<TimeSliceID, Activity>,
-    activity_surpluses: &IndexMap<TimeSliceID, MoneyPerActivity>,
-) -> ProfitabilityIndex {
-    // Calculate the annualised fixed costs
-    let annualised_fixed_cost = annual_fixed_cost * capacity;
-
-    // Calculate the total annualised surplus
-    let mut total_annualised_surplus = Money(0.0);
-    for (time_slice, activity) in activity {
-        let activity_surplus = activity_surpluses[time_slice];
-        total_annualised_surplus += activity_surplus * *activity;
-    }
-
-    ProfitabilityIndex {
-        total_annualised_surplus,
-        annualised_fixed_cost,
-    }
+    activity_costs: &IndexMap<TimeSliceID, MoneyPerActivity>,
+) -> Option<MoneyPerActivity> {
+    lcox(capacity, annual_fixed_cost, activity, activity_costs).map(|lcox| -lcox)
 }
 
 /// Calculates annual LCOX based on capacity and activity.
 ///
+/// It should be called with activity costs that EXCLUDE the commodity of interest.
 /// If the total activity is zero, then it returns `None`, otherwise `Some` LCOX value.
 pub fn lcox(
     capacity: Capacity,
@@ -104,7 +73,6 @@ mod tests {
     use super::*;
     use crate::time_slice::TimeSliceID;
     use float_cmp::assert_approx_eq;
-    use indexmap::indexmap;
     use rstest::rstest;
 
     #[rstest]
@@ -139,86 +107,6 @@ mod tests {
             Dimensionless(discount_rate),
         );
         assert_approx_eq!(MoneyPerCapacity, result, expected, epsilon = 1e-8);
-    }
-
-    #[rstest]
-    #[case(
-        100.0, 50.0,
-        vec![("winter", "day", 10.0), ("summer", "night", 15.0)],
-        vec![("winter", "day", 30.0), ("summer", "night", 20.0)],
-        0.12 // Expected PI: (10*30 + 15*20) / (100*50) = 600/5000 = 0.12
-    )]
-    #[case(
-        50.0, 100.0,
-        vec![("q1", "peak", 5.0)],
-        vec![("q1", "peak", 40.0)],
-        0.04 // Expected PI: (5*40) / (50*100) = 200/5000 = 0.04
-    )]
-    fn profitability_index_works(
-        #[case] capacity: f64,
-        #[case] annual_fixed_cost: f64,
-        #[case] activity_data: Vec<(&str, &str, f64)>,
-        #[case] surplus_data: Vec<(&str, &str, f64)>,
-        #[case] expected: f64,
-    ) {
-        let activity = activity_data
-            .into_iter()
-            .map(|(season, time_of_day, value)| {
-                (
-                    TimeSliceID {
-                        season: season.into(),
-                        time_of_day: time_of_day.into(),
-                    },
-                    Activity(value),
-                )
-            })
-            .collect();
-
-        let activity_surpluses = surplus_data
-            .into_iter()
-            .map(|(season, time_of_day, value)| {
-                (
-                    TimeSliceID {
-                        season: season.into(),
-                        time_of_day: time_of_day.into(),
-                    },
-                    MoneyPerActivity(value),
-                )
-            })
-            .collect();
-
-        let result = profitability_index(
-            Capacity(capacity),
-            MoneyPerCapacity(annual_fixed_cost),
-            &activity,
-            &activity_surpluses,
-        );
-
-        assert_approx_eq!(Dimensionless, result.value(), Dimensionless(expected));
-    }
-
-    #[test]
-    fn profitability_index_zero_activity() {
-        let capacity = Capacity(100.0);
-        let annual_fixed_cost = MoneyPerCapacity(50.0);
-        let activity = indexmap! {};
-        let activity_surpluses = indexmap! {};
-
-        let result =
-            profitability_index(capacity, annual_fixed_cost, &activity, &activity_surpluses);
-        assert_eq!(result.value(), Dimensionless(0.0));
-    }
-
-    #[test]
-    #[should_panic(expected = "Annualised fixed cost cannot be zero")]
-    fn profitability_index_panics_on_zero_cost() {
-        let result = profitability_index(
-            Capacity(0.0),
-            MoneyPerCapacity(100.0),
-            &indexmap! {},
-            &indexmap! {},
-        );
-        result.value();
     }
 
     #[rstest]

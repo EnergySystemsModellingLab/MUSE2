@@ -91,7 +91,7 @@ pub fn calculate_coefficients_for_asset(
                 calculate_asset_costs_for_lcox(asset, operating_cost, time_slice, &prices.market)
             }
             ObjectiveType::NetPresentValue => {
-                calculate_asset_revenues(asset, operating_cost, time_slice, &prices.market)
+                -calculate_asset_revenues(asset, operating_cost, time_slice, &prices.market)
             }
         };
         market_costs.insert(time_slice.clone(), market_cost);
