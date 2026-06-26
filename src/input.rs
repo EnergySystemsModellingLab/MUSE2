@@ -259,6 +259,7 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
         &region_ids,
         &time_slice_info,
         years,
+        model_params.default_capacity_granularity_factor,
     )?;
     let agents = read_agents(
         model_dir.as_ref(),
@@ -324,6 +325,7 @@ pub fn load_commodity_graphs<P: AsRef<Path>>(
         &region_ids,
         &time_slice_info,
         years,
+        model_params.default_capacity_granularity_factor,
     )?;
 
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);

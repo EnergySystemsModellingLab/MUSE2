@@ -31,18 +31,21 @@ fields:
     description:
       Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the
       maximum activity per year for one unit of capacity.
-    notes: Must be >=0. Optional (defaults to 1.0).
-  - name: unit_size
+    notes: Must be >0. Optional (defaults to 1.0).
+  - name: capacity_granularity
     type: number
     description:
-      Capacity of the units in which an asset for this process will be divided into when
-      commissioned, if any.
-    notes:
-      If present, must be >0. Optional (defaults to None). Assets with a defined unit size are
-      divided into n = ceil(C / U) equal units, where C is overall capacity and U is unit_size
-      (i.e. rounding up the number of units, which may result in a total capacity greater than C, if
-      C is not an exact multiple of U).
-
-      It should be noted that making this number too small with respect to the typical size of an
-      asset might create hundreds or thousands of children assets, with a very negative effect on
-      the performance. Users are advised to use this feature with care.
+      The minimum capacity increment that can be invested in for this process. Reducing this value
+      allows for more precise capacities, but can slow down the simulation.
+    notes: Must be >0. Optional (defaults to
+      default_capacity_granularity_factor / capacity_to_activity).
+  - name: is_divisible
+    type: boolean
+    description:
+      Whether the process is commissioned as a set of individual units of size
+      `capacity_granularity` (true), which can be decommissioned individually, or as a single
+      indivisible unit (false) which must be decommissioned in one go. If true, assets are
+      divided into n = ceil(C / G) equal units, where C is overall capacity and G is
+      `capacity_granularity` (i.e. rounding up the number of units, which may result in a total
+      capacity greater than C, if C is not an exact multiple of G).
+    notes: Optional (defaults to false).

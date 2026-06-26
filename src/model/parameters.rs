@@ -4,10 +4,8 @@
 //! `model.toml` configuration used by the model. Validation functions ensure sensible numeric
 //! ranges and invariants for runtime use.
 use crate::asset::check_capacity_valid_for_asset;
-use crate::input::{
-    deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
-};
-use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
+use crate::input::{input_err_msg, is_sorted_and_unique, read_toml};
+use crate::units::{Activity, Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 use log::warn;
@@ -77,11 +75,6 @@ pub struct ModelParameters {
     ///
     /// Don't change unless you know what you're doing.
     pub candidate_asset_capacity: Capacity,
-    /// Affects the maximum capacity that can be given to a newly created asset.
-    ///
-    /// It is the proportion of maximum capacity that could be required across time slices.
-    #[serde(deserialize_with = "deserialise_proportion_nonzero")]
-    pub capacity_limit_factor: Dimensionless,
     /// The cost applied to unmet demand.
     ///
     /// Currently this only applies to the LCOX appraisal.
@@ -100,6 +93,8 @@ pub struct ModelParameters {
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
     pub remaining_demand_absolute_tolerance: Flow,
+    /// Factor used to define the default `capacity_granularity` for processes
+    pub default_capacity_granularity_factor: Activity,
     /// Options for the HiGHS solver.
     ///
     /// For a full list of options, see [the HiGHS documentation].
@@ -118,13 +113,13 @@ impl Default for ModelParameters {
             // Default values for optional parameters
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
-            capacity_limit_factor: Dimensionless(0.1),
             value_of_lost_load: MoneyPerFlow(1e9),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
+            default_capacity_granularity_factor: Activity(100.0),
             highs: HighsOptions::default(),
         }
     }
@@ -275,6 +270,15 @@ fn check_capacity_margin(value: Dimensionless) -> Result<()> {
     Ok(())
 }
 
+fn check_default_capacity_granularity_factor(value: Activity) -> Result<()> {
+    ensure!(
+        value.is_finite() && value > Activity(0.0),
+        "default_capacity_granularity_factor must be a finite number greater than zero"
+    );
+
+    Ok(())
+}
+
 /// Check the custom HiGHS options are valid.
 ///
 /// Note that we cannot know whether the options specified exist and are of the correct type until
@@ -328,11 +332,13 @@ impl ModelParameters {
         // milestone_years
         check_milestone_years(&self.milestone_years)?;
 
-        // capacity_limit_factor already validated with deserialise_proportion_nonzero
-
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
             .context("Invalid value for candidate_asset_capacity")?;
+
+        // default_capacity_granularity_factor
+        check_default_capacity_granularity_factor(self.default_capacity_granularity_factor)
+            .context("Invalid value for default_capacity_granularity_factor")?;
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;

@@ -1337,7 +1337,8 @@ mod tests {
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(1.0),
             investment_constraints: HashMap::new(),
-            unit_size: None,
+            capacity_granularity: Capacity(1.0),
+            is_divisible: false,
         }
     }
 

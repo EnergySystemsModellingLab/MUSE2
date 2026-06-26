@@ -1,12 +1,12 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
 use crate::agent::ObjectiveType;
-use crate::asset::{Asset, AssetCapacity, AssetRef};
+use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Money, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Money, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -53,8 +53,6 @@ where
 pub struct AppraisalOutput {
     /// The asset being appraised
     pub asset: AssetRef,
-    /// The hypothetical capacity to install
-    pub capacity: AssetCapacity,
     /// Time slice level activity of the asset
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// The hypothetical unmet demand following investment in this asset
@@ -69,14 +67,12 @@ impl AppraisalOutput {
     /// Create a new `AppraisalOutput`
     fn new<T: MetricTrait>(
         asset: AssetRef,
-        capacity: AssetCapacity,
         results: ResultsMap,
         metric: Option<T>,
         coefficients: Rc<ObjectiveCoefficients>,
     ) -> Self {
         Self {
             asset,
-            capacity,
             activity: results.activity,
             unmet_demand: results.unmet_demand,
             metric: metric.map(|m| Box::new(m) as Box<dyn MetricTrait>),
@@ -92,24 +88,14 @@ impl AppraisalOutput {
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
-        assert!(
-            self.is_valid() && other.is_valid(),
-            "Cannot compare non-valid outputs"
-        );
+        let (metric1, metric2) = self
+            .metric
+            .as_deref()
+            .zip(other.metric.as_deref())
+            .expect("Cannot compare non-valid outputs");
 
-        // We've already checked the metrics aren't `None` in `is_valid`
-        self.metric
-            .as_ref()
-            .unwrap()
-            .compare(other.metric.as_ref().unwrap().as_ref())
-    }
-
-    /// Whether this [`AppraisalOutput`] is a valid output.
-    ///
-    /// Specifically, it checks whether the metric is a valid value (not `None`) and that the
-    /// calculated capacity is greater than zero.
-    pub fn is_valid(&self) -> bool {
-        self.metric.is_some() && self.capacity.total_capacity() > Capacity(0.0)
+        // We've already checked the metrics aren't `None`
+        metric1.compare(metric2)
     }
 }
 
@@ -253,16 +239,14 @@ impl MetricTrait for NPVMetric {}
 fn calculate_lcox(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results =
-        perform_optimisation(model, asset, max_capacity, commodity, coefficients, demand)?;
+    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
 
     let cost_index = lcox(
-        max_capacity.total_capacity(),
+        asset.capacity().total_capacity(),
         annual_fixed_cost(asset),
         &results.activity,
         &coefficients.market_costs,
@@ -270,7 +254,6 @@ fn calculate_lcox(
 
     Ok(AppraisalOutput::new(
         asset.clone(),
-        max_capacity,
         results,
         cost_index.map(LCOXMetric::new),
         coefficients.clone(),
@@ -285,13 +268,11 @@ fn calculate_lcox(
 fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: AssetCapacity,
     commodity: &Commodity,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results =
-        perform_optimisation(model, asset, max_capacity, commodity, coefficients, demand)?;
+    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
 
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
@@ -300,7 +281,7 @@ fn calculate_npv(
     );
 
     let profitability_index = profitability_index(
-        max_capacity.total_capacity(),
+        asset.capacity().total_capacity(),
         annual_fixed_cost,
         &results.activity,
         &coefficients.market_costs,
@@ -308,7 +289,6 @@ fn calculate_npv(
 
     Ok(AppraisalOutput::new(
         asset.clone(),
-        max_capacity,
         results,
         Some(NPVMetric::new(profitability_index)),
         coefficients.clone(),
@@ -324,18 +304,16 @@ fn calculate_npv(
 pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
-    max_capacity: Option<AssetCapacity>,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
     coefficients: &Rc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let max_capacity = max_capacity.unwrap_or(asset.capacity());
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,
         ObjectiveType::NetPresentValue => calculate_npv,
     };
-    appraisal_method(model, asset, max_capacity, commodity, coefficients, demand)
+    appraisal_method(model, asset, commodity, coefficients, demand)
 }
 
 /// Compare assets as a fallback if metrics are equal.
@@ -355,17 +333,15 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
 /// and newer assets are preferred over older ones. The function does not guarantee that all ties
 /// will be resolved.
 ///
-/// Before sorting, outputs are filtered using [`AppraisalOutput::is_valid`], which excludes entries
-/// with invalid metrics (e.g. `None`) as well as zero capacity. This avoids meaningless or `NaN`
-/// appraisal metrics that could cause the program to panic, so the length of the returned vector
-/// may be less than the input.
+/// Before sorting, outputs are filtered to exclude entries with invalid metrics (i.e. `None`), so
+/// the length of the returned vector may be less than the input.
 ///
 /// # Returns
 ///
 /// Returns the number of non-feasible assets which were removed.
 pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
     let old_len = outputs.len();
-    outputs.retain(AppraisalOutput::is_valid);
+    outputs.retain(|output| output.metric.is_some());
     let num_nonfeasible = old_len - outputs.len();
 
     outputs.sort_by(|output1, output2| match output1.compare_metric(output2) {
@@ -400,7 +376,7 @@ mod tests {
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity};
+    use crate::units::{Capacity, Money, MoneyPerActivity};
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
     use std::rc::Rc;
@@ -594,7 +570,6 @@ mod tests {
             .zip(metrics)
             .map(|(asset, metric)| AppraisalOutput {
                 asset: AssetRef::from(asset),
-                capacity: AssetCapacity::Continuous(Capacity(10.0)),
                 coefficients: objective_coeffs(),
                 activity: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
@@ -909,41 +884,11 @@ mod tests {
         );
     }
 
-    /// Test that appraisal outputs with zero capacity are filtered out during sorting.
-    #[rstest]
-    fn appraisal_sort_filters_zero_capacity_outputs(asset: Asset) {
-        let metric = LCOXMetric::new(MoneyPerActivity(1.0));
-        let metrics = [
-            Box::new(metric.clone()),
-            Box::new(metric.clone()),
-            Box::new(metric),
-        ];
-
-        // Create outputs with zero capacity
-        let mut outputs: Vec<AppraisalOutput> = metrics
-            .into_iter()
-            .map(|metric| AppraisalOutput {
-                asset: AssetRef::from(asset.clone()),
-                capacity: AssetCapacity::Continuous(Capacity(0.0)),
-                coefficients: objective_coeffs(),
-                activity: IndexMap::new(),
-                unmet_demand: IndexMap::new(),
-                metric: Some(metric),
-            })
-            .collect();
-
-        sort_and_filter_appraisal_outputs(&mut outputs);
-
-        // All zero capacity outputs should be filtered out
-        assert_eq!(outputs.len(), 0);
-    }
-
     /// Test that appraisal outputs with an invalid metric are filtered out
     #[rstest]
     fn appraisal_sort_filters_invalid_metric(asset: Asset) {
         let output = AppraisalOutput {
             asset: AssetRef::from(asset),
-            capacity: AssetCapacity::Continuous(Capacity(1.0)), // non-zero capacity
             coefficients: objective_coeffs(),
             activity: IndexMap::new(),
             unmet_demand: IndexMap::new(),

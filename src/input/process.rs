@@ -8,7 +8,7 @@ use crate::process::{
 };
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
-use crate::units::{ActivityPerCapacity, Capacity};
+use crate::units::{Activity, ActivityPerCapacity, Capacity};
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::IndexSet;
 use log::warn;
@@ -37,7 +37,9 @@ struct ProcessRaw {
     start_year: Option<u32>,
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
-    unit_size: Option<Capacity>,
+    capacity_granularity: Option<Capacity>,
+    #[serde(default)]
+    is_divisible: bool, // defaults to false if not specified
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -60,8 +62,15 @@ pub fn read_processes(
     region_ids: &IndexSet<RegionID>,
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
+    default_capacity_granularity_factor: Activity,
 ) -> Result<ProcessMap> {
-    let mut processes = read_processes_file(model_dir, milestone_years, region_ids, commodities)?;
+    let mut processes = read_processes_file(
+        model_dir,
+        milestone_years,
+        region_ids,
+        commodities,
+        default_capacity_granularity_factor,
+    )?;
     let mut activity_limits = read_process_availabilities(model_dir, &processes, time_slice_info)?;
     let mut flows = read_process_flows(model_dir, &mut processes, commodities, milestone_years)?;
     let mut parameters = read_process_parameters(model_dir, &processes, milestone_years)?;
@@ -88,11 +97,18 @@ fn read_processes_file(
     milestone_years: &[u32],
     region_ids: &IndexSet<RegionID>,
     commodities: &CommodityMap,
+    default_capacity_granularity_factor: Activity,
 ) -> Result<ProcessMap> {
     let file_path = model_dir.join(PROCESSES_FILE_NAME);
     let processes_csv = read_csv(&file_path)?;
-    read_processes_file_from_iter(processes_csv, milestone_years, region_ids, commodities)
-        .with_context(|| input_err_msg(&file_path))
+    read_processes_file_from_iter(
+        processes_csv,
+        milestone_years,
+        region_ids,
+        commodities,
+        default_capacity_granularity_factor,
+    )
+    .with_context(|| input_err_msg(&file_path))
 }
 
 fn read_processes_file_from_iter<I>(
@@ -100,6 +116,7 @@ fn read_processes_file_from_iter<I>(
     milestone_years: &[u32],
     region_ids: &IndexSet<RegionID>,
     commodities: &CommodityMap,
+    default_capacity_granularity_factor: Activity,
 ) -> Result<ProcessMap>
 where
     I: Iterator<Item = ProcessRaw>,
@@ -146,19 +163,23 @@ where
             .capacity_to_activity
             .unwrap_or(ActivityPerCapacity(1.0));
 
-        // Validate unit_size
-        if process_raw.unit_size.is_some() {
-            ensure!(
-                process_raw.unit_size > Some(Capacity(0.0)),
-                "Error in process {}: unit_size must be > 0 or None",
-                process_raw.id
-            );
-        }
-
         // Validate capacity_to_activity
         ensure!(
-            capacity_to_activity >= ActivityPerCapacity(0.0),
-            "Error in process {}: capacity_to_activity must be >= 0",
+            capacity_to_activity > ActivityPerCapacity(0.0),
+            "Error in process {}: capacity_to_activity must be > 0",
+            process_raw.id
+        );
+
+        // Capacity granularity defaults to
+        // `default_capacity_granularity_factor / capacity_to_activity` if not specified
+        let capacity_granularity = process_raw
+            .capacity_granularity
+            .unwrap_or_else(|| default_capacity_granularity_factor / capacity_to_activity);
+
+        // Validate capacity_granularity
+        ensure!(
+            capacity_granularity > Capacity(0.0),
+            "Error in process {}: capacity_granularity must be > 0",
             process_raw.id
         );
 
@@ -173,7 +194,8 @@ where
             primary_output,
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
-            unit_size: process_raw.unit_size,
+            capacity_granularity,
+            is_divisible: process_raw.is_divisible,
         };
 
         ensure!(

@@ -57,8 +57,8 @@ fn get_all_patches() -> PatchMap {
                 "simple",
                 vec![
                     FilePatch::new("processes.csv")
-                        .with_deletion("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,")
-                        .with_addition("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,1000"),
+                        .with_deletion("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,false")
+                        .with_addition("RGASBR,Gas boiler,all,RSHEAT,2020,2040,1.0,true"),
                 ],
                 None,
             ),
