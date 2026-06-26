@@ -24,6 +24,9 @@ ready to be released, carry out the following steps:
 - Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average" ([#1281])
 - The `agent_search_space.csv` input file has been renamed to `agent_search_spaces.csv` for
   consistency ([#1293])
+- Due to an internal change, some options in CSV files are now case sensitive (e.g. you must put
+  `lcox` rather than `LCOX`). The error message you see if it does not match will now be more
+  informative, however. ([#1376])
 
 ## Bug fixes
 
@@ -39,3 +42,4 @@ ready to be released, carry out the following steps:
 [#1293]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1293
 [#1319]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1319
 [#1349]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1349
+[#1376]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1376
