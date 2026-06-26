@@ -84,12 +84,12 @@ impl AppraisalOutput {
     }
     /// Compare this appraisal to another on the basis of the comparison metric.
     ///
-    /// Note that if the metrics are approximately equal (as determined by the [`approx_eq!`] macro)
-    /// then [`Ordering::Equal`] is returned. The reason for this is because different CPU
-    /// architectures may lead to subtly different values for the comparison metrics and if the
-    /// value is very similar to another, then it can lead to different decisions being made,
-    /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
-    /// possible, which is why we use a more approximate comparison.
+    /// Note that if the metrics are approximately equal (as determined by
+    /// [`float_cmp::eq::ApproxEq`]), then [`Ordering::Equal`] is returned. The reason for this is
+    /// because different CPU architectures may lead to subtly different values for the comparison
+    /// metrics and if the value is very similar to another, then it can lead to different decisions
+    /// being made, depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid
+    /// this, if possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
         assert!(
             self.is_valid() && other.is_valid(),
