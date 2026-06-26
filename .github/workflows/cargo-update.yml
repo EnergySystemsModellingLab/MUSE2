@@ -23,10 +23,10 @@ jobs:
       - name: Update dependencies
         run: cargo update
 
-      - name: Configure git
+      - name: Set user name and email for git
         run: |
-          git config user.name "Cargo Updater"
-          git config user.email "cto@rust-lang.org"
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create a branch for the update
         run: |
