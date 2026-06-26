@@ -37,15 +37,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Open a pull request using GitHub CLI
+      - name: Open a pull request
         if: steps.checker.outputs.success != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr create \
-            --title "chore: Update Cargo.lock" \
-            --body "Automated weekly update of Cargo.lock via \`cargo update\`." \
-            --base ${{ github.ref_name }} \
-            --head update-cargolock \
-            --label "dependencies" \
-            || gh pr edit --base main
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+          branch: update/cargo-lock
+          title: Update Cargo.lock
+          commit-message: "chore: update Cargo.lock"
+          body: Update dependencies to latest versions.
