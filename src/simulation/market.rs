@@ -228,7 +228,7 @@ fn get_asset_options<'a>(
 ///
 /// Returns a list of assets that are selected for investment for this market in this year.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_single_market(
+pub fn select_assets_for_single_market(
     model: &Model,
     commodity_id: &CommodityID,
     region_id: &RegionID,
@@ -308,7 +308,7 @@ fn select_assets_for_single_market(
 /// A longer-term solution (TODO) may be to trigger re-investment for the affected markets. Other
 /// yet-to-implement features may also help to stabilise the cycle, such as capacity growth limits.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_cycle(
+pub fn select_assets_for_cycle(
     model: &Model,
     markets: &[(CommodityID, RegionID)],
     year: u32,
