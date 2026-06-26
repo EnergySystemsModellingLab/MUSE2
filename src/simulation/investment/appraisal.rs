@@ -3,10 +3,10 @@ use super::DemandMap;
 use crate::agent::ObjectiveType;
 use crate::asset::{Asset, AssetCapacity, AssetRef};
 use crate::commodity::Commodity;
-use crate::finance::{ProfitabilityIndex, lcox, profitability_index};
+use crate::finance::{lcox, snas};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Money, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -22,7 +22,6 @@ mod constraints;
 mod costs;
 mod optimisation;
 use coefficients::ObjectiveCoefficients;
-use float_cmp::approx_eq;
 use float_cmp::{ApproxEq, F64Margin};
 use optimisation::perform_optimisation;
 
@@ -179,58 +178,35 @@ impl ComparableMetric for LCOXMetric {
 /// `LCOXMetric` implements the `MetricTrait` supertrait.
 impl MetricTrait for LCOXMetric {}
 
-/// Net Present Value (NPV) metric
+/// Net Present Value (NPV) metric.
+///
+/// Represents the net present value of an investment. Higher values indicate
+/// more profitable investments.
 #[derive(Debug, Clone, Serialize)]
-pub struct NPVMetric(ProfitabilityIndex);
+pub struct NPVMetric {
+    /// The calculated NPV value for this metric
+    pub npv: MoneyPerActivity,
+}
 
 impl NPVMetric {
-    /// Creates a new `NPVMetric` with the given profitability index.
-    pub fn new(profitability_index: ProfitabilityIndex) -> Self {
-        Self(profitability_index)
-    }
-
-    /// Returns true if this metric represents a zero fixed cost case.
-    fn is_zero_fixed_cost(&self) -> bool {
-        approx_eq!(Money, self.0.annualised_fixed_cost, Money(0.0))
+    /// Creates a new `NPVMetric` with the given NPV value.
+    pub fn new(npv: MoneyPerActivity) -> Self {
+        Self { npv }
     }
 }
 
 impl ComparableMetric for NPVMetric {
     fn value(&self) -> f64 {
-        if self.is_zero_fixed_cost() {
-            self.0.total_annualised_surplus.value()
-        } else {
-            self.0.value().value()
-        }
+        self.npv.value()
     }
 
-    /// Higher profitability index values indicate more profitable investments.
-    /// When annual fixed cost is zero, the profitability index is infinite and
-    /// total surplus is used for comparison instead.
     fn compare(&self, other: &dyn ComparableMetric) -> Ordering {
         let other = other
             .as_any()
             .downcast_ref::<Self>()
             .expect("Cannot compare metrics of different types");
 
-        // Handle comparison based on fixed cost status
-        match (self.is_zero_fixed_cost(), other.is_zero_fixed_cost()) {
-            // Both have zero fixed cost: compare total surplus (higher is better)
-            (true, true) => {
-                let self_surplus = self.0.total_annualised_surplus;
-                let other_surplus = other.0.total_annualised_surplus;
-                compare_approx(other_surplus, self_surplus)
-            }
-            // Both have non-zero fixed cost: compare profitability index (higher is better)
-            (false, false) => {
-                let self_pi = self.0.value();
-                let other_pi = other.0.value();
-                compare_approx(other_pi, self_pi)
-            }
-            // Zero fixed cost is always better than non-zero fixed cost
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-        }
+        compare_approx(other.npv, self.npv)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -299,7 +275,7 @@ fn calculate_npv(
         "The current NPV calculation does not support negative annual fixed costs"
     );
 
-    let profitability_index = profitability_index(
+    let snas = snas(
         max_capacity.total_capacity(),
         annual_fixed_cost,
         &results.activity,
@@ -310,7 +286,7 @@ fn calculate_npv(
         asset.clone(),
         max_capacity,
         results,
-        Some(NPVMetric::new(profitability_index)),
+        snas.map(NPVMetric::new),
         coefficients.clone(),
     ))
 }
@@ -396,11 +372,10 @@ pub fn count_equal_and_best_appraisal_outputs(outputs: &[AppraisalOutput]) -> us
 mod tests {
     use super::*;
     use crate::agent::AgentID;
-    use crate::finance::ProfitabilityIndex;
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
-    use crate::units::{Money, MoneyPerActivity};
+    use crate::units::MoneyPerActivity;
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
     use std::rc::Rc;
@@ -428,109 +403,17 @@ mod tests {
 
     /// Parametrised tests for NPV metric comparison.
     #[rstest]
-    // Both zero AFC: compare by total surplus (higher is better)
-    #[case(100.0, 0.0, 50.0, 0.0, Ordering::Less, "both_zero_afc_first_better")]
-    #[case(
-        50.0,
-        0.0,
-        100.0,
-        0.0,
-        Ordering::Greater,
-        "both_zero_afc_second_better"
-    )]
-    #[case(100.0, 0.0, 100.0, 0.0, Ordering::Equal, "both_zero_afc_equal")]
-    // Both approximately zero AFC (same as both zero): compare by total surplus (higher is better)
-    #[case(
-        100.0,
-        1e-10,
-        50.0,
-        1e-10,
-        Ordering::Less,
-        "both_approx_zero_afc_first_better"
-    )]
-    #[case(
-        100.0,
-        1e-10,
-        200.0,
-        50.0,
-        Ordering::Less,
-        "approx_zero_afc_beats_nonzero"
-    )]
-    #[case(
-        200.0,
-        50.0,
-        100.0,
-        1e-10,
-        Ordering::Greater,
-        "nonzero_afc_loses_to_approx_zero"
-    )]
-    // Both non-zero AFC: compare by profitability index (higher is better)
-    #[case(
-        200.0,
-        100.0,
-        150.0,
-        100.0,
-        Ordering::Less,
-        "both_nonzero_afc_first_better"
-    )]
-    #[case(
-        150.0,
-        100.0,
-        200.0,
-        100.0,
-        Ordering::Greater,
-        "both_nonzero_afc_second_better"
-    )]
-    #[case(200.0, 100.0, 200.0, 100.0, Ordering::Equal, "both_nonzero_afc_equal")]
-    // Zero vs non-zero AFC: zero or approximately zero is always better
-    #[case(
-        10.0,
-        0.0,
-        1000.0,
-        100.0,
-        Ordering::Less,
-        "first_zero_afc_beats_second_nonzero_afc"
-    )]
-    #[case(
-        10.0,
-        1e-10,
-        1000.0,
-        100.0,
-        Ordering::Less,
-        "first_approx_zero_afc_beats_second_nonzero_afc"
-    )]
-    #[case(
-        1000.0,
-        100.0,
-        10.0,
-        0.0,
-        Ordering::Greater,
-        "second_zero_afc_beats_first_nonzero_afc"
-    )]
-    #[case(
-        1000.0,
-        100.0,
-        10.0,
-        1e-10,
-        Ordering::Greater,
-        "second_nonzero_afc_beats_first_approx_zero_afc"
-    )]
+    #[case(10.0, 10.0, Ordering::Equal, "equal_costs")]
+    #[case(5.0, 10.0, Ordering::Greater, "second_higher_metric_is_better")]
+    #[case(10.0, 5.0, Ordering::Less, "first_higher_metric_is_better")]
     fn npv_metric_comparison(
-        #[case] surplus1: f64,
-        #[case] fixed_cost1: f64,
-        #[case] surplus2: f64,
-        #[case] fixed_cost2: f64,
+        #[case] cost1: f64,
+        #[case] cost2: f64,
         #[case] expected: Ordering,
         #[case] description: &str,
     ) {
-        let metric1 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(surplus1),
-            annualised_fixed_cost: Money(fixed_cost1),
-        });
-        let metric2 = NPVMetric::new(ProfitabilityIndex {
-            total_annualised_surplus: Money(surplus2),
-            annualised_fixed_cost: Money(fixed_cost2),
-        });
+        let metric1 = NPVMetric::new(MoneyPerActivity(cost1));
+        let metric2 = NPVMetric::new(MoneyPerActivity(cost2));
 
         assert_eq!(
             metric1.compare(&metric2),
@@ -631,64 +514,22 @@ mod tests {
         assert_approx_eq!(f64, outputs[2].metric.as_ref().unwrap().value(), 7.0); // Worst (highest)
     }
 
-    /// Test sorting by NPV profitability index when invariant to asset properties
+    /// Test sorting by NPV metric when invariant to asset properties
     #[rstest]
     fn appraisal_sort_by_npv_metric(asset: Asset) {
         let metrics: Vec<Box<dyn MetricTrait>> = vec![
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(200.0),
-                annualised_fixed_cost: Money(100.0),
-            })),
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(300.0),
-                annualised_fixed_cost: Money(100.0),
-            })),
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(150.0),
-                annualised_fixed_cost: Money(100.0),
-            })),
+            Box::new(NPVMetric::new(MoneyPerActivity(5.0))),
+            Box::new(NPVMetric::new(MoneyPerActivity(3.0))),
+            Box::new(NPVMetric::new(MoneyPerActivity(7.0))),
         ];
 
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         sort_and_filter_appraisal_outputs(&mut outputs);
 
-        // Higher profitability index is better, so should be sorted: 3.0, 2.0, 1.5
-        assert_approx_eq!(f64, outputs[0].metric.as_ref().unwrap().value(), 3.0); // Best (highest PI)
-        assert_approx_eq!(f64, outputs[1].metric.as_ref().unwrap().value(), 2.0);
-        assert_approx_eq!(f64, outputs[2].metric.as_ref().unwrap().value(), 1.5); // Worst (lowest PI)
-    }
-
-    /// Test that NPV metrics with zero annual fixed cost are prioritised above all others
-    /// when invariant to asset properties
-    #[rstest]
-    fn appraisal_sort_by_npv_metric_zero_afc_prioritised(asset: Asset) {
-        let metrics: Vec<Box<dyn MetricTrait>> = vec![
-            // Very high profitability index but non-zero AFC
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(1000.0),
-                annualised_fixed_cost: Money(100.0),
-            })),
-            // Zero AFC with modest surplus - should be prioritised first
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(50.0),
-                annualised_fixed_cost: Money(0.0),
-            })),
-            // Another high profitability index but non-zero AFC
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(500.0),
-                annualised_fixed_cost: Money(50.0),
-            })),
-        ];
-
-        let mut outputs =
-            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
-        sort_and_filter_appraisal_outputs(&mut outputs);
-
-        // Zero AFC should be first despite lower absolute surplus value
-        assert_approx_eq!(f64, outputs[0].metric.as_ref().unwrap().value(), 50.0); // Zero AFC (uses surplus)
-        assert_approx_eq!(f64, outputs[1].metric.as_ref().unwrap().value(), 10.0); // PI = 1000/100
-        assert_approx_eq!(f64, outputs[2].metric.as_ref().unwrap().value(), 10.0); // PI = 500/50
+        assert_approx_eq!(f64, outputs[0].metric.as_ref().unwrap().value(), 7.0); // Best (highest)
+        assert_approx_eq!(f64, outputs[1].metric.as_ref().unwrap().value(), 5.0);
+        assert_approx_eq!(f64, outputs[2].metric.as_ref().unwrap().value(), 3.0); // Worst (lowest)
     }
 
     /// Test that mixing LCOX and NPV metrics causes a runtime panic during comparison
@@ -697,10 +538,7 @@ mod tests {
     fn appraisal_sort_by_mixed_metrics_panics(asset: Asset) {
         let metrics: Vec<Box<dyn MetricTrait>> = vec![
             Box::new(LCOXMetric::new(MoneyPerActivity(5.0))),
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(200.0),
-                annualised_fixed_cost: Money(100.0),
-            })),
+            Box::new(NPVMetric::new(MoneyPerActivity(3.0))),
             Box::new(LCOXMetric::new(MoneyPerActivity(3.0))),
         ];
 
@@ -1064,28 +902,6 @@ mod tests {
                 Box::new(LCOXMetric::new(metric_value)),
             ],
         );
-
-        assert_eq!(count_equal_and_best_appraisal_outputs(&outputs), 1);
-    }
-
-    /// Equal NPV metrics and identical assets → second element should be counted.
-    #[rstest]
-    fn count_equal_best_equal_npv_metrics(asset: Asset) {
-        let make_npv = |surplus: f64, fixed_cost: f64| {
-            Box::new(NPVMetric::new(ProfitabilityIndex {
-                total_annualised_surplus: Money(surplus),
-                annualised_fixed_cost: Money(fixed_cost),
-            })) as Box<dyn MetricTrait>
-        };
-
-        let metrics = vec![
-            make_npv(200.0, 100.0),
-            make_npv(200.0, 100.0), // Equal to best
-            make_npv(100.0, 100.0), // Worse
-        ];
-
-        let outputs =
-            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
 
         assert_eq!(count_equal_and_best_appraisal_outputs(&outputs), 1);
     }
