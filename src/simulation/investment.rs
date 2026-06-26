@@ -8,7 +8,7 @@ use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Capacity, Dimensionless, Flow};
+use crate::units::{Dimensionless, Flow};
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
@@ -809,8 +809,9 @@ fn update_assets(
             if let Some(remaining_capacity) = remaining_candidate_capacity.get_mut(&best_asset) {
                 *remaining_capacity = *remaining_capacity - best_asset.capacity();
 
-                // If there's no capacity remaining, remove the asset from the options
-                if remaining_capacity.total_capacity() <= Capacity(0.0) {
+                // If there's insufficient remaining capacity allowance to install any further
+                // counts of this asset, we remove the asset from the options
+                if remaining_capacity.total_capacity() < best_asset.capacity().total_capacity() {
                     let old_idx = opt_assets
                         .iter()
                         .position(|asset| *asset == best_asset)
