@@ -182,7 +182,16 @@ For each asset option:
 
 #### Tool B: NPV
 
-This method is identical to LCOX, but includes the commodity of interest in the metric calculation.
+ This method uses the Specific Net Annualised Surplus (SNAS) to rank options. It is similar in
+ structure to the LCOX calculation, but uses activity values that include the commodity of interest
+ and compares options by *maximising* surplus:
+
+ \\[
+ \text{SNAS} = \frac{\sum_t act_t \times AC_t^{\text{NPV}} - \text{AFC} \times \text{cap}_r}{\sum_t
+  act_t}
+ \\]
+
+ Higher SNAS values indicate more profitable investments.
 
 #### Equal-Metric Fallback
 

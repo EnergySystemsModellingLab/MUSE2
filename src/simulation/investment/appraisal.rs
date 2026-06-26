@@ -178,26 +178,26 @@ impl ComparableMetric for LCOXMetric {
 /// `LCOXMetric` implements the `MetricTrait` supertrait.
 impl MetricTrait for LCOXMetric {}
 
-/// Net Present Value (NPV) metric.
+/// Net Present Value (NPV) tool metric.
 ///
-/// Represents the net present value of an investment. Higher values indicate
-/// more profitable investments.
+/// In the NPV appraisal tool we compare options using the Specific Net Annualised Surplus (SNAS)
+/// expressed per unit activity. Higher values indicate more profitable investments.
 #[derive(Debug, Clone, Serialize)]
 pub struct NPVMetric {
-    /// The calculated NPV value for this metric
-    pub npv: MoneyPerActivity,
+    /// The calculated SNAS value for this metric
+    pub snas: MoneyPerActivity,
 }
 
 impl NPVMetric {
-    /// Creates a new `NPVMetric` with the given NPV value.
-    pub fn new(npv: MoneyPerActivity) -> Self {
-        Self { npv }
+    /// Creates a new `NPVMetric` with the given SNAS value.
+    pub fn new(snas: MoneyPerActivity) -> Self {
+        Self { snas }
     }
 }
 
 impl ComparableMetric for NPVMetric {
     fn value(&self) -> f64 {
-        self.npv.value()
+        self.snas.value()
     }
 
     fn compare(&self, other: &dyn ComparableMetric) -> Ordering {
@@ -206,7 +206,7 @@ impl ComparableMetric for NPVMetric {
             .downcast_ref::<Self>()
             .expect("Cannot compare metrics of different types");
 
-        compare_approx(other.npv, self.npv)
+        compare_approx(other.snas, self.snas)
     }
 
     fn as_any(&self) -> &dyn Any {
