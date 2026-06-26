@@ -520,17 +520,16 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        asset, process, process_activity_limits_map, process_flows_map, process_parameter_map,
-        region_id, svd_commodity, time_slice, time_slice_info, time_slice_info2,
+        asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
+        time_slice_info, time_slice_info2,
     };
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
-    use crate::units::{ActivityPerCapacity, Flow, FlowPerActivity, MoneyPerFlow};
-    use indexmap::{IndexSet, indexmap};
-    use rstest::{fixture, rstest};
+    use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
+    use indexmap::indexmap;
+    use rstest::rstest;
     use std::rc::Rc;
-    use std::slice::from_ref;
 
     #[rstest]
     fn get_demand_limiting_capacity_works(

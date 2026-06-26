@@ -26,7 +26,8 @@ pub enum MarketSet {
     /// Assets are selected for a single market using [`select_assets_for_single_market`]
     Single((CommodityID, RegionID)),
     /// Assets are selected for a group of markets which forms a cycle.
-    /// Experimental: handled by [`select_assets_for_cycle`]. May not work in every case.
+    /// Experimental: handled by [`select_assets_for_cycle`] and guarded by the broken options
+    /// parameter.
     Cycle(Vec<(CommodityID, RegionID)>),
     /// Assets are selected for a layer of independent [`MarketSet`]s
     Layer(Vec<MarketSet>),
@@ -232,7 +233,7 @@ fn get_asset_options<'a>(
 ///
 /// Returns a list of assets that are selected for investment for this market in this year.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_single_market(
+pub fn select_assets_for_single_market(
     model: &Model,
     commodity_id: &CommodityID,
     region_id: &RegionID,
@@ -313,7 +314,7 @@ fn select_assets_for_single_market(
 /// A longer-term solution (TODO) may be to trigger re-investment for the affected markets. Other
 /// yet-to-implement features may also help to stabilise the cycle, such as capacity growth limits.
 #[allow(clippy::too_many_arguments)]
-fn select_assets_for_cycle(
+pub fn select_assets_for_cycle(
     model: &Model,
     markets: &[(CommodityID, RegionID)],
     year: u32,
@@ -480,10 +481,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::AgentID;
     use crate::fixture::{
-        agent_id, process, process_activity_limits_map, process_flows_map,
-        process_investment_constraints, process_parameter_map, region_id,
+        asset, process, process_activity_limits_map, process_flows_map, process_parameter_map,
+        region_id,
     };
     use crate::process::{
         Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessInvestmentConstraint,
@@ -493,9 +493,9 @@ mod tests {
     use crate::units::Dimensionless;
     use crate::units::{ActivityPerCapacity, Capacity};
     use indexmap::IndexSet;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use std::rc::Rc;
-
+    use std::slice::from_ref;
 
     #[rstest]
     fn collect_investment_limits_for_candidates_empty_list() {
