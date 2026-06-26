@@ -3,6 +3,7 @@ use crate::get_muse2_config_dir;
 use crate::input::read_toml;
 use crate::log::DEFAULT_LOG_LEVEL;
 use anyhow::Result;
+use clap::Args;
 use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -35,38 +36,117 @@ pub fn get_settings_file_path() -> PathBuf {
     path
 }
 
-/// Program settings from config file
+/// Defines the program [`Settings`] together with their defaults and which of them can be
+/// overridden from the command line.
 ///
-/// NOTE: If you add or change a field in this struct, you must also update the schema in
-/// `schemas/settings.yaml`.
-#[derive(Debug, DocumentedFields, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
-pub struct Settings {
-    /// The default program log level
-    pub log_level: String,
-    /// Whether to overwrite output files by default
-    pub overwrite: bool,
-    /// Whether to write additional information to CSV files
-    pub debug_model: bool,
-    /// Results root path to save MUSE2 results. Defaults to `muse2_results`.
-    pub results_root: PathBuf,
-    /// Results root path to save MUSE2 graph outputs. Defaults to `muse2_graphs`.
-    pub graph_results_root: PathBuf,
-    /// Whether to copy input files to the output folder.
-    pub copy_input_files: bool,
+/// Each setting is declared exactly once: its doc comment, type and default value. Appending
+/// `, cli` to a setting generates a matching `Option<bool>` field on [`SettingsOverrides`]
+/// (reusing the doc comment as the flag's help text) and a merge step in
+/// [`Settings::apply_overrides`]. Settings without `cli` can only be set via `settings.toml`.
+macro_rules! settings {
+    (
+        $(
+            $(#[doc = $doc:literal])+
+            $field:ident: $ty:ty = $default:expr $(, $cli:ident)? ;
+        )+
+    ) => {
+        /// Program settings, resolved from the defaults, the settings file and CLI overrides.
+        ///
+        /// NOTE: If you add or change a field here, you must also update the schema in
+        /// `schemas/settings.yaml`.
+        #[derive(Debug, DocumentedFields, Serialize, Deserialize, PartialEq)]
+        #[serde(default)]
+        pub struct Settings {
+            $(
+                $(#[doc = $doc])+
+                pub $field: $ty,
+            )+
+        }
+
+        impl Default for Settings {
+            fn default() -> Self {
+                Self {
+                    $( $field: $default, )+
+                }
+            }
+        }
+
+        settings!(@overrides { } { }
+            $( [ $field { $(#[doc = $doc])+ } $($cli)? ] )+
+        );
+    };
+
+    // Overridable setting: add an `Option<bool>` flag and a merge step.
+    (@overrides
+        { $($fields:tt)* }
+        { $($applies:tt)* }
+        [ $field:ident { $(#[doc = $doc:literal])+ } cli ]
+        $($rest:tt)*
+    ) => {
+        settings!(@overrides
+            {
+                $($fields)*
+                $(#[doc = $doc])+
+                #[arg(long, value_name = "BOOL", num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+                pub $field: Option<bool>,
+            }
+            { $($applies)* ($field) }
+            $($rest)*
+        );
+    };
+
+    // File-only setting: skip it.
+    (@overrides
+        { $($fields:tt)* }
+        { $($applies:tt)* }
+        [ $field:ident { $(#[doc = $doc:literal])+ } ]
+        $($rest:tt)*
+    ) => {
+        settings!(@overrides { $($fields)* } { $($applies)* } $($rest)*);
+    };
+
+    // No settings left: emit the overrides struct and the merge method.
+    (@overrides { $($fields:tt)* } { $( ($afield:ident) )* }) => {
+        /// Settings that can be overridden via command-line arguments.
+        ///
+        /// A field is `Some` only when the corresponding flag was passed; otherwise the value from
+        /// the settings file (or default) is kept.
+        #[derive(Debug, Default, Args)]
+        pub struct SettingsOverrides {
+            $($fields)*
+        }
+
+        impl Settings {
+            /// Apply command-line `overrides` on top of these settings.
+            pub fn apply_overrides(&mut self, overrides: &SettingsOverrides) {
+                $(
+                    if let Some(value) = overrides.$afield {
+                        self.$afield = value;
+                    }
+                )*
+            }
+        }
+    };
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            log_level: DEFAULT_LOG_LEVEL.to_string(),
-            overwrite: false,
-            debug_model: false,
-            results_root: PathBuf::from("muse2_results"),
-            graph_results_root: PathBuf::from("muse2_graphs"),
-            copy_input_files: true,
-        }
-    }
+settings! {
+    /// The default program log level
+    log_level: String = DEFAULT_LOG_LEVEL.to_string();
+
+    /// Results root path to save MUSE2 results. Defaults to `muse2_results`.
+    results_root: PathBuf = PathBuf::from("muse2_results");
+
+    /// Results root path to save MUSE2 graph outputs. Defaults to `muse2_graphs`.
+    graph_results_root: PathBuf = PathBuf::from("muse2_graphs");
+
+    /// Whether to overwrite output files
+    overwrite: bool = false, cli;
+
+    /// Whether to write additional information to CSV files
+    debug_model: bool = false, cli;
+
+    /// Whether to copy input files to the output folder
+    copy_input_files: bool = true, cli;
 }
 
 impl Settings {
@@ -129,6 +209,7 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::fs::File;
     use std::io::Write;
     use tempfile::tempdir;
@@ -165,5 +246,28 @@ mod tests {
     #[test]
     fn default_file_contents() {
         assert!(!Settings::default_file_contents().is_empty());
+    }
+
+    /// A CLI override should always take precedence over the settings-file value, including the
+    /// case where the user explicitly opts out of an option that is enabled in the file.
+    #[rstest]
+    #[case(false, None, false)] // no flag passed: keep the file value
+    #[case(true, None, true)] // no flag passed: keep the file value
+    #[case(false, Some(true), true)] // --overwrite (=true): opt in
+    #[case(true, Some(false), false)] // --overwrite=false: opt out
+    fn apply_overrides_takes_precedence(
+        #[case] file_value: bool,
+        #[case] cli_value: Option<bool>,
+        #[case] expected: bool,
+    ) {
+        let mut settings = Settings {
+            overwrite: file_value,
+            ..Settings::default()
+        };
+        settings.apply_overrides(&SettingsOverrides {
+            overwrite: cli_value,
+            ..Default::default()
+        });
+        assert_eq!(settings.overwrite, expected);
     }
 }
