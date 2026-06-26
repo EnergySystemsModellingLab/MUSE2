@@ -20,7 +20,8 @@ highest-cost active asset producing the commodity.
 balance constraints in the dispatch optimisation.
 - **`scarcity`**: Prices are set to the shadow price plus the highest activity dual of the assets
 producing the commodity in that region and time slice.
-- **`unpriced`**: No prices are calculated for the commodity.
+- **`unpriced`**: No prices are calculated for the commodity. This is mandatory for all OTH
+(Other)-type commodities.
 
 ### Cost Calculations
 
@@ -34,7 +35,7 @@ shared between outputs according to output flow coefficients.
 The generic activity cost comprises all operating expenditures, input purchases, and flow costs/levies
 not associated with specific SED/SVD outputs:
 \\[
-\text{GenericActivityCost} = \text{VariableOperatingCost} + \text{InputPurchases} + \sum \text{GenericFlowCosts}
+\text{GenericActivityCost} = \text{VariableOpex} + \text{InputPurchases} + \sum \text{GenericFlowCosts}
 \\]
 
 This is shared equally over all SED/SVD outputs in proportion to their output coefficients to
@@ -76,8 +77,8 @@ This is divided again by the sum of SED/SVD output coefficients to get a cost pe
 SVD}} \text{OutputCoefficient}_c}
 \\]
 
-*Note: this only works if all output commodities are measured in the same energy units (e.g. PJ).
-For this reason, MUSE2 disallows processes that have output commodities with differing units.*
+> Note: this only works if all output commodities are measured in the same energy units (e.g. PJ).
+> For this reason, MUSE2 disallows processes that have output commodities with differing units.*
 
 The final full cost of output commodity \\( c \\) is:
 \\[
@@ -98,7 +99,7 @@ In the final milestone year, prices for commodities with no active producer are 
 
 For commodities defined at coarser time slice levels (e.g. seasonal or annual), prices are
 calculated by weighting asset costs across time slices by activity to yield a flat price for the
-season/year. For candidates, or assets with zero activity across the selection, upper activity
+season/year. For candidate assets, or assets with zero activity across the selection, upper activity
 limits are used as weights.
 
 ## Price Calculation Order
@@ -135,9 +136,10 @@ The following example demonstrates the calculation of full-cost prices for two c
 
 ### GASPRD
 
-In this scenario, GASPRD is produced by a single GASDRV asset. This asset produces 1 unit of GASPRD
-per unit of activity, along with 5.113 units of CO₂ emissions. Suppose an annual utilisation
-of 0.20786471743 units of activity per unit of capacity (based on dispatch results).
+In this scenario, GASPRD (raw gas) is produced by a single GASDRV (dry gas extraction) asset. This
+asset produces 1 unit of GASPRD per unit of activity, along with 5.113 units of CO₂ emissions.
+Suppose an annual utilisation of 0.20786471743 units of activity per unit of capacity (based on
+dispatch results).
 
 #### Marginal Cost
 
@@ -153,11 +155,10 @@ Using a lifetime of 25 years, a discount rate of 10%, annual fixed costs of 0.3 
 and a total capital cost of 10 per unit capacity:
 
 \\[
-\text{CRF} = 0.11016807219
-\\]
-
-\\[
-\text{AnnualFixedCostPerCapacity} = (10 \times 0.11016807219 + 0.3) = 1.4016807219
+\begin{aligned}
+\text{CRF} &= 0.11016807219 \\\\
+\text{AnnualFixedCostPerCapacity} &= (10 \times 0.11016807219 + 0.3) = 1.4016807219
+\end{aligned}
 \\]
 
 Accounting for annual utilisation:
@@ -177,25 +178,22 @@ The full cost is:
 
 ### GASNAT
 
-Following on from the above scenario, GASNAT is produced by a single GASPRC asset, which consumes
-GASPRD as an input fuel. This asset consumes 1.05 units of GASPRD and produces 1 unit of GASNAT
-per unit of activity, along with 2.5565 units of CO₂ emissions. Suppose an annual utilisation
-of 0.2094885671 units of activity per unit of capacity (based on dispatch results).
+Following on from the above scenario, GASNAT (processed natural gas) is produced by a single GASPRC
+(gas processing) asset, which consumes GASPRD as an input fuel. This asset consumes 1.05 units of
+GASPRD and produces 1 unit of GASNAT per unit of activity, along with 2.5565 units of CO₂ emissions.
+Suppose an annual utilisation of 0.2094885671 units of activity per unit of capacity (based on
+dispatch results).
 
 #### Marginal Cost
 
 The asset incurs a CO₂ levy (0.04/unit), a variable operating cost of 0.5 and fuel purchases:
 
 \\[
-\text{CO2Levy} = 2.5565 \times 0.04 = 0.10226
-\\]
-
-\\[
-\text{InputPurchases} = 8.9477554044 \times 1.05 = 9.39514317462
-\\]
-
-\\[
-\text{MarginalCost}_{\text{GASNAT}} = 0.10226 + 0.5 + 9.39514317462 = 9.99740317462
+\begin{aligned}
+\text{CO2Levy} &= 2.5565 \times 0.04 = 0.10226 \\\\
+\text{InputPurchases} &= 8.9477554044 \times 1.05 = 9.39514317462 \\\\
+\text{MarginalCost}_{\text{GASNAT}} &= 0.10226 + 0.5 + 9.39514317462 = 9.99740317462
+\end{aligned}
 \\]
 
 #### Full Cost
@@ -204,11 +202,10 @@ Using the same lifetime and discount rate, along with annual fixed costs of 0.21
 and a total capital cost of 7 per unit capacity:
 
 \\[
-\text{CRF} = 0.11016807219
-\\]
-
-\\[
-\text{AnnualFixedCostPerCapacity} = (7 \times 0.11016807219 + 0.21) = 0.98117650533
+\begin{aligned}
+\text{CRF} &= 0.11016807219 \\\\
+\text{AnnualFixedCostPerCapacity} &= (7 \times 0.11016807219 + 0.21) = 0.98117650533
+\end{aligned}
 \\]
 
 Accounting for annual utilisation:
@@ -217,9 +214,9 @@ Accounting for annual utilisation:
 \\]
 
 Accounting for the output coefficient:
-\[
+\\[
 \text{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 4.6836756722
-\]
+\\]
 
 The full cost is:
 \\[

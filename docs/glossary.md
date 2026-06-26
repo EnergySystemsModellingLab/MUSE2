@@ -70,6 +70,10 @@ example, with a 2025 Base Year and End Year 2100, a user might choose to record 
 **Merit Order:** A method of operating *Assets* when the cheapest is dispatched first, followed by
 the next most expensive, etc, until demand is served. Also called “unit commitment.”
 
+**OTH (other)-type commodity:** A commoodity that is not supply-demand balanced in the model.
+Includes side products and emissions such as CO₂, or any raw materials that are not output by
+modelled processes.
+
 **Output Commodity/ies:** The commodities that flow out of a *Process*.
 
 **Process:** A blueprint of an available *Process* that converts input commodities to output
