@@ -32,12 +32,13 @@ jobs:
         run: |
           git switch --force-create update-cargo-lock
           git add Cargo.lock
-          git commit -m "chore: Update Cargo.lock"
+          git commit -m "chore: Update Cargo.lock" || echo success=false > $GITHUB_OUTPUT
           git push origin update-cargo-lock --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Open a pull request using GitHub CLI
+        if: steps.checker.outputs.success != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
