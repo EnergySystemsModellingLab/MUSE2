@@ -5,7 +5,8 @@ name: Update Cargo.lock
 
 on:
   schedule:
-    - cron: "0 0 * * 1" # To sync with dependabot
+    # Dependabot visits on Weds, so run on Thurs
+    - cron: "0 0 * * 4"
   workflow_dispatch:
 
 permissions:
