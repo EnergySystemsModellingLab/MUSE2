@@ -40,14 +40,18 @@ pub fn get_settings_file_path() -> PathBuf {
 /// overridden from the command line.
 ///
 /// Each setting is declared exactly once: its doc comment, type and default value. Appending
-/// `, cli` to a setting generates a matching `Option<bool>` field on [`SettingsOverrides`]
-/// (reusing the doc comment as the flag's help text) and a merge step in
-/// [`Settings::apply_overrides`]. Settings without `cli` can only be set via `settings.toml`.
+/// `, cli` to a setting generates a matching `Option<T>` field on [`SettingsOverrides`] (reusing
+/// the doc comment as the flag's help text) and a merge step in [`Settings::apply_overrides`].
+/// Settings without `cli` can only be set via `settings.toml`.
+///
+/// Both `bool` and `String` settings can be marked `cli`. A `bool` flag may be passed bare
+/// (`--flag`, meaning `true`) or with an explicit value (`--flag=false`), whereas a `String` flag
+/// always takes a value (`--flag value`).
 macro_rules! settings {
     (
         $(
             $(#[doc = $doc:literal])+
-            $field:ident: $ty:ty = $default:expr $(, $cli:ident)? ;
+            $field:ident: $ty:tt = $default:expr $(, $cli:ident)? ;
         )+
     ) => {
         /// Program settings, resolved from the defaults, the settings file and CLI overrides.
@@ -72,15 +76,16 @@ macro_rules! settings {
         }
 
         settings!(@overrides { } { }
-            $( [ $field { $(#[doc = $doc])+ } $($cli)? ] )+
+            $( [ $field: $ty { $(#[doc = $doc])+ } $($cli)? ] )+
         );
     };
 
-    // Overridable setting: add an `Option<bool>` flag and a merge step.
+    // Overridable `bool` setting: add an `Option<bool>` flag and a merge step. The flag may be
+    // passed bare (`--flag` => `true`) or with an explicit value (`--flag=false`).
     (@overrides
         { $($fields:tt)* }
         { $($applies:tt)* }
-        [ $field:ident { $(#[doc = $doc:literal])+ } cli ]
+        [ $field:ident: bool { $(#[doc = $doc:literal])+ } cli ]
         $($rest:tt)*
     ) => {
         settings!(@overrides
@@ -95,11 +100,31 @@ macro_rules! settings {
         );
     };
 
+    // Overridable `String` setting: add an `Option<String>` flag and a merge step. The flag always
+    // takes a value (`--flag value`).
+    (@overrides
+        { $($fields:tt)* }
+        { $($applies:tt)* }
+        [ $field:ident: String { $(#[doc = $doc:literal])+ } cli ]
+        $($rest:tt)*
+    ) => {
+        settings!(@overrides
+            {
+                $($fields)*
+                $(#[doc = $doc])+
+                #[arg(long)]
+                pub $field: Option<String>,
+            }
+            { $($applies)* ($field) }
+            $($rest)*
+        );
+    };
+
     // File-only setting: skip it.
     (@overrides
         { $($fields:tt)* }
         { $($applies:tt)* }
-        [ $field:ident { $(#[doc = $doc:literal])+ } ]
+        [ $field:ident: $ty:tt { $(#[doc = $doc:literal])+ } ]
         $($rest:tt)*
     ) => {
         settings!(@overrides { $($fields)* } { $($applies)* } $($rest)*);
@@ -120,8 +145,8 @@ macro_rules! settings {
             /// Apply command-line `overrides` on top of these settings.
             pub fn apply_overrides(&mut self, overrides: &SettingsOverrides) {
                 $(
-                    if let Some(value) = overrides.$afield {
-                        self.$afield = value;
+                    if let Some(value) = &overrides.$afield {
+                        self.$afield = value.clone();
                     }
                 )*
             }
