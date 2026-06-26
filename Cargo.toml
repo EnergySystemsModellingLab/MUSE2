@@ -20,7 +20,6 @@ itertools = "0.15.0"
 serde = {version = "1.0.228", features = ["derive", "rc"]}
 tempfile = "3.27.0"
 toml = "1.1.2"
-unicase = "2.9.0"
 fern = {version = "0.7.1", features = ["chrono", "colored"]}
 chrono = "0.4"
 clap = {version = "4.6.1", features = ["cargo", "derive"]}
