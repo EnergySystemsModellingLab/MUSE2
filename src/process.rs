@@ -11,7 +11,7 @@ use crate::units::{
 use anyhow::{Result, ensure};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use serde_string_enum::DeserializeLabeledStringEnum;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
@@ -458,15 +458,15 @@ impl ProcessFlow {
 }
 
 /// Type of commodity flow (see [`ProcessFlow`])
-#[derive(PartialEq, Default, Debug, Clone, DeserializeLabeledStringEnum)]
+#[derive(PartialEq, Default, Debug, Clone, Deserialize)]
 pub enum FlowType {
     /// The input to output flow ratio is fixed
     #[default]
-    #[string = "fixed"]
+    #[serde(rename = "fixed")]
     Fixed,
     /// The flow ratio can vary, subject to overall flow of a specified group of commodities whose
     /// input/output ratio must be as per user input data
-    #[string = "flexible"]
+    #[serde(rename = "flexible")]
     Flexible,
 }
 
