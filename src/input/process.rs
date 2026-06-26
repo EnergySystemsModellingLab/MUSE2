@@ -38,7 +38,8 @@ struct ProcessRaw {
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
     capacity_granularity: Option<Capacity>,
-    is_divisible: Option<bool>,
+    #[serde(default)]
+    is_divisible: bool, // defaults to false if not specified
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -169,9 +170,6 @@ where
             process_raw.id
         );
 
-        // is_divisible defaults to false if not specified
-        let is_divisible = process_raw.is_divisible.unwrap_or(false);
-
         // Capacity granularity defaults to
         // `default_capacity_granularity_factor / capacity_to_activity` if not specified
         let capacity_granularity = process_raw
@@ -197,7 +195,7 @@ where
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
             capacity_granularity,
-            is_divisible,
+            is_divisible: process_raw.is_divisible,
         };
 
         ensure!(

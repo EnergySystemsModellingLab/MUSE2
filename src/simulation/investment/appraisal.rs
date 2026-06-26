@@ -88,16 +88,14 @@ impl AppraisalOutput {
     /// depending on the user's platform (e.g. macOS ARM vs. Windows). We want to avoid this, if
     /// possible, which is why we use a more approximate comparison.
     pub fn compare_metric(&self, other: &Self) -> Ordering {
-        assert!(
-            self.metric.is_some() && other.metric.is_some(),
-            "Cannot compare non-valid outputs"
-        );
+        let (metric1, metric2) = self
+            .metric
+            .as_deref()
+            .zip(other.metric.as_deref())
+            .expect("Cannot compare non-valid outputs");
 
         // We've already checked the metrics aren't `None`
-        self.metric
-            .as_ref()
-            .unwrap()
-            .compare(other.metric.as_ref().unwrap().as_ref())
+        metric1.compare(metric2)
     }
 }
 

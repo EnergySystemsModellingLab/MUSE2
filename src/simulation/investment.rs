@@ -283,8 +283,8 @@ fn select_assets_for_single_market(
         );
 
         // Existing and candidate assets from which to choose
-        let opt_assets = get_asset_options(existing_assets, agent, commodity, region_id, year)
-            .collect::<Vec<_>>();
+        let opt_assets =
+            get_asset_options(existing_assets, agent, commodity, region_id, year).collect_vec();
 
         // Calculate investment limits for candidate assets
         let investment_limits =
