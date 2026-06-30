@@ -31,6 +31,8 @@ ready to be released, carry out the following steps:
 - Fix parsing and validation of agent search space file ([#1293])
 - Use shadow prices rather than market prices for appraisal optimisations and dispatch runs during
   investment ([#1349])
+- Updated input data validation to ensure `capacity_to_activity > 0`. Previously,
+ `capacity_to_activity = 0` was permitted.
 
 [highs-opts-docs]: ../developer_guide/custom_highs_options.md
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259

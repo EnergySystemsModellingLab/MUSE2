@@ -136,7 +136,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         Self::new_with_state(
             AssetState::Candidate,
             process,
@@ -190,7 +190,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         Self::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -216,7 +216,7 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         Self::new_with_state(
             AssetState::Commissioned {
                 id: AssetID(0),
@@ -988,7 +988,7 @@ impl UserAsset {
         max_decommission_year: Option<u32>,
     ) -> Result<Self> {
         check_capacity_valid_for_asset(capacity)?;
-        let unit_size = process.unit_size;
+        let unit_size = process.unit_size();
         let asset = Asset::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -1404,7 +1404,8 @@ mod tests {
         #[case] unit_size: Capacity,
         #[case] n_expected_children: usize,
     ) {
-        process.unit_size = Some(unit_size);
+        process.capacity_granularity = unit_size;
+        process.is_divisible = true;
         let asset = AssetRef::from(
             Asset::new_ready(
                 "agent1".into(),
@@ -1442,10 +1443,7 @@ mod tests {
 
     #[rstest]
     fn into_for_each_child_nondivisible(asset: Asset) {
-        assert!(
-            asset.process.unit_size.is_none(),
-            "Asset should be non-divisible"
-        );
+        assert!(!asset.process.is_divisible, "Asset should be non-divisible");
 
         let asset = AssetRef::from(asset);
         let mut count = 0;
@@ -1542,8 +1540,8 @@ mod tests {
     #[test]
     fn commission_year_before_time_horizon() {
         let processes_patch = FilePatch::new("processes.csv")
-            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
-            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0,");
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,false")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,1980,2040,1.0,false");
 
         // Check we can run model with asset commissioned before time horizon (simple starts in
         // 2020)
@@ -1567,8 +1565,8 @@ mod tests {
     #[test]
     fn commission_year_after_time_horizon() {
         let processes_patch = FilePatch::new("processes.csv")
-            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,")
-            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0,");
+            .with_deletion("GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,false")
+            .with_addition("GASDRV,Dry gas extraction,all,GASPRD,2020,2050,1.0,false");
 
         // Check we can run model with asset commissioned after time horizon (simple ends in 2040)
         let patches = vec![
