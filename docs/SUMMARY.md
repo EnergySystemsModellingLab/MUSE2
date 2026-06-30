@@ -12,6 +12,7 @@
 - [Model Description](model/README.md)
   - [Dispatch Optimisation](model/dispatch_optimisation.md)
   - [Investment Appraisal](model/investment.md)
+  - [Commodity Prices](model/prices.md)
   - [Model Diagrams](model/model_diagrams.md)
 - [Glossary](glossary.md)
 - [Developer Guide](developer_guide/README.md)
