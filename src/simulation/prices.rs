@@ -5,7 +5,7 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::simulation::investment::InvestmentSet;
+use crate::simulation::market::MarketSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
@@ -120,10 +120,10 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     // Lazily computed only if at least one FullCost market is encountered.
     let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
 
-    // Iterate over investment sets in reverse order
-    for investment_set in model.investment_order[&year].iter().rev() {
-        price_investment_set(
-            investment_set,
+    // Iterate over market sets in reverse order
+    for market_set in model.investment_order[&year].iter().rev() {
+        price_market_set(
+            market_set,
             model,
             solution,
             year,
@@ -139,9 +139,9 @@ pub fn calculate_prices(model: &Model, solution: &Solution, year: u32) -> Result
     })
 }
 
-/// Calculate prices for the markets in an investment set, updating `market_prices`.
-fn price_investment_set(
-    investment_set: &InvestmentSet,
+/// Calculate prices for the markets in an market set, updating `market_prices`.
+fn price_market_set(
+    market_set: &MarketSet,
     model: &Model,
     solution: &Solution,
     year: u32,
@@ -149,8 +149,8 @@ fn price_investment_set(
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
 ) {
-    match investment_set {
-        InvestmentSet::Single(market) => {
+    match market_set {
+        MarketSet::Single(market) => {
             price_markets(
                 model,
                 solution,
@@ -161,7 +161,7 @@ fn price_investment_set(
                 market_prices,
             );
         }
-        InvestmentSet::Cycle(markets) => {
+        MarketSet::Cycle(markets) => {
             price_cycle(
                 model,
                 solution,
@@ -172,9 +172,9 @@ fn price_investment_set(
                 market_prices,
             );
         }
-        InvestmentSet::Layer(investment_sets) => {
-            for set in investment_sets {
-                price_investment_set(
+        MarketSet::Layer(market_sets) => {
+            for set in market_sets {
+                price_market_set(
                     set,
                     model,
                     solution,

@@ -14,6 +14,7 @@ pub mod optimisation;
 use optimisation::{DispatchRun, FlowMap};
 pub mod investment;
 use investment::perform_agent_investment;
+pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
 
