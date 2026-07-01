@@ -137,10 +137,9 @@ providing investment and dynamic decommissioning decisions.
 
 ### Tools
 
-#### Tool A: LCOX
+#### Tool A: LCOX (`objective_type` = "lcox")
 
-This method is used when decision rule is single objective and objective is LCOX for agents' serving
-commodity \\( c \\). This method constructs a supply portfolio (from new candidates \\( ca \\), new
+This method constructs a supply portfolio (from new candidates \\( ca \\), new
 import infrastructure \\( ca_{import} \\), and available existing assets \\( ex \\)) to meet target
 \\( U_{c} \\) at the lowest cost for the investor. As above, the appraisal for each option
 explicitly accounts for its own operational constraints and adapts based on the \\( balance\_level
@@ -180,7 +179,7 @@ For each asset option:
    \times \text{AC}_t^{\text{LCOX}}}{\sum_t act_t}
   \\]
 
-#### Tool B: NPV
+#### Tool B: NPV  (`objective_type` = "npv")
 
  This method uses the Specific Net Annualised Surplus (SNAS) to rank options. It is similar in
  structure to the LCOX calculation, but uses activity values that include the commodity of interest
