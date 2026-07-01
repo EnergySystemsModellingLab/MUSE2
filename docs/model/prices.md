@@ -78,7 +78,7 @@ SVD}} \text{OutputCoefficient}_c}
 \\]
 
 > Note: this only works if all output commodities are measured in the same energy units (e.g. PJ).
-> For this reason, MUSE2 disallows processes that have output commodities with differing units.*
+> For this reason, MUSE2 disallows processes that have output commodities with differing units.
 
 The final full cost of output commodity \\( c \\) is:
 \\[
