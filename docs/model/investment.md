@@ -137,56 +137,9 @@ providing investment and dynamic decommissioning decisions.
 
 ### Tools
 
-#### Tool A: NPV
+#### Tool A: LCOX (`objective_type` = "lcox")
 
-This method is used when the decision rule is `single` and the objective is annualised profit for
-agents serving commodity \\( c \\). It iteratively builds a supply portfolio by selecting
-options that offer the highest annualised profit for serving the current commodity demand. The
-economic evaluation uses \\( \pi_{prevMSY} \\) prices and takes account of asset-specific
-operational constraints (e.g., minimum load levels) and the balance level of the target commodity
-(time slice profile, seasonal or annual). For each asset option:
-
-- **Optimise capacity and dispatch to maximise annualised profit:** Solve a small optimisation
-  sub-problem to maximise the asset's surplus, subject to its operational rules and the specific
-  demand tranche it is being asked to serve.
-
-  \\[
-    maximise \Big\\{\sum_t act_t AC\_{t}^{NPV}
-    \Big\\}
-  \\]
-
-  Where \\( act_t \\) is a decision variable, and subject to:
-
-  - The asset operational constraints (e.g., \\( avail_{LB}, avail_{EQ} \\), etc.), activity less
-    than capacity, applied to its activity profile \\( act_t \\).
-
-  - A demand constraint, where output cannot exceed demand in the tranche, which adapts based on the
-    commodity's balance level (time slice, season, annual).
-
-  - Capacity is constrained up to \\( CapMaxBuild \\) for candidates, and to known capacity for
-    existing assets.
-
-- **Decide on metric:** The type of metric used to compare profitability is dependent on the value of
-  \\(\text{AFC}\\). If \\(\text{AFC} = 0\\) within the tolerance provided by the `float_cmp` crate,
-  the associated investment option is always prioritised over options with \\(\text{AFC} > 0\\).
-
-- **If \\(\text{AFC} > 0\\), Use the profitability index \\(\text{PI}\\) metric:** This is the total
- annualised surplus divided by the annualised fixed cost.
-  \\[
-  \text{PI} =
-  \frac{\sum\_t act\_t \cdot \text{AC}\_t^{\text{NPV}}}{\text{AFC} \cdot \text{cap}}
-  \\]
-
-- **If \\(\text{AFC} = 0\\), Use the total annualised surplus metric \\(\text{TAS}\\):**
-    \\[
-  \text{TAS} =
-  \sum\_t act\_t \cdot \text{AC}\_t^{\text{NPV}}
-  \\]
-
-#### Tool B: LCOX
-
-This method is used when decision rule is single objective and objective is LCOX for agents' serving
-commodity \\( c \\). This method constructs a supply portfolio (from new candidates \\( ca \\), new
+This method constructs a supply portfolio (from new candidates \\( ca \\), new
 import infrastructure \\( ca_{import} \\), and available existing assets \\( ex \\)) to meet target
 \\( U_{c} \\) at the lowest cost for the investor. As above, the appraisal for each option
 explicitly accounts for its own operational constraints and adapts based on the \\( balance\_level
@@ -225,6 +178,19 @@ For each asset option:
   \text{Cost Index} = \frac{\text{AFC} \times \text{cap}_r + \sum_t act_t
    \times \text{AC}_t^{\text{LCOX}}}{\sum_t act_t}
   \\]
+
+#### Tool B: NPV  (`objective_type` = "npv")
+
+ This method uses the Specific Net Annualised Surplus (SNAS) to rank options. It is similar in
+ structure to the LCOX calculation, but uses activity values that include the commodity of interest
+ and compares options by *maximising* surplus:
+
+ \\[
+ \text{SNAS} = \frac{\sum_t act_t \times AC_t^{\text{NPV}} - \text{AFC} \times \text{cap}_r}{\sum_t
+  act_t}
+ \\]
+
+ Higher SNAS values indicate more profitable investments.
 
 #### Equal-Metric Fallback
 
