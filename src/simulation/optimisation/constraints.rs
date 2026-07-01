@@ -147,10 +147,11 @@ where
             continue;
         }
 
-        // If any candidate asset produces this commodity as its primary output, we add a small
-        // epsilon to the LHS of constraints to ensure that candidate assets are activated.
+        // If any candidate asset in this region produces this commodity as its primary output, we
+        // add a small epsilon to the *lower bound* of the balance constraints to force some dispatch.
         let epsilon = if candidate_assets
             .iter()
+            .filter(|a| a.region_id() == region_id)
             .filter_map(|a| a.primary_output_commodity())
             .any(|id| id == commodity_id)
         {
@@ -191,8 +192,8 @@ where
                 }
             }
 
-            // For SED commodities, the LHS must be >=0 (+ epsilon) and for SVD commodities, it must
-            // be >= the exogenous demand supplied by the user (+ epsilon)
+            // For SED commodities, enforce net production >= epsilon, and for SVD commodities
+            // enforce net production >= exogenous demand (+ epsilon).
             let min = match commodity.kind {
                 CommodityType::ServiceDemand => {
                     commodity.demand[&(region_id.clone(), year, ts_selection.clone())].value()
