@@ -199,7 +199,9 @@ fn run_dispatch_for_year(
         (Some(existing), Some(with_candidates)) => {
             calculate_prices(model, existing, with_candidates, year)?
         }
-        (None, Some(_)) => unreachable!("candidates without existing assets"),
+        (None, Some(with_candidates)) => {
+            calculate_prices(model, with_candidates, with_candidates, year)?
+        }
     };
 
     Ok((prices, flow_map))
