@@ -1,6 +1,6 @@
 //! Code for calculating commodity prices used by the simulation.
 //!
-#![doc = concat!("See <https://energysystemsmodellinglab.github.io/MUSE2/v", env!("CARGO_PKG_VERSION"), "/model/prices.html>")]
+#![doc = concat!("See <", crate::docs_url!("/model/prices.html"), ">")]
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
 use crate::model::Model;

@@ -21,9 +21,7 @@ use settings::SettingsSubcommands;
     version,
     about,
     after_help = concat!(
-        "For more detailed documentation on this version of MUSE2, see: https://energysystemsmodellinglab.github.io/MUSE2/v",
-        env!("CARGO_PKG_VERSION"),
-        "/"
+        "For more detailed documentation on this version of MUSE2, see: ", crate::docs_url!()
     )
 )]
 struct Cli {
