@@ -9,6 +9,7 @@ use crate::units::UnitType;
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
+/// Small epsilon to add to the commodity balance constraints for candidate assets
 const COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES: f64 = 1e-6;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
