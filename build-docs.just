@@ -42,9 +42,12 @@ header:
     @echo Generating theme/header.hbs
     @uv run docs/generate_header.py
 
-# Build documentation for previous releases
-old: header
-    @# Clean output dir
-    @rm -rf book/release
+# Move the dev docs to the same level as the old docs
+move-dev: header book api
+    @echo Moving dev docs to /dev
+    @uv run docs/move_dev_docs.py
 
+# Build documentation for previous releases
+old: move-dev
+    @echo Building old versions of docs
     @uv run docs/build_old_docs.py

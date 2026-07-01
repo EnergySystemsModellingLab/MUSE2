@@ -63,10 +63,8 @@ properties:
     type: object
     description: |
       Used for setting custom HiGHS options. As this is unsafe, it requires setting
-      `please_give_me_broken_results` to true. For more information, see the relevant [section of
-      the developer documentation][highs-opts-docs].
-
-      [highs-opts-docs]: https://energysystemsmodellinglab.github.io/MUSE2/developer_guide/custom_highs_options.html
+      `please_give_me_broken_results` to true. For more information, see the relevant
+      [section of the developer documentation](../developer_guide/custom_highs_options.html).
     properties:
       global_options:
         type: object
