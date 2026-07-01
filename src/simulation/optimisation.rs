@@ -732,6 +732,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &all_assets,
             markets_to_balance,
             self.year,
+            self.candidate_assets,
         );
 
         // Create model and apply any user-supplied HiGHS options to it
