@@ -1,0 +1,48 @@
+# Heavily borrows from
+# https://github.com/dora-rs/dora/blob/main/.github/workflows/cargo-update.yml
+
+name: Update Cargo.lock
+
+on:
+  schedule:
+    # Dependabot visits on Weds, so run on Thurs
+    - cron: "0 0 * * 4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cargo-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Update dependencies
+        run: cargo update
+
+      - name: Set user name and email for git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create a branch for the update
+        run: |
+          git switch --force-create update-cargo-lock
+          git add Cargo.lock
+          git commit -m "chore: Update Cargo.lock" || echo success=false > $GITHUB_OUTPUT
+          git push origin update-cargo-lock --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Open a pull request
+        if: steps.checker.outputs.success != 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+          branch: update/cargo-lock
+          title: Update Cargo.lock
+          commit-message: "chore: update Cargo.lock"
+          body: Update dependencies to latest versions.

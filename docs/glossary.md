@@ -70,6 +70,10 @@ example, with a 2025 Base Year and End Year 2100, a user might choose to record 
 **Merit Order:** A method of operating *Assets* when the cheapest is dispatched first, followed by
 the next most expensive, etc, until demand is served. Also called “unit commitment.”
 
+**OTH (other)-type commodity:** A commoodity that is not supply-demand balanced in the model.
+Includes side products and emissions such as CO₂, or any raw materials that are not output by
+modelled processes.
+
 **Output Commodity/ies:** The commodities that flow out of a *Process*.
 
 **Process:** A blueprint of an available *Process* that converts input commodities to output
@@ -88,8 +92,13 @@ other.
 *Service Demands* or specific *Commodity* production. For example, the residential sector, the power
 sector, etc.
 
-**Service Demand:** A Service Demand is a type of commodity that is consumed at the boundary of the
-modelled system. For example, tonne-kilometers of road freight, PJ of useful heat demand, etc.
+**Service Demand (SVD):** A Service Demand is a type of commodity that is consumed at the boundary
+of the modelled system. For example, tonne-kilometers of road freight, PJ of useful heat demand,
+etc.
+
+**Supply Equals Demand (SED):**: An SED commodity is a type of commodity that is both consumed and
+produced by processes in the system. In fully resolved systems, supply of these commodities is
+constrained to be equal to or greater than demand.
 
 **Discount Rate:** The discount rate used to calculate any process-specific agent economic
 objectives that require a discount rate. For example, Equivalent Annual Cost, Net Present Value,
