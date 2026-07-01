@@ -43,7 +43,7 @@ header:
     @uv run docs/generate_header.py
 
 # Move the dev docs to the same level as the old docs
-move-dev: header book
+move-dev: header book api
     @echo Moving dev docs to /dev
     @uv run docs/move_dev_docs.py
 

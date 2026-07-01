@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).parent.parent.absolute()
 
 
 def move_to_dev() -> None:
-    """Build documentation for previous releases."""
+    """Move the built documentation output (`book/`) into `book/dev/`."""
     bookdir = REPO_ROOT / "book"
     outdir = REPO_ROOT / "book" / "dev"
 
