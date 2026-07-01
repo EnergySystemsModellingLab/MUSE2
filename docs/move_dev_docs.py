@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 
 from release import get_releases
 
-DOCS_SITE_ROOT = "https://energysystemsmodellinglab.github.io/MUSE2"
 REPO_ROOT = Path(__file__).parent.parent.absolute()
 
 
@@ -27,7 +26,7 @@ def move_to_dev() -> None:
         f.write(f"""<head>
     <meta
         http-equiv="Refresh"
-        content="0; URL={DOCS_SITE_ROOT}/{get_releases()[0]}/"
+        content="0; URL=./{get_releases()[0]}/index.html"
     />
 </head>""")
 
