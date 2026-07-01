@@ -23,7 +23,9 @@ const DEFAULT_SETTINGS_FILE_HEADER: &str = concat!(
 # \tmuse2 settings show-default
 #
 # For information about the possible settings, visit:
-# \thttps://energysystemsmodellinglab.github.io/MUSE2/file_formats/program_settings.html
+# \thttps://energysystemsmodellinglab.github.io/MUSE2/v",
+    env!("CARGO_PKG_VERSION"),
+    "/file_formats/program_settings.html
 "
 );
 
