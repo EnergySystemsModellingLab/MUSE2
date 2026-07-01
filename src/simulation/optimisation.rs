@@ -511,7 +511,7 @@ fn get_parent_or_self(assets: &[AssetRef]) -> Vec<AssetRef> {
 ///
 /// For a detailed description, please see the [dispatch optimisation formulation][1].
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html
+#[doc = concat!("[1]: https://energysystemsmodellinglab.github.io/MUSE2/v", env!("CARGO_PKG_VERSION"), "/model/dispatch_optimisation.html")]
 #[must_use = "Must call run() method on DispatchRun struct"]
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
