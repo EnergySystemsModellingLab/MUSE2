@@ -166,34 +166,41 @@ fn run_dispatch_for_year(
 ) -> Result<(Prices, FlowMap)> {
     // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
     // flows (i.e. all are zero)
-    let (solution_existing, flow_map) = (!assets.is_empty())
-        .then(|| -> Result<_> {
-            let solution =
-                DispatchRun::new(model, assets, year).run("final without candidates", writer)?;
-            let flow_map = solution.create_flow_map();
-
-            Ok((Some(solution), flow_map))
-        })
-        .transpose()?
-        .unwrap_or_default();
+    let (solution_existing, flow_map) = if assets.is_empty() {
+        (None, FlowMap::default())
+    } else {
+        let solution =
+            DispatchRun::new(model, assets, year).run("final without candidates", writer)?;
+        let flow_map = solution.create_flow_map();
+        (Some(solution), flow_map)
+    };
 
     // Perform a separate dispatch run with both existing assets and candidates, if there are any,
-    // to get prices. If not, use the previous solution.
-    let solution_for_prices = (!candidates.is_empty())
-        .then(|| {
+    // to get shadow prices. If not, use the existing solution alone.
+    let solution_with_candidates = if candidates.is_empty() {
+        None
+    } else {
+        Some(
             DispatchRun::new(model, assets, year)
                 .with_candidates(candidates)
-                .run("final with candidates", writer)
-        })
-        .transpose()?
-        .or(solution_existing);
+                .run("final with candidates", writer)?,
+        )
+    };
 
-    // If there were either existing or candidate assets, we can calculate prices.
-    // If not, return empty maps.
-    let prices = solution_for_prices
-        .map(|solution| calculate_prices(model, &solution, year))
-        .transpose()?
-        .unwrap_or_default();
+    // Calculate prices from the appropriate solution(s). If there were candidates, use the solution
+    // that includes them; otherwise use the existing solution alone. If there were no assets at
+    // all, return empty prices.
+    let prices = match (
+        solution_existing.as_ref(),
+        solution_with_candidates.as_ref(),
+    ) {
+        (None, None) => Prices::default(),
+        (Some(existing), None) => calculate_prices(model, existing, existing, year)?,
+        (Some(existing), Some(with_candidates)) => {
+            calculate_prices(model, existing, with_candidates, year)?
+        }
+        (None, Some(_)) => unreachable!("candidates without existing assets"),
+    };
 
     Ok((prices, flow_map))
 }
