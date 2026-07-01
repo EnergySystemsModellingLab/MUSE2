@@ -6,7 +6,7 @@ use crate::process::Process;
 use crate::region::RegionID;
 use crate::units::Dimensionless;
 use indexmap::{IndexMap, IndexSet};
-use serde_string_enum::DeserializeLabeledStringEnum;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -79,12 +79,12 @@ pub enum DecisionRule {
 }
 
 /// The type of objective for the agent
-#[derive(Debug, Clone, Copy, PartialEq, DeserializeLabeledStringEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 pub enum ObjectiveType {
     /// Average cost of one unit of output commodity over its lifetime
-    #[string = "lcox"]
+    #[serde(rename = "lcox")]
     LevelisedCostOfX,
     /// Net present value
-    #[string = "npv"]
+    #[serde(rename = "npv")]
     NetPresentValue,
 }

@@ -5,7 +5,6 @@ use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
 use serde::Deserialize;
-use serde_string_enum::DeserializeLabeledStringEnum;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -61,32 +60,32 @@ pub struct Commodity {
 define_id_getter! {Commodity, CommodityID}
 
 /// Type of balance for application of cost
-#[derive(Eq, PartialEq, Clone, Debug, DeserializeLabeledStringEnum, Hash)]
+#[derive(Eq, PartialEq, Clone, Debug, Deserialize, Hash)]
 pub enum BalanceType {
     /// Applies to production, with an equal and opposite levy/incentive on consumption
-    #[string = "net"]
+    #[serde(rename = "net")]
     Net,
     /// Applies to consumption only
-    #[string = "cons"]
+    #[serde(rename = "cons")]
     Consumption,
     /// Applies to production only
-    #[string = "prod"]
+    #[serde(rename = "prod")]
     Production,
 }
 
 /// Commodity balance type
-#[derive(PartialEq, Debug, DeserializeLabeledStringEnum, Clone)]
+#[derive(PartialEq, Debug, Deserialize, Clone)]
 pub enum CommodityType {
     /// Supply and demand of this commodity must be balanced
-    #[string = "sed"]
+    #[serde(rename = "sed")]
     SupplyEqualsDemand,
     /// Specifies a demand (specified in input files) which must be met by the simulation
-    #[string = "svd"]
+    #[serde(rename = "svd")]
     ServiceDemand,
     /// Either an input or an output to the simulation.
     ///
     /// This represents a commodity which can either be produced or consumed, but not both.
-    #[string = "oth"]
+    #[serde(rename = "oth")]
     Other,
 }
 
