@@ -85,7 +85,7 @@ fn check_example_info_command() {
 }
 
 #[test]
-fn check_no_copy_input_files_flag() {
+fn check_copy_input_files_flag() {
     let tempdir = tempdir().unwrap();
     let output_dir = tempdir.path().join("results");
     assert_muse2_runs(&[
@@ -93,7 +93,7 @@ fn check_no_copy_input_files_flag() {
         MODEL_DIR,
         "--output-dir",
         &output_dir.to_string_lossy(),
-        "--no-copy-input-files",
+        "--copy-input-files=false",
     ]);
 
     // Check that input files were not copied to the output directory
