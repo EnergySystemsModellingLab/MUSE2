@@ -9,6 +9,9 @@ use crate::units::UnitType;
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
+/// Small epsilon to add to the commodity balance constraints for candidate assets
+const COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES: f64 = 1e-6;
+
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
     /// Row offset in the solver's row ordering corresponding to the first key in `keys`.
@@ -80,6 +83,7 @@ pub fn add_model_constraints<'a, I>(
     assets: &I,
     markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
+    candidate_assets: &'a [AssetRef],
 ) -> ConstraintKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
@@ -91,6 +95,7 @@ where
         assets,
         markets_to_balance,
         year,
+        candidate_assets,
     );
 
     let activity_keys =
@@ -121,6 +126,7 @@ fn add_commodity_balance_constraints<'a, I>(
     assets: &I,
     markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
+    candidate_assets: &'a [AssetRef],
 ) -> CommodityBalanceKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
@@ -140,6 +146,19 @@ where
         ) {
             continue;
         }
+
+        // If any candidate asset in this region produces this commodity as its primary output, we
+        // add a small epsilon to the *lower bound* of the balance constraints to force some dispatch.
+        let epsilon = if candidate_assets
+            .iter()
+            .filter(|a| a.region_id() == region_id)
+            .filter_map(|a| a.primary_output_commodity())
+            .any(|id| id == commodity_id)
+        {
+            COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
+        } else {
+            0.0
+        };
 
         for ts_selection in model
             .time_slice_info
@@ -173,13 +192,16 @@ where
                 }
             }
 
-            // For SED commodities, the LHS must be >=0 and for SVD commodities, it must be >=
-            // the exogenous demand supplied by the user
-            let min = if commodity.kind == CommodityType::ServiceDemand {
-                commodity.demand[&(region_id.clone(), year, ts_selection.clone())].value()
-            } else {
-                0.0
+            // For SED commodities, enforce net production >= epsilon, and for SVD commodities
+            // enforce net production >= exogenous demand (+ epsilon).
+            let min = match commodity.kind {
+                CommodityType::ServiceDemand => {
+                    commodity.demand[&(region_id.clone(), year, ts_selection.clone())].value()
+                        + epsilon
+                }
+                _ => epsilon,
             };
+
             // Consume collected terms into a row. `terms.drain(..)` ensures the vector is
             // emptied for the next selection.
             problem.add_row(min.., terms.drain(..));
