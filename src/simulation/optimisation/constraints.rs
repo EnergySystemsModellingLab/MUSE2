@@ -5,7 +5,7 @@ use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
-use crate::units::UnitType;
+use crate::units::{Activity, UnitType};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
@@ -147,19 +147,6 @@ where
             continue;
         }
 
-        // If any candidate asset in this region produces this commodity as its primary output, we
-        // add a small epsilon to the *lower bound* of the balance constraints to force some dispatch.
-        let epsilon = if candidate_assets
-            .iter()
-            .filter(|a| a.region_id() == region_id)
-            .filter_map(|a| a.primary_output_commodity())
-            .any(|id| id == commodity_id)
-        {
-            COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
-        } else {
-            0.0
-        };
-
         for ts_selection in model
             .time_slice_info
             .iter_selections_at_level(commodity.time_slice_level)
@@ -191,6 +178,19 @@ where
                     terms.push((var, 1.0));
                 }
             }
+
+            // If any candidate asset in this region produces this commodity as its primary output,
+            // and has a nonzero activity limit for this time slice selection, then we add a small
+            // epsilon to the *lower bound* of the balance constraints to force some dispatch.
+            let epsilon = if candidate_assets.iter().any(|a| {
+                a.region_id() == region_id
+                    && a.primary_output_commodity() == Some(commodity_id)
+                    && a.get_activity_limits_for_selection(&ts_selection).end() > &Activity(0.0)
+            }) {
+                COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
+            } else {
+                0.0
+            };
 
             // For SED commodities, enforce net production >= epsilon, and for SVD commodities
             // enforce net production >= exogenous demand (+ epsilon).
