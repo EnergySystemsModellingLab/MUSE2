@@ -179,12 +179,13 @@ where
                 }
             }
 
-            // If any candidate asset in this region produces this commodity as its primary output,
-            // and has a nonzero activity limit for this time slice selection, then we add a small
-            // epsilon to the *lower bound* of the balance constraints to force some dispatch.
+            // If any candidate asset in this region produces this commodity, and has a
+            // nonzero activity limit for this time slice selection, then we add a small epsilon
+            // to the *lower bound* of the balance constraints to force some dispatch.
             let epsilon = if candidate_assets.iter().any(|a| {
                 a.region_id() == region_id
-                    && a.primary_output_commodity() == Some(commodity_id)
+                    && a.iter_output_flows()
+                        .any(|flow| &flow.commodity.id == commodity_id)
                     && a.get_activity_limits_for_selection(&ts_selection).end() > &Activity(0.0)
             }) {
                 COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
