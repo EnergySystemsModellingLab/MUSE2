@@ -12,7 +12,7 @@ use indexmap::IndexMap;
 ///
 /// Constrains the activity variables to be within the asset's activity limits.
 ///
-/// The asset's per-capacity activity limits are scaled by the the asset's capacity to give
+/// The asset's per-capacity activity limits are scaled by the asset's capacity to give
 /// absolute bounds, and a single bounded constraint is added per time-slice selection covering the
 /// sum of activity in that selection.
 pub fn add_activity_constraints(
