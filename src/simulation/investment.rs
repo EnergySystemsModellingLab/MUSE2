@@ -292,12 +292,13 @@ fn select_assets_for_single_market(
             commodity,
             region_id,
             year,
+            model.parameters.capacity_limit_factor,
         )
         .collect::<Vec<_>>();
 
         // Calculate investment limits for candidate assets
         let investment_limits =
-            calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
+            collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
@@ -655,6 +656,7 @@ fn get_demand_limiting_capacity(
 }
 
 /// Get options from existing and potential assets for the given parameters
+#[allow(clippy::too_many_arguments)]
 fn get_asset_options<'a>(
     time_slice_info: &'a TimeSliceInfo,
     all_existing_assets: &'a [AssetRef],
@@ -663,6 +665,7 @@ fn get_asset_options<'a>(
     commodity: &'a Commodity,
     region_id: &'a RegionID,
     year: u32,
+    capacity_limit_factor: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     // Get existing assets which produce the commodity of interest
     let existing_assets = all_existing_assets
@@ -673,8 +676,15 @@ fn get_asset_options<'a>(
         .cloned();
 
     // Get candidates assets which produce the commodity of interest
-    let candidate_assets =
-        get_candidate_assets(time_slice_info, demand, agent, region_id, commodity, year);
+    let candidate_assets = get_candidate_assets(
+        time_slice_info,
+        demand,
+        agent,
+        region_id,
+        commodity,
+        year,
+        capacity_limit_factor,
+    );
 
     chain(existing_assets, candidate_assets)
 }
@@ -687,6 +697,7 @@ fn get_candidate_assets<'a>(
     region_id: &'a RegionID,
     commodity: &'a Commodity,
     year: u32,
+    capacity_limit_factor: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
         .iter_search_space(region_id, &commodity.id, year)
@@ -698,7 +709,8 @@ fn get_candidate_assets<'a>(
             // Set capacity based on demand
             // This will serve as the upper limit when appraising the asset
             let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
-            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size());
+            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size())
+                .apply_limit_factor(capacity_limit_factor);
             asset.set_capacity(asset_capacity);
 
             asset.into()
@@ -742,30 +754,20 @@ fn log_on_equal_appraisal_outputs(
     }
 }
 
-/// Calculate investment limits for an agent's candidate assets in a given year
-///
-/// Investment limits are based on demand for the commodity (capacity cannot exceed that needed to
-/// meet demand), and any annual addition limits specified by the process (scaled according to the
-/// agent's portion of the commodity demand and the number of years elapsed since the previous
-/// milestone year).
-fn calculate_investment_limits_for_candidates(
+/// Investment limits are based on any annual addition limits specified by the process, scaled
+/// according to the agent's portion of the commodity demand and the number of years elapsed since
+/// the previous milestone year.
+fn collect_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
 ) -> HashMap<AssetRef, AssetCapacity> {
-    // Calculate limits for each candidate asset
     opt_assets
         .iter()
         .filter(|asset| !asset.is_commissioned())
-        .map(|asset| {
-            // Start off with the demand-limiting capacity (pre-calculated when creating candidate)
-            let mut cap = asset.capacity();
-
-            // Cap by the addition limits of the process, if specified
-            if let Some(limit_capacity) = asset.max_installable_capacity(commodity_portion) {
-                cap = cap.min(limit_capacity);
-            }
-
-            (asset.clone(), cap)
+        .filter_map(|asset| {
+            asset
+                .max_installable_capacity(commodity_portion)
+                .map(|limit_capacity| (asset.clone(), limit_capacity))
         })
         .collect()
 }
@@ -820,31 +822,38 @@ fn select_best_assets(
                 continue;
             }
 
-            // For candidates, determine the maximum capacity that can be invested in this round.
-            // This is whichever is the smallest of the tranche size (based on demand limiting
-            // capacity before investment), the remaining available capacity for the candidate and
-            // the demand limiting capacity recalculated based on demand unserved by the other
-            // selected assets.
-            let max_capacity = (!asset.is_commissioned()).then(|| {
-                let tranche_capacity = asset
-                    .capacity()
-                    .apply_limit_factor(model.parameters.capacity_limit_factor);
+            // For candidates, cap the asset's current capacity by the demand-limiting capacity
+            // and, where an addition constraint exists, the remaining installable capacity.
+            let mut asset = asset.clone();
+            if !asset.is_commissioned() {
                 let dlc = AssetCapacity::from_capacity(
-                    get_demand_limiting_capacity(&model.time_slice_info, asset, commodity, &demand),
+                    get_demand_limiting_capacity(
+                        &model.time_slice_info,
+                        &asset,
+                        commodity,
+                        &demand,
+                    ),
                     asset.unit_size(),
                 );
-                let remaining_capacity = remaining_candidate_capacity[asset];
+                let cap = asset.capacity().min(dlc);
+                let max_capacity = remaining_candidate_capacity
+                    .get(&asset)
+                    .copied()
+                    .map_or(cap, |remaining| cap.min(remaining));
+                asset.make_mut().set_capacity(max_capacity);
+            }
 
-                tranche_capacity.min(dlc).min(remaining_capacity)
-            });
+            // Skip assets with zero capacity
+            if asset.capacity().total_capacity() <= Capacity(0.0) {
+                continue;
+            }
 
             let output = appraise_investment(
                 model,
-                asset,
-                max_capacity,
+                &asset,
                 commodity,
                 objective_type,
-                &coefficients[asset],
+                &coefficients[&asset],
                 &demand,
             )?;
             outputs_for_opts.push(output);
@@ -884,13 +893,12 @@ fn select_best_assets(
             "Selected {} asset '{}' (capacity: {})",
             &best_output.asset.state(),
             &best_output.asset.process_id(),
-            best_output.capacity.total_capacity()
+            best_output.asset.capacity().total_capacity()
         );
 
         // Update the assets and remaining candidate capacity
         update_assets(
             best_output.asset,
-            best_output.capacity,
             &mut opt_assets,
             &mut remaining_candidate_capacity,
             &mut best_assets,
@@ -920,8 +928,7 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
-    mut best_asset: AssetRef,
-    capacity: AssetCapacity,
+    best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_candidate_capacity: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
@@ -933,27 +940,30 @@ fn update_assets(
             best_assets.push(best_asset);
         }
         AssetState::Candidate => {
-            // Remove this capacity from the available remaining capacity for this asset
-            let remaining_capacity = remaining_candidate_capacity.get_mut(&best_asset).unwrap();
-            *remaining_capacity = *remaining_capacity - capacity;
+            // Track remaining capacity for assets that have limits
+            if let Some(remaining_capacity) = remaining_candidate_capacity.get_mut(&best_asset) {
+                *remaining_capacity = *remaining_capacity - best_asset.capacity();
 
-            // If there's no capacity remaining, remove the asset from the options
-            if remaining_capacity.total_capacity() <= Capacity(0.0) {
-                let old_idx = opt_assets
-                    .iter()
-                    .position(|asset| *asset == best_asset)
-                    .unwrap();
-                opt_assets.swap_remove(old_idx);
-                remaining_candidate_capacity.remove(&best_asset);
+                // If there's no capacity remaining, remove the asset from the options
+                if remaining_capacity.total_capacity() <= Capacity(0.0) {
+                    let old_idx = opt_assets
+                        .iter()
+                        .position(|asset| *asset == best_asset)
+                        .unwrap();
+
+                    opt_assets.swap_remove(old_idx);
+                    remaining_candidate_capacity.remove(&best_asset);
+                }
             }
 
             if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset)
             {
                 // If the asset is already in the list of best assets, add the additional required capacity
-                existing_asset.make_mut().increase_capacity(capacity);
+                existing_asset
+                    .make_mut()
+                    .increase_capacity(best_asset.capacity());
             } else {
-                // Otherwise, update the capacity of the chosen asset and add it to the list of best assets
-                best_asset.make_mut().set_capacity(capacity);
+                // Otherwise add it to the list of best assets
                 best_assets.push(best_asset);
             }
         }
@@ -966,9 +976,8 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        agent_id, asset, process, process_activity_limits_map, process_flows_map,
-        process_investment_constraints, process_parameter_map, region_id, svd_commodity,
-        time_slice, time_slice_info, time_slice_info2,
+        asset, process, process_activity_limits_map, process_flows_map, process_parameter_map,
+        region_id, svd_commodity, time_slice, time_slice_info, time_slice_info2,
     };
     use crate::process::{
         ActivityLimits, FlowType, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
@@ -977,10 +986,11 @@ mod tests {
     use crate::region::RegionID;
     use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
-    use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{ActivityPerCapacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use std::rc::Rc;
+    use std::slice::from_ref;
 
     #[rstest]
     fn get_demand_limiting_capacity_works(
@@ -1127,101 +1137,44 @@ mod tests {
     }
 
     #[rstest]
-    fn calculate_investment_limits_for_candidates_empty_list() {
-        // Test with empty list of assets
-        let opt_assets: Vec<AssetRef> = vec![];
-        let commodity_portion = Dimensionless(1.0);
-
-        let result = calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
+    fn collect_investment_limits_for_candidates_empty_list() {
+        let result = collect_investment_limits_for_candidates(&[], Dimensionless(1.0));
         assert!(result.is_empty());
     }
 
-    #[rstest]
-    fn calculate_investment_limits_for_candidates_commissioned_assets_filtered(
-        process: Process,
-        region_id: RegionID,
-        agent_id: AgentID,
-    ) {
-        // Create a mix of commissioned and candidate assets
-        let process_rc = Rc::new(process);
-        let capacity = Capacity(10.0);
-
-        // Create commissioned asset - should be filtered out
-        let commissioned_asset = Asset::new_commissioned(
-            agent_id.clone(),
-            process_rc.clone(),
-            region_id.clone(),
-            capacity,
-            2015,
-        )
-        .unwrap();
-
-        // Create candidate asset - should be included
-        let candidate_asset =
-            Asset::new_candidate(process_rc.clone(), region_id.clone(), capacity, 2015).unwrap();
-
-        let candidate_asset_ref = AssetRef::from(candidate_asset);
-        let opt_assets = vec![
-            AssetRef::from(commissioned_asset),
-            candidate_asset_ref.clone(),
-        ];
-        let commodity_portion = Dimensionless(1.0);
-
-        let result = calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
-        // Only the candidate asset should be in the result
-        assert_eq!(result.len(), 1);
-        assert!(result.contains_key(&candidate_asset_ref));
+    #[fixture]
+    fn commissioned_asset(asset: Asset) -> AssetRef {
+        asset.into()
     }
 
-    #[rstest]
-    fn calculate_investment_limits_for_candidates_no_investment_constraints(
-        process: Process,
-        region_id: RegionID,
-    ) {
-        // Create candidate asset without investment constraints
-        let process_rc = Rc::new(process);
-        let capacity = Capacity(15.0);
-
-        let candidate_asset = Asset::new_candidate(process_rc, region_id, capacity, 2015).unwrap();
-
-        let opt_assets = vec![AssetRef::from(candidate_asset.clone())];
-        let commodity_portion = Dimensionless(0.8);
-
-        let result = calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
-        // Should return the asset's original capacity since no constraints apply
-        assert_eq!(result.len(), 1);
-        let asset_ref = AssetRef::from(candidate_asset);
-        assert_eq!(result[&asset_ref], AssetCapacity::Continuous(capacity));
+    #[fixture]
+    fn uncommissioned_asset_without_limit(process: Process, region_id: RegionID) -> AssetRef {
+        Asset::new_candidate(Rc::new(process), region_id, Capacity(10.0), 2015)
+            .unwrap()
+            .into()
     }
 
-    #[rstest]
-    // Asset capacity higher than constraint -> limited by constraint
-    #[case(Capacity(15.0), Capacity(10.0))]
-    // Asset capacity lower than constraint -> limited by asset capacity
-    #[case(Capacity(5.0), Capacity(5.0))]
-    fn calculate_investment_limits_for_candidates_with_constraints(
+    #[fixture]
+    fn uncommissioned_asset_with_limit(
         region_id: RegionID,
         process_activity_limits_map: ProcessActivityLimitsMap,
         process_flows_map: ProcessFlowsMap,
         process_parameter_map: ProcessParameterMap,
-        #[case] asset_capacity: Capacity,
-        #[case] expected_limit: Capacity,
-    ) {
+    ) -> AssetRef {
         let region_ids: IndexSet<RegionID> = [region_id.clone()].into();
 
-        // Add investment constraint with addition limit
-        let constraint = ProcessInvestmentConstraint {
-            addition_limit: Some(Capacity(10.0)),
-        };
         let mut constraints = ProcessInvestmentConstraintsMap::new();
-        constraints.insert((region_id.clone(), 2015), Rc::new(constraint));
+
+        constraints.insert(
+            (region_id.clone(), 2015),
+            Rc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(Capacity(10.0)),
+            }),
+        );
 
         let process = Process {
             id: "constrained_process".into(),
-            description: "Process with constraints".into(),
+            description: String::new(),
             years: 2010..=2020,
             activity_limits: process_activity_limits_map,
             flows: process_flows_map,
@@ -1233,152 +1186,38 @@ mod tests {
             unit_size: None,
         };
 
-        let process_rc = Rc::new(process);
-
-        let candidate_asset =
-            Asset::new_candidate(process_rc, region_id, asset_capacity, 2015).unwrap();
-
-        let opt_assets = vec![AssetRef::from(candidate_asset.clone())];
-        let commodity_portion = Dimensionless(1.0);
-
-        let result = calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
-        // Should be limited by the minimum of asset capacity and constraint
-        assert_eq!(result.len(), 1);
-        let asset_ref = AssetRef::from(candidate_asset);
-        assert_eq!(
-            result[&asset_ref],
-            AssetCapacity::Continuous(expected_limit)
-        );
+        Asset::new_candidate(Rc::new(process), region_id, Capacity(15.0), 2015)
+            .unwrap()
+            .into()
     }
 
     #[rstest]
-    fn calculate_investment_limits_for_candidates_multiple_assets(
-        region_id: RegionID,
-        process_activity_limits_map: ProcessActivityLimitsMap,
-        process_flows_map: ProcessFlowsMap,
-        process_parameter_map: ProcessParameterMap,
-    ) {
-        let region_ids: IndexSet<RegionID> = [region_id.clone()].into();
-
-        // Create first process with constraints
-        let constraint1 = ProcessInvestmentConstraint {
-            addition_limit: Some(Capacity(12.0)),
-        };
-        let mut constraints1 = ProcessInvestmentConstraintsMap::new();
-        constraints1.insert((region_id.clone(), 2015), Rc::new(constraint1));
-
-        let process1 = Process {
-            id: "process1".into(),
-            description: "First process".into(),
-            years: 2010..=2020,
-            activity_limits: process_activity_limits_map.clone(),
-            flows: process_flows_map.clone(),
-            parameters: process_parameter_map.clone(),
-            regions: region_ids.clone(),
-            primary_output: None,
-            capacity_to_activity: ActivityPerCapacity(1.0),
-            investment_constraints: constraints1,
-            unit_size: None,
-        };
-
-        // Create second process without constraints
-        let process2 = Process {
-            id: "process2".into(),
-            description: "Second process".into(),
-            years: 2010..=2020,
-            activity_limits: process_activity_limits_map,
-            flows: process_flows_map,
-            parameters: process_parameter_map,
-            regions: region_ids,
-            primary_output: None,
-            capacity_to_activity: ActivityPerCapacity(1.0),
-            investment_constraints: process_investment_constraints(),
-            unit_size: None,
-        };
-
-        let process1_rc = Rc::new(process1);
-        let process2_rc = Rc::new(process2);
-
-        let candidate1 =
-            Asset::new_candidate(process1_rc, region_id.clone(), Capacity(20.0), 2015).unwrap();
-
-        let candidate2 = Asset::new_candidate(process2_rc, region_id, Capacity(8.0), 2015).unwrap();
-
-        let opt_assets = vec![
-            AssetRef::from(candidate1.clone()),
-            AssetRef::from(candidate2.clone()),
-        ];
-        let commodity_portion = Dimensionless(0.75);
-
-        let result = calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
-        // Should have both assets in result
-        assert_eq!(result.len(), 2);
-
-        // First asset should be limited by constraint: 12.0 * 0.75 = 9.0
-        let asset1_ref = AssetRef::from(candidate1);
-        assert_eq!(
-            result[&asset1_ref],
-            AssetCapacity::Continuous(Capacity(9.0))
+    fn commissioned_assets_are_excluded(commissioned_asset: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&commissioned_asset),
+            Dimensionless(1.0),
         );
 
-        // Second asset should use its original capacity (no constraints)
-        let asset2_ref = AssetRef::from(candidate2);
-        assert_eq!(
-            result[&asset2_ref],
-            AssetCapacity::Continuous(Capacity(8.0))
-        );
+        assert!(!result.contains_key(&commissioned_asset));
     }
 
     #[rstest]
-    fn calculate_investment_limits_for_candidates_discrete_capacity(
-        region_id: RegionID,
-        process_activity_limits_map: crate::process::ProcessActivityLimitsMap,
-        process_flows_map: crate::process::ProcessFlowsMap,
-        process_parameter_map: crate::process::ProcessParameterMap,
-    ) {
-        let region_ids: IndexSet<RegionID> = [region_id.clone()].into();
-
-        // Add investment constraint
-        let constraint = ProcessInvestmentConstraint {
-            addition_limit: Some(Capacity(35.0)), // Enough for 3.5 units at 10.0 each
-        };
-        let mut constraints = ProcessInvestmentConstraintsMap::new();
-        constraints.insert((region_id.clone(), 2015), Rc::new(constraint));
-
-        let process = Process {
-            id: "discrete_process".into(),
-            description: "Process with discrete units".into(),
-            years: 2010..=2020,
-            activity_limits: process_activity_limits_map,
-            flows: process_flows_map,
-            parameters: process_parameter_map,
-            regions: region_ids,
-            primary_output: None,
-            capacity_to_activity: ActivityPerCapacity(1.0),
-            investment_constraints: constraints,
-            unit_size: Some(Capacity(10.0)), // Discrete units of 10.0 capacity each
-        };
-
-        let process_rc = Rc::new(process);
-        let capacity = Capacity(50.0); // 5 units at 10.0 each
-
-        let candidate_asset = Asset::new_candidate(process_rc, region_id, capacity, 2015).unwrap();
-
-        let opt_assets = vec![AssetRef::from(candidate_asset.clone())];
-        let commodity_portion = Dimensionless(1.0);
-
-        let result = calculate_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
-        // Should be limited by constraint and rounded down to whole units
-        // Constraint: 35.0, divided by unit size 10.0 = 3.5 -> floor to 3 units = 30.0
-        assert_eq!(result.len(), 1);
-        let asset_ref = AssetRef::from(candidate_asset);
-        assert_eq!(
-            result[&asset_ref],
-            AssetCapacity::Discrete(3, Capacity(10.0))
+    fn candidate_assets_without_limits_are_excluded(uncommissioned_asset_without_limit: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&uncommissioned_asset_without_limit),
+            Dimensionless(1.0),
         );
-        assert_eq!(result[&asset_ref].total_capacity(), Capacity(30.0));
+
+        assert!(!result.contains_key(&uncommissioned_asset_without_limit));
+    }
+
+    #[rstest]
+    fn candidate_assets_with_limits_are_included(uncommissioned_asset_with_limit: AssetRef) {
+        let result = collect_investment_limits_for_candidates(
+            from_ref(&uncommissioned_asset_with_limit),
+            Dimensionless(1.0),
+        );
+
+        assert!(result.contains_key(&uncommissioned_asset_with_limit));
     }
 }
