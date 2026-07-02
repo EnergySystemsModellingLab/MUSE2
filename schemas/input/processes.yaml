@@ -31,7 +31,7 @@ fields:
     description:
       Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the
       maximum activity per year for one unit of capacity.
-    notes: Must be >=0. Optional (defaults to 1.0).
+    notes: Must be >0. Optional (defaults to 1.0).
   - name: unit_size
     type: number
     description:
