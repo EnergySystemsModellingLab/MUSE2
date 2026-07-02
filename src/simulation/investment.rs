@@ -690,6 +690,9 @@ fn get_asset_options<'a>(
 }
 
 /// Get candidate assets which produce a particular commodity for a given agent
+///
+/// Capacities of candidate assets are set to the demand-limiting capacity for the given market,
+/// scaled by the `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
     time_slice_info: &'a TimeSliceInfo,
     demand: &'a DemandMap,
@@ -822,7 +825,7 @@ fn select_best_assets(
                 continue;
             }
 
-            // For candidates, cap the asset's current capacity by the demand-limiting capacity
+            // For candidates, cap the asset's capacity by the current demand-limiting capacity
             // and, where an addition constraint exists, the remaining installable capacity.
             let mut asset = asset.clone();
             if !asset.is_commissioned() {
