@@ -106,7 +106,7 @@ where
 
         // Check that capacity is approximately a multiple of the process unit size
         // If not, raise a warning
-        if let Some(unit_size) = process.unit_size {
+        if let Some(unit_size) = process.unit_size() {
             let ratio = (asset.capacity / unit_size).value();
             if !approx_eq!(f64, ratio, ratio.ceil()) {
                 let n_units = ratio.ceil();

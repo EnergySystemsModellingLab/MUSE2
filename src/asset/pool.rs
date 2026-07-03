@@ -265,7 +265,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
+        (asset.total_capacity() / asset.process.unit_size().expect("Asset is not divisible"))
             .value()
             .ceil() as usize
     }
@@ -442,7 +442,8 @@ mod tests {
         let original_count = asset_pool.assets.len();
 
         // Create new non-commissioned assets
-        process.unit_size = Some(Capacity(4.0));
+        process.capacity_granularity = Capacity(4.0);
+        process.is_divisible = true;
         let process_rc = Rc::new(process);
         let new_assets: Vec<AssetRef> = vec![
             Asset::new_ready(
@@ -474,7 +475,8 @@ mod tests {
         let existing_assets = asset_pool.take();
 
         // Add one ready divisible asset so extend() commissions multiple new children
-        process.unit_size = Some(Capacity(4.0));
+        process.capacity_granularity = Capacity(4.0);
+        process.is_divisible = true;
         let process_rc = Rc::new(process);
         let ready_divisible: AssetRef = Asset::new_ready(
             "agent_selected".into(),

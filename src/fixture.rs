@@ -212,7 +212,8 @@ pub fn asset(process: Process) -> Asset {
 
 #[fixture]
 pub fn asset_divisible(mut process: Process) -> Asset {
-    process.unit_size = Some(Capacity(4.0));
+    process.capacity_granularity = Capacity(4.0);
+    process.is_divisible = true;
     Asset::new_ready(
         "agent1".into(),
         Rc::new(process),
@@ -321,7 +322,8 @@ pub fn process(
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
         investment_constraints: process_investment_constraints,
-        unit_size: None,
+        capacity_granularity: Capacity(1.0),
+        is_divisible: false,
     }
 }
 

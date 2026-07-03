@@ -63,18 +63,27 @@ pub struct Process {
     pub capacity_to_activity: ActivityPerCapacity,
     /// Investment constraints for this process
     pub investment_constraints: ProcessInvestmentConstraintsMap,
-    /// Capacity of the units in which an asset for this process will be divided into when commissioned, if any.
+    /// The amount of capacity appraised and commissioned at a time.
+    pub capacity_granularity: Capacity,
+    /// Whether or not assets are divisible.
     ///
-    /// By default, an asset will not be divided when commissioned (`unit_size` will be None), but
-    /// if this is set, then it will be divided in as many assets as needed to commission the total
-    /// capacity, each having a `unit_size` capacity or a fraction of it.
-    pub unit_size: Option<Capacity>,
+    /// This controls whether this process is commissioned as a set of individual units of size
+    /// `capacity_granularity` (true) or as a single indivisible unit (false).
+    pub is_divisible: bool,
 }
 
 impl Process {
     /// Whether the process can be commissioned in a given year
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
+    }
+
+    /// Capacity of the units making up divisible assets, if applicable.
+    ///
+    /// For divisible processes, this will be `capacity_granularity`. For indivisible processes,
+    /// this will be None.
+    pub fn unit_size(&self) -> Option<Capacity> {
+        self.is_divisible.then_some(self.capacity_granularity)
     }
 }
 
