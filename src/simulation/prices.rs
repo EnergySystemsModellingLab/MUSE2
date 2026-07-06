@@ -54,39 +54,6 @@ impl<W: UnitType> WeightedAverageAccumulator<W> {
     }
 }
 
-/// Weighted average accumulator with a backup weighting path for `MoneyPerFlow` prices.
-#[derive(Clone, Copy, Debug)]
-struct WeightedAverageBackupAccumulator<W: UnitType> {
-    /// Primary weighted average path.
-    primary: WeightedAverageAccumulator<W>,
-    /// Backup weighted average path.
-    backup: WeightedAverageAccumulator<W>,
-}
-
-impl<W: UnitType> Default for WeightedAverageBackupAccumulator<W> {
-    fn default() -> Self {
-        Self {
-            primary: WeightedAverageAccumulator::<W>::default(),
-            backup: WeightedAverageAccumulator::<W>::default(),
-        }
-    }
-}
-
-impl<W: UnitType> WeightedAverageBackupAccumulator<W> {
-    /// Add a weighted value to the accumulator with a backup weight.
-    fn add(&mut self, value: MoneyPerFlow, weight: W, backup_weight: W) {
-        self.primary.add(value, weight);
-        self.backup.add(value, backup_weight);
-    }
-
-    /// Solve the weighted average, falling back to backup weights if needed.
-    ///
-    /// Returns `None` if both denominators are zero (or close to zero).
-    fn finalise(self) -> Option<MoneyPerFlow> {
-        self.primary.finalise().or_else(|| self.backup.finalise())
-    }
-}
-
 /// Sets of prices calculated from dispatch results
 #[derive(Default)]
 pub struct Prices {
@@ -699,14 +666,19 @@ where
         _ => panic!("Invalid pricing strategy"),
     }
 
-    // Accumulator map to collect costs from existing assets. For each (commodity, region,
-    // ts selection), this maps each asset to a weighted average of the costs for that
+    // Accumulator maps to collect costs from existing assets. For each (commodity, region,
+    // ts selection), these map each asset to a weighted average of the costs for that
     // commodity across all time slices in the selection, weighted by activity (using activity
     // limits as a backup weight if there is zero activity across the selection). The granularity of
-    // the selection depends on the time slice level of the commodity (i.e. individual, season, year).
-    let mut existing_accum: IndexMap<
+    // the selection depends on the time slice level of the commodity (i.e. individual, season,
+    // year).
+    let mut primary_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        IndexMap<AssetRef, WeightedAverageBackupAccumulator<Activity>>,
+        IndexMap<AssetRef, WeightedAverageAccumulator<Activity>>,
+    > = IndexMap::new();
+    let mut backup_accum: IndexMap<
+        (CommodityID, RegionID, TimeSliceSelection),
+        IndexMap<AssetRef, WeightedAverageAccumulator<Activity>>,
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
@@ -755,22 +727,42 @@ where
 
             // Accumulate cost for this asset, weighted by activity (using the activity limit
             // as a backup weight)
-            existing_accum
-                .entry((commodity_id.clone(), region_id.clone(), ts_selection))
+            let key = (
+                commodity_id.clone(),
+                region_id.clone(),
+                ts_selection.clone(),
+            );
+            primary_accum
+                .entry(key.clone())
                 .or_default()
                 .entry(asset.clone())
                 .or_default()
-                .add(total_cost, activity, activity_limit);
+                .add(total_cost, activity);
+            backup_accum
+                .entry(key)
+                .or_default()
+                .entry(asset.clone())
+                .or_default()
+                .add(total_cost, activity_limit);
         }
     }
 
     // For each group, finalise per-asset weighted averages then take the max across assets
-    existing_accum.into_iter().filter_map(|(key, per_asset)| {
-        per_asset
+    // If there is no activity across the group, use the backup weighted average based on potential
+    // activity (i.e. the upper activity limit) instead, taking the min across assets.
+    primary_accum.into_iter().filter_map(move |(key, primary)| {
+        let price = primary
             .into_values()
-            .filter_map(WeightedAverageBackupAccumulator::finalise)
-            .reduce(|current, value| current.max(value))
-            .map(|v| (key, v))
+            .filter_map(WeightedAverageAccumulator::finalise)
+            .reduce(|a, b| a.max(b))
+            .or_else(|| {
+                backup_accum
+                    .swap_remove(&key)?
+                    .into_values()
+                    .filter_map(WeightedAverageAccumulator::finalise)
+                    .reduce(|a, b| a.min(b))
+            })?;
+        Some((key, price))
     })
 }
 
@@ -1010,14 +1002,19 @@ where
         _ => panic!("Invalid pricing strategy"),
     }
 
-    // Accumulator map to collect costs from existing assets. Collects a weighted average
-    // for each (commodity, region, ts selection), across all contributing assets, weighted
-    // according to output (with a backup weight based on potential output if there is zero
-    // activity across the selection). The granularity of the selection depends on the time slice
-    // level of the commodity (i.e. individual, season, year).
-    let mut existing_accum: IndexMap<
+    // Accumulator maps to collect costs from existing assets. The primary map collects a weighted
+    // average for each (commodity, region, ts selection), across all contributing assets, weighted
+    // according to output. The backup map collects a weighted average for each (commodity, region,
+    // ts selection) for each asset, weighted according to potential output (upper availability
+    // limit). The granularity of the selection depends on the time slice level of the commodity
+    // (i.e. individual, season, year).
+    let mut primary_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
-        WeightedAverageBackupAccumulator<Flow>,
+        WeightedAverageAccumulator<Flow>,
+    > = IndexMap::new();
+    let mut backup_accum: IndexMap<
+        (CommodityID, RegionID, TimeSliceSelection),
+        IndexMap<AssetRef, WeightedAverageAccumulator<Activity>>,
     > = IndexMap::new();
 
     // Cache of annual fixed costs per flow for each asset (only used for Full cost pricing)
@@ -1070,25 +1067,40 @@ where
                 .expect("Commodity should be an output flow for this asset")
                 .coeff;
             let output_weight = activity * output_coeff;
-            let backup_output_weight = activity_limit * output_coeff;
 
             // Accumulate cost for this group, weighted by output with a backup
             // potential-output weight.
-            existing_accum
-                .entry((
-                    commodity_id.clone(),
-                    region_id.clone(),
-                    time_slice_selection,
-                ))
+            let key = (
+                commodity_id.clone(),
+                region_id.clone(),
+                time_slice_selection.clone(),
+            );
+            primary_accum
+                .entry(key.clone())
                 .or_default()
-                .add(total_cost, output_weight, backup_output_weight);
+                .add(total_cost, output_weight);
+            backup_accum
+                .entry(key)
+                .or_default()
+                .entry(asset.clone())
+                .or_default()
+                .add(total_cost, activity_limit);
         }
     }
 
-    // For each group, finalise weighted averages
-    existing_accum
-        .into_iter()
-        .filter_map(|(key, accum)| accum.finalise().map(|v| (key, v)))
+    // For each group, finalise weighted averages. If there is no output across the group, use the
+    // backup weighted average based on potential output (i.e. the upper activity limit) instead,
+    // taking the min across assets.
+    primary_accum.into_iter().filter_map(move |(key, primary)| {
+        let price = primary.finalise().or_else(|| {
+            backup_accum
+                .swap_remove(&key)?
+                .into_values()
+                .filter_map(WeightedAverageAccumulator::finalise)
+                .reduce(|a, b| a.min(b))
+        })?;
+        Some((key, price))
+    })
 }
 
 /// Calculate annual activities for each asset by summing across all time slices
@@ -1582,31 +1594,6 @@ mod tests {
     #[test]
     fn weighted_average_accumulator_zero_weight() {
         let accum = WeightedAverageAccumulator::<Dimensionless>::default();
-        assert_eq!(accum.finalise(), None);
-    }
-
-    #[test]
-    fn weighted_average_backup_accumulator_primary_preferred() {
-        let mut accum = WeightedAverageBackupAccumulator::<Dimensionless>::default();
-        accum.add(MoneyPerFlow(100.0), Dimensionless(3.0), Dimensionless(1.0));
-        accum.add(MoneyPerFlow(200.0), Dimensionless(1.0), Dimensionless(1.0));
-        // Primary is non-zero, use it: (100*3 + 200*1) / (3+1) = 125
-        // (backup would be (100*1 + 200*1) / (1+1) = 150, but we don't use it)
-        assert_eq!(accum.finalise(), Some(MoneyPerFlow(125.0)));
-    }
-
-    #[test]
-    fn weighted_average_backup_accumulator_fallback() {
-        let mut accum = WeightedAverageBackupAccumulator::<Dimensionless>::default();
-        accum.add(MoneyPerFlow(100.0), Dimensionless(0.0), Dimensionless(2.0));
-        accum.add(MoneyPerFlow(200.0), Dimensionless(0.0), Dimensionless(2.0));
-        // Primary is zero, fallback to backup: (100*2 + 200*2) / (2+2) = 150
-        assert_eq!(accum.finalise(), Some(MoneyPerFlow(150.0)));
-    }
-
-    #[test]
-    fn weighted_average_backup_accumulator_both_zero() {
-        let accum = WeightedAverageBackupAccumulator::<Dimensionless>::default();
         assert_eq!(accum.finalise(), None);
     }
 }
