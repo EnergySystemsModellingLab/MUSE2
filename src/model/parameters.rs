@@ -118,7 +118,7 @@ impl Default for ModelParameters {
             // Default values for optional parameters
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
-            capacity_limit_factor: Dimensionless(0.1),
+            capacity_limit_factor: Dimensionless(0.05),
             value_of_lost_load: MoneyPerFlow(1e9),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
