@@ -194,12 +194,12 @@ where
             };
 
             // For SED commodities, enforce net production >= epsilon, and for SVD commodities
-            // enforce net production >= exogenous demand (+ epsilon).
+            // enforce net production >= exogenous demand (with a lower cap of epsilon).
             let min = match commodity.kind {
-                CommodityType::ServiceDemand => {
-                    commodity.demand[&(region_id.clone(), year, ts_selection.clone())].value()
-                        + epsilon
-                }
+                CommodityType::ServiceDemand => commodity.demand
+                    [&(region_id.clone(), year, ts_selection.clone())]
+                    .value()
+                    .max(epsilon),
                 _ => epsilon,
             };
 
