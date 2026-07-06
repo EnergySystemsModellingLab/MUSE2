@@ -1005,9 +1005,9 @@ where
     // Accumulator maps to collect costs from existing assets. The primary map collects a weighted
     // average for each (commodity, region, ts selection), across all contributing assets, weighted
     // according to output. The backup map collects a weighted average for each (commodity, region,
-    // ts selection) across all contributing assets, weighted according to potential output.
-    // The granularity of the selection depends on the time slice level of the commodity (i.e.
-    // individual, season, year).
+    // ts selection) for each asset, weighted according to potential output (upper availability
+    // limit). The granularity of the selection depends on the time slice level of the commodity
+    // (i.e. individual, season, year).
     let mut primary_accum: IndexMap<
         (CommodityID, RegionID, TimeSliceSelection),
         WeightedAverageAccumulator<Flow>,
