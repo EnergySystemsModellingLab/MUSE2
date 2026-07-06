@@ -157,8 +157,8 @@ where
 
         // Validate capacity_to_activity
         ensure!(
-            capacity_to_activity >= ActivityPerCapacity(0.0),
-            "Error in process {}: capacity_to_activity must be >= 0",
+            capacity_to_activity > ActivityPerCapacity(0.0),
+            "Error in process {}: capacity_to_activity must be > 0",
             process_raw.id
         );
 
