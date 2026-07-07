@@ -571,7 +571,7 @@ where
     })
 }
 
-/// Calculates a characteristic capacity scale for an asset.
+/// Calculates a characteristic capacity scale for a candidate asset.
 ///
 /// The returned value is the capacity that would satisfy the total annual demand assuming the asset
 /// operates at its maximum annual activity for the entire year. It ignores finer-grained activity
@@ -579,17 +579,23 @@ where
 ///
 /// This value is later scaled by `capacity_limit_factor` to set capacities for candidate assets in
 /// each round of investments.
-fn calculate_asset_capacity_scale(
+///
+/// If the asset has zero maximum annual supply, zero capacity is returned. This indicates that the
+/// asset is non-feasible, and will be excluded from consideration by `select_best_assets`.
+fn calculate_candidate_asset_capacity_scale(
     asset: &Asset,
     commodity: &Commodity,
     demand: &DemandMap,
 ) -> Capacity {
     let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
-    let annual_demand = demand.values().copied().sum::<Flow>();
     let max_annual_supply_per_capacity = *asset
         .get_activity_per_capacity_limits_for_selection(&TimeSliceSelection::Annual)
         .end()
         * coeff;
+    if max_annual_supply_per_capacity == FlowPerCapacity(0.0) {
+        return Capacity(0.0);
+    }
+    let annual_demand = demand.values().copied().sum::<Flow>();
     annual_demand / max_annual_supply_per_capacity
 }
 
@@ -711,8 +717,8 @@ fn get_asset_options<'a>(
 ///
 /// Each candidate is assigned a capacity based on a characteristic capacity scale for the asset.
 /// The scale is computed from the total annual demand for the commodity and the asset's maximum
-/// annual production per unit capacity (see `calculate_asset_capacity_scale`), then multiplied by
-/// `capacity_limit_factor`.
+/// annual production per unit capacity (see `calculate_candidate_asset_capacity_scale`), then
+/// multiplied by `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
@@ -732,7 +738,8 @@ fn get_candidate_assets<'a>(
             // Set capacity based on demand
             // This will serve as the upper limit when appraising the asset (may later be
             // constrained by process addition limits and demand-limiting capacity)
-            let capacity_scale = calculate_asset_capacity_scale(&asset, commodity, demand);
+            let capacity_scale =
+                calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
             let asset_capacity = AssetCapacity::from_capacity(capacity_scale, asset.unit_size())
                 .apply_limit_factor(capacity_limit_factor);
             asset.set_capacity(asset_capacity);
@@ -1163,6 +1170,7 @@ mod tests {
     #[case(Flow(10.0), Dimensionless(1.0), Capacity(10.0))] // normal: demand / (limit * coeff) = 10 / (1 * 1) = 10
     #[case(Flow(0.0), Dimensionless(1.0), Capacity(0.0))] // zero demand → zero capacity
     #[case(Flow(10.0), Dimensionless(0.5), Capacity(20.0))] // activity limit < 1: 10 / (0.5 * 1) = 20
+    #[case(Flow(10.0), Dimensionless(0.0), Capacity(0.0))] // activity limit = 0 → zero capacity
     fn calculate_asset_capacity_scale_works(
         time_slice: TimeSliceID,
         time_slice_info: TimeSliceInfo,
@@ -1191,7 +1199,7 @@ mod tests {
         let asset = asset(process);
         let demand = indexmap! { time_slice => demand_value };
         assert_eq!(
-            calculate_asset_capacity_scale(&asset, &commodity_rc, &demand),
+            calculate_candidate_asset_capacity_scale(&asset, &commodity_rc, &demand),
             expected
         );
     }
