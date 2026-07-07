@@ -592,7 +592,7 @@ fn calculate_candidate_asset_capacity_scale(
         .get_activity_per_capacity_limits_for_selection(&TimeSliceSelection::Annual)
         .end()
         * coeff;
-    if max_annual_supply_per_capacity == FlowPerCapacity(0.0) {
+    if max_annual_supply_per_capacity < FlowPerCapacity::EPSILON {
         return Capacity(0.0);
     }
     let annual_demand = demand.values().copied().sum::<Flow>();

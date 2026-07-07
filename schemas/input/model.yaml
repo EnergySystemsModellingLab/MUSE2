@@ -23,6 +23,7 @@ properties:
       Candidate assets for investment are assigned a characteristic capacity scale based on annual
       demand. This parameter specifies the fraction of that scale appraised each investment round.
 
+      Must be >0 and <=1.
       Lower values produce smaller investment increments, while higher values produce larger increments.
   value_of_lost_load:
     type: number
