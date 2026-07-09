@@ -280,8 +280,9 @@ struct AppraisalResultsTimeSliceRow {
 /// For writing extra debug information about the model
 struct DebugDataWriter {
     context: Option<String>,
+    unmet_demand_file_path: PathBuf,
     commodity_balance_duals_writer: csv::Writer<File>,
-    unmet_demand_writer: csv::Writer<File>,
+    unmet_demand_writer: Option<csv::Writer<File>>,
     solver_values_writer: csv::Writer<File>,
     appraisal_results_writer: csv::Writer<File>,
     appraisal_results_time_slice_writer: csv::Writer<File>,
@@ -302,8 +303,9 @@ impl DebugDataWriter {
 
         Ok(Self {
             context: None,
+            unmet_demand_file_path: output_path.join(UNMET_DEMAND_FILE_NAME),
             commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
-            unmet_demand_writer: new_writer(UNMET_DEMAND_FILE_NAME)?,
+            unmet_demand_writer: None,
             solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
             appraisal_results_writer: new_writer(APPRAISAL_RESULTS_FILE_NAME)?,
             appraisal_results_time_slice_writer: new_writer(
@@ -439,7 +441,21 @@ impl DebugDataWriter {
     where
         I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, Flow)>,
     {
-        for (commodity_id, region_id, time_slice, value) in iter {
+        let rows: Vec<(&CommodityID, &RegionID, &TimeSliceID, Flow)> =
+            iter.collect::<Vec<(&CommodityID, &RegionID, &TimeSliceID, Flow)>>();
+
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        // If the unmet demand writer already exist, we return with an error, as it should not happen
+        ensure!(
+            self.unmet_demand_writer.is_none(),
+            "Unmet demand file already exists!"
+        );
+
+        self.unmet_demand_writer = Some(csv::Writer::from_path(&self.unmet_demand_file_path)?);
+        for (commodity_id, region_id, time_slice, value) in rows {
             let row = UnmetDemandRow {
                 milestone_year,
                 run_description: self.with_context(run_description),
@@ -448,7 +464,10 @@ impl DebugDataWriter {
                 time_slice: time_slice.clone(),
                 value,
             };
-            self.unmet_demand_writer.serialize(row)?;
+            self.unmet_demand_writer
+                .as_mut()
+                .expect("Writer does not exist (cannot not happen)")
+                .serialize(row)?;
         }
 
         Ok(())
@@ -529,8 +548,10 @@ impl DebugDataWriter {
 
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
+        if let Some(wrt) = &mut self.unmet_demand_writer {
+            wrt.flush()?;
+        }
         self.commodity_balance_duals_writer.flush()?;
-        self.unmet_demand_writer.flush()?;
         self.solver_values_writer.flush()?;
         self.appraisal_results_writer.flush()?;
         self.appraisal_results_time_slice_writer.flush()?;
