@@ -2,7 +2,7 @@
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::region::RegionID;
-use crate::simulation::investment::InvestmentSet;
+use crate::simulation::market::MarketSet;
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
 use log::warn;
@@ -13,7 +13,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::{Directed, Direction};
 use std::collections::HashMap;
 
-type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
+type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 
 /// Analyse the commodity graphs for a given year to determine the order in which investment
 /// decisions should be made.
@@ -24,10 +24,10 @@ type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 ///    all regions are combined into a single `InvestmentGraph`. TODO: at present there can be no
 ///    edges between regions; in future we will want to implement trade as edges between regions,
 ///    but this will have no impact on the following steps.
-/// 2. Condense strongly connected components (cycles) into `InvestmentSet::Cycle` nodes.
+/// 2. Condense strongly connected components (cycles) into `MarketSet::Cycle` nodes.
 /// 3. Perform a topological sort on the condensed graph.
 /// 4. Compute layers for investment based on the topological order, grouping independent sets into
-///    `InvestmentSet::Layer`s.
+///    `MarketSet::Layer`s.
 ///
 /// Arguments:
 /// * `graphs` - Commodity graphs for each region and year, outputted from `build_commodity_graphs_for_model`
@@ -35,13 +35,13 @@ type InvestmentGraph = Graph<InvestmentSet, GraphEdge, Directed>;
 /// * `year` - The year to solve the investment order for
 ///
 /// # Returns
-/// A Vec of `InvestmentSet`s in the order they should be solved, with cycles grouped into
-/// `InvestmentSet::Cycle`s and independent sets grouped into `InvestmentSet::Layer`s.
+/// A Vec of `MarketSet`s in the order they should be solved, with cycles grouped into
+/// `MarketSet::Cycle`s and independent sets grouped into `MarketSet::Layer`s.
 fn solve_investment_order_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
     year: u32,
-) -> Vec<InvestmentSet> {
+) -> Vec<MarketSet> {
     // Initialise InvestmentGraph for this year from the set of original `CommodityGraph`s
     let mut investment_graph = init_investment_graph_for_year(graphs, year, commodities);
 
@@ -60,7 +60,7 @@ fn solve_investment_order_for_year(
 /// Initialise an `InvestmentGraph` for the given year from a set of `CommodityGraph`s
 ///
 /// Commodity graphs for each region are first filtered to only include SVD/SED commodities. Each
-/// commodity node is then added to a global investment graph as an `InvestmentSet::Single`, with
+/// commodity node is then added to a global investment graph as an `MarketSet::Single`, with
 /// edges preserved from the original commodity graphs.
 fn init_investment_graph_for_year(
     graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
@@ -96,7 +96,7 @@ fn init_investment_graph_for_year(
                 };
                 (
                     ni,
-                    combined.add_node(InvestmentSet::Single((cid.clone(), region_id.clone()))),
+                    combined.add_node(MarketSet::Single((cid.clone(), region_id.clone()))),
                 )
             })
             .collect();
@@ -114,7 +114,7 @@ fn init_investment_graph_for_year(
     combined
 }
 
-/// Compresses cycles into `InvestmentSet::Cycle` nodes
+/// Compresses cycles into `MarketSet::Cycle` nodes
 fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
     // Detect strongly connected components
     let mut condensed_graph = condensation(graph.clone(), true);
@@ -124,12 +124,12 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 
     // Map to a new InvestmentGraph
     condensed_graph.map(
-        // Map nodes to InvestmentSet
+        // Map nodes to MarketSet
         // If only one member, keep as-is; if multiple members, create Cycle
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
-            _ => InvestmentSet::Cycle(
+            _ => MarketSet::Cycle(
                 node_weight
                     .iter()
                     .flat_map(|s| s.iter_markets())
@@ -145,7 +145,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// Order the members of each strongly connected component using a mixed-integer linear program.
 ///
 /// `condensed_graph` contains the SCCs detected in the original investment graph, stored as
-/// `Vec<InvestmentSet>` node weights. Single-element components are already acyclic, but components
+/// `Vec<MarketSet>` node weights. Single-element components are already acyclic, but components
 /// with multiple members require an internal ordering so that the investment algorithm can treat
 /// them as near-acyclic chains, minimising potential disruption.
 ///
@@ -229,22 +229,22 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// * As with any SCC, at least one pairwise violation is guaranteed. In this ordering, the only
 ///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
 ///
-/// The resulting order replaces the original `InvestmentSet::Cycle` entry inside the condensed
+/// The resulting order replaces the original `MarketSet::Cycle` entry inside the condensed
 /// graph, providing a deterministic processing sequence for downstream logic.
 #[allow(clippy::too_many_lines)]
 fn order_sccs(
-    condensed_graph: &mut Graph<Vec<InvestmentSet>, GraphEdge>,
+    condensed_graph: &mut Graph<Vec<MarketSet>, GraphEdge>,
     original_graph: &InvestmentGraph,
 ) {
     const EXTERNAL_BIAS: f64 = 0.1;
 
-    // Map each investment set back to the node index in the original graph so we can inspect edges.
-    let node_lookup: HashMap<InvestmentSet, NodeIndex> = original_graph
+    // Map each market set back to the node index in the original graph so we can inspect edges.
+    let node_lookup: HashMap<MarketSet, NodeIndex> = original_graph
         .node_indices()
         .map(|idx| (original_graph.node_weight(idx).unwrap().clone(), idx))
         .collect();
 
-    // Work through each SCC; groups with just one investment set don't need to be ordered.
+    // Work through each SCC; groups with just one market set don't need to be ordered.
     for group in condensed_graph.node_indices() {
         let scc = condensed_graph.node_weight_mut(group).unwrap();
         let n = scc.len();
@@ -252,7 +252,7 @@ fn order_sccs(
             continue;
         }
 
-        // Capture current order and resolve each investment set back to its original graph index.
+        // Capture current order and resolve each market set back to its original graph index.
         let original_order = scc.clone();
         let original_indices = original_order
             .iter()
@@ -387,7 +387,7 @@ fn order_sccs(
     }
 }
 
-/// Compute layers of investment sets from the topological order
+/// Compute layers of market sets from the topological order
 ///
 /// This function works by computing the rank of each node in the graph based on the longest path
 /// from any root node to that node. Any nodes with the same rank are independent and can be solved
@@ -395,11 +395,11 @@ fn order_sccs(
 /// to lowest rank (root nodes).
 ///
 /// This function computes the ranks of each node, groups nodes by rank, and then produces a final
-/// ordered Vec of `InvestmentSet`s which gives the order in which to solve the investment decisions.
+/// ordered Vec of `MarketSet`s which gives the order in which to solve the investment decisions.
 ///
-/// Investment sets with the same rank (i.e., can be solved in parallel) are grouped into
-/// `InvestmentSet::Layer`. Investment sets that are alone in their rank remain as-is (i.e. either
-/// `Single` or `Cycle`). `Layer`s can contain a mix of `Single` and `Cycle` investment sets.
+/// Market sets with the same rank (i.e., can be solved in parallel) are grouped into
+/// `MarketSet::Layer`. Market sets that are alone in their rank remain as-is (i.e. either
+/// `Single` or `Cycle`). `Layer`s can contain a mix of `Single` and `Cycle` market sets.
 ///
 /// For example, given the following graph:
 ///
@@ -411,11 +411,11 @@ fn order_sccs(
 /// D   E   F
 /// ```
 ///
-/// Rank 0: A -> `InvestmentSet::Single`
-/// Rank 1: B, C -> `InvestmentSet::Layer`
-/// Rank 2: D, E, F -> `InvestmentSet::Layer`
+/// Rank 0: A -> `MarketSet::Single`
+/// Rank 1: B, C -> `MarketSet::Layer`
+/// Rank 2: D, E, F -> `MarketSet::Layer`
 ///
-/// These are returned as a `Vec<InvestmentSet>` from highest rank to lowest (i.e. the D, E, F layer
+/// These are returned as a `Vec<MarketSet>` from highest rank to lowest (i.e. the D, E, F layer
 /// first, then the B, C layer, then the singleton A).
 ///
 /// Arguments:
@@ -425,9 +425,9 @@ fn order_sccs(
 /// * `order` - The topological order of the graph nodes. Computed using `petgraph::algo::toposort`.
 ///
 /// Returns:
-/// A Vec of `InvestmentSet`s in the order they should be solved, with independent sets grouped into
-/// `InvestmentSet::Layer`s.
-fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<InvestmentSet> {
+/// A Vec of `MarketSet`s in the order they should be solved, with independent sets grouped into
+/// `MarketSet::Layer`s.
+fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<MarketSet> {
     // Initialize all ranks to 0
     let mut ranks: HashMap<_, usize> = graph.node_indices().map(|n| (n, 0)).collect();
 
@@ -445,27 +445,27 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
 
     // Group nodes by rank
     let max_rank = ranks.values().copied().max().unwrap_or(0);
-    let mut groups: Vec<Vec<InvestmentSet>> = vec![Vec::new(); max_rank + 1];
+    let mut groups: Vec<Vec<MarketSet>> = vec![Vec::new(); max_rank + 1];
     for node_idx in order {
         let rank = ranks[node_idx];
         let w = graph.node_weight(*node_idx).unwrap().clone();
         groups[rank].push(w);
     }
 
-    // Produce final ordered Vec<InvestmentSet>: ranks descending (leaf-first),
-    // compressing equal-rank nodes into an InvestmentSet::Layer.
+    // Produce final ordered Vec<MarketSet>: ranks descending (leaf-first),
+    // compressing equal-rank nodes into an MarketSet::Layer.
     let mut result = Vec::new();
     for mut items in groups.into_iter().rev() {
         if items.is_empty() {
             unreachable!("Should be no gaps in the ranking")
         }
-        // If only one InvestmentSet in the group, we do not need to compress into a layer, so just
+        // If only one MarketSet in the group, we do not need to compress into a layer, so just
         // push the single item (this item may be a `Single` or `Cycle`).
         if items.len() == 1 {
             result.push(items.remove(0));
         // Otherwise, create a layer. The items within the layer may be a mix of `Single` or `Cycle`.
         } else {
-            result.push(InvestmentSet::Layer(items));
+            result.push(MarketSet::Layer(items));
         }
     }
 
@@ -481,14 +481,14 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<Investmen
 ///
 /// # Returns
 ///
-/// A map from `year` to the ordered list of `InvestmentSet`s for investment decisions. The
-/// ordering ensures that leaf-node `InvestmentSet`s (those with no outgoing edges) are solved
+/// A map from `year` to the ordered list of `MarketSet`s for investment decisions. The
+/// ordering ensures that leaf-node `MarketSet`s (those with no outgoing edges) are solved
 /// first.
 pub fn solve_investment_order_for_model(
     commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
     commodities: &CommodityMap,
     years: &[u32],
-) -> HashMap<u32, Vec<InvestmentSet>> {
+) -> HashMap<u32, Vec<MarketSet>> {
     let mut investment_orders = HashMap::new();
     for year in years {
         let order = solve_investment_order_for_year(commodity_graphs, commodities, *year);
@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn order_sccs_simple_cycle() {
-        let markets = ["A", "B", "C"].map(|id| InvestmentSet::Single((id.into(), "GBR".into())));
+        let markets = ["A", "B", "C"].map(|id| MarketSet::Single((id.into(), "GBR".into())));
 
         // Create graph with cycle edges plus an extra dependency B ← D (see doc comment)
         let mut original = InvestmentGraph::new();
@@ -524,7 +524,7 @@ mod tests {
             );
         }
         // External market receiving exports from C; encourages C to appear early.
-        let external = original.add_node(InvestmentSet::Single(("X".into(), "GBR".into())));
+        let external = original.add_node(MarketSet::Single(("X".into(), "GBR".into())));
         original.add_edge(
             node_indices[2],
             external,
@@ -532,7 +532,7 @@ mod tests {
         );
 
         // Single SCC containing all markets.
-        let mut condensed: Graph<Vec<InvestmentSet>, GraphEdge> = Graph::new();
+        let mut condensed: Graph<Vec<MarketSet>, GraphEdge> = Graph::new();
         let component = condensed.add_node(markets.to_vec());
 
         order_sccs(&mut condensed, &original);
@@ -540,7 +540,7 @@ mod tests {
         // Expected order corresponds to the example in the doc comment.
         // Note that C should be first, as it has an outgoing edge to the external market.
         let expected = ["C", "A", "B"]
-            .map(|id| InvestmentSet::Single((id.into(), "GBR".into())))
+            .map(|id| MarketSet::Single((id.into(), "GBR".into())))
             .to_vec();
 
         assert_eq!(condensed.node_weight(component).unwrap(), &expected);
@@ -569,11 +569,11 @@ mod tests {
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
         // Expected order: C, B, A (leaf nodes first)
-        // No cycles or layers, so all investment sets should be `Single`
+        // No cycles or layers, so all market sets should be `Single`
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single(("C".into(), "GBR".into())));
-        assert_eq!(result[1], InvestmentSet::Single(("B".into(), "GBR".into())));
-        assert_eq!(result[2], InvestmentSet::Single(("A".into(), "GBR".into())));
+        assert_eq!(result[0], MarketSet::Single(("C".into(), "GBR".into())));
+        assert_eq!(result[1], MarketSet::Single(("B".into(), "GBR".into())));
+        assert_eq!(result[2], MarketSet::Single(("A".into(), "GBR".into())));
     }
 
     #[rstest]
@@ -596,11 +596,11 @@ mod tests {
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
 
-        // Should be a single `Cycle` investment set containing both commodities
+        // Should be a single `Cycle` market set containing both commodities
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            InvestmentSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
+            MarketSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
         );
     }
 
@@ -637,15 +637,15 @@ mod tests {
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], InvestmentSet::Single(("D".into(), "GBR".into())));
+        assert_eq!(result[0], MarketSet::Single(("D".into(), "GBR".into())));
         assert_eq!(
             result[1],
-            InvestmentSet::Layer(vec![
-                InvestmentSet::Single(("B".into(), "GBR".into())),
-                InvestmentSet::Single(("C".into(), "GBR".into()))
+            MarketSet::Layer(vec![
+                MarketSet::Single(("B".into(), "GBR".into())),
+                MarketSet::Single(("C".into(), "GBR".into()))
             ])
         );
-        assert_eq!(result[2], InvestmentSet::Single(("A".into(), "GBR".into())));
+        assert_eq!(result[2], MarketSet::Single(("A".into(), "GBR".into())));
     }
 
     #[rstest]
@@ -678,23 +678,23 @@ mod tests {
         assert_eq!(result.len(), 3);
         assert_eq!(
             result[0],
-            InvestmentSet::Layer(vec![
-                InvestmentSet::Single(("C".into(), "GBR".into())),
-                InvestmentSet::Single(("C".into(), "FRA".into()))
+            MarketSet::Layer(vec![
+                MarketSet::Single(("C".into(), "GBR".into())),
+                MarketSet::Single(("C".into(), "FRA".into()))
             ])
         );
         assert_eq!(
             result[1],
-            InvestmentSet::Layer(vec![
-                InvestmentSet::Single(("B".into(), "GBR".into())),
-                InvestmentSet::Single(("B".into(), "FRA".into()))
+            MarketSet::Layer(vec![
+                MarketSet::Single(("B".into(), "GBR".into())),
+                MarketSet::Single(("B".into(), "FRA".into()))
             ])
         );
         assert_eq!(
             result[2],
-            InvestmentSet::Layer(vec![
-                InvestmentSet::Single(("A".into(), "GBR".into())),
-                InvestmentSet::Single(("A".into(), "FRA".into()))
+            MarketSet::Layer(vec![
+                MarketSet::Single(("A".into(), "GBR".into())),
+                MarketSet::Single(("A".into(), "FRA".into()))
             ])
         );
     }
