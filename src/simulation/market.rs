@@ -146,89 +146,6 @@ impl Display for MarketSet {
     }
 }
 
-/// Investment limits are based on any annual addition limits specified by the process, scaled
-/// according to the agent's portion of the commodity demand and the number of years elapsed since
-/// the previous milestone year.
-pub fn collect_investment_limits_for_candidates(
-    opt_assets: &[AssetRef],
-    commodity_portion: Dimensionless,
-) -> HashMap<AssetRef, AssetCapacity> {
-    opt_assets
-        .iter()
-        .filter(|asset| !asset.is_commissioned())
-        .filter_map(|asset| {
-            asset
-                .max_installable_capacity(commodity_portion)
-                .map(|limit_capacity| (asset.clone(), limit_capacity))
-        })
-        .collect()
-}
-
-/// Get candidate assets which produce a particular commodity for a given agent
-///
-/// Capacities of candidate assets are set to the demand-limiting capacity for the given market,
-/// scaled by the `capacity_limit_factor`.
-fn get_candidate_assets<'a>(
-    time_slice_info: &'a TimeSliceInfo,
-    demand: &'a DemandMap,
-    agent: &'a Agent,
-    region_id: &'a RegionID,
-    commodity: &'a Commodity,
-    year: u32,
-    capacity_limit_factor: Dimensionless,
-) -> impl Iterator<Item = AssetRef> + 'a {
-    agent
-        .iter_search_space(region_id, &commodity.id, year)
-        .map(move |process| {
-            let mut asset =
-                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
-                    .unwrap();
-
-            // Set capacity based on demand
-            // This will serve as the upper limit when appraising the asset
-            let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
-            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size())
-                .apply_limit_factor(capacity_limit_factor);
-            asset.set_capacity(asset_capacity);
-
-            asset.into()
-        })
-}
-
-/// Get options from existing and potential assets for the given parameters
-#[allow(clippy::too_many_arguments)]
-fn get_asset_options<'a>(
-    time_slice_info: &'a TimeSliceInfo,
-    all_existing_assets: &'a [AssetRef],
-    demand: &'a DemandMap,
-    agent: &'a Agent,
-    commodity: &'a Commodity,
-    region_id: &'a RegionID,
-    year: u32,
-    capacity_limit_factor: Dimensionless,
-) -> impl Iterator<Item = AssetRef> + 'a {
-    // Get existing assets which produce the commodity of interest
-    let existing_assets = all_existing_assets
-        .iter()
-        .filter_agent(&agent.id)
-        .filter_region(region_id)
-        .filter_primary_producers_of(&commodity.id)
-        .cloned();
-
-    // Get candidates assets which produce the commodity of interest
-    let candidate_assets = get_candidate_assets(
-        time_slice_info,
-        demand,
-        agent,
-        region_id,
-        commodity,
-        year,
-        capacity_limit_factor,
-    );
-
-    chain(existing_assets, candidate_assets)
-}
-
 /// Select assets for a single market in a given year
 ///
 /// Returns a list of assets that are selected for investment for this market in this year.
@@ -476,6 +393,89 @@ where
 
         Some((agent, *portion))
     })
+}
+
+/// Get options from existing and potential assets for the given parameters
+#[allow(clippy::too_many_arguments)]
+fn get_asset_options<'a>(
+    time_slice_info: &'a TimeSliceInfo,
+    all_existing_assets: &'a [AssetRef],
+    demand: &'a DemandMap,
+    agent: &'a Agent,
+    commodity: &'a Commodity,
+    region_id: &'a RegionID,
+    year: u32,
+    capacity_limit_factor: Dimensionless,
+) -> impl Iterator<Item = AssetRef> + 'a {
+    // Get existing assets which produce the commodity of interest
+    let existing_assets = all_existing_assets
+        .iter()
+        .filter_agent(&agent.id)
+        .filter_region(region_id)
+        .filter_primary_producers_of(&commodity.id)
+        .cloned();
+
+    // Get candidates assets which produce the commodity of interest
+    let candidate_assets = get_candidate_assets(
+        time_slice_info,
+        demand,
+        agent,
+        region_id,
+        commodity,
+        year,
+        capacity_limit_factor,
+    );
+
+    chain(existing_assets, candidate_assets)
+}
+
+/// Get candidate assets which produce a particular commodity for a given agent
+///
+/// Capacities of candidate assets are set to the demand-limiting capacity for the given market,
+/// scaled by the `capacity_limit_factor`.
+fn get_candidate_assets<'a>(
+    time_slice_info: &'a TimeSliceInfo,
+    demand: &'a DemandMap,
+    agent: &'a Agent,
+    region_id: &'a RegionID,
+    commodity: &'a Commodity,
+    year: u32,
+    capacity_limit_factor: Dimensionless,
+) -> impl Iterator<Item = AssetRef> + 'a {
+    agent
+        .iter_search_space(region_id, &commodity.id, year)
+        .map(move |process| {
+            let mut asset =
+                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
+                    .unwrap();
+
+            // Set capacity based on demand
+            // This will serve as the upper limit when appraising the asset
+            let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
+            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size())
+                .apply_limit_factor(capacity_limit_factor);
+            asset.set_capacity(asset_capacity);
+
+            asset.into()
+        })
+}
+
+/// Investment limits are based on any annual addition limits specified by the process, scaled
+/// according to the agent's portion of the commodity demand and the number of years elapsed since
+/// the previous milestone year.
+pub fn collect_investment_limits_for_candidates(
+    opt_assets: &[AssetRef],
+    commodity_portion: Dimensionless,
+) -> HashMap<AssetRef, AssetCapacity> {
+    opt_assets
+        .iter()
+        .filter(|asset| !asset.is_commissioned())
+        .filter_map(|asset| {
+            asset
+                .max_installable_capacity(commodity_portion)
+                .map(|limit_capacity| (asset.clone(), limit_capacity))
+        })
+        .collect()
 }
 
 #[cfg(test)]
