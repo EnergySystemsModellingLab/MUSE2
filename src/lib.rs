@@ -4,6 +4,23 @@
 /// The main GitHub issues page for MUSE2
 pub const ISSUES_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues");
 
+/// A macro to get a url to the most recent version of the documentation
+#[macro_export]
+macro_rules! docs_url {
+    () => {
+        docs_url!("")
+    };
+    ($suffix:literal) => {
+        concat!(
+            env!("CARGO_PKG_HOMEPAGE"),
+            "/v",
+            env!("CARGO_PKG_VERSION"),
+            "/",
+            $suffix
+        )
+    };
+}
+
 use dirs::config_dir;
 use std::path::PathBuf;
 
