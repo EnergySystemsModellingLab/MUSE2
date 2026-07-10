@@ -715,10 +715,10 @@ fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate is assigned a capacity based on a characteristic capacity scale for the asset.
-/// The scale is computed from the total annual demand for the commodity and the asset's maximum
-/// annual production per unit capacity (see `calculate_candidate_asset_capacity_scale`), then
-/// multiplied by `capacity_limit_factor`.
+/// Each candidate is assigned a capacity. For divisible assets, the capacity is set to 1 unit.
+/// For indivisible assets, a capacity is calculated based on the total demand for the commodity and
+/// the asset's maximum annual production per unit capacity
+/// (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
@@ -735,13 +735,16 @@ fn get_candidate_assets<'a>(
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
 
-            // Set capacity based on demand
+            // Set capacity of the candidate
             // This will serve as the upper limit when appraising the asset (may later be
             // constrained by process addition limits and demand-limiting capacity)
-            let capacity_scale =
-                calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-            let asset_capacity = AssetCapacity::from_capacity(capacity_scale, asset.unit_size())
-                .apply_limit_factor(capacity_limit_factor);
+            let asset_capacity = if let Some(unit_size) = asset.unit_size() {
+                AssetCapacity::Discrete(1, unit_size)
+            } else {
+                let capacity_scale =
+                    calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
+                AssetCapacity::Continuous(capacity_scale * capacity_limit_factor)
+            };
             asset.set_capacity(asset_capacity);
             asset.into()
         })

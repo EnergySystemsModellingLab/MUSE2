@@ -144,27 +144,12 @@ impl AssetCapacity {
             "Cannot change capacity type"
         );
     }
-
-    /// Applies a limit factor to the capacity, scaling it accordingly.
-    ///
-    /// For discrete capacities, the number of units is scaled by the limit factor and rounded up to
-    /// the nearest integer.
-    pub fn apply_limit_factor(self, limit_factor: Dimensionless) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        match self {
-            AssetCapacity::Continuous(cap) => AssetCapacity::Continuous(cap * limit_factor),
-            AssetCapacity::Discrete(units, size) => {
-                let new_units = (units as f64 * limit_factor.value()).ceil() as u32;
-                AssetCapacity::Discrete(new_units, size)
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::units::{Capacity, Dimensionless};
+    use crate::units::Capacity;
     use rstest::rstest;
 
     #[rstest]
@@ -207,20 +192,6 @@ mod tests {
         let got = AssetCapacity::from_capacity_floor(capacity, unit_size);
         assert_eq!(got.n_units(), expected_n);
         assert_eq!(got.total_capacity(), expected_total);
-    }
-
-    #[rstest]
-    #[case::round_up(3u32, Capacity(4.0), Dimensionless(0.5), 2u32)]
-    #[case::exact(3u32, Capacity(4.0), Dimensionless(0.33), 1u32)]
-    fn apply_limit_factor(
-        #[case] start_units: u32,
-        #[case] unit_size: Capacity,
-        #[case] factor: Dimensionless,
-        #[case] expected_units: u32,
-    ) {
-        let orig = AssetCapacity::Discrete(start_units, unit_size);
-        let got = orig.apply_limit_factor(factor);
-        assert_eq!(got, AssetCapacity::Discrete(expected_units, unit_size));
     }
 
     #[rstest]
