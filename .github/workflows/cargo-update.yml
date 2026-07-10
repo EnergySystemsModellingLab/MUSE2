@@ -31,10 +31,10 @@ jobs:
       - name: Create a branch for the update
         id: branch-creator
         run: |
-          git switch --force-create update-cargo-lock
+          git switch --force-create update/cargo-lock
           git add Cargo.lock
           git commit -m "chore: Update Cargo.lock" || echo success=false > $GITHUB_OUTPUT
-          git push origin update-cargo-lock --force
+          git push origin update/cargo-lock --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
