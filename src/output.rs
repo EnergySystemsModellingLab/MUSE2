@@ -449,9 +449,7 @@ impl DebugDataWriter {
         }
 
         // If the unmet demand writer already exist, we return with an error, as it should not happen
-        if self.unmet_demand_writer.is_some() {
-            panic!("Unmet demand file already exists!");
-        }
+        assert!(self.unmet_demand_writer.is_none(), "Unmet demand file already exists!");
 
         self.unmet_demand_writer = Some(csv::Writer::from_path(&self.unmet_demand_file_path)?);
         for (commodity_id, region_id, time_slice, value) in rows {
