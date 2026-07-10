@@ -118,7 +118,7 @@ where
 /// commodity-balance constraint added to `problem` and `keys` lists the
 /// `(commodity, region, time_selection)` entries in the same order as the rows.
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#commodity-balance-for--cin-mathbfcmathrmsed-
+#[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#commodity-balance-for--cin-mathbfcmathrmsed-"))]
 fn add_commodity_balance_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -230,7 +230,7 @@ where
 /// (upper and lower bounds) are added per selection; in that case the same key is
 /// stored twice to match the solver ordering.
 ///
-/// [1]: https://energysystemsmodellinglab.github.io/MUSE2/model/dispatch_optimisation.html#a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
+#[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-"))]
 fn add_activity_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
