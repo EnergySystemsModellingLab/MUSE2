@@ -118,7 +118,7 @@ where
                             producers.iter().any(|producer| producer.id == process.id),
                             "Process '{}' does not produce commodity '{commodity_id}' in region \
                             '{region_id}' in year {year}",
-                            &process.id
+                            process.id
                         );
                     }
 

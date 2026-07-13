@@ -348,7 +348,7 @@ pub fn select_best_assets(
             !opt_assets.is_empty(),
             "Failed to meet demand for commodity '{}' in region '{}' with provided investment \
             options. This may be due to overly restrictive process investment constraints.",
-            &commodity.id,
+            commodity.id,
             region_id
         );
 
@@ -406,7 +406,7 @@ pub fn select_best_assets(
         // Save appraisal results
         writer.write_appraisal_debug_info(
             year,
-            &format!("{} {} round {}", &commodity.id, &agent.id, round),
+            &format!("{} {} round {}", commodity.id, agent.id, round),
             &outputs_for_opts,
             &demand,
         )?;
@@ -422,7 +422,7 @@ pub fn select_best_assets(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
                 year '{}', agent '{}'. {} non-feasible investments were not considered. \
                 This unmet demand may still be satisfied during the full system dispatch.",
-                &commodity.id, region_id, year, agent.id, num_nonfeasible
+                commodity.id, region_id, year, agent.id, num_nonfeasible
             );
             break;
         }
@@ -435,8 +435,8 @@ pub fn select_best_assets(
         // Log the selected asset
         debug!(
             "Selected {} asset '{}' (capacity: {})",
-            &best_output.asset.state(),
-            &best_output.asset.process_id(),
+            best_output.asset.state(),
+            best_output.asset.process_id(),
             best_output.asset.capacity().total_capacity()
         );
 

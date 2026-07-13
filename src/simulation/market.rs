@@ -168,7 +168,7 @@ pub fn select_assets_for_single_market(
     {
         debug!(
             "Running asset selection for agent '{}' in market '{}|{}'",
-            &agent.id, commodity_id, region_id
+            agent.id, commodity_id, region_id
         );
 
         // Get demand portion for this market for this agent in this year
