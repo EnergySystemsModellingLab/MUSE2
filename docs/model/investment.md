@@ -1,374 +1,382 @@
-# Investment Appraisal Approach
+# Investment Appraisal
 
 <!-- markdownlint-disable MD049 -->
 
-This section details the investment and asset retention decision process, which is applied within
-step 2 of the [overall MUSE2 workflow][framework-overview]. This process determines which new assets
-to build and which existing assets to retain to meet system needs over time. In the overall
-workflow, dispatch optimisation is used to identify *physical needs* by quantifying demand profiles
-for commodities of interest.
+This section describes the investment and asset retention process applied at each milestone year
+(MSY). Given commodity demand profiles produced by the previous MSY's dispatch optimisation,
+agents iteratively build a portfolio of new and retained assets to meet those demands for the
+coming MSY.
 
-## Commodity prices
+## Overview
 
-The economic evaluation and selection of all supply options — new candidate assets and
-contributions from existing assets — consistently use prices formed in the *previous*
-milestone year (\\( \lambda\_{c,r,t} \\)). This approach models investment and retention
-decisions as being based on recent, known economic conditions while responding to immediate
-commodity demands. A core assumption is that all commodities, except specific user-identified SVD
-commodities, have reliable \\( \lambda\_{c,r,t} \\) values for these economic evaluations.
+For each commodity market (a commodity–region pair), agents evaluate every
+available supply option — existing commissioned assets and new candidate assets from their search
+space — and select the best option to commit. The selected asset's production profile is subtracted
+from the remaining demand, and the process repeats until demand is met or no feasible options
+remain. This loop runs once per agent, per commodity market, in **investment order** (see below).
 
-When `pricing_strategy` is `shadow`, these are the shadow prices for each commodity
-\\( c \\), in each region \\( r \\), for each time slice \\( t \\), taken from the final dispatch of
-the preceding MSY. When the `pricing_strategy` option is set to `scarcity`, these are the
-shadow prices for each commodity adjusted to remove the impact of binding capacity constraints.
+## Investment Order
 
-Note: there is an option to iterate over each year so that investment decisions are based on
-equilibrium prices in the _current year_, in what's referred to as the "[ironing-out loop][framework-overview]".
-In this case, \\( \lambda\_{c,r,t} \\) will reflect prices from previous iteration of the
-ironing-out loop.
+Investment decisions are made sequentially, starting from the most downstream commodity markets
+and moving upstream. For example, investment in electricity generation happens before investment
+in gas production. This ordering ensures that when an upstream market is being invested in, the
+demand created by already-committed downstream assets is already known.
 
-## Candidate and existing asset data
+Only commodities of type `ServiceDemand` (SVD) and `SupplyEqualsDemand` (SED) are subject to
+investment decisions. Other commodity types (e.g. `OTH`) are excluded.
 
-Asset economic data for investment appraisal calculations, drawn from user inputs and previous
-investments.
+Note: the investment order is the reverse of the [price calculation order][prices], where prices
+are computed upstream first.
 
-- For all assets:
+After each commodity market is settled, a dispatch is run over all assets selected so far. This
+quantifies the input commodity flows consumed by newly committed assets — for example, a gas
+generator committed during electricity market investment will consume gas, creating demand that
+the gas market investment must subsequently meet.
 
-  - All relevant operational parameters for \\( opt \\) as defined in [Dispatch Optimisation
-    Formulation] (e.g., availability \\( avail_{UB} \\), variable costs \\( cost_{var} \\), yield
-    coefficients \\( output_{coeff} \\), etc.).
+### Circularities
 
-  - \\( \text{FOM}_{opt,r} \\): Annual fixed Operations & Maintenance costs per unit of capacity for
-    \\( opt \\) in \\( r \\).
+When commodity markets form a cycle (e.g. electricity → hydrogen → electricity), the markets in
+the cycle are resolved in sequence within one pass. After each market in the cycle is visited, a
+dispatch is run to rebalance demand. Newly committed assets within the cycle are given limited
+capacity flexibility, controlled by the `capacity_margin` parameter, to absorb small demand shifts
+caused by later markets in the cycle. If these shifts exceed `capacity_margin`, the simulation
+terminates with an error, and the user should increase this parameter.
 
-- For new candidate assets:
+## Commodity Prices Used in Appraisal
 
-  - \\( \text{CAPEX}_{ca,r} \\): Upfront capital expenditure required per unit of new capacity for
-    candidate \\( ca \\) in region \\( r \\).
+Investment appraisal uses two distinct price sets, both sourced from the previous MSY's dispatch
+(or from the previous [ironing-out loop][framework-overview] iteration if enabled):
 
-  - \\( \text{Life}_{ca} \\): Expected operational lifetime of the new asset \\( ca \\) (in years).
+- **Shadow prices** \\( \lambda\_{c,r,t} \\): used for activity coefficients in the mini dispatch
+  optimisation step of each appraisal (see [Mini Dispatch Optimisation](#mini-dispatch-optimisation)).
+- **Market prices** \\( \pi\_{c,r,t} \\): used to calculate the investment metric (Cost Index or
+  SNAS) after dispatch.
 
-  - \\( \text{WACC}_{ca} \\): Weighted Average Cost of Capital (discount rate) used for appraising
-    candidate \\( ca \\).
+See [Commodity Prices][prices] for how these price sets are calculated.
 
-  - \\( CapMaxBuild_{ca,r} \\): Maximum buildable new capacity for candidate asset type \\( ca \\)
-    in region \\( r \\) during this MSY investment phase (an exogenous physical, resource, or policy
-    limit).
+## Agent Shares
 
-## Investment Appraisal
+Each commodity market may be served by multiple agents, each responsible for a defined share
+(or *portion*) of the total demand. An agent's portion determines:
 
-The main MUSE2 workflow invokes the portfolio construction methods detailed in tools A and B
-below. These tools select the best asset from the pool of candidate and existing assets, thereby
-providing investment and dynamic decommissioning decisions.
+- The fraction of the total demand that the agent is responsible for meeting.
+- The scaling applied to any `max_annual_addition` investment constraints
+  (see [Investment Constraints](#investment-constraints)).
 
-### Pre-calculation of metrics for each supply option
+Agent portions for each commodity and milestone year are defined in the agent input files.
 
-- Annualised fixed costs per unit of capacity (\\( AFC_{opt,r} \\)): For new candidates, this is
-  their annualised CAPEX plus FOM. For existing assets, the relevant fixed cost is its FOM.
+## Investment Options
 
-- Calculate the specific process and commodity flow costs (\\(\text{SPCF}\_{t})\\):
+For each commodity market, agents consider two categories of supply option:
 
+- **Existing assets**: already-commissioned assets owned by the agent that produce the commodity
+  of interest as their primary output.
+- **Candidate assets**: processes in the agent's search space that could be newly built.
+
+### Annualised Fixed Cost
+
+The annualised fixed cost (AFC) per unit of capacity differs between the two categories:
+
+- **Existing assets**: AFC comprises only the fixed operations and maintenance cost:
   \\[
-    \text{SPCF}\_{t} = \sum\_{c} \Big( cost\_{\text{input}}[c] \cdot input\_{\text{coeff}}[c] +
-            cost\_{\text{output}}[c] \cdot output\_{\text{coeff}}[c] \Big)
+    \text{AFC}_\text{existing} = \text{FOM}
   \\]
 
-#### Coefficients of activity
-
-- Calculate net revenue per unit of activity \\(AC\_{t}^{NPV} \\) (Tool A):
+- **Candidate assets**: AFC includes annualised capital expenditure plus fixed O&M:
   \\[
-    \begin{aligned}
-          AC\_{t}^{NPV} = &-cost\_{\text{var}}[t] \\\\
-            &- \text{SPCF}\_{t} \\\\
-            &+ \sum\_{c} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}[c] \Big)
-              \cdot \lambda\_{c,r,t} \\\\
-            &+ \varepsilon \\\\
-    \end{aligned}
-  \\]
-  \\(\varepsilon \approx 1\times 10^{-14}\\) is added to
-  each \\(AC\_{t}^{NPV} \\) to allow assets which are breakeven (or very close to breakeven) to be
-  dispatched.
-
-- Calculate cost per unit of activity \\( AC\_{t}^{LCOX} \\) (Tool B). Note that the commodity
-  of interest (primary output \\( c\_{primary} \\)) is excluded from the price term:
-  \\[
-    \begin{aligned}
-          AC\_{t}^{LCOX} = & \quad cost\_{\text{var}}[t] \\\\
-            &+ \text{SPCF}\_{t} \\\\
-            &- \sum\_{c \neq c\_{primary}} \Big( output\_{\text{coeff}}[c] - input\_{\text{coeff}}
-            [c] \Big)
-              \cdot \lambda\_{c,r,t} \\\\
-    \end{aligned}
+    \text{AFC}_\text{candidate} = \text{CAPEX} \times \text{CRF} + \text{FOM}
   \\]
 
-- The third term in both activity coefficients accounts for commodity price flow costs, which are
-  the net costs or revenues associated with the commodity flows. In the LCOX case the commodity of
-  interest is excluded from this term because the cost of production shouldn't depend on the market
-  price of the commodity being produced.
-
-### Initialise demand profiles for commodity of interest
-
-- Initialise \\( D[c,t] \\) from the MSY dispatch run output \\( U_c \\).
-
-- We break down the demand profile into tranches. The first tranche for investment consideration is
-  that with the highest load factor. The size of this tranche is the overall peak demand divided by
-  an input parameter (which can vary between 2 and 6). This assumption should be revisited!
-
-### Iteratively construct asset portfolio to meet target \\( U_c \\)
-
-> Note: The current implementation of MUSE2 doesn't use tranches
-
-1. Start with the first tranche of the demand.
-
-2. Loop over available options \\( opt \\) (new or existing or import), applying either tool A or B
-   to check the supply option.
-
-3. Result includes all options \\( opt^\* \\) (new or existing or import) from which we select the
-   one that is the best. The related capacity to commit is returned from the tool, as is its
-   production profile related to the tranche. Save key information, including investment/retention
-   metric for all options, even the ones not invested/retained.
-
-4. \\( D[c] \\) is updated to remove the production profile of the committed asset. The next tranche
-   profile is then calculated (note that \\( opt^\* \\) may not serve all demand in the current
-   tranche).
-
-5. Keep going until there is no \\( D[c] \\) left. Will need to handle a situation where we run out
-   of candidate and existing assets and demand is still present.
-
-### Tools
-
-#### Tool A: LCOX (`objective_type` = "lcox")
-
-This method constructs a supply portfolio (from new candidates \\( ca \\), new
-import infrastructure \\( ca_{import} \\), and available existing assets \\( ex \\)) to meet target
-\\( U_{c} \\) at the lowest cost for the investor. As above, the appraisal for each option
-explicitly accounts for its own operational constraints and adapts based on the \\( balance\_level
-\\) of \\( c \\). Inputs and outputs for all options are valued using prices from the previous
-milestone year (\\( \pi_{prevMSY} \\)), for priced commodities. Inputs and outputs for unpriced
-commodities are set to zero, and the commodity of interest is assumed to have zero value.
-For each asset option:
-
-- **Optimise capacity and dispatch to minimise annualised cost:** Solve a small optimisation
-  sub-problem to minimise the asset's annualised cost, subject to its operational rules and the specific
-  demand tranche it is being asked to serve.
-
+  where the Capital Recovery Factor (CRF) annualises the upfront capital cost over the asset's
+  lifetime \\( L \\) at discount rate \\( d \\):
   \\[
-    minimise \Big\\{
-      \text{AFC} \times cap + \sum\_t act\_t \times AC\_{t}^{LCOX} + VoLL \times UnmetD\_t
-    \Big\\}
+    \text{CRF} = \frac{d \cdot (1 + d)^L}{(1 + d)^L - 1}
   \\]
 
-  Where \\( cap \\) and \\( act_t \\) are decision variables, and subject to:
+  If \\( d = 0 \\), then \\( \text{CRF} = 1/L \\).
 
-  - The asset operational constraints (e.g., \\( avail_{LB}, avail_{EQ} \\), etc.), activity less
-    than capacity, applied to its activity profile \\( act_t \\).
+## Asset Capacity
 
-  - A demand constraint, where output from the asset plus VoLL-related outputs must equal demand in
-    each timeslice of the tranche, which adapts based on the commodity's balance level (time slice,
-    season, annual).
+A process is either **divisible** or **non-divisible**:
 
-  - Capacity is constrained up to \\( CapMaxBuild \\) for candidates, and to known capacity for
-    existing assets.
+- A **divisible** process has a fixed `unit_size`. Assets of this type consist of one or more
+  discrete units, each of size `unit_size`. When commissioned, a divisible asset is split into
+  individual units, each of which is appraised and retained or mothballed independently.
+- A **non-divisible** process has no unit size. Its capacity is a continuous value and the asset
+  is always treated as a single block.
 
-  - VoLL variables are active to ensure a feasible solution alongside maximum operation of the
-    asset.
+### Existing assets
 
-- **Calculate a Cost Index Metric:** This is the total annualised cost divided by the annual output.
+- **Non-divisible**: the asset is appraised as a whole at its full installed capacity.
+- **Divisible**: each individual unit is appraised separately, one at a time. This allows partial
+  retention — for example, some units of a multi-unit plant may be retained while others are
+  mothballed.
+
+### Candidate assets
+
+Before a candidate asset can be appraised, it is assigned a trial capacity which defines how much
+capacity can be installed in a single investment round (subject to further constraints below)
+
+- **Divisible**: the trial capacity is set to one unit (one `unit_size`), representing a single
+  unit being considered for investment.
+- **Non-divisible**: the trial capacity is based on the capacity that would satisfy the
+  total remaining demand if the asset operated at its maximum annual rate:
+
   \\[
-  \text{Cost Index} = \frac{\text{AFC} \times \text{cap}_r + \sum_t act_t
-   \times \text{AC}_t^{\text{LCOX}}}{\sum_t act_t}
+    \text{TrialCapacity} = \frac{\sum_t D[c, t]}{\text{MaxAnnualSupplyPerCapacity}}
+    \times \text{CapacityLimitFactor}
   \\]
 
-#### Tool B: NPV  (`objective_type` = "npv")
+  `capacity_limit_factor` (set in `model.toml`, between 0 and 1) controls the size of
+  investment increments relative to total demand. Lower values produce smaller investment
+  increments (requiring more investment rounds), while higher values produce larger increments.
 
- This method uses the Specific Net Annualised Surplus (SNAS) to rank options. It is similar in
- structure to the LCOX calculation, but uses activity values that include the commodity of interest
- and compares options by *maximising* surplus:
+### Demand-limiting capacity (DLC)
 
- \\[
- \text{SNAS} = \frac{\sum_t act_t \times AC_t^{\text{NPV}} - \text{AFC} \times \text{cap}_r}{\sum_t
-  act_t}
- \\]
+In each investment round, a candidate's trial capacity is further capped by the
+*demand-limiting capacity*, which is the minimum capacity required to satisfy the remaining demand
+across all time-slice selections:
 
- Higher SNAS values indicate more profitable investments.
+\\[
+  \text{DLC} = \max_{\text{selection}} \frac{\sum_{t \in \text{selection}} D[c, t]}
+    {\text{MaxSupplyPerCapacity}_\text{selection}}
+\\]
 
-#### Equal-Metric Fallback
+Selections where the asset has zero maximum supply are excluded. The cap prevents over-investment
+(i.e. building more capacity than needed to meet remaining demand).
 
-If two or more investment options from the same tool have equal metrics, the following tie-breaking
-rules are applied in order:
+### Investment constraints
 
-1. Assets which are already commissioned are preferred over new candidate assets.
-2. Newer (commissioned later) assets are preferred over older assets.
-3. If there is still a tie, the first option in the data structure storing the metrics is selected,
-   which is an arbitrary choice. A `debug` level log message is emitted in this case.
+Candidate assets may have a `max_annual_addition` limit specifying the maximum new capacity
+that can be built per year. The installable capacity limit for a given MSY is:
+
+\\[
+  \text{MaxInstallableCapacity} = \text{MaxAnnualAddition} \times \Delta_\text{MSY}
+    \times \text{AgentPortion}
+\\]
+
+where \\( \Delta_\text{MSY} \\) is the number of years since the previous MSY and
+\\( \text{AgentPortion} \\) is the fraction of the commodity market for which this agent is
+responsible.
+
+If the remaining installable capacity is exhausted, the candidate is excluded from further
+consideration.
+
+## Mini Dispatch Optimisation
+
+For each supply option being appraised, a small linear programme (LP) is solved to determine the
+optimal activity profile given the current remaining demand.
+
+### Activity coefficients
+
+The objective coefficient for each time slice is the net revenue per unit of activity, calculated
+using **shadow prices**:
+
+\\[
+  \alpha_t = \text{RevenueFromFlows}(\lambda, t) - \text{OperatingCost}(t) + \varepsilon
+\\]
+
+where \\( \text{RevenueFromFlows} \\) is the sum of all commodity flow revenues and costs (positive
+for outputs, negative for inputs) valued at shadow prices, \\( \text{OperatingCost} \\) is the
+variable operating cost plus levies and flow costs, and \\( \varepsilon \\) is a
+small positive constant added to ensure that break-even assets are still dispatched.
+
+### Constraints
+
+- **Activity bounds**: the sum of activity within each time-slice selection is bounded by the
+  asset's availability limits multiplied by its capacity.
+- **Demand constraints**: demand for a commodity is balanced at the commodity's defined
+  *time-slice level* (e.g. annual, seasonal, or time-slice). The total supply (activity × flow
+  coefficient) within each balance bucket must not exceed the remaining demand for that bucket.
+
+### Objective
+
+\\[
+  \max \sum_t \alpha_t \cdot act_t
+\\]
+
+## Metric Calculation
+
+After the dispatch LP is solved, an investment metric is calculated from the resulting activity
+profile using **market prices**.
+
+### Market costs per time slice
+
+The market cost \\( \mu_t \\) is calculated differently depending on the objective type:
+
+- **LCOX**: the net cost of operating, excluding revenues from the primary output commodity:
+  \\[
+    \mu_t^\text{LCOX} = \text{OperatingCost}(t) -
+      \text{RevenueFromNonPrimaryFlows}(\pi, t)
+  \\]
+
+- **NPV**: the net cost of operating, including all commodity flows (so negative values represent
+  profit):
+  \\[
+    \mu_t^\text{NPV} = \text{OperatingCost}(t) - \text{RevenueFromFlows}(\pi, t)
+  \\]
+
+### Tool A: LCOX (`objective_type = "lcox"`)
+
+The Cost Index is the total annualised cost divided by total annual output. The primary output
+commodity is assigned zero value, so the Cost Index reflects the cost of producing it:
+
+\\[
+  \text{CostIndex} = \frac{\text{AFC} \times \text{cap} + \sum_t act_t \times \mu_t^\text{LCOX}}
+    {\sum_t act_t}
+\\]
+
+Lower values indicate lower-cost investments.
+
+### Tool B: NPV (`objective_type = "npv"`)
+
+The Specific Net Annualised Surplus (SNAS) is the net surplus per unit of activity. The primary
+output commodity is included at its full market price:
+
+\\[
+  \text{SNAS} = \frac{-\left(\text{AFC} \times \text{cap} + \sum_t act_t \times
+    \mu_t^\text{NPV}\right)}{\sum_t act_t}
+\\]
+
+Higher values indicate more profitable investments.
+
+> For both tools, any option with zero total activity after the mini dispatch LP is excluded from
+> consideration, as it cannot contribute to meeting demand.
+
+## Asset Selection
+
+### Sorting and tie-breaking
+
+All feasible options are appraised and ranked by their metric. When two options have approximately
+equal metrics, the following tie-breaking rules are applied in order:
+
+1. Existing commissioned assets are preferred over new candidates.
+2. Among existing assets, newer assets (commissioned more recently) are preferred.
+3. If the tie is still unresolved, the first option in the ordering is selected arbitrarily, and a
+   `debug`-level log message is emitted.
+
+### Selection loop
+
+The best-ranked asset is committed. Its production profile from the mini dispatch optimisation is
+subtracted from the remaining demand, and the loop repeats with the updated demand profile. This
+continues until:
+
+- The remaining demand falls below `remaining_demand_absolute_tolerance`, or
+- No feasible options remain. In this case, a warning is logged and the loop ends early. The
+  unmet demand may still be satisfied during the full system dispatch, but is not guaranteed.
+
+If demand cannot be met at all due to overly restrictive investment constraints, the simulation
+terminates with an error.
+
+## Mothballing and Decommissioning
+
+After investment is complete for a given MSY, any previously commissioned assets that were not
+selected for retention are *mothballed*: their mothball year is recorded and they are removed from
+the active asset pool. They remain available for potential re-selection in future MSYs.
+
+A mothballed asset that remains unused for `mothball_years` consecutive years (as specified in
+`model.toml`) is *decommissioned* — permanently removed from the asset pool and excluded from all
+future investment and dispatch.
 
 ## Example: Gas Power Plant
 
-The following is an illustrative example of how the NPV and LCOX approaches work, using a simple
-gas combined-cycle power plant as the supply option under consideration.
-This example demonstrates the evaluation across two time periods
-\\(t\_0\\) (peak period) and \\(t\_1\\) (off-peak period) with variable operating costs
- \\( cost\_{var}[t] \\) constant in all time periods.
+The following illustrates how LCOX and NPV metrics are calculated for a gas combined-cycle power
+plant, evaluated across two time slices: \\( t_0 \\) (peak) and \\( t_1 \\) (off-peak).
 
-### Model Parameters
+### Parameters
 
-#### Asset Parameters
+#### Asset flows and operating costs
 <!-- markdownlint-disable MD013 -->
-| Parameter                      | Notation                             | Value                     | Description                       |
-|--------------------------------|--------------------------------------|---------------------------|-----------------------------------|
-| Primary output (Electricity)   | \\( output\_{coeff}[c_{primary}] \\) | 1.0 MWh per unit activity | Main commodity produced           |
-| By-product output (Waste heat) | \\( output\_{coeff}[c_{heat}] \\)    | 0.5 MWh per unit activity | Co-product from generation        |
-| Input (Natural gas)            | \\( input\_{coeff}[c_{gas}] \\)      | 2.5 MWh per unit activity | Fuel consumption                  |
-| Variable operating cost        | \\( cost\_{var}[t] \\)               | £5/MWh of activity        | Operating costs per unit activity |
+| Flow | Value | Description |
+| ------ | ------- | ------------- |
+| Electricity output | \\( +1.0 \\) MWh/MWh activity | Primary output |
+| Heat output | \\( +0.5 \\) MWh/MWh activity | By-product |
+| Natural gas input | \\( -2.5 \\) MWh/MWh activity | Fuel |
+| \\( \text{OperatingCost} \\) | £5/MWh activity | Constant across time slices |
 <!-- markdownlint-enable MD013 -->
 
-All per-flow costs represented in the general formulas as \\( cost\_{input} \\) and
-\\( cost\_{output} \\) are assumed to be zero.
+All per-flow costs (\\( cost_\text{input} \\), \\( cost_\text{output} \\)) are zero.
 
-#### Investment Parameters
+#### Fixed costs and capacity
 
-| Parameter             | Notation             | Value     |
-|-----------------------|----------------------|-----------|
-| Annualised fixed cost | \\( AFC\_{opt,r} \\) | £1,000/MW |
-| Capacity              | \\( cap \\)          | 100 MW    |
+| Parameter | Value |
+|-----------|-------|
+| AFC | £1,000/MW |
+| Capacity | 100 MW |
 
-#### Market Prices by Time Period
+#### Prices (both shadow and market prices are equal in this example)
 
-| Commodity   | Notation                            | \\(t_0\\) (Peak) | \\(t_1\\) (Off-peak) |
-|-------------|-------------------------------------|------------------|----------------------|
-| Electricity | \\( \lambda\_{c\_{primary},r,t} \\) | £90/MWh          | £50/MWh              |
-| Heat        | \\( \lambda\_{c\_{heat},r,t} \\)    | £25/MWh          | £15/MWh              |
-| Natural gas | \\( \lambda\_{c\_{gas},r,t} \\)     | £35/MWh          | £25/MWh              |
+| Commodity | \\( t_0 \\) (Peak) | \\( t_1 \\) (Off-peak) |
+| ----------- | -------------------- | ------------------------ |
+| Electricity | £90/MWh | £50/MWh |
+| Heat | £25/MWh | £15/MWh |
+| Natural gas | £35/MWh | £25/MWh |
 
-### NPV Approach (Tool A)
+### Mini Dispatch Optimisation (identical for LCOX and NPV)
 
-#### Calculate Net Revenue per Unit of Activity
+Activity coefficients use shadow prices:
 
-**For \\(t\_0\\) (peak period):**
+**\\( t_0 \\):**
+\\[
+\alpha_{t_0} = (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5
+= 90 + 12.5 - 87.5 - 5 = \text{£10/MWh}
+\\]
+
+**\\( t_1 \\):**
+\\[
+\alpha_{t_1} = (1.0 \times 50) + (0.5 \times 15) + (-2.5 \times 25) - 5
+= 50 + 7.5 - 62.5 - 5 = \text{£}{-10}\text{/MWh}
+\\]
+
+The optimiser maximises \\( 10 \cdot act_{t_0} + (-10) \cdot act_{t_1} \\), so it prefers to
+dispatch during \\( t_0 \\) and minimise activity during \\( t_1 \\), subject to demand and
+availability constraints.
+
+Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 20 \\) MWh.
+
+### LCOX Metric
+
+**Market costs (excluding primary output):**
 
 \\[
 \begin{aligned}
-AC_{t_{0}}^{NPV} &= (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5 \\\\
-&= 90 + 12.5 - 87.5 - 5 \\\\
-&= \text{£10/MWh}
+\mu_{t_0}^\text{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) = 5 + 87.5 - 12.5 = \text{£80/MWh} \\\\
+\mu_{t_1}^\text{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) = 5 + 62.5 - 7.5 = \text{£60/MWh}
 \end{aligned}
 \\]
 
-The asset earns £10 profit for every MWh it operates during peak periods.
+**Cost Index:**
+\\[
+\begin{aligned}
+\text{CostIndex} &= \frac{(1{,}000 \times 100) + (80 \times 80) + (20 \times 60)}{80 + 20} \\\\
+&= \frac{100{,}000 + 6{,}400 + 1{,}200}{100} \\\\
+&= \frac{107{,}600}{100} = \text{£1,076/MWh}
+\end{aligned}
+\\]
 
-**For \\(t\_1\\) (off-peak period):**
+### NPV Metric
+
+**Market costs (including primary output):**
 
 \\[
 \begin{aligned}
-AC_{t\_1}^{NPV} &= (1.0 \times 50) + (0.5 \times 15) + (-2.5 \times 25) - 5 \\\\
-&= 50 + 7.5 - 62.5 - 5 \\\\
-&= \text{£} -10 \text{/MWh}
+\mu_{t_0}^\text{NPV} &= 5 - (1.0 \times 90) - (0.5 \times 25) + (2.5 \times 35) = 5 - 90 - 12.5 + 87.5 = \text{£}{-10}\text{/MWh} \\\\
+\mu_{t_1}^\text{NPV} &= 5 - (1.0 \times 50) - (0.5 \times 15) + (2.5 \times 25) = 5 - 50 - 7.5 + 62.5 = \text{£10/MWh}
 \end{aligned}
 \\]
 
-The asset loses £10 for every MWh it operates during off-peak periods.
-
-#### Dispatch Optimisation
-
-The optimisation maximises total net revenue across all time periods:
-
-\\[
-\max \sum\_t act\_t \cdot AC\_t^{NPV} = act\_{t_{0}} \cdot 10 + act\_{t\_1} \cdot (-10)
-\\]
-
-where \\( act\_t \\) is the activity (operational level) in each time slice, subject to operational
- constraints and demand requirements.
-
-In this case, the optimiser will prefer to dispatch the asset during \\(t\_0\\) (profitable) and
-minimise operation during \\(t\_1\\) (unprofitable), subject to technical constraints such as minimum
-load requirements.
-
-#### Profitability Index
-
-The profitability index is calculated as:
-
-\\[
-\text{PI} = \frac{\sum\_t act\_t \cdot AC\_t^{NPV}}{AFC \times cap}
-\\]
-
-Suppose the dispatch optimiser determines \\( act\_{t\_{0}} = 80 \\) MWh and \\( act\_{t\_1} = 20 \\)
-MWh are the optimal activity levels:
-
+**SNAS:**
 \\[
 \begin{aligned}
-\text{PI} &= \frac{(80 \times 10) + (20 \times (-10))}{1{,}000 \times 100} \\\\
-&= \frac{800 - 200}{100{,}000} \\\\
-&= \frac{600}{100{,}000} \\\\
-&= 0.006
+\text{SNAS} &= \frac{-\left[(1{,}000 \times 100) + (80 \times (-10)) + (20 \times 10)\right]}{80 + 20} \\\\
+&= \frac{-(100{,}000 - 800 + 200)}{100} \\\\
+&= \frac{-99{,}400}{100} = \text{£}{-994}\text{/MWh}
 \end{aligned}
 \\]
 
-The profitability index is then compared against all other options to determine which asset provides
- the best return on investment for serving the demand.
-
-### LCOX Approach (Tool B)
-
-#### Net Cost per Unit of Activity
-
-**For \\(t\_0\\) (peak period):**
-
-\\[
-\begin{aligned}
-AC\_{t\_{0}}^{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) \\\\
-&= 5 + 87.5 - 12.5 \\\\
-&= \text{£80/MWh}
-\end{aligned}
-\\]
-
-It costs £80 per MWh to operate during peak periods (net of heat by-product sales).
-
-**For \\(t_1\\) (off-peak period):**
-
-\\[
-\begin{aligned}
-AC\_{t\_1}^{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) \\\\
-&= 5 + 62.5 - 7.5 \\\\
-&= \text{£60/MWh}
-\end{aligned}
-\\]
-
-It costs £60 per MWh to operate during off-peak periods, reflecting lower gas prices
- and lower heat by-product value.
-
-#### Capacity and Dispatch Optimisation
-
-The optimiser determines the most cost-effective capacity and dispatch pattern to meet demand across
-both time periods by minimising the total annualised cost with respect to decision variables
-\\( cap \\) and \\( act\_t \\):
-
-\\[
-AFC \cdot cap + \sum\_t act\_t \cdot AC\_t^{LCOX} = 1{,}000 \cdot cap + act\_{t\_{0}}
- \cdot 80 + act\_{t\_1} \cdot 60
-\\]
-
-#### Cost Index (Levelised Cost of X)
-
-The Cost Index is calculated as:
-
-\\[
-\text{Cost Index} = \frac{AFC \cdot cap + \sum\_t act\_t \cdot AC\_t^{LCOX}}{\sum\_t act\_t}
-\\]
-
-Suppose the optimiser determines \\( cap = 100 \\) MW, \\( act\_{t\_{0}} = 150 \\) MWh,
- and \\( act\_{t\_1} = 80 \\) MWh are the optimal capacity and activity levels:
-
-\\[
-\begin{aligned}
-\text{Cost Index} &= \frac{(1{,}000 \times 100) + (150 \times 80) + (80 \times 60)}{150 + 80} \\\\
-&= \frac{100{,}000 + 12{,}000 + 4{,}800}{230} \\\\
-&= \frac{116{,}800}{230} \\\\
-&= \text{£508/MWh}
-\end{aligned}
-\\]
-
-The Cost Index is £508 per MWh of electricity produced.
- This metric is compared across all supply options to identify
- the lowest-cost solution for meeting demand.
+The negative SNAS indicates that at current market prices, this asset does not generate a surplus
+over its annualised costs. It would still be selected if it has the highest SNAS among all
+available options.
 
 [framework-overview]: index.html#framework-overview
-[Dispatch Optimisation Formulation]: ./dispatch_optimisation.md
+[prices]: ./prices.md
