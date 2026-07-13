@@ -7,10 +7,10 @@ use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
-use crate::units::{CapacityPerYear, Year};
+use crate::units::{Capacity, CapacityPerYear, Year};
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
@@ -24,19 +24,47 @@ struct ProcessInvestmentConstraintRaw {
     regions: String,
     commission_years: String,
     addition_limit: CapacityPerYear,
+    #[serde(
+        default,
+        deserialize_with = "ProcessInvestmentConstraintRaw::parse_empty_limit"
+    )]
+    total_capacity_limit: Option<Capacity>,
 }
 
 impl ProcessInvestmentConstraintRaw {
     /// Validate the constraint record for logical consistency and required fields
     fn validate(&self) -> Result<()> {
-        // Validate that value is finite
+        // Validate that addition_limit is finite
         ensure!(
             self.addition_limit.is_finite() && self.addition_limit >= CapacityPerYear(0.0),
             "Invalid value for addition constraint: '{}'; must be non-negative and finite.",
             self.addition_limit
         );
 
+        // Validate total_capacity_limit: must be in range [0, inf)
+        if let Some(limit) = self.total_capacity_limit {
+            ensure!(
+                limit.is_finite() && limit >= Capacity(0.0),
+                "Invalid value for total capacity constraint: '{limit}'; must be non-negative and finite.",
+            );
+        }
+
         Ok(())
+    }
+
+    // Custom deserializer for if a limit is empty (implies no limit)
+    fn parse_empty_limit<'de, D>(d: D) -> Result<Option<Capacity>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let limit = Option::<String>::deserialize(d)?;
+        match limit {
+            None => Ok(None),
+            Some(s) => s
+                .parse::<Capacity>()
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
     }
 }
 
@@ -155,12 +183,16 @@ mod tests {
     use crate::units::Capacity;
     use rstest::rstest;
 
-    fn validate_raw_constraint(addition_limit: CapacityPerYear) -> Result<()> {
+    fn validate_raw_constraint(
+        addition_limit: CapacityPerYear,
+        total_capacity_limit: Option<Capacity>,
+    ) -> Result<()> {
         let constraint = ProcessInvestmentConstraintRaw {
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
             addition_limit,
+            total_capacity_limit,
         };
         constraint.validate()
     }
@@ -175,6 +207,7 @@ mod tests {
             regions: "GBR".into(),
             commission_years: "ALL".into(), // Should apply to milestone years [2012, 2016]
             addition_limit: CapacityPerYear(100.0),
+            total_capacity_limit: Some(Capacity(100.0)),
         }];
 
         let result = read_process_investment_constraints_from_iter(
@@ -221,18 +254,21 @@ mod tests {
                 regions: "GBR".into(),
                 commission_years: "2010".into(),
                 addition_limit: CapacityPerYear(100.0),
+                total_capacity_limit: Some(Capacity(100.0)),
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
                 regions: "ALL".into(),
                 commission_years: "2015".into(),
                 addition_limit: CapacityPerYear(200.0),
+                total_capacity_limit: Some(Capacity(100.0)),
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
                 regions: "USA".into(),
                 commission_years: "2020".into(),
                 addition_limit: CapacityPerYear(50.0),
+                total_capacity_limit: Some(Capacity(100.0)),
             },
         ];
 
@@ -292,6 +328,7 @@ mod tests {
             regions: "ALL".into(),
             commission_years: "ALL".into(),
             addition_limit: CapacityPerYear(75.0),
+            total_capacity_limit: Some(Capacity(100.0)),
         }];
 
         // Read constraints into the map
@@ -340,6 +377,7 @@ mod tests {
             regions: "GBR".into(),
             commission_years: "2025".into(), // Outside milestone years (2010-2020)
             addition_limit: CapacityPerYear(100.0),
+            total_capacity_limit: Some(Capacity(100.0)),
         }];
 
         // Should fail with milestone year validation error
@@ -357,15 +395,15 @@ mod tests {
     #[test]
     fn validate_addition_with_finite_value() {
         // Valid: addition constraint with positive value
-        let valid = validate_raw_constraint(CapacityPerYear(10.0));
+        let valid = validate_raw_constraint(CapacityPerYear(10.0), None);
         valid.unwrap();
 
         // Valid: addition constraint with zero value
-        let valid = validate_raw_constraint(CapacityPerYear(0.0));
+        let valid = validate_raw_constraint(CapacityPerYear(0.0), None);
         valid.unwrap();
 
         // Not valid: addition constraint with negative value
-        let invalid = validate_raw_constraint(CapacityPerYear(-10.0));
+        let invalid = validate_raw_constraint(CapacityPerYear(-10.0), None);
         assert_error!(
             invalid,
             "Invalid value for addition constraint: '-10'; must be non-negative and finite."
@@ -375,17 +413,47 @@ mod tests {
     #[test]
     fn validate_addition_rejects_infinite() {
         // Invalid: infinite value
-        let invalid = validate_raw_constraint(CapacityPerYear(f64::INFINITY));
+        let invalid = validate_raw_constraint(CapacityPerYear(f64::INFINITY), None);
         assert_error!(
             invalid,
             "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
         );
 
         // Invalid: NaN value
-        let invalid = validate_raw_constraint(CapacityPerYear(f64::NAN));
+        let invalid = validate_raw_constraint(CapacityPerYear(f64::NAN), None);
         assert_error!(
             invalid,
             "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
+        );
+    }
+
+    #[test]
+    fn validate_total_capacity_limit() {
+        // Valid: total_capacity_limit with values in range [0, inf)
+        let valid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(0.0)));
+        valid.unwrap();
+        let valid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(123.45e6)));
+        valid.unwrap();
+
+        // Valid: total_capacity_limit as None
+        let valid = validate_raw_constraint(CapacityPerYear(10.0), None);
+        valid.unwrap();
+
+        // Not valid: total_capacity_limit with values outside range [0, inf)
+        let invalid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(-7.89)));
+        assert_error!(
+            invalid,
+            "Invalid value for total capacity constraint: '-7.89'; must be non-negative and finite."
+        );
+        let invalid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(f64::INFINITY)));
+        assert_error!(
+            invalid,
+            "Invalid value for total capacity constraint: 'inf'; must be non-negative and finite."
+        );
+        let invalid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(f64::NAN)));
+        assert_error!(
+            invalid,
+            "Invalid value for total capacity constraint: 'NaN'; must be non-negative and finite."
         );
     }
 }
