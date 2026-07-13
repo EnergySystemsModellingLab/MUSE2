@@ -260,7 +260,7 @@ impl Asset {
                 format!(
                     "No process availabilities supplied for process {} in region {} in year {}. \
                     You should update process_availabilities.csv.",
-                    &process.id, region_id, commission_year
+                    process.id, region_id, commission_year
                 )
             })?
             .clone();
@@ -271,7 +271,7 @@ impl Asset {
                 format!(
                     "No commodity flows supplied for process {} in region {} in year {}. \
                     You should update process_flows.csv.",
-                    &process.id, region_id, commission_year
+                    process.id, region_id, commission_year
                 )
             })?
             .clone();
@@ -282,7 +282,7 @@ impl Asset {
                 format!(
                     "No process parameters supplied for process {} in region {} in year {}. \
                     You should update process_parameters.csv.",
-                    &process.id, region_id, commission_year
+                    process.id, region_id, commission_year
                 )
             })?
             .clone();

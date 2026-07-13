@@ -1021,9 +1021,9 @@ mod tests {
             cost: MoneyPerFlow(0.0),
         };
 
-        assert!(flow_in.direction() == FlowDirection::Input);
-        assert!(flow_out.direction() == FlowDirection::Output);
-        assert!(flow_zero.direction() == FlowDirection::Zero);
+        assert_eq!(flow_in.direction(), FlowDirection::Input);
+        assert_eq!(flow_out.direction(), FlowDirection::Output);
+        assert_eq!(flow_zero.direction(), FlowDirection::Zero);
     }
 
     #[rstest]
