@@ -441,33 +441,32 @@ impl DebugDataWriter {
     where
         I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, Flow)>,
     {
-        let rows: Vec<(&CommodityID, &RegionID, &TimeSliceID, Flow)> =
-            iter.collect::<Vec<(&CommodityID, &RegionID, &TimeSliceID, Flow)>>();
+        let mut rows = iter.peekable();
 
-        if rows.is_empty() {
+        if rows.peek().is_none() {
             return Ok(());
         }
 
-        // If the unmet demand writer already exist, we return with an error, as it should not happen
+        // If the unmet demand writer already exist, we panic, as it should not happen
         assert!(
             self.unmet_demand_writer.is_none(),
             "Unmet demand file already exists!"
         );
 
-        self.unmet_demand_writer = Some(csv::Writer::from_path(&self.unmet_demand_file_path)?);
+        let run_description = self.with_context(run_description);
+        let writer = self
+            .unmet_demand_writer
+            .insert(csv::Writer::from_path(&self.unmet_demand_file_path)?);
         for (commodity_id, region_id, time_slice, value) in rows {
             let row = UnmetDemandRow {
                 milestone_year,
-                run_description: self.with_context(run_description),
+                run_description: run_description.clone(),
                 commodity_id: commodity_id.clone(),
                 region_id: region_id.clone(),
                 time_slice: time_slice.clone(),
                 value,
             };
-            self.unmet_demand_writer
-                .as_mut()
-                .expect("Writer does not exist (cannot not happen)")
-                .serialize(row)?;
+            writer.serialize(row)?;
         }
 
         Ok(())
