@@ -533,6 +533,7 @@ mod tests {
             (region_id.clone(), 2015),
             Rc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(10.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             }),
         );
 

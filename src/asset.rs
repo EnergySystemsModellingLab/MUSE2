@@ -934,7 +934,10 @@ impl Asset {
         self.process
             .investment_constraints
             .get(&(self.region_id.clone(), self.commission_year))
-            .and_then(|c| c.get_addition_limit().map(|l| l * commodity_portion))
+            .and_then(|c| {
+                c.get_addition_limit(self.capacity())
+                    .map(|l| l * commodity_portion)
+            })
             .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
     }
 }
@@ -1590,11 +1593,12 @@ mod tests {
 
     #[rstest]
     fn max_installable_capacity(mut process: Process, region_id: RegionID) {
-        // Set an addition limit of 3 for (region, year 2015)
+        // Set an addition limit of 3 and total capacity limit of 100 for (region, year 2015)
         process.investment_constraints.insert(
             (region_id.clone(), 2015),
             Rc::new(crate::process::ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(3.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             }),
         );
         let process_rc = Rc::new(process);
