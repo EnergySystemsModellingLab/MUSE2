@@ -17,7 +17,7 @@ fn check_help_command() {
     assert!(
         get_muse2_stdout(&["help"]).contains(
             format!(
-                "https://energysystemsmodellinglab.github.io/MUSE2/release/v{}/",
+                "https://energysystemsmodellinglab.github.io/MUSE2/v{}/",
                 env!("CARGO_PKG_VERSION")
             )
             .as_str()
