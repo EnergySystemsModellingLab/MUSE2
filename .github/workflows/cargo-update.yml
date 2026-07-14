@@ -29,6 +29,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create a branch for the update
+        id: branch-creator
         run: |
           git switch --force-create update-cargo-lock
           git add Cargo.lock
@@ -38,7 +39,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Open a pull request
-        if: steps.checker.outputs.success != 'true'
+        if: steps.branch-creator.outputs.success != 'false'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}

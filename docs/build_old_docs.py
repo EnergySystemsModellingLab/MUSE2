@@ -85,7 +85,7 @@ def build_docs_for_release(release: str, repo_path: Path, outdir: Path) -> None:
 
 def build_old_docs() -> None:
     """Build documentation for previous releases."""
-    outdir = REPO_ROOT / "book" / "release"
+    outdir = REPO_ROOT / "book"
     outdir.mkdir(parents=True, exist_ok=True)
 
     # Clone this repo to a temporary directory

@@ -262,7 +262,7 @@ mod tests {
         #[case] right: AssetCapacity,
     ) {
         assert_eq!(left.partial_cmp(&right), None);
-        assert!(left != right);
+        assert_ne!(left, right);
     }
 
     #[rstest]
