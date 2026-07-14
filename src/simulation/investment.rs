@@ -7,7 +7,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use indexmap::IndexMap;
@@ -195,7 +195,34 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
     }
 }
 
-/// Get a portion of the demand profile for this market
+/// Calculates a characteristic capacity scale for a candidate asset.
+///
+/// The returned value is the capacity that would satisfy the total annual demand assuming the asset
+/// operates at its maximum annual activity for the entire year. It ignores finer-grained activity
+/// constraints and temporal variations in demand.
+///
+/// This value is later scaled by `capacity_limit_factor` to set capacities for candidate assets in
+/// each round of investments.
+///
+/// If the asset has zero maximum annual supply, zero capacity is returned. This indicates that the
+/// asset is non-feasible, and will be excluded from consideration by `select_best_assets`.
+pub fn calculate_candidate_asset_capacity_scale(
+    asset: &Asset,
+    commodity: &Commodity,
+    demand: &DemandMap,
+) -> Capacity {
+    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+    let max_annual_supply_per_capacity = *asset
+        .get_activity_per_capacity_limits_for_selection(&TimeSliceSelection::Annual)
+        .end()
+        * coeff;
+    if max_annual_supply_per_capacity < FlowPerCapacity::EPSILON {
+        return Capacity(0.0);
+    }
+    let annual_demand = demand.values().copied().sum::<Flow>();
+    annual_demand / max_annual_supply_per_capacity
+}
+
 /// Returns the minimum installed capacity required for `asset` to satisfy the demand that it can
 /// potentially serve, accounting for its activity constraints.
 ///
@@ -673,5 +700,43 @@ mod tests {
             get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
 
         assert_eq!(result, Capacity(20.0));
+    }
+
+    #[rstest]
+    #[case(Flow(10.0), Dimensionless(1.0), Capacity(10.0))] // normal: demand / (limit * coeff) = 10 / (1 * 1) = 10
+    #[case(Flow(0.0), Dimensionless(1.0), Capacity(0.0))] // zero demand → zero capacity
+    #[case(Flow(10.0), Dimensionless(0.5), Capacity(20.0))] // activity limit < 1: 10 / (0.5 * 1) = 20
+    #[case(Flow(10.0), Dimensionless(0.0), Capacity(0.0))] // activity limit = 0 → zero capacity
+    fn calculate_asset_capacity_scale_works(
+        time_slice: TimeSliceID,
+        time_slice_info: TimeSliceInfo,
+        svd_commodity: Commodity,
+        mut process: Process,
+        #[case] demand_value: Flow,
+        #[case] activity_limit: Dimensionless,
+        #[case] expected: Capacity,
+    ) {
+        let commodity_rc = Rc::new(svd_commodity);
+        let process_flow = ProcessFlow {
+            commodity: Rc::clone(&commodity_rc),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+        process.flows = process_flows_map(
+            process.regions.clone(),
+            Rc::new(indexmap! { commodity_rc.id.clone() => process_flow }),
+        );
+
+        let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info);
+        limits.add_time_slice_limit(time_slice.clone(), Dimensionless(0.0)..=activity_limit);
+        process.activity_limits = process_activity_limits_map(process.regions.clone(), limits);
+
+        let asset = asset(process);
+        let demand = indexmap! { time_slice => demand_value };
+        assert_eq!(
+            calculate_candidate_asset_capacity_scale(&asset, &commodity_rc, &demand),
+            expected
+        );
     }
 }

@@ -7,7 +7,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::investment::{
-    AllDemandMap, DemandMap, get_demand_limiting_capacity, select_best_assets,
+    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
     update_net_demand_map,
 };
 use crate::simulation::prices::Prices;
@@ -182,7 +182,6 @@ pub fn select_assets_for_single_market(
 
         // Existing and candidate assets from which to choose
         let opt_assets = get_asset_options(
-            &model.time_slice_info,
             existing_assets,
             &demand_portion_for_market,
             agent,
@@ -351,6 +350,7 @@ pub fn select_assets_for_cycle(
     Ok(all_cycle_assets)
 }
 
+/// Get a portion of the demand profile for this market
 fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
@@ -396,9 +396,7 @@ where
 }
 
 /// Get options from existing and potential assets for the given parameters
-#[allow(clippy::too_many_arguments)]
 fn get_asset_options<'a>(
-    time_slice_info: &'a TimeSliceInfo,
     all_existing_assets: &'a [AssetRef],
     demand: &'a DemandMap,
     agent: &'a Agent,
@@ -417,7 +415,6 @@ fn get_asset_options<'a>(
 
     // Get candidates assets which produce the commodity of interest
     let candidate_assets = get_candidate_assets(
-        time_slice_info,
         demand,
         agent,
         region_id,
@@ -431,10 +428,11 @@ fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Capacities of candidate assets are set to the demand-limiting capacity for the given market,
-/// scaled by the `capacity_limit_factor`.
+/// Each candidate is assigned a capacity. For divisible assets, the capacity is set to 1 unit.
+/// For indivisible assets, a capacity is calculated based on the total demand for the commodity and
+/// the asset's maximum annual production per unit capacity
+/// (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
-    time_slice_info: &'a TimeSliceInfo,
     demand: &'a DemandMap,
     agent: &'a Agent,
     region_id: &'a RegionID,
@@ -445,17 +443,22 @@ fn get_candidate_assets<'a>(
     agent
         .iter_search_space(region_id, &commodity.id, year)
         .map(move |process| {
+            // Create asset with zero capacity, which will be updated below
             let mut asset =
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
 
-            // Set capacity based on demand
-            // This will serve as the upper limit when appraising the asset
-            let capacity = get_demand_limiting_capacity(time_slice_info, &asset, commodity, demand);
-            let asset_capacity = AssetCapacity::from_capacity(capacity, asset.unit_size())
-                .apply_limit_factor(capacity_limit_factor);
+            // Set capacity of the candidate
+            // This will serve as the upper limit when appraising the asset (may later be
+            // constrained by process addition limits and demand-limiting capacity)
+            let asset_capacity = if let Some(unit_size) = asset.unit_size() {
+                AssetCapacity::Discrete(1, unit_size)
+            } else {
+                let capacity_scale =
+                    calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
+                AssetCapacity::Continuous(capacity_scale * capacity_limit_factor)
+            };
             asset.set_capacity(asset_capacity);
-
             asset.into()
         })
 }
