@@ -653,9 +653,9 @@ mod tests {
 
         // Commissioned assets should be prioritised first
         assert!(outputs[0].asset.is_commissioned());
-        assert!(outputs[0].asset.commission_year() == 2020);
+        assert_eq!(outputs[0].asset.commission_year(), 2020);
         assert!(outputs[1].asset.is_commissioned());
-        assert!(outputs[1].asset.commission_year() == 2015);
+        assert_eq!(outputs[1].asset.commission_year(), 2015);
 
         // Non-commissioned assets should come after
         assert!(!outputs[2].asset.is_commissioned());
