@@ -374,68 +374,72 @@ mod tests {
         );
     }
 
-    #[test]
-    fn validate_addition_with_finite_value() {
-        // Valid: addition constraint with positive value
-        let valid = validate_raw_constraint(CapacityPerYear(10.0), None);
+    #[rstest]
+    #[case(CapacityPerYear(10.0), None)]
+    #[case(CapacityPerYear(0.0), None)]
+    #[case(CapacityPerYear(10.0), Some(Capacity(100.0)))]
+    #[case(CapacityPerYear(10.0), Some(Capacity(0.0)))]
+    fn validate_constraints_valid(
+        #[case] addition_limit: CapacityPerYear,
+        #[case] total_capacity_limit: Option<Capacity>,
+    ) {
+        // Valid: capacity constraints with values >= 0, and total_capacity_limit as None
+        let valid = validate_raw_constraint(addition_limit, total_capacity_limit);
         valid.unwrap();
-
-        // Valid: addition constraint with zero value
-        let valid = validate_raw_constraint(CapacityPerYear(0.0), None);
-        valid.unwrap();
-
-        // Not valid: addition constraint with negative value
-        let invalid = validate_raw_constraint(CapacityPerYear(-10.0), None);
-        assert_error!(
-            invalid,
-            "Invalid value for addition constraint: '-10'; must be non-negative and finite."
-        );
     }
 
-    #[test]
-    fn validate_addition_rejects_infinite() {
-        // Invalid: infinite value
-        let invalid = validate_raw_constraint(CapacityPerYear(f64::INFINITY), None);
-        assert_error!(
-            invalid,
-            "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
-        );
-
-        // Invalid: NaN value
-        let invalid = validate_raw_constraint(CapacityPerYear(f64::NAN), None);
-        assert_error!(
-            invalid,
-            "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
-        );
+    #[rstest]
+    #[case(CapacityPerYear(-10.0), None, "Invalid value for addition constraint: '-10'; must be non-negative and finite.")]
+    #[case(CapacityPerYear(10.0), Some(Capacity(-100.0)), "Invalid value for total capacity constraint: '-100'; must be non-negative and finite.")]
+    fn validate_constraints_rejects_negative(
+        #[case] addition_limit: CapacityPerYear,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Not valid: capacity constraints with negative value
+        let invalid = validate_raw_constraint(addition_limit, total_capacity_limit);
+        assert_error!(invalid, error_msg);
     }
 
-    #[test]
-    fn validate_total_capacity_limit() {
-        // Valid: total_capacity_limit with values in range [0, inf)
-        let valid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(0.0)));
-        valid.unwrap();
-        let valid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(123.45e6)));
-        valid.unwrap();
+    #[rstest]
+    #[case(
+        CapacityPerYear(f64::INFINITY),
+        None,
+        "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
+    )]
+    #[case(
+        CapacityPerYear(10.0),
+        Some(Capacity(f64::INFINITY)),
+        "Invalid value for total capacity constraint: 'inf'; must be non-negative and finite."
+    )]
+    fn validate_constraints_rejects_infinite(
+        #[case] addition_limit: CapacityPerYear,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Not valid: capacity constraints with infinite value
+        let invalid = validate_raw_constraint(addition_limit, total_capacity_limit);
+        assert_error!(invalid, error_msg);
+    }
 
-        // Valid: total_capacity_limit as None
-        let valid = validate_raw_constraint(CapacityPerYear(10.0), None);
-        valid.unwrap();
-
-        // Not valid: total_capacity_limit with values outside range [0, inf)
-        let invalid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(-7.89)));
-        assert_error!(
-            invalid,
-            "Invalid value for total capacity constraint: '-7.89'; must be non-negative and finite."
-        );
-        let invalid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(f64::INFINITY)));
-        assert_error!(
-            invalid,
-            "Invalid value for total capacity constraint: 'inf'; must be non-negative and finite."
-        );
-        let invalid = validate_raw_constraint(CapacityPerYear(10.0), Some(Capacity(f64::NAN)));
-        assert_error!(
-            invalid,
-            "Invalid value for total capacity constraint: 'NaN'; must be non-negative and finite."
-        );
+    #[rstest]
+    #[case(
+        CapacityPerYear(f64::NAN),
+        None,
+        "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
+    )]
+    #[case(
+        CapacityPerYear(10.0),
+        Some(Capacity(f64::NAN)),
+        "Invalid value for total capacity constraint: 'NaN'; must be non-negative and finite."
+    )]
+    fn validate_constraints_rejects_nan(
+        #[case] addition_limit: CapacityPerYear,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Not valid: capacity constraints with NaN value
+        let invalid = validate_raw_constraint(addition_limit, total_capacity_limit);
+        assert_error!(invalid, error_msg);
     }
 }
