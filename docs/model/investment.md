@@ -36,9 +36,10 @@ investment decisions. Other commodity types (e.g. `OTH`) are excluded.
 When commodity markets form a cycle (e.g. electricity → hydrogen → electricity), the markets in
 the cycle are resolved in sequence within one pass. After each market in the cycle is visited, a
 dispatch is run to rebalance demand. Newly committed assets within the cycle are given limited
-capacity flexibility, controlled by the `capacity_margin` parameter, to absorb small demand shifts
-caused by later markets in the cycle. If these shifts exceed `capacity_margin`, the simulation
-terminates with an error, and the user should increase this parameter.
+capacity flexibility, controlled by the `capacity_margin` parameter (defined in
+[`model.toml`][model-toml]), to absorb small demand shifts caused by later markets in the cycle.
+If these shifts exceed `capacity_margin`, the simulation terminates with an error, and the user
+should increase this parameter.
 
 ## Commodity Prices Used in Appraisal
 
@@ -58,7 +59,7 @@ Each commodity market may be served by multiple agents, each responsible for a d
 (or *portion*) of the total demand. An agent's portion determines:
 
 - The fraction of the total demand that the agent is responsible for meeting.
-- The scaling applied to any `max_annual_addition` investment constraints
+- The scaling applied to any `addition_limit` investment constraints
   (see [Investment Constraints](#investment-constraints)).
 
 Agent portions for each commodity and milestone year are defined in the agent input files.
@@ -98,9 +99,10 @@ The annualised fixed cost (AFC) per unit of capacity differs between the two cat
 
 A process is either **divisible** or **non-divisible**:
 
-- A **divisible** process has a fixed `unit_size`. Assets of this type consist of one or more
-  discrete units, each of size `unit_size`. When commissioned, a divisible asset is split into
-  individual units, each of which is appraised and retained or mothballed independently.
+- A **divisible** process has a fixed `unit_size` (defined in [`processes.csv`][processes-csv]).
+  Assets of this type consist of one or more discrete units, each of size `unit_size`. When
+  commissioned, a divisible asset is split into individual units, each of which is appraised and
+  retained or mothballed independently.
 - A **non-divisible** process has no unit size. Its capacity is a continuous value and the asset
   is always treated as a single block.
 
@@ -126,7 +128,7 @@ capacity can be installed in a single investment round (subject to further const
     \times \text{CapacityLimitFactor}
   \\]
 
-  `capacity_limit_factor` (set in `model.toml`, between 0 and 1) controls the size of
+  `capacity_limit_factor` (set in [`model.toml`][model-toml], between 0 and 1) controls the size of
   investment increments relative to total demand. Lower values produce smaller investment
   increments (requiring more investment rounds), while higher values produce larger increments.
 
@@ -146,11 +148,12 @@ Selections where the asset has zero maximum supply are excluded. The cap prevent
 
 ### Investment constraints
 
-Candidate assets may have a `max_annual_addition` limit specifying the maximum new capacity
-that can be built per year. The installable capacity limit for a given MSY is:
+Processes may have an `addition_limit` (see
+[`process_investment_constraints.csv`][process-investment-constraints-csv]) specifying the
+maximum new capacity that can be built per year. The installable capacity limit for a given MSY is:
 
 \\[
-  \text{MaxInstallableCapacity} = \text{MaxAnnualAddition} \times \Delta_\text{MSY}
+  \text{MaxInstallableCapacity} = \text{AdditionLimit} \times \Delta_\text{MSY}
     \times \text{AgentPortion}
 \\]
 
@@ -262,7 +265,8 @@ The best-ranked asset is committed. Its production profile from the mini dispatc
 subtracted from the remaining demand, and the loop repeats with the updated demand profile. This
 continues until:
 
-- The remaining demand falls below `remaining_demand_absolute_tolerance`, or
+- The remaining demand falls below `remaining_demand_absolute_tolerance`
+  (in [`model.toml`][model-toml]), or
 - No feasible options remain. In this case, a warning is logged and the loop ends early. The
   unmet demand may still be satisfied during the full system dispatch, but is not guaranteed.
 
@@ -280,9 +284,9 @@ After investment is complete for a given MSY, any previously commissioned assets
 selected for retention are *mothballed*: their mothball year is recorded and they are removed from
 the active asset pool. They remain available for potential re-selection in future MSYs.
 
-A mothballed asset that remains unused for `mothball_years` consecutive years (as specified in
-`model.toml`) is *decommissioned* — permanently removed from the asset pool and excluded from all
-future investment and dispatch.
+A mothballed asset that remains unused for `mothball_years` consecutive years (as defined in
+[`model.toml`][model-toml]) is *decommissioned* — permanently removed from the asset pool and
+excluded from all future investment and dispatch.
 
 ## Example: Gas Power Plant
 
@@ -386,3 +390,6 @@ available options.
 
 [framework-overview]: index.html#framework-overview
 [prices]: ./prices.md
+[model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
+[processes-csv]: ../file_formats/input_files.md#processescsv
+[process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
