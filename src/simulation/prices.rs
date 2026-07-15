@@ -224,8 +224,8 @@ fn price_markets(
     market_prices: &mut PriceMap,
     strategy_override: Option<PricingStrategy>,
 ) {
+    // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
     let mut pricing_sets = HashMap::new();
-
     for (commodity_id, region_id) in markets {
         // If a strategy override is provided, apply it to all commodities in the markets list.
         let strategy = if let Some(strategy) = strategy_override.as_ref() {
