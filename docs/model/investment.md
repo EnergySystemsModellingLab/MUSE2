@@ -3,35 +3,33 @@
 <!-- markdownlint-disable MD049 -->
 
 This section describes the investment and asset retention process applied at each milestone year
-(MSY). Given commodity demand profiles produced by the previous MSY's dispatch optimisation,
-agents iteratively build a portfolio of new and retained assets to meet those demands for the
-coming MSY.
-
-## Overview
-
-For each commodity market (a commodity–region pair), agents evaluate every
-available supply option — existing commissioned assets and new candidate assets from their search
-space — and select the best option to commit. The selected asset's production profile is subtracted
-from the remaining demand, and the process repeats until demand is met or no feasible options
-remain. This loop runs once per agent, per commodity market, in **investment order** (see below).
+(MSY). For each commodity market (a commodity–region pair), processed in **investment order**
+(see below), agents evaluate every available supply option — existing commissioned assets and new
+candidate assets from their search space — and select the best option to commit. The committed
+asset's production is subtracted from the remaining demand for that market, and the process
+repeats until demand is met or no feasible options remain. Demands for `ServiceDemand` (SVD)
+commodities are fixed from the input data, while demands for `SupplyEqualsDemand` (SED)
+commodities accumulate as assets are committed earlier in the investment order.
 
 ## Investment Order
 
 Investment decisions are made sequentially, starting from the most downstream commodity markets
-and moving upstream. For example, investment in electricity generation happens before investment
-in gas production. This ordering ensures that when an upstream market is being invested in, the
+and moving upstream. For example, in a model where gas may be used to generate electricity,
+investment in electricity generation would happen before investment in gas production.
+
+This ordering ensures that when an upstream market is being invested in, the
 demand created by already-committed downstream assets is already known.
-
-Only commodities of type `ServiceDemand` (SVD) and `SupplyEqualsDemand` (SED) are subject to
-investment decisions. Other commodity types (e.g. `OTH`) are excluded.
-
-Note: the investment order is the reverse of the [price calculation order][prices], where prices
-are computed upstream first.
 
 After each commodity market is settled, a dispatch is run over all assets selected so far. This
 quantifies the input commodity flows consumed by newly committed assets — for example, a gas
 generator committed during electricity market investment will consume gas, creating demand that
 the gas market investment must subsequently meet.
+
+Only commodities of type `ServiceDemand` (SVD) and `SupplyEqualsDemand` (SED) are subject to
+investment decisions. Other commodity types (e.g. `OTH`) are excluded.
+
+> Note: the investment order is the reverse of the [price calculation order][prices], where prices
+> are computed upstream first.
 
 ### Circularities
 
@@ -242,7 +240,9 @@ output commodity is included at its full market price:
 Higher values indicate more profitable investments.
 
 > For both tools, any option with zero total activity after the mini dispatch LP is excluded from
-> consideration, as it cannot contribute to meeting demand.
+> consideration, as it cannot contribute to meeting demand. This will generally happen if all
+> time slices have negative activity coefficients, unless the process has lower-bound activity
+> constraints that force activity.
 
 ## Asset Selection
 
