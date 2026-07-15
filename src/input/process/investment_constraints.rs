@@ -10,6 +10,7 @@ use crate::region::parse_region_str;
 use crate::units::{Capacity, CapacityPerYear, Dimensionless, Year};
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
+use log::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -38,12 +39,21 @@ impl ProcessInvestmentConstraintRaw {
             self.addition_limit
         );
 
-        // Validate capacity_growth_limit: must be in range [0, inf)
+        // Validate capacity_growth_limit
         if let Some(limit) = self.capacity_growth_limit {
+            // Must be in range [0, inf)
             ensure!(
                 limit.is_finite() && limit >= Dimensionless(0.0),
                 "Invalid value for capacity growth constraint: '{limit}'; must be non-negative and finite.",
             );
+
+            // Warn user they may have specified limit as percentage, rather than fraction
+            if limit > Dimensionless(1.0) {
+                warn!(
+                    "Interpreting capacity growth constraint '{limit}' as {}%",
+                    limit * Dimensionless(100.0)
+                );
+            }
         }
 
         // Validate total_capacity_limit: must be in range [0, inf)
@@ -171,6 +181,7 @@ mod tests {
     use crate::fixture::{assert_error, processes};
     use crate::region::RegionID;
     use crate::units::Capacity;
+    use logtest::Logger;
     use rstest::rstest;
 
     fn validate_raw_constraint(
@@ -484,5 +495,16 @@ mod tests {
         let invalid =
             validate_raw_constraint(addition_limit, capacity_growth_limit, total_capacity_limit);
         assert_error!(invalid, error_msg);
+    }
+
+    #[test]
+    fn validate_capacity_growth_limit_warning() {
+        // Check warning raised if value above 1 provided
+        let mut logger = Logger::start();
+        let _ = validate_raw_constraint(CapacityPerYear(10.0), Some(Dimensionless(5.0)), None);
+        assert_eq!(
+            logger.pop().unwrap().args(),
+            "Interpreting capacity growth constraint '5' as 500%"
+        );
     }
 }
