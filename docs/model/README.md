@@ -134,5 +134,5 @@ The workflow is structured as follows:
 
 3. **Outer loop ends when no further milestone years exist.**
 
-[investment appraisal tools]: ./investment.md#tools
+[investment appraisal tools]: ./investment.md#metric-calculation
 [Dispatch Optimisation Formulation]: ./dispatch_optimisation.md
