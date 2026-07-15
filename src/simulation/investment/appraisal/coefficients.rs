@@ -74,16 +74,24 @@ pub fn calculate_coefficients_for_asset(
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
     let mut market_costs = IndexMap::new();
+    let primary_output_flow = asset.primary_output().unwrap();
+    let asset_region = asset.region_id();
     for time_slice in time_slice_info.iter_ids() {
         // Get the operating cost of the asset. This includes the variable operating cost, levies and
         // flow costs, but excludes costs/revenues from commodity consumption/production.
         let operating_cost = asset.get_operating_cost(year, time_slice);
+        let net_operating_cost =
+            -calculate_asset_revenues(asset, operating_cost, time_slice, &prices.shadow);
 
-        let coefficient =
-            calculate_asset_revenues(asset, operating_cost, time_slice, &prices.shadow);
+        let fallback_cost = prices
+            .fallback
+            .get(&primary_output_flow.commodity.id, asset_region, time_slice)
+            .unwrap()
+            * primary_output_flow.coeff;
+
         activity_coefficients.insert(
             time_slice.clone(),
-            coefficient + EPSILON_ACTIVITY_COEFFICIENT,
+            fallback_cost - net_operating_cost + EPSILON_ACTIVITY_COEFFICIENT,
         );
 
         let market_cost = match objective_type {
