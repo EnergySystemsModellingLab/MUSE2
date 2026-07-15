@@ -10,7 +10,7 @@ use crate::region::parse_region_str;
 use crate::units::{Capacity, CapacityPerYear, Year};
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
@@ -24,10 +24,6 @@ struct ProcessInvestmentConstraintRaw {
     regions: String,
     commission_years: String,
     addition_limit: CapacityPerYear,
-    #[serde(
-        default,
-        deserialize_with = "ProcessInvestmentConstraintRaw::parse_empty_limit"
-    )]
     total_capacity_limit: Option<Capacity>,
 }
 
@@ -50,21 +46,6 @@ impl ProcessInvestmentConstraintRaw {
         }
 
         Ok(())
-    }
-
-    // Custom deserializer for if a limit is empty (implies no limit)
-    fn parse_empty_limit<'de, D>(d: D) -> Result<Option<Capacity>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let limit = Option::<String>::deserialize(d)?;
-        match limit {
-            None => Ok(None),
-            Some(s) => s
-                .parse::<Capacity>()
-                .map(Some)
-                .map_err(serde::de::Error::custom),
-        }
     }
 }
 
