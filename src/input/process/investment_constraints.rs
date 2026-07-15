@@ -148,7 +148,6 @@ where
 
             let constraint = Rc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(scaled_limit),
-                total_capacity_limit: record.total_capacity_limit,
             });
 
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;

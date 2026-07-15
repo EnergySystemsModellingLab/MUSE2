@@ -1,6 +1,5 @@
 //! Processes are used for converting between different commodities. The data structures in this
 //! module are used to represent these conversions along with the associated costs.
-use crate::asset::AssetCapacity;
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
@@ -506,8 +505,6 @@ pub struct ProcessInvestmentConstraint {
     /// Addition constraint: Limit an agent can invest in the process, shared according to the
     /// agent's proportion of the process's primary commodity demand
     pub addition_limit: Option<Capacity>,
-    /// Total capacity constraint: Limit the total capacity an agent can invest
-    pub total_capacity_limit: Option<Capacity>,
 }
 
 impl ProcessInvestmentConstraint {
@@ -516,8 +513,7 @@ impl ProcessInvestmentConstraint {
     /// For now, this just returns `addition_limit`, but in the future when we add growth
     /// limits and total capacity limits, this will have more complex logic which will depend on the
     /// current total capacity.
-    #[allow(unused_variables)]
-    pub fn get_addition_limit(&self, current_capacity: AssetCapacity) -> Option<Capacity> {
+    pub fn get_addition_limit(&self) -> Option<Capacity> {
         self.addition_limit
     }
 }
