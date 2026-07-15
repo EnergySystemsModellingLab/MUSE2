@@ -50,6 +50,10 @@ Investment appraisal uses two distinct price sets, both sourced from the previou
   optimisation step of each appraisal (see [Mini Dispatch Optimisation](#mini-dispatch-optimisation)).
 - **Market prices** \\( \pi\_{c,r,t} \\): used to calculate the investment metric (Cost Index or
   SNAS) after dispatch.
+- **Fallback prices** \\( \phi_{c,r,t} \\): used to incentivise dispatch in the mini dispatch
+  optimisation when shadow prices alone are insufficient (see
+  [Mini Dispatch Optimisation](#mini-dispatch-optimisation)). Calculated using the strategy defined
+  by `fallback_price_strategy` in [`model.toml`][model-toml].
 
 See [Commodity Prices][prices] for how these price sets are calculated.
 
@@ -171,17 +175,47 @@ optimal activity profile given the current remaining demand.
 
 ### Activity coefficients
 
-The objective coefficient for each time slice is the net revenue per unit of activity, calculated
-using **shadow prices**:
+The mini dispatch optimisation implicitly frames each time slice as a choice: the asset can either
+produce the commodity of interest, or it can be treated as procured from an alternative source at
+the **fallback price** \\( \phi_{c,r,t} \\). Each unit of activity produces
+\\( f_{c,\text{primary}} \\) units of output, displacing that quantity from the fallback source.
+The optimiser therefore dispatches the asset whenever doing so is cheaper than procuring from
+elsewhere.
+
+This is captured by the activity coefficient \\( \alpha_t \\), which combines two components:
 
 \\[
-  \alpha_t = \text{RevenueFromFlows}(\lambda, t) - \text{OperatingCost}(t) + \varepsilon
+  \text{NetOperatingCost}_t = \text{OperatingCost}(t) - \text{RevenueFromFlows}(\lambda, t)
+\\]
+
+\\[
+  \text{FallbackCost} = \phi_{c,r,t} \cdot f_{c,\text{primary}}
+\\]
+
+\\[
+  \alpha_t = \text{FallbackCost} - \text{NetOperatingCost}_t + \varepsilon
 \\]
 
 where \\( \text{RevenueFromFlows} \\) is the sum of all commodity flow revenues and costs (positive
 for outputs, negative for inputs) valued at shadow prices, \\( \text{OperatingCost} \\) is the
-variable operating cost plus levies and flow costs, and \\( \varepsilon \\) is a
-small positive constant added to ensure that break-even assets are still dispatched.
+variable operating cost plus levies and flow costs, \\( f_{c,\text{primary}} \\) is the primary
+output flow coefficient, and \\( \varepsilon \\) is a small positive constant added to ensure that
+break-even assets are still dispatched.
+
+**NetOperatingCost** is the net cost of running the asset for one unit of activity at shadow prices
+— negative when the asset is profitable (revenues exceed costs).
+
+**FallbackCost** is the cost of procuring one unit of activity's worth of primary output from an
+alternative source at the fallback price.
+
+The asset dispatches when \\( \alpha_t > 0 \\), i.e. when:
+
+\\[
+  \text{NetOperatingCost}_t < \text{FallbackCost}
+\\]
+
+\\( \phi_{c,r,t} \\) is calculated according to the strategy defined by `fallback_price_strategy`
+in [`model.toml`][model-toml].
 
 ### Constraints
 
