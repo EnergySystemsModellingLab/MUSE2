@@ -71,7 +71,8 @@ For each commodity market, agents consider two categories of supply option:
 
 - **Existing assets**: already-commissioned assets owned by the agent that produce the commodity
   of interest as their primary output.
-- **Candidate assets**: processes in the agent's search space that could be newly built.
+- **Candidate assets**: processes in the agent's search space with the commodity of interest as
+  their primary output, available to be newly built.
 
 ### Annualised Fixed Cost
 
@@ -267,6 +268,11 @@ continues until:
 
 If demand cannot be met at all due to overly restrictive investment constraints, the simulation
 terminates with an error.
+
+> **Note:** only production of the *primary output* commodity is counted against the remaining
+> demand. If a committed asset also produces other commodities as secondary outputs, that
+> side-production does not reduce the demand targets of those other commodity markets. This
+> behaviour may be revised in a future release.
 
 ## Mothballing and Decommissioning
 
