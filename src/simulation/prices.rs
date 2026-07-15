@@ -2,7 +2,7 @@
 //!
 #![doc = concat!("See <", crate::docs_url!("/model/prices.html"), ">")]
 use crate::asset::AssetRef;
-use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
+use crate::commodity::{CommodityID, CommodityMap, CommodityType, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::market::MarketSet;
@@ -114,17 +114,19 @@ pub fn calculate_prices(
             &mut market_prices,
             None,
         );
-        price_market_set(
-            market_set,
-            model,
-            solution_without_candidates,
-            solution_with_candidates,
-            year,
-            &shadow_prices,
-            &mut annual_activities,
-            &mut fallback_prices,
-            Some(model.parameters.fallback_price_strategy),
-        );
+        if model.parameters.fallback_price_strategy != PricingStrategy::Unpriced {
+            price_market_set(
+                market_set,
+                model,
+                solution_without_candidates,
+                solution_with_candidates,
+                year,
+                &shadow_prices,
+                &mut annual_activities,
+                &mut fallback_prices,
+                Some(model.parameters.fallback_price_strategy),
+            );
+        }
     }
 
     Ok(Prices {
@@ -227,6 +229,10 @@ fn price_markets(
     for (commodity_id, region_id) in markets {
         // If a strategy override is provided, apply it to all commodities in the markets list.
         let strategy = if let Some(strategy) = strategy_override.as_ref() {
+            // Skip OTH commodities — they are not subject to investment decisions
+            if model.commodities[commodity_id].kind == CommodityType::Other {
+                continue;
+            }
             strategy
         } else {
             // Otherwise, use the commodity's pricing strategy. For now, commodities use a single

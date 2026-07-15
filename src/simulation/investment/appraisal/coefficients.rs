@@ -5,7 +5,7 @@ use crate::model::Model;
 use crate::simulation::PriceMap;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::MoneyPerActivity;
+use crate::units::{MoneyPerActivity, MoneyPerFlow};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -86,7 +86,7 @@ pub fn calculate_coefficients_for_asset(
         let fallback_cost = prices
             .fallback
             .get(&primary_output_flow.commodity.id, asset_region, time_slice)
-            .unwrap()
+            .unwrap_or(MoneyPerFlow(0.0))
             * primary_output_flow.coeff;
 
         activity_coefficients.insert(

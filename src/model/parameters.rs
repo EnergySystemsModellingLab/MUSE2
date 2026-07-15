@@ -83,6 +83,11 @@ pub struct ModelParameters {
     /// It is the proportion of maximum capacity that could be required across time slices.
     #[serde(deserialize_with = "deserialise_proportion_nonzero")]
     pub capacity_limit_factor: Dimensionless,
+    /// The pricing strategy used to calculate fallback prices for the mini dispatch optimisation
+    /// during investment appraisal.
+    ///
+    /// If set to `unpriced`, a fallback price of zero is used, which reverts to the
+    /// pure shadow-price formulation.
     pub fallback_price_strategy: PricingStrategy,
     /// The cost applied to unmet demand.
     ///
@@ -332,6 +337,8 @@ impl ModelParameters {
         check_milestone_years(&self.milestone_years)?;
 
         // capacity_limit_factor already validated with deserialise_proportion_nonzero
+
+        // fallback_price_strategy already validated by deserialisation
 
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
