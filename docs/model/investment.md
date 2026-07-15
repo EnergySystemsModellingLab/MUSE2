@@ -299,10 +299,10 @@ All per-flow costs (\\( cost_\text{input} \\), \\( cost_\text{output} \\)) are z
 
 #### Fixed costs and capacity
 
-| Parameter | Value |
-|-----------|-------|
-| AFC | £1,000/MW |
-| Capacity | 100 MW |
+| Parameter | Value     |
+|-----------|-----------|
+| AFC       | £1,000/MW |
+| Capacity  | 100 MW    |
 
 #### Prices (both shadow and market prices are equal in this example)
 
@@ -319,13 +319,13 @@ Activity coefficients use shadow prices:
 **\\( t_0 \\):**
 \\[
 \alpha_{t_0} = (1.0 \times 90) + (0.5 \times 25) + (-2.5 \times 35) - 5
-= 90 + 12.5 - 87.5 - 5 = \text{£10/MWh}
+= \text{£10/MWh}
 \\]
 
 **\\( t_1 \\):**
 \\[
 \alpha_{t_1} = (1.0 \times 50) + (0.5 \times 15) + (-2.5 \times 25) - 5
-= 50 + 7.5 - 62.5 - 5 = \text{£}{-10}\text{/MWh}
+= \text{£}{-10}\text{/MWh}
 \\]
 
 The optimiser maximises \\( 10 \cdot act_{t_0} + (-10) \cdot act_{t_1} \\), so it prefers to
@@ -340,8 +340,8 @@ Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 
 
 \\[
 \begin{aligned}
-\mu_{t_0}^\text{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) = 5 + 87.5 - 12.5 = \text{£80/MWh} \\\\
-\mu_{t_1}^\text{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) = 5 + 62.5 - 7.5 = \text{£60/MWh}
+\mu_{t_0}^\text{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) = \text{£80/MWh} \\\\
+\mu_{t_1}^\text{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) = \text{£60/MWh}
 \end{aligned}
 \\]
 
@@ -349,8 +349,7 @@ Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 
 \\[
 \begin{aligned}
 \text{CostIndex} &= \frac{(1{,}000 \times 100) + (80 \times 80) + (20 \times 60)}{80 + 20} \\\\
-&= \frac{100{,}000 + 6{,}400 + 1{,}200}{100} \\\\
-&= \frac{107{,}600}{100} = \text{£1,076/MWh}
+&= \text{£1,076/MWh}
 \end{aligned}
 \\]
 
@@ -360,17 +359,18 @@ Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 
 
 \\[
 \begin{aligned}
-\mu_{t_0}^\text{NPV} &= 5 - (1.0 \times 90) - (0.5 \times 25) + (2.5 \times 35) = 5 - 90 - 12.5 + 87.5 = \text{£}{-10}\text{/MWh} \\\\
-\mu_{t_1}^\text{NPV} &= 5 - (1.0 \times 50) - (0.5 \times 15) + (2.5 \times 25) = 5 - 50 - 7.5 + 62.5 = \text{£10/MWh}
+\mu_{t_0}^\text{NPV} &= 5 - (1.0 \times 90) - (0.5 \times 25) + (2.5 \times 35)
+= \text{£}{-10}\text{/MWh} \\\\
+\mu_{t_1}^\text{NPV} &= 5 - (1.0 \times 50) - (0.5 \times 15) + (2.5 \times 25) = \text{£10/MWh}
 \end{aligned}
 \\]
 
 **SNAS:**
 \\[
 \begin{aligned}
-\text{SNAS} &= \frac{-\left[(1{,}000 \times 100) + (80 \times (-10)) + (20 \times 10)\right]}{80 + 20} \\\\
-&= \frac{-(100{,}000 - 800 + 200)}{100} \\\\
-&= \frac{-99{,}400}{100} = \text{£}{-994}\text{/MWh}
+\text{SNAS} &= \frac{-\left[(1{,}000 \times 100) + (80 \times (-10)) + (20 \times 10)\right]}
+{80 + 20} \\\\
+&= \text{£}{-994}\text{/MWh}
 \end{aligned}
 \\]
 
