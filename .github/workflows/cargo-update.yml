@@ -43,6 +43,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+          base: main
           branch: update/cargo-lock
           title: Update Cargo.lock
           commit-message: "chore: update Cargo.lock"
