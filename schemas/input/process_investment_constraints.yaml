@@ -26,6 +26,12 @@ fields:
     notes: |
       The addition limit is allocated evenly between all agents using their proportion of the
       process's primary commodity demand.
+  - name: capacity_growth_limit
+    type: number
+    description: |
+      The constraint on fractional growth per year, based on the available stock in a year, per
+      region and technology. E.g 0.1 -> max 10% growth allowed.
+    notes: This is currently unused.
   - name: total_capacity_limit
     type: number
     description: The hard upper limit on the amount agents can invest in the process
