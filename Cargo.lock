@@ -321,6 +321,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "context_manager"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "728d71fd281b0ea795f0515222004c2a95ae640dab7fd905b7f9a549a1f8fd66"
+dependencies = [
+ "context_manager_macro",
+]
+
+[[package]]
+name = "context_manager_macro"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8090038efdbf72a77e0b9355618143912186cf2335d9747920a2bd72b0b08ee5"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -916,6 +935,7 @@ dependencies = [
  "clap",
  "clap-markdown",
  "colored 3.1.1",
+ "context_manager",
  "csv",
  "derive_more",
  "dirs",
