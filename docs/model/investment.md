@@ -143,7 +143,7 @@ In each investment round, a candidate's trial capacity is further capped by the
 across all time-slice selections:
 
 \\[
-  \text{DLC} = \max_{\text{selection}} \frac{\sum_{t \in \text{selection}} Demand_t}
+  \text{DLC} = \max_{\text{selection}} \frac{\sum_{t \in \text{selection}} \text{Demand}\_t}
     {\text{MaxSupplyPerCapacity}_\text{selection}}
 \\]
 
