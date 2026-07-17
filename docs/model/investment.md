@@ -118,7 +118,9 @@ A process is either **divisible** or **non-divisible**:
 ### Candidate assets
 
 Before a candidate asset can be appraised, it is assigned a trial capacity which defines how much
-capacity can be installed in a single investment round (subject to further constraints below)
+capacity can be installed in a single investment round (subject to further
+[demand-limiting capacity](#demand-limiting-capacity-dlc) and
+[investment constraints](#investment-constraints), described below)
 
 - **Divisible**: the trial capacity is set to one unit (one `unit_size`), representing a single
   unit being considered for investment.
