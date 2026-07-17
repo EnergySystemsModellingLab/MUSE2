@@ -26,3 +26,7 @@ fields:
     notes: |
       The addition limit is allocated evenly between all agents using their proportion of the
       process's primary commodity demand.
+  - name: total_capacity_limit
+    type: number
+    description: The hard upper limit on the amount agents can invest in the process
+    notes: This is currently unused.
