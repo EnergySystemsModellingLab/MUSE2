@@ -7,8 +7,8 @@ This section describes the investment and asset retention process applied at eac
 (see below), agents evaluate every available supply option — existing commissioned assets and new
 candidate assets from their search space — and select the best option to commit. The committed
 asset's production is subtracted from the remaining demand for that market, and the process
-repeats until demand is met or no feasible options remain. Demands for `ServiceDemand` (SVD)
-commodities are fixed from the input data, while demands for `SupplyEqualsDemand` (SED)
+repeats until demand is met or no feasible options remain. Demands for `ServiceDemand` (`SVD`)
+commodities are fixed from the input data, while demands for `SupplyEqualsDemand` (`SED`)
 commodities accumulate as assets are committed earlier in the investment order.
 
 ## Investment Order
@@ -25,7 +25,7 @@ quantifies the input commodity flows consumed by newly committed assets — for 
 generator committed during electricity market investment will consume gas, creating demand that
 the gas market investment must subsequently meet.
 
-Only commodities of type `ServiceDemand` (SVD) and `SupplyEqualsDemand` (SED) are subject to
+Only commodities of type `ServiceDemand` and `SupplyEqualsDemand` are subject to
 investment decisions. Other commodity types (e.g. `OTH`) are excluded.
 
 > Note: the investment order is the reverse of the [price calculation order][prices], where prices
@@ -77,7 +77,8 @@ For each commodity market, agents consider two categories of supply option:
 
 The annualised fixed cost (AFC) per unit of capacity differs between the two categories:
 
-- **Existing assets**: AFC comprises only the fixed operations and maintenance cost:
+- **Existing assets**: AFC comprises only the fixed operations and maintenance (O&M) cost
+(\\( \text{FOM} \\)):
   \\[
     \text{AFC}_\text{existing} = \text{FOM}
   \\]
@@ -103,8 +104,9 @@ A process is either **divisible** or **non-divisible**:
   Assets of this type consist of one or more discrete units, each of size `unit_size`. When
   commissioned, a divisible asset is split into individual units, each of which is appraised and
   retained or mothballed independently.
-- A **non-divisible** process has no unit size. Its capacity is a continuous value and the asset
-  is always treated as a single block.
+- A **non-divisible** process has no `unit_size`. Assets of this type are treated as a single
+  entity: capacities may take any value within their allowable range, but cannot be split into
+  independently appraised or mothballed units.
 
 ### Existing assets
 
@@ -124,7 +126,7 @@ capacity can be installed in a single investment round (subject to further const
   total remaining demand if the asset operated at its maximum annual rate:
 
   \\[
-    \text{TrialCapacity} = \frac{\sum_t D[c, t]}{\text{MaxAnnualSupplyPerCapacity}}
+    \text{TrialCapacity} = \frac{\sum_t \text{Demand}_t}{\text{MaxAnnualSupplyPerCapacity}}
     \times \text{CapacityLimitFactor}
   \\]
 
@@ -139,7 +141,7 @@ In each investment round, a candidate's trial capacity is further capped by the
 across all time-slice selections:
 
 \\[
-  \text{DLC} = \max_{\text{selection}} \frac{\sum_{t \in \text{selection}} D[c, t]}
+  \text{DLC} = \max_{\text{selection}} \frac{\sum_{t \in \text{selection}} Demand_t}
     {\text{MaxSupplyPerCapacity}_\text{selection}}
 \\]
 
@@ -193,8 +195,11 @@ small positive constant added to ensure that break-even assets are still dispatc
 
 ### Objective
 
+The optimisation maximises the total net revenue across all time slices, subject to the above
+constraints:
+
 \\[
-  \max \sum_t \alpha_t \cdot act_t
+  \max \sum_t \alpha_t \cdot \text{Activity}_t
 \\]
 
 ## Metric Calculation
@@ -218,31 +223,31 @@ The market cost \\( \mu_t \\) is calculated differently depending on the objecti
     \mu_t^\text{NPV} = \text{OperatingCost}(t) - \text{RevenueFromFlows}(\pi, t)
   \\]
 
-### Tool A: LCOX (`objective_type = "lcox"`)
+### LCOX metric (`objective_type = "lcox"`)
 
-The Cost Index is the total annualised cost divided by total annual output. The primary output
-commodity is assigned zero value, so the Cost Index reflects the cost of producing it:
+The LCOX metric is calculated as the total annualised cost divided by total annual output, using
+the above defined market costs which *exclude* the primary output commodity:
 
 \\[
-  \text{CostIndex} = \frac{\text{AFC} \times \text{cap} + \sum_t act_t \times \mu_t^\text{LCOX}}
-    {\sum_t act_t}
+  \text{LCOXMetric} = \frac{\text{AFC} \times \text{cap} + \sum_t \text{Activity}_t \times \mu_t^\text{LCOX}}
+    {\sum_t \text{Activity}_t}
 \\]
 
 Lower values indicate lower-cost investments.
 
-### Tool B: NPV (`objective_type = "npv"`)
+### NPV metric (`objective_type = "npv"`)
 
-The Specific Net Annualised Surplus (SNAS) is the net surplus per unit of activity. The primary
-output commodity is included at its full market price:
+The NPV metric is based on the Specific Net Annualised Surplus (SNAS). This the net surplus per
+unit of activity, using market costs that *include* the primary output commodity:
 
 \\[
-  \text{SNAS} = \frac{-\left(\text{AFC} \times \text{cap} + \sum_t act_t \times
-    \mu_t^\text{NPV}\right)}{\sum_t act_t}
+  \text{SNAS} = \frac{-\left(\text{AFC} \times \text{cap} + \sum_t \text{Activity}_t \times
+    \mu_t^\text{NPV}\right)}{\sum_t \text{Activity}_t}
 \\]
 
 Higher values indicate more profitable investments.
 
-> For both tools, any option with zero total activity after the mini dispatch LP is excluded from
+> For both metrics, any option with zero total activity after the mini dispatch LP is excluded from
 > consideration, as it cannot contribute to meeting demand. This will generally happen if all
 > time slices have negative activity coefficients, unless the process has lower-bound activity
 > constraints that force activity.
