@@ -7,7 +7,7 @@ use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
-use crate::units::{Capacity, CapacityPerYear, Dimensionless, Year};
+use crate::units::{Capacity, CapacityPerYear, Dimensionless, UnitType, Year};
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
 use log::warn;
@@ -33,22 +33,16 @@ struct ProcessInvestmentConstraintRaw {
 impl ProcessInvestmentConstraintRaw {
     /// Validate the constraint record for logical consistency and required fields
     fn validate(&self) -> Result<()> {
-        // Validate that addition_limit is finite
+        self.validate_constraints_combination()?;
+
+        // Validate addition_limit
         if let Some(limit) = self.addition_limit {
-            ensure!(
-                limit.is_finite() && limit >= CapacityPerYear(0.0),
-                "Invalid value for addition constraint: '{limit}'; must be non-negative and \
-                 finite.",
-            );
+            Self::validate_constraint_value(limit, "addition")?;
         }
 
         // Validate capacity_growth_limit
         if let Some(limit) = self.capacity_growth_limit {
-            // Must be in range [0, inf)
-            ensure!(
-                limit.is_finite() && limit >= Dimensionless(0.0),
-                "Invalid value for capacity growth constraint: '{limit}'; must be non-negative and finite.",
-            );
+            Self::validate_constraint_value(limit, "capacity growth")?;
 
             // Warn user they may have specified limit as percentage, rather than fraction
             if limit > Dimensionless(1.0) {
@@ -68,13 +62,38 @@ impl ProcessInvestmentConstraintRaw {
             );
         }
 
-        // Validate total_capacity_limit: must be in range [0, inf)
+        // Validate total_capacity_limit
         if let Some(limit) = self.total_capacity_limit {
-            ensure!(
-                limit.is_finite() && limit >= Capacity(0.0),
-                "Invalid value for total capacity constraint: '{limit}'; must be non-negative and finite.",
-            );
+            Self::validate_constraint_value(limit, "total capacity")?;
         }
+
+        Ok(())
+    }
+
+    /// Check whether the limit is finite, otherwise return an error
+    fn validate_constraint_value<T: UnitType>(constraint: T, constraint_name: &str) -> Result<()> {
+        ensure!(
+            constraint.is_finite() && constraint.value() >= 0.0,
+            "Invalid value for {} constraint: '{}'; must be non-negative and finite.",
+            constraint_name,
+            constraint.value(),
+        );
+
+        Ok(())
+    }
+
+    /// Check that the combination of constraints is valid
+    fn validate_constraints_combination(&self) -> Result<()> {
+        // Allow any of addition_limit, capacity_growth_limit and total_capacity_limit to be empty,
+        // but not all three.
+        ensure!(
+            !(self.addition_limit.is_none()
+                && self.capacity_growth_limit.is_none()
+                && self.total_capacity_limit.is_none()),
+            "Invalid investment constraints for '{}': cannot have all process investment \
+             constraints undefined; rather omit the record for that process/region/year.",
+            self.process_id
+        );
 
         Ok(())
     }
@@ -630,7 +649,7 @@ mod tests {
         None,
         "Invalid value for growth seed: 'inf'; must be greater than or equal to 1, and finite."
     )]
-    fn validate_growth_seed_invvalid(
+    fn validate_growth_seed_invalid(
         #[case] addition_limit: Option<CapacityPerYear>,
         #[case] capacity_growth_limit: Option<Dimensionless>,
         #[case] growth_seed: Option<Dimensionless>,
@@ -645,5 +664,18 @@ mod tests {
             total_capacity_limit,
         );
         assert_error!(invalid, error_msg);
+    }
+
+    #[test]
+    fn validate_constraints_combination_rejects_all_undefined() {
+        // Check an error is raised if all of addition_limit, capacity_growth_limit and
+        // total_capacity_limit are undefined.
+        let invalid = validate_raw_constraint(None, None, Some(Dimensionless(1.25)), None);
+        assert_error!(
+            invalid,
+            "Invalid investment constraints for 'test_process': cannot have all process \
+             investment constraints undefined; rather omit the record for that process/\
+             region/year."
+        );
     }
 }
