@@ -24,7 +24,9 @@ fern = {version = "0.7.1", features = ["chrono", "colored"]}
 chrono = "0.4"
 clap = {version = "4.6.1", features = ["cargo", "derive"]}
 include_dir = "0.7.4"
-highs = "2.2.0"
+# Pinned because latest version leads to different results on different platforms:
+# https://github.com/EnergySystemsModellingLab/MUSE2/issues/1431
+highs = "=2.3.0"
 indexmap = "2.14.0"
 human-panic = "2.0.8"
 clap-markdown = "0.1.5"
