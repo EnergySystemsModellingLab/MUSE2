@@ -348,7 +348,7 @@ fn log_on_equal_appraisal_outputs(
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
-    investment_limits: HashMap<AssetRef, AssetCapacity>,
+    candidate_investment_limits: HashMap<AssetRef, AssetCapacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -358,7 +358,7 @@ pub fn select_best_assets(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
-    let mut remaining_candidate_capacity = investment_limits;
+    let mut remaining_candidate_capacity = candidate_investment_limits;
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
@@ -384,7 +384,7 @@ pub fn select_best_assets(
         let mut seen_groups = HashSet::new();
 
         // Appraise all options
-        let mut outputs_for_opts = Vec::new();
+        let mut outputs = Vec::new();
         for asset in &opt_assets {
             // Skip any assets from groups we've already seen
             if let Some(group_id) = asset.group_id()
@@ -427,24 +427,24 @@ pub fn select_best_assets(
                 &coefficients[&asset],
                 &demand,
             )?;
-            outputs_for_opts.push(output);
+            outputs.push(output);
         }
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
             year,
             &format!("{} {} round {}", commodity.id, agent.id, round),
-            &outputs_for_opts,
+            &outputs,
             &demand,
         )?;
 
         // Sort by investment priority and discard non-feasible options
-        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
+        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);
 
         // If none of the remaining options are feasible, we terminate the loop. We may still be
         // able to meet the full demands with assets selected so far, so we continue anyway with a
         // warning.
-        if outputs_for_opts.is_empty() {
+        if outputs.is_empty() {
             warn!(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
                 year '{}', agent '{}'. {} non-feasible investments were not considered. \
@@ -455,9 +455,9 @@ pub fn select_best_assets(
         }
 
         // Warn if there are multiple equally good assets
-        log_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
+        log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);
 
-        let best_output = outputs_for_opts.into_iter().next().unwrap();
+        let best_output = outputs.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(
