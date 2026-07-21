@@ -1,19 +1,14 @@
 //! Implement a context manager for timing the decorated function
 use context_manager::{CallerContext, SyncWrapContext};
-use lazy_static::lazy_static;
 use log::debug;
-use std::sync::RwLock;
+use std::sync::{LazyLock, RwLock};
 use std::{marker::PhantomData, time::Instant};
 
 // Global variable to store the total time spent in investment step
-lazy_static! {
-    static ref INVESTMENT_TIME: RwLock<f64> = RwLock::new(0.0);
-}
+static INVESTMENT_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0));
 
 // Global variable to store the total time spent in dispatch steps
-lazy_static! {
-    static ref DISPATCH_TIME: RwLock<f64> = RwLock::new(0.0);
-}
+static DISPATCH_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0));
 
 #[doc(hidden)]
 pub trait TimerLabel {
@@ -22,7 +17,7 @@ pub trait TimerLabel {
 
 #[doc(hidden)]
 pub trait Accumulator {
-    fn accumulate(miliseconds: &f64) -> ();
+    fn accumulate(milliseconds: &f64);
 }
 
 /// Generic timing implementation shared by all timing contexts
@@ -77,24 +72,24 @@ impl TimerLabel for DispatchLabel {
 #[doc(hidden)]
 pub struct NullAccumulator;
 impl Accumulator for NullAccumulator {
-    fn accumulate(_miliseconds: &f64) -> () {}
+    fn accumulate(_milliseconds: &f64) {}
 }
 
 #[doc(hidden)]
 pub struct InvestmentAccumulator;
 impl Accumulator for InvestmentAccumulator {
-    fn accumulate(miliseconds: &f64) -> () {
+    fn accumulate(milliseconds: &f64) {
         let mut investment_time = INVESTMENT_TIME.write().unwrap();
-        *investment_time += *miliseconds;
+        *investment_time += *milliseconds;
     }
 }
 
 #[doc(hidden)]
 pub struct DispatchAccumulator;
 impl Accumulator for DispatchAccumulator {
-    fn accumulate(miliseconds: &f64) -> () {
+    fn accumulate(milliseconds: &f64) {
         let mut dispatch_time = DISPATCH_TIME.write().unwrap();
-        *dispatch_time += *miliseconds;
+        *dispatch_time += *milliseconds;
     }
 }
 
