@@ -749,11 +749,14 @@ impl Asset {
         self.capacity.set(capacity);
     }
 
-    /// Increase the capacity for this asset (only for Candidate assets)
+    /// Increase the capacity for this asset (only for Candidate and Parent assets)
     pub fn increase_capacity(&mut self, capacity: AssetCapacity) {
         assert!(
-            self.state == AssetState::Candidate,
-            "increase_capacity can only be called on Candidate assets"
+            matches!(
+                self.state,
+                AssetState::Candidate | AssetState::Parent { .. }
+            ),
+            "increase_capacity can only be called on Candidate or Parent assets"
         );
         assert!(
             capacity.total_capacity() > Capacity(0.0),
