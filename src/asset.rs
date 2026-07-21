@@ -643,7 +643,10 @@ impl Asset {
 
     /// Whether this asset has been commissioned
     pub fn is_commissioned(&self) -> bool {
-        matches!(&self.state, AssetState::Commissioned { .. })
+        matches!(
+            &self.state,
+            AssetState::Commissioned { .. } | AssetState::Parent { .. }
+        )
     }
 
     /// Get the commission year for this asset
