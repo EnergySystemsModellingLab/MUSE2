@@ -953,7 +953,6 @@ dependencies = [
  "include_dir",
  "indexmap",
  "itertools 0.15.0",
- "lazy_static",
  "log",
  "logtest",
  "map-macro",
