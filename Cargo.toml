@@ -24,7 +24,9 @@ fern = {version = "0.7.1", features = ["chrono", "colored"]}
 chrono = "0.4"
 clap = {version = "4.6.1", features = ["cargo", "derive"]}
 include_dir = "0.7.4"
-highs = "2.2.0"
+# Pinned because latest version leads to different results on different platforms:
+# https://github.com/EnergySystemsModellingLab/MUSE2/issues/1431
+highs = "=2.3.0"
 indexmap = "2.14.0"
 human-panic = "2.0.8"
 clap-markdown = "0.1.5"
@@ -32,7 +34,7 @@ platform-info = "2.1.0"
 derive_more = {version = "2.1", features = ["add", "add_assign", "not", "deref", "display", "sum", "from_str", "from", "into"]}
 petgraph = "0.8.3"
 strum = {version = "0.28.0", features = ["derive"]}
-documented = "0.9.2"
+documented = "0.10.0"
 dirs = "6.0.0"
 edit = "0.1.5"
 erased-serde = "0.4.10"
