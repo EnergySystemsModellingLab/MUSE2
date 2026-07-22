@@ -10,83 +10,68 @@ static INVESTMENT_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0
 // Global variable to store the total time spent in dispatch steps
 static DISPATCH_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0));
 
-#[doc(hidden)]
-pub trait TimerLabel {
+/// Trait providing the context of actions to be carried by the timer
+pub trait Context {
+    /// Adds the label to be used in the logs
     fn label(caller_context: &CallerContext) -> String;
-}
 
-#[doc(hidden)]
-pub trait Accumulator {
+    /// Includes de logic to accumulate the time in a global variable
     fn accumulate(milliseconds: &f64);
 }
 
 /// Generic timing implementation shared by all timing contexts
-pub struct TimerContext<L: TimerLabel = FnNameLabel, A: Accumulator = NullAccumulator> {
+pub struct GenericTimer<C: Context = GenericContext> {
     start: Instant,
-    _label: PhantomData<L>,
-    _accumulator: PhantomData<A>,
+    _context: PhantomData<C>, // See https://doc.rust-lang.org/nomicon/phantom-data.html
 }
 
-impl<T, L: TimerLabel, A: Accumulator> SyncWrapContext<T> for TimerContext<L, A> {
+impl<T, C: Context> SyncWrapContext<T> for GenericTimer<C> {
     fn new() -> Self {
         Self {
             start: Instant::now(),
-            _label: PhantomData,
-            _accumulator: PhantomData,
+            _context: PhantomData,
         }
     }
 
     fn after(self, caller_context: &CallerContext, _result: &T) {
-        let label = L::label(caller_context);
+        let label = C::label(caller_context);
         let ms = self.start.elapsed().as_secs_f64() * 1000.0;
-        A::accumulate(&ms);
+        C::accumulate(&ms);
         debug!("{label} completed in {ms:.1}ms");
     }
 }
 
-#[doc(hidden)]
-pub struct FnNameLabel;
-impl TimerLabel for FnNameLabel {
+/// Default context for timer, not accumularinging the time s
+/// uaing the decorated function name in the logs
+pub struct GenericContext;
+impl Context for GenericContext {
     fn label(caller_context: &CallerContext) -> String {
         let fn_name = caller_context.fn_name();
         format!("[Timer] '{fn_name}'")
     }
-}
-
-#[doc(hidden)]
-pub struct InvestmentLabel;
-impl TimerLabel for InvestmentLabel {
-    fn label(_: &CallerContext) -> String {
-        "Investment step".to_string()
-    }
-}
-
-#[doc(hidden)]
-pub struct DispatchLabel;
-impl TimerLabel for DispatchLabel {
-    fn label(_: &CallerContext) -> String {
-        "Dispatch step".to_string()
-    }
-}
-
-#[doc(hidden)]
-pub struct NullAccumulator;
-impl Accumulator for NullAccumulator {
     fn accumulate(_milliseconds: &f64) {}
 }
 
-#[doc(hidden)]
-pub struct InvestmentAccumulator;
-impl Accumulator for InvestmentAccumulator {
+/// Investment context, using a fixed label in logs and accumulating
+/// the time in the `INVESTMENT_TIME` variable
+pub struct InvestmentContext;
+impl Context for InvestmentContext {
+    fn label(_: &CallerContext) -> String {
+        "Investment step".to_string()
+    }
     fn accumulate(milliseconds: &f64) {
         let mut investment_time = INVESTMENT_TIME.write().unwrap();
         *investment_time += *milliseconds;
     }
 }
 
-#[doc(hidden)]
-pub struct DispatchAccumulator;
-impl Accumulator for DispatchAccumulator {
+/// Dispatch context, using a fixed label in logs and accumulating
+/// the time in the `DISPATCH_TIME` variable
+pub struct DispatchContext;
+impl Context for DispatchContext {
+    fn label(_: &CallerContext) -> String {
+        "Dispatch step".to_string()
+    }
     fn accumulate(milliseconds: &f64) {
         let mut dispatch_time = DISPATCH_TIME.write().unwrap();
         *dispatch_time += *milliseconds;
@@ -94,10 +79,10 @@ impl Accumulator for DispatchAccumulator {
 }
 
 /// Investment context for timing a function call
-pub type InvestmentTimerContext = TimerContext<InvestmentLabel, InvestmentAccumulator>;
+pub type InvestmentTimer = GenericTimer<InvestmentContext>;
 
 /// Dispatch context for timing a function call
-pub type DispatchTimerContext = TimerContext<DispatchLabel, DispatchAccumulator>;
+pub type DispatchTimer = GenericTimer<DispatchContext>;
 
 /// Get the total time spent in investment steps
 pub fn get_investment_time() -> f64 {
