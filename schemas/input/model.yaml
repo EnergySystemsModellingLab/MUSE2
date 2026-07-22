@@ -25,6 +25,25 @@ properties:
 
       Must be >0 and <=1.
       Lower values produce smaller investment increments, while higher values produce larger increments.
+  fallback_price_strategy:
+    type: string
+    description: Pricing strategy used to calculate fallback prices in the mini dispatch optimisation during investment appraisal
+    default: full_average
+    enum:
+      - unpriced
+      - shadow
+      - scarcity
+      - marginal
+      - marginal_average
+      - full
+      - full_average
+    notes: |
+      The fallback price represents the cost of procuring the commodity of interest from an
+      alternative source rather than producing it with the asset being appraised. It provides an
+      additional incentive for an asset to dispatch even when shadow prices alone are insufficient.
+
+      Setting this to `unpriced` uses a fallback price of zero, reverting to the pure
+      shadow-price formulation.
   value_of_lost_load:
     type: number
     description: The cost applied to unmet demand

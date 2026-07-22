@@ -2,7 +2,7 @@
 //!
 #![doc = concat!("See <", crate::docs_url!("/model/prices.html"), ">")]
 use crate::asset::AssetRef;
-use crate::commodity::{CommodityID, CommodityMap, PricingStrategy};
+use crate::commodity::{CommodityID, CommodityMap, CommodityType, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::market::MarketSet;
@@ -61,6 +61,8 @@ pub struct Prices {
     pub market: PriceMap,
     /// Commodity shadow prices
     pub shadow: PriceMap,
+    /// Commodity fallback prices calculated according to the model's `fallback_price_strategy`
+    pub fallback: PriceMap,
 }
 
 /// Calculate commodity prices.
@@ -90,8 +92,11 @@ pub fn calculate_prices(
     let shadow_prices =
         PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals());
 
-    // Set up empty prices map
+    // Set up empty market prices map
     let mut market_prices = PriceMap::default();
+
+    // Set up empty fallback prices map
+    let mut fallback_prices = PriceMap::default();
 
     // Lazily computed only if at least one FullCost market is encountered.
     let mut annual_activities: Option<HashMap<AssetRef, Activity>> = None;
@@ -107,12 +112,27 @@ pub fn calculate_prices(
             &shadow_prices,
             &mut annual_activities,
             &mut market_prices,
+            None,
         );
+        if model.parameters.fallback_price_strategy != PricingStrategy::Unpriced {
+            price_market_set(
+                market_set,
+                model,
+                solution_without_candidates,
+                solution_with_candidates,
+                year,
+                &shadow_prices,
+                &mut annual_activities,
+                &mut fallback_prices,
+                Some(model.parameters.fallback_price_strategy),
+            );
+        }
     }
 
     Ok(Prices {
         market: market_prices,
         shadow: shadow_prices,
+        fallback: fallback_prices,
     })
 }
 
@@ -127,6 +147,7 @@ fn price_market_set(
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
+    strategy_override: Option<PricingStrategy>,
 ) {
     match market_set {
         MarketSet::Single(market) => {
@@ -139,6 +160,7 @@ fn price_market_set(
                 shadow_prices,
                 annual_activities,
                 market_prices,
+                strategy_override,
             );
         }
         MarketSet::Cycle(markets) => {
@@ -151,6 +173,7 @@ fn price_market_set(
                 shadow_prices,
                 annual_activities,
                 market_prices,
+                strategy_override,
             );
         }
         MarketSet::Layer(market_sets) => {
@@ -164,6 +187,7 @@ fn price_market_set(
                     shadow_prices,
                     annual_activities,
                     market_prices,
+                    strategy_override,
                 );
             }
         }
@@ -198,17 +222,29 @@ fn price_markets(
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
+    strategy_override: Option<PricingStrategy>,
 ) {
     // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
-    // For now, commodities use a single strategy for all regions, but this may change in the future.
     let mut pricing_sets = HashMap::new();
     for (commodity_id, region_id) in markets {
-        let commodity = &model.commodities[commodity_id];
-        if commodity.pricing_strategy == PricingStrategy::Unpriced {
-            continue;
-        }
+        // If a strategy override is provided, apply it to all commodities in the markets list.
+        let strategy = if let Some(strategy) = strategy_override.as_ref() {
+            // Skip OTH commodities — they are not subject to investment decisions
+            if model.commodities[commodity_id].kind == CommodityType::Other {
+                continue;
+            }
+            strategy
+        } else {
+            // Otherwise, use the commodity's pricing strategy. For now, commodities use a single
+            // strategy for all regions, but this may change in the future.
+            let strategy = &model.commodities[commodity_id].pricing_strategy;
+            if *strategy == PricingStrategy::Unpriced {
+                continue;
+            }
+            strategy
+        };
         pricing_sets
-            .entry(&commodity.pricing_strategy)
+            .entry(strategy)
             .or_insert_with(HashSet::new)
             .insert((commodity_id.clone(), region_id.clone()));
     }
@@ -311,6 +347,7 @@ fn price_cycle(
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
+    strategy_override: Option<PricingStrategy>,
 ) {
     // Seed the markets with shadow prices
     for (commodity_id, region_id) in markets {
@@ -334,6 +371,7 @@ fn price_cycle(
                 shadow_prices,
                 annual_activities,
                 market_prices,
+                strategy_override,
             );
         }
     }
