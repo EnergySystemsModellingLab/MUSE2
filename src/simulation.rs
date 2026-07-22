@@ -4,7 +4,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
 use crate::simulation::prices::{Prices, calculate_prices};
-use crate::timeit::{DispatchTimerContext, get_dispatch_time, get_investment_time};
+use crate::timeit::{DispatchTimer, get_dispatch_time, get_investment_time};
 use crate::units::Capacity;
 use anyhow::{Context, Result};
 use context_manager;
@@ -169,7 +169,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 }
 
 // Run dispatch to get flows and prices for a milestone year
-#[context_manager::wrap(DispatchTimerContext)]
+#[context_manager::wrap(DispatchTimer)]
 fn run_dispatch_for_year(
     model: &Model,
     assets: &[AssetRef],

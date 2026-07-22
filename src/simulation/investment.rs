@@ -8,7 +8,7 @@ use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
-use crate::timeit::InvestmentTimerContext;
+use crate::timeit::InvestmentTimer;
 use crate::units::{ActivityPerCapacity, Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use context_manager;
@@ -45,7 +45,7 @@ pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Flow>;
 ///
 /// The assets selected (including retained commissioned assets) for the given planning `year` or an
 /// error.
-#[context_manager::wrap(InvestmentTimerContext)]
+#[context_manager::wrap(InvestmentTimer)]
 pub fn perform_agent_investment(
     model: &Model,
     year: u32,
