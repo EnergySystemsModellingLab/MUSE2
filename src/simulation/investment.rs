@@ -13,7 +13,7 @@ use anyhow::{Result, ensure};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::{debug, warn};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 pub mod appraisal;
@@ -348,7 +348,7 @@ fn log_on_equal_appraisal_outputs(
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
-    investment_limits: HashMap<AssetRef, AssetCapacity>,
+    candidate_investment_limits: HashMap<AssetRef, AssetCapacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -358,7 +358,12 @@ pub fn select_best_assets(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
-    let mut remaining_candidate_capacity = investment_limits;
+
+    // Remaining capacity for candidates and divisible assets
+    let mut remaining_capacities = candidate_investment_limits;
+
+    // Swap child assets for parents representing a single unit
+    let children = replace_child_assets_with_parents(&mut opt_assets, &mut remaining_capacities);
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
@@ -379,20 +384,9 @@ pub fn select_best_assets(
             region_id
         );
 
-        // Since all assets with the same `group_id` are identical, we only need to appraise one
-        // from each group.
-        let mut seen_groups = HashSet::new();
-
         // Appraise all options
-        let mut outputs_for_opts = Vec::new();
+        let mut outputs = Vec::new();
         for asset in &opt_assets {
-            // Skip any assets from groups we've already seen
-            if let Some(group_id) = asset.group_id()
-                && !seen_groups.insert(group_id)
-            {
-                continue;
-            }
-
             // For candidates, cap the asset's capacity by the current demand-limiting capacity
             // and, where an addition constraint exists, the remaining installable capacity.
             let mut asset = asset.clone();
@@ -407,7 +401,7 @@ pub fn select_best_assets(
                     asset.unit_size(),
                 );
                 let cap = asset.capacity().min(dlc);
-                let max_capacity = remaining_candidate_capacity
+                let max_capacity = remaining_capacities
                     .get(&asset)
                     .copied()
                     .map_or(cap, |remaining| cap.min(remaining));
@@ -427,24 +421,24 @@ pub fn select_best_assets(
                 &coefficients[&asset],
                 &demand,
             )?;
-            outputs_for_opts.push(output);
+            outputs.push(output);
         }
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
             year,
             &format!("{} {} round {}", commodity.id, agent.id, round),
-            &outputs_for_opts,
+            &outputs,
             &demand,
         )?;
 
         // Sort by investment priority and discard non-feasible options
-        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs_for_opts);
+        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);
 
         // If none of the remaining options are feasible, we terminate the loop. We may still be
         // able to meet the full demands with assets selected so far, so we continue anyway with a
         // warning.
-        if outputs_for_opts.is_empty() {
+        if outputs.is_empty() {
             warn!(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
                 year '{}', agent '{}'. {} non-feasible investments were not considered. \
@@ -455,9 +449,9 @@ pub fn select_best_assets(
         }
 
         // Warn if there are multiple equally good assets
-        log_on_equal_appraisal_outputs(&outputs_for_opts, &agent.id, &commodity.id, region_id);
+        log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);
 
-        let best_output = outputs_for_opts.into_iter().next().unwrap();
+        let best_output = outputs.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(
@@ -471,7 +465,7 @@ pub fn select_best_assets(
         update_assets(
             best_output.asset,
             &mut opt_assets,
-            &mut remaining_candidate_capacity,
+            &mut remaining_capacities,
             &mut best_assets,
         );
 
@@ -489,7 +483,78 @@ pub fn select_best_assets(
         }
     }
 
+    // Convert parent assets back to children
+    replace_parent_assets_with_children(&mut best_assets, children, remaining_capacities);
+
     Ok(best_assets)
+}
+
+/// Replace all child assets with parent assets representing a single unit.
+///
+/// Non-divisible assets are left as is. `remaining_capacities` is updated to include total capacity
+/// for each parent asset.
+///
+/// # Returns
+///
+/// The child assets previously in `assets`.
+fn replace_child_assets_with_parents(
+    assets: &mut Vec<AssetRef>,
+    remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
+) -> Vec<AssetRef> {
+    // Extract all child assets
+    let children = assets
+        .extract_if(.., |asset| asset.parent().is_some())
+        .collect_vec();
+
+    let parents = children
+        .iter()
+        .map(|child| child.parent().unwrap())
+        .unique();
+    for parent in parents {
+        // Store remaining capacity
+        remaining_capacities.insert(parent.clone(), parent.capacity());
+
+        // Add parent asset (one unit)
+        assets.push(parent.make_partial_parent(1));
+    }
+
+    children
+}
+
+/// Replace parent assets with their corresponding children.
+///
+/// If only a portion of a parent's capacity was selected, some child assets will be dropped,
+/// starting with those with the highest ID.
+fn replace_parent_assets_with_children(
+    assets: &mut Vec<AssetRef>,
+    mut children: Vec<AssetRef>,
+    mut remaining_capacities: HashMap<AssetRef, AssetCapacity>,
+) {
+    // Drop parent assets. We can figure out which ones were selected from `children` and
+    // `remaining_capacities`.
+    assets.retain(|asset| !asset.is_parent());
+
+    // Sort children in reverse order, so higher IDs come first
+    children.sort_by(|a, b| a.cmp(b).reverse());
+
+    // Drop any surplus children
+    children.retain(|child| {
+        let Some(remaining) = remaining_capacities.get_mut(child.parent().unwrap()) else {
+            return true;
+        };
+
+        // Decrease remaining capacity
+        if remaining.n_units() == Some(1) {
+            remaining_capacities.remove(child);
+        } else {
+            *remaining = *remaining - child.capacity();
+        }
+
+        false
+    });
+
+    // Add child assets back into `assets`
+    assets.extend(children);
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
@@ -501,7 +566,7 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
 fn update_assets(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
-    remaining_candidate_capacity: &mut HashMap<AssetRef, AssetCapacity>,
+    remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
 ) {
     match best_asset.state() {
@@ -510,9 +575,9 @@ fn update_assets(
             opt_assets.retain(|asset| *asset != best_asset);
             best_assets.push(best_asset);
         }
-        AssetState::Candidate => {
+        AssetState::Candidate | AssetState::Parent { .. } => {
             // Track remaining capacity for assets that have limits
-            if let Some(remaining_capacity) = remaining_candidate_capacity.get_mut(&best_asset) {
+            if let Some(remaining_capacity) = remaining_capacities.get_mut(&best_asset) {
                 *remaining_capacity = *remaining_capacity - best_asset.capacity();
 
                 // If there's no capacity remaining, remove the asset from the options
@@ -523,7 +588,7 @@ fn update_assets(
                         .unwrap();
 
                     opt_assets.swap_remove(old_idx);
-                    remaining_candidate_capacity.remove(&best_asset);
+                    remaining_capacities.remove(&best_asset);
                 }
             }
 
@@ -538,7 +603,11 @@ fn update_assets(
                 best_assets.push(best_asset);
             }
         }
-        _ => panic!("update_assets should only be called with Commissioned or Candidate assets"),
+        AssetState::Ready { .. } => {
+            panic!(
+                "update_assets should only be called with Commissioned, Parent or Candidate assets"
+            )
+        }
     }
 }
 
