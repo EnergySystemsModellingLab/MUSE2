@@ -195,13 +195,11 @@ where
 
             // Multiply the addition limit (if provided) by the number of years since previous
             // milestone.
-            let scaled_limit: Option<Capacity> = record
+            let addition_limit: Option<Capacity> = record
                 .addition_limit
                 .map(|limit| limit * Year(years_since_prev as f64));
 
-            let constraint = Rc::new(ProcessInvestmentConstraint {
-                addition_limit: scaled_limit,
-            });
+            let constraint = Rc::new(ProcessInvestmentConstraint { addition_limit });
 
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }
