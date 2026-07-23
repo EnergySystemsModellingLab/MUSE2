@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD041 -->
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-11-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-12-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 [![Build and test](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml/badge.svg)](https://github.com/EnergySystemsModellingLab/MUSE2/actions/workflows/cargo-test.yml)
 [![codecov](https://codecov.io/github/EnergySystemsModellingLab/MUSE2/graph/badge.svg?token=nV8gp1NCh8)](https://codecov.io/github/EnergySystemsModellingLab/MUSE2)
@@ -88,6 +88,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/e
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/ahawkes"><img src="https://avatars.githubusercontent.com/u/12055725?v=4?s=100" width="100px;" alt="Adam Hawkes"/><br /><sub><b>Adam Hawkes</b></sub></a><br /><a href="#ideas-ahawkes" title="Ideas, Planning, & Feedback">🤔</a> <a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=ahawkes" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Aurashk"><img src="https://avatars.githubusercontent.com/u/9390150?v=4?s=100" width="100px;" alt="Aurash Karimi"/><br /><sub><b>Aurash Karimi</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=Aurashk" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mjademitchell"><img src="https://avatars.githubusercontent.com/u/242165951?v=4?s=100" width="100px;" alt="Melissa Jade Mitchell"/><br /><sub><b>Melissa Jade Mitchell</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=mjademitchell" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://dc2917.github.io/"><img src="https://avatars.githubusercontent.com/u/45606273?v=4?s=100" width="100px;" alt="Dan Cummins"/><br /><sub><b>Dan Cummins</b></sub></a><br /><a href="https://github.com/EnergySystemsModellingLab/MUSE2/commits?author=dc2917" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>
