@@ -9,6 +9,7 @@ use ::log::{info, warn};
 use anyhow::{Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 pub mod example;
 use example::ExampleSubcommands;
@@ -136,6 +137,7 @@ pub fn run_cli() -> Result<()> {
 
 /// Handle the `run` command.
 pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
+    let start = Instant::now();
     let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     // These settings can be overridden by command-line arguments
@@ -197,6 +199,11 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     // Run the simulation
     crate::simulation::run(&model, output_path, settings.debug_model)?;
     info!("Simulation complete!");
+
+    info!(
+        "--- Total execution time: {:.1}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
 
     info!(
         "--- Total time spent in investment steps: {:.1}ms",
