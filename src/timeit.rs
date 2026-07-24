@@ -2,7 +2,8 @@
 use context_manager::{CallerContext, SyncWrapContext};
 use log::debug;
 use std::sync::{LazyLock, RwLock};
-use std::{marker::PhantomData, time::Instant};
+use std::marker::PhantomData;
+use std::time::Instant;
 
 // Global variable to store the total time spent in investment step
 static INVESTMENT_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0));
