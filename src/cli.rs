@@ -4,6 +4,7 @@ use crate::input::{load_commodity_graphs, load_model};
 use crate::log;
 use crate::output::{copy_input_files, create_output_directory, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
+use crate::timeit::{DispatchContext, InvestmentContext, TimeContext};
 use ::log::{info, warn};
 use anyhow::{Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
@@ -196,6 +197,15 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     // Run the simulation
     crate::simulation::run(&model, output_path, settings.debug_model)?;
     info!("Simulation complete!");
+
+    info!(
+        "--- Total time spent in investment steps: {:.1}ms",
+        InvestmentContext::total_time()
+    );
+    info!(
+        "--- Total time spent in dispatch steps: {:.1}ms",
+        DispatchContext::total_time()
+    );
 
     Ok(())
 }

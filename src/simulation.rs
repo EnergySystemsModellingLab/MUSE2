@@ -4,7 +4,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
 use crate::simulation::prices::{Prices, calculate_prices};
-use crate::timeit::{DispatchTimer, get_dispatch_time, get_investment_time};
+use crate::timeit::DispatchTimer;
 use crate::units::Capacity;
 use anyhow::{Context, Result};
 use context_manager;
@@ -155,15 +155,6 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     }
 
     writer.flush()?;
-
-    info!(
-        "--- Total time spent in investment steps: {:.1}ms",
-        get_investment_time()
-    );
-    info!(
-        "--- Total time spent in dispatch steps: {:.1}ms",
-        get_dispatch_time()
-    );
 
     Ok(())
 }
