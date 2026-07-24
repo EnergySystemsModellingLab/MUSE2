@@ -12,21 +12,26 @@ static INVESTMENT_TIME: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(0.0))
 static DISPATCH_TIME: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(0.0));
 
 /// Trait providing the context of actions to be carried by the timer
-pub trait Context {
+pub trait TimeContext {
     /// Adds the label to be used in the logs
     fn label(caller_context: &CallerContext) -> String;
 
     /// Includes de logic to accumulate the time in a global variable
     fn accumulate(milliseconds: &f64);
+
+    /// Returns the total time spent in this context
+    fn total_time() -> f64 {
+        0.0
+    }
 }
 
 /// Generic timing implementation shared by all timing contexts
-pub struct GenericTimer<C: Context = GenericContext> {
+pub struct GenericTimer<C: TimeContext = GenericContext> {
     start: Instant,
     _context: PhantomData<C>, // See https://doc.rust-lang.org/nomicon/phantom-data.html
 }
 
-impl<T, C: Context> SyncWrapContext<T> for GenericTimer<C> {
+impl<T, C: TimeContext> SyncWrapContext<T> for GenericTimer<C> {
     fn new() -> Self {
         Self {
             start: Instant::now(),
@@ -45,7 +50,7 @@ impl<T, C: Context> SyncWrapContext<T> for GenericTimer<C> {
 /// Default context for timer, not accumularinging the time s
 /// uaing the decorated function name in the logs
 pub struct GenericContext;
-impl Context for GenericContext {
+impl TimeContext for GenericContext {
     fn label(caller_context: &CallerContext) -> String {
         let fn_name = caller_context.fn_name();
         format!("[Timer] '{fn_name}'")
@@ -56,7 +61,7 @@ impl Context for GenericContext {
 /// Investment context, using a fixed label in logs and accumulating
 /// the time in the `INVESTMENT_TIME` variable
 pub struct InvestmentContext;
-impl Context for InvestmentContext {
+impl TimeContext for InvestmentContext {
     fn label(_: &CallerContext) -> String {
         "Investment step".to_string()
     }
@@ -64,18 +69,26 @@ impl Context for InvestmentContext {
         let mut investment_time = INVESTMENT_TIME.lock().unwrap();
         *investment_time += *milliseconds;
     }
+    fn total_time() -> f64 {
+        let investment_time = INVESTMENT_TIME.lock().unwrap();
+        *investment_time
+    }
 }
 
 /// Dispatch context, using a fixed label in logs and accumulating
 /// the time in the `DISPATCH_TIME` variable
 pub struct DispatchContext;
-impl Context for DispatchContext {
+impl TimeContext for DispatchContext {
     fn label(_: &CallerContext) -> String {
         "Dispatch step".to_string()
     }
     fn accumulate(milliseconds: &f64) {
         let mut dispatch_time = DISPATCH_TIME.lock().unwrap();
         *dispatch_time += *milliseconds;
+    }
+    fn total_time() -> f64 {
+        let dispatch_time = DISPATCH_TIME.lock().unwrap();
+        *dispatch_time
     }
 }
 
@@ -84,15 +97,3 @@ pub type InvestmentTimer = GenericTimer<InvestmentContext>;
 
 /// Dispatch context for timing a function call
 pub type DispatchTimer = GenericTimer<DispatchContext>;
-
-/// Get the total time spent in investment steps
-pub fn get_investment_time() -> f64 {
-    let investment_time = INVESTMENT_TIME.lock().unwrap();
-    *investment_time
-}
-
-/// Get the total time spent in dispatch steps
-pub fn get_dispatch_time() -> f64 {
-    let dispatch_time = DISPATCH_TIME.lock().unwrap();
-    *dispatch_time
-}
