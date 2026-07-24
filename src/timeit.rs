@@ -2,14 +2,14 @@
 use context_manager::{CallerContext, SyncWrapContext};
 use log::debug;
 use std::marker::PhantomData;
-use std::sync::{LazyLock, RwLock};
+use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 
 // Global variable to store the total time spent in investment step
-static INVESTMENT_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0));
+static INVESTMENT_TIME: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(0.0));
 
 // Global variable to store the total time spent in dispatch steps
-static DISPATCH_TIME: LazyLock<RwLock<f64>> = LazyLock::new(|| RwLock::new(0.0));
+static DISPATCH_TIME: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(0.0));
 
 /// Trait providing the context of actions to be carried by the timer
 pub trait Context {
@@ -61,7 +61,7 @@ impl Context for InvestmentContext {
         "Investment step".to_string()
     }
     fn accumulate(milliseconds: &f64) {
-        let mut investment_time = INVESTMENT_TIME.write().unwrap();
+        let mut investment_time = INVESTMENT_TIME.lock().unwrap();
         *investment_time += *milliseconds;
     }
 }
@@ -74,7 +74,7 @@ impl Context for DispatchContext {
         "Dispatch step".to_string()
     }
     fn accumulate(milliseconds: &f64) {
-        let mut dispatch_time = DISPATCH_TIME.write().unwrap();
+        let mut dispatch_time = DISPATCH_TIME.lock().unwrap();
         *dispatch_time += *milliseconds;
     }
 }
@@ -87,12 +87,12 @@ pub type DispatchTimer = GenericTimer<DispatchContext>;
 
 /// Get the total time spent in investment steps
 pub fn get_investment_time() -> f64 {
-    let investment_time = INVESTMENT_TIME.read().unwrap();
+    let investment_time = INVESTMENT_TIME.lock().unwrap();
     *investment_time
 }
 
 /// Get the total time spent in dispatch steps
 pub fn get_dispatch_time() -> f64 {
-    let dispatch_time = DISPATCH_TIME.read().unwrap();
+    let dispatch_time = DISPATCH_TIME.lock().unwrap();
     *dispatch_time
 }
