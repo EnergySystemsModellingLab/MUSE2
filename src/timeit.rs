@@ -1,8 +1,8 @@
 //! Implement a context manager for timing the decorated function
 use context_manager::{CallerContext, SyncWrapContext};
 use log::debug;
-use std::sync::{LazyLock, RwLock};
 use std::marker::PhantomData;
+use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
 
 // Global variable to store the total time spent in investment step
