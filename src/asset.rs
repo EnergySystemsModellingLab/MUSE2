@@ -656,7 +656,7 @@ impl Asset {
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
-            AssetState::Commissioned { id, .. } => Some(*id),
+            AssetState::Commissioned { id, .. } | AssetState::Parent { id, .. } => Some(*id),
             _ => None,
         }
     }
@@ -692,9 +692,8 @@ impl Asset {
                 parent
                     .as_ref()
                     // Safe because parents always have state `Parent`
-                    .map(|parent| parent.group_id().unwrap())
+                    .map(|parent| parent.id().unwrap())
             }
-            AssetState::Parent { id, .. } => Some(*id),
             _ => None,
         }
     }
