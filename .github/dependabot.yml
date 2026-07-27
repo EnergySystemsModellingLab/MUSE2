@@ -12,6 +12,11 @@ updates:
     groups:
       rust:
         patterns: ["*"]
+    ignore:
+      # These packages are currently pinned, see:
+      #     https://github.com/EnergySystemsModellingLab/MUSE2/issues/1431
+      - dependency-name: highs
+      - dependency-name: highs-sys
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
