@@ -1,6 +1,6 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
-use crate::asset::{Asset, AssetGroupID, AssetID, AssetRef};
+use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
@@ -141,7 +141,7 @@ pub fn copy_input_files(model_dir: &Path, output_dir: &Path, model_name: &str) -
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct AssetRow {
     asset_id: Option<AssetID>,
-    group_id: Option<AssetGroupID>,
+    group_id: Option<AssetID>,
     process_id: ProcessID,
     region_id: RegionID,
     agent_id: AgentID,
@@ -179,7 +179,7 @@ impl AssetRow {
 struct AssetCapacityRow {
     milestone_year: u32,
     asset_id: Option<AssetID>,
-    group_id: Option<AssetGroupID>,
+    group_id: Option<AssetID>,
     capacity: Capacity,
     num_units: Option<u32>,
 }
@@ -189,7 +189,7 @@ struct AssetCapacityRow {
 struct CommodityFlowRow {
     milestone_year: u32,
     asset_id: Option<AssetID>,
-    group_id: Option<AssetGroupID>,
+    group_id: Option<AssetID>,
     commodity_id: CommodityID,
     time_slice: TimeSliceID,
     flow: Flow,
@@ -211,7 +211,7 @@ struct DispatchRow {
     milestone_year: u32,
     run_description: String,
     asset_id: Option<AssetID>,
-    group_id: Option<AssetGroupID>,
+    group_id: Option<AssetID>,
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
@@ -641,7 +641,7 @@ impl DataWriter {
     /// For divisible asset groups, a single row is emitted per group (using the parent asset's
     /// metadata).
     pub fn write_assets(&mut self, assets: &[AssetRef]) -> Result<()> {
-        let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
+        let mut seen_group_ids: HashSet<AssetID> = HashSet::new();
         for asset in assets {
             if let Some(parent) = asset.parent() {
                 // Active child of a group: emit one row for the group (first child wins)
@@ -666,7 +666,7 @@ impl DataWriter {
         milestone_year: u32,
         assets: &[AssetRef],
     ) -> Result<()> {
-        let mut seen_group_ids: HashSet<AssetGroupID> = HashSet::new();
+        let mut seen_group_ids: HashSet<AssetID> = HashSet::new();
         for asset in assets {
             if let Some(parent) = asset.parent() {
                 let group_id = asset.group_id().unwrap();

@@ -12,8 +12,6 @@ pub struct AssetPool {
     assets: Vec<AssetRef>,
     /// Next available asset ID number
     next_id: u32,
-    /// Next available group ID number
-    next_group_id: u32,
 }
 
 impl AssetPool {
@@ -50,11 +48,11 @@ impl AssetPool {
 
     /// Commission the specified asset or, if divisible, its children
     fn commission(&mut self, asset: AssetRef) {
-        asset.into_for_each_child(&mut self.next_group_id, |parent, mut child| {
+        asset.into_for_each_child(&mut self.next_id, |parent, mut child, next_id| {
             child
                 .make_mut()
-                .commission(AssetID(self.next_id), parent.cloned());
-            self.next_id += 1;
+                .commission(AssetID(*next_id), parent.cloned());
+            *next_id += 1;
             self.assets.push(child);
         });
     }
@@ -281,7 +279,7 @@ mod tests {
         assert!(user_assets.is_empty());
         assert!(!asset_pool.assets.is_empty());
         assert_eq!(asset_pool.assets.len(), expected_children);
-        assert_eq!(asset_pool.next_group_id, 1);
+        assert_eq!(asset_pool.next_id, 4);
     }
 
     #[rstest]
@@ -297,9 +295,9 @@ mod tests {
         assert_eq!(first_batch.len(), expected_children);
         assert!(first_batch.iter().all(|asset| asset.parent().is_some()));
 
-        // IDs should form a contiguous sequence starting from 0
+        // IDs should form a contiguous sequence starting from 1 (0 represents parent)
         let n = expected_children as u32;
-        assert_equal(first_batch.iter().map(|a| a.id().unwrap().0), 0..n);
+        assert_equal(first_batch.iter().map(|a| a.id().unwrap().0), 1..=n);
 
         // Second call should return only assets commissioned in this second invocation
         let mut later_assets = vec![asset_divisible.into()];
@@ -314,7 +312,10 @@ mod tests {
         );
 
         // IDs of the second batch continue directly on from the first
-        assert_equal(second_batch.iter().map(|a| a.id().unwrap().0), n..n * 2);
+        assert_equal(
+            second_batch.iter().map(|a| a.id().unwrap().0),
+            n + 2..n * 2 + 2,
+        );
     }
 
     #[rstest]
@@ -503,8 +504,8 @@ mod tests {
         assert!(returned.iter().all(|asset| asset.parent().is_some()));
 
         // IDs form a contiguous range immediately after the pre-existing assets
-        let start = initial_count as u32;
-        let end = (initial_count + expected_new) as u32;
+        let start = 1 + initial_count as u32;
+        let end = 1 + (initial_count + expected_new) as u32;
         assert_equal(returned.iter().map(|a| a.id().unwrap().0), start..end);
     }
 

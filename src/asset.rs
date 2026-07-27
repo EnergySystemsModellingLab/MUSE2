@@ -44,22 +44,6 @@ pub use pool::AssetPool;
 )]
 pub struct AssetID(u32);
 
-/// A unique identifier for an asset group
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    derive_more::Display,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Deserialize,
-    Serialize,
-)]
-pub struct AssetGroupID(u32);
-
 /// The state of an asset
 ///
 /// New assets are created as either `Ready` or `Candidate` assets. `Ready` assets from the input
@@ -96,10 +80,10 @@ pub enum AssetState {
     /// Parents are used for grouping (commissioned) divided assets, which can be used as an
     /// optimisation.
     Parent {
+        /// ID of this parent
+        id: AssetID,
         /// The ID of the agent which owns this asset's children
         agent_id: AgentID,
-        /// ID of the asset group
-        group_id: AssetGroupID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -701,7 +685,7 @@ impl Asset {
     }
 
     /// Get the group ID for this asset, if any
-    pub fn group_id(&self) -> Option<AssetGroupID> {
+    pub fn group_id(&self) -> Option<AssetID> {
         match &self.state {
             AssetState::Commissioned { parent, .. } => {
                 // Get group ID from parent
@@ -710,7 +694,7 @@ impl Asset {
                     // Safe because parents always have state `Parent`
                     .map(|parent| parent.group_id().unwrap())
             }
-            AssetState::Parent { group_id, .. } => Some(*group_id),
+            AssetState::Parent { id, .. } => Some(*id),
             _ => None,
         }
     }
@@ -1072,9 +1056,9 @@ impl AssetRef {
     /// unit of the original asset's unit size.
     ///
     /// Panics if this asset's state is not `Ready`.
-    fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
+    fn into_for_each_child<F>(mut self, next_id: &mut u32, mut f: F)
     where
-        F: FnMut(Option<&AssetRef>, AssetRef),
+        F: FnMut(Option<&AssetRef>, AssetRef, &mut u32),
     {
         assert!(
             matches!(self.state, AssetState::Ready { .. }),
@@ -1084,7 +1068,7 @@ impl AssetRef {
 
         let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
             // Asset is non-divisible
-            f(None, self);
+            f(None, self, next_id);
             return;
         };
 
@@ -1098,13 +1082,13 @@ impl AssetRef {
         let agent_id = self.agent_id().unwrap().clone();
         self.make_mut().state = AssetState::Parent {
             agent_id,
-            group_id: AssetGroupID(*next_group_id),
+            id: AssetID(*next_id),
         };
-        *next_group_id += 1;
+        *next_id += 1;
 
         // Run `f` over each child
         for child in iter::repeat_n(child, n_units as usize) {
-            f(Some(&self), child);
+            f(Some(&self), child, next_id);
         }
     }
 
@@ -1190,7 +1174,7 @@ enum AssetCmp<'a> {
             &'a RegionID,
             u32,
             Option<&'a AgentID>,
-            Option<AssetGroupID>,
+            Option<AssetID>, // group ID
         ),
     ),
 }
@@ -1424,19 +1408,23 @@ mod tests {
 
         let mut count = 0;
         let mut total_child_capacity = Capacity(0.0);
-        asset.clone().into_for_each_child(&mut 0, |parent, child| {
-            assert!(parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. })));
+        asset
+            .clone()
+            .into_for_each_child(&mut 0, |parent, child, _| {
+                assert!(
+                    parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. }))
+                );
 
-            // Check each child has capacity equal to unit_size
-            assert_eq!(
-                child.total_capacity(),
-                unit_size,
-                "Child capacity should equal unit_size"
-            );
+                // Check each child has capacity equal to unit_size
+                assert_eq!(
+                    child.total_capacity(),
+                    unit_size,
+                    "Child capacity should equal unit_size"
+                );
 
-            total_child_capacity += child.total_capacity();
-            count += 1;
-        });
+                total_child_capacity += child.total_capacity();
+                count += 1;
+            });
         assert_eq!(count, n_expected_children, "Unexpected number of children");
 
         // Check total capacity is >= parent capacity
@@ -1455,11 +1443,13 @@ mod tests {
 
         let asset = AssetRef::from(asset);
         let mut count = 0;
-        asset.clone().into_for_each_child(&mut 0, |parent, child| {
-            assert!(parent.is_none());
-            assert_eq!(child, asset);
-            count += 1;
-        });
+        asset
+            .clone()
+            .into_for_each_child(&mut 0, |parent, child, _| {
+                assert!(parent.is_none());
+                assert_eq!(child, asset);
+                count += 1;
+            });
         assert_eq!(count, 1);
     }
 
@@ -1468,7 +1458,7 @@ mod tests {
         let asset = AssetRef::from(asset_divisible);
         let mut parent = None;
 
-        asset.into_for_each_child(&mut 0, |maybe_parent, _| {
+        asset.into_for_each_child(&mut 0, |maybe_parent, _, _| {
             if parent.is_none() {
                 parent = maybe_parent.cloned();
             }
