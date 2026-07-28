@@ -674,16 +674,6 @@ impl Asset {
         matches!(self.state, AssetState::Parent { .. })
     }
 
-    /// Get the number of children this asset has.
-    ///
-    /// If this asset is not a parent, then `None` is returned.
-    pub fn num_children(&self) -> Option<u32> {
-        match &self.state {
-            AssetState::Parent { .. } => Some(self.capacity().n_units().unwrap()),
-            _ => None,
-        }
-    }
-
     /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
@@ -1495,7 +1485,7 @@ mod tests {
             partial_parent.capacity(),
             AssetCapacity::Discrete(num_units, Capacity(4.0))
         );
-        assert_eq!(partial_parent.num_children(), Some(num_units));
+        assert_eq!(partial_parent.capacity().n_units(), Some(num_units));
         assert_eq!(partial_parent.id(), parent.id());
         assert_eq!(partial_parent.agent_id(), parent.agent_id());
         assert_eq!(Rc::ptr_eq(&partial_parent.0, &parent.0), expect_same_asset);
