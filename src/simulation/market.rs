@@ -351,7 +351,7 @@ pub fn select_assets_for_cycle(
 }
 
 /// Get a portion of the demand profile for this market
-fn get_demand_portion_for_market(
+pub fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
     commodity_id: &CommodityID,
@@ -374,7 +374,7 @@ fn get_demand_portion_for_market(
 
 /// Get the agents responsible for a given market in a given year along with the commodity
 /// portion for which they are responsible
-fn get_responsible_agents<'a, I>(
+pub fn get_responsible_agents<'a, I>(
     agents: I,
     commodity_id: &'a CommodityID,
     region_id: &'a RegionID,
@@ -396,7 +396,7 @@ where
 }
 
 /// Get options from existing and potential assets for the given parameters
-fn get_asset_options<'a>(
+pub fn get_asset_options<'a>(
     all_existing_assets: &'a [AssetRef],
     demand: &'a DemandMap,
     agent: &'a Agent,

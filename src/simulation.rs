@@ -212,7 +212,7 @@ fn run_dispatch_for_year(
 }
 
 /// Create candidate assets for all potential processes in a specified year
-fn candidate_assets_for_next_year(
+pub fn candidate_assets_for_next_year(
     processes: &ProcessMap,
     next_year: Option<u32>,
     candidate_asset_capacity: Capacity,
