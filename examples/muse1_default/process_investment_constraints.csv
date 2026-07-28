@@ -1,6 +1,6 @@
-process_id,regions,commission_years,addition_limit
-gassupply1,R1,all,10
-gasCCGT,R1,all,10
-windturbine,R1,all,10
-gasboiler,R1,all,10
-heatpump,R1,all,10
+process_id,regions,commission_years,addition_limit,capacity_growth_limit,total_capacity_limit
+gassupply1,R1,all,10,0.5,100
+gasCCGT,R1,all,10,0.5,100
+windturbine,R1,all,10,0.5,100
+gasboiler,R1,all,10,0.5,100
+heatpump,R1,all,10,0.5,100

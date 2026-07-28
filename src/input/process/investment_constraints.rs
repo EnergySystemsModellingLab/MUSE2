@@ -7,9 +7,10 @@ use crate::process::{
     ProcessID, ProcessInvestmentConstraint, ProcessInvestmentConstraintsMap, ProcessMap,
 };
 use crate::region::parse_region_str;
-use crate::units::{CapacityPerYear, Year};
+use crate::units::{Capacity, CapacityPerYear, Dimensionless, UnitType, Year};
 use anyhow::{Context, Result, ensure};
 use itertools::iproduct;
+use log::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -23,17 +24,75 @@ struct ProcessInvestmentConstraintRaw {
     process_id: String,
     regions: String,
     commission_years: String,
-    addition_limit: CapacityPerYear,
+    addition_limit: Option<CapacityPerYear>,
+    capacity_growth_limit: Option<Dimensionless>,
+    growth_seed: Option<Dimensionless>,
+    total_capacity_limit: Option<Capacity>,
 }
 
 impl ProcessInvestmentConstraintRaw {
     /// Validate the constraint record for logical consistency and required fields
     fn validate(&self) -> Result<()> {
-        // Validate that value is finite
+        self.validate_constraints_combination()?;
+
+        // Validate addition_limit
+        if let Some(limit) = self.addition_limit {
+            Self::validate_constraint_value(limit, "addition")?;
+        }
+
+        // Validate capacity_growth_limit
+        if let Some(limit) = self.capacity_growth_limit {
+            Self::validate_constraint_value(limit, "capacity growth")?;
+
+            // Warn user they may have specified limit as percentage, rather than fraction
+            if limit > Dimensionless(1.0) {
+                warn!(
+                    "Interpreting capacity growth constraint '{limit}' as {}%",
+                    limit * Dimensionless(100.0)
+                );
+            }
+        }
+
+        // Validate growth seed: must be in range [1, inf)
+        if let Some(growth_seed) = self.growth_seed {
+            ensure!(
+                growth_seed.is_finite() && growth_seed >= Dimensionless(1.0),
+                "Invalid value for growth seed: '{growth_seed}'; must be greater than or equal to \
+                 1, and finite.",
+            );
+        }
+
+        // Validate total_capacity_limit
+        if let Some(limit) = self.total_capacity_limit {
+            Self::validate_constraint_value(limit, "total capacity")?;
+        }
+
+        Ok(())
+    }
+
+    /// Check whether the limit is finite, otherwise return an error
+    fn validate_constraint_value<T: UnitType>(constraint: T, constraint_name: &str) -> Result<()> {
         ensure!(
-            self.addition_limit.is_finite() && self.addition_limit >= CapacityPerYear(0.0),
-            "Invalid value for addition constraint: '{}'; must be non-negative and finite.",
-            self.addition_limit
+            constraint.is_finite() && constraint.value() >= 0.0,
+            "Invalid value for {} constraint: '{}'; must be non-negative and finite.",
+            constraint_name,
+            constraint.value(),
+        );
+
+        Ok(())
+    }
+
+    /// Check that the combination of constraints is valid
+    fn validate_constraints_combination(&self) -> Result<()> {
+        // Allow any of addition_limit, capacity_growth_limit and total_capacity_limit to be empty,
+        // but not all three.
+        ensure!(
+            !(self.addition_limit.is_none()
+                && self.capacity_growth_limit.is_none()
+                && self.total_capacity_limit.is_none()),
+            "Invalid investment constraints for '{}': cannot have all process investment \
+             constraints undefined; rather omit the record for that process/region/year.",
+            self.process_id
         );
 
         Ok(())
@@ -134,12 +193,13 @@ where
             let prev_year = milestone_years[idx - 1];
             let years_since_prev = year - prev_year;
 
-            // Multiply the addition limit by the number of years since previous milestone.
-            let scaled_limit = record.addition_limit * Year(years_since_prev as f64);
+            // Multiply the addition limit (if provided) by the number of years since previous
+            // milestone.
+            let addition_limit: Option<Capacity> = record
+                .addition_limit
+                .map(|limit| limit * Year(years_since_prev as f64));
 
-            let constraint = Rc::new(ProcessInvestmentConstraint {
-                addition_limit: Some(scaled_limit),
-            });
+            let constraint = Rc::new(ProcessInvestmentConstraint { addition_limit });
 
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }
@@ -153,14 +213,23 @@ mod tests {
     use crate::fixture::{assert_error, processes};
     use crate::region::RegionID;
     use crate::units::Capacity;
+    use logtest::Logger;
     use rstest::rstest;
 
-    fn validate_raw_constraint(addition_limit: CapacityPerYear) -> Result<()> {
+    fn validate_raw_constraint(
+        addition_limit: Option<CapacityPerYear>,
+        capacity_growth_limit: Option<Dimensionless>,
+        growth_seed: Option<Dimensionless>,
+        total_capacity_limit: Option<Capacity>,
+    ) -> Result<()> {
         let constraint = ProcessInvestmentConstraintRaw {
             process_id: "test_process".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
             addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
         };
         constraint.validate()
     }
@@ -174,7 +243,10 @@ mod tests {
             process_id: "process1".into(),
             regions: "GBR".into(),
             commission_years: "ALL".into(), // Should apply to milestone years [2012, 2016]
-            addition_limit: CapacityPerYear(100.0),
+            addition_limit: Some(CapacityPerYear(100.0)),
+            capacity_growth_limit: Some(Dimensionless(0.5)),
+            growth_seed: Some(Dimensionless(1.0)),
+            total_capacity_limit: Some(Capacity(100.0)),
         }];
 
         let result = read_process_investment_constraints_from_iter(
@@ -220,19 +292,28 @@ mod tests {
                 process_id: "process1".into(),
                 regions: "GBR".into(),
                 commission_years: "2010".into(),
-                addition_limit: CapacityPerYear(100.0),
+                addition_limit: Some(CapacityPerYear(100.0)),
+                capacity_growth_limit: Some(Dimensionless(0.5)),
+                growth_seed: Some(Dimensionless(1.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
                 regions: "ALL".into(),
                 commission_years: "2015".into(),
-                addition_limit: CapacityPerYear(200.0),
+                addition_limit: Some(CapacityPerYear(200.0)),
+                capacity_growth_limit: Some(Dimensionless(0.5)),
+                growth_seed: Some(Dimensionless(1.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
                 regions: "USA".into(),
                 commission_years: "2020".into(),
-                addition_limit: CapacityPerYear(50.0),
+                addition_limit: Some(CapacityPerYear(50.0)),
+                capacity_growth_limit: Some(Dimensionless(0.5)),
+                growth_seed: Some(Dimensionless(1.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             },
         ];
 
@@ -291,7 +372,10 @@ mod tests {
             process_id: "process1".into(),
             regions: "ALL".into(),
             commission_years: "ALL".into(),
-            addition_limit: CapacityPerYear(75.0),
+            addition_limit: Some(CapacityPerYear(75.0)),
+            capacity_growth_limit: Some(Dimensionless(0.5)),
+            growth_seed: Some(Dimensionless(1.0)),
+            total_capacity_limit: Some(Capacity(100.0)),
         }];
 
         // Read constraints into the map
@@ -339,7 +423,10 @@ mod tests {
             process_id: "process1".into(),
             regions: "GBR".into(),
             commission_years: "2025".into(), // Outside milestone years (2010-2020)
-            addition_limit: CapacityPerYear(100.0),
+            addition_limit: Some(CapacityPerYear(100.0)),
+            capacity_growth_limit: Some(Dimensionless(0.5)),
+            growth_seed: Some(Dimensionless(1.0)),
+            total_capacity_limit: Some(Capacity(100.0)),
         }];
 
         // Should fail with milestone year validation error
@@ -354,38 +441,239 @@ mod tests {
         );
     }
 
-    #[test]
-    fn validate_addition_with_finite_value() {
-        // Valid: addition constraint with positive value
-        let valid = validate_raw_constraint(CapacityPerYear(10.0));
-        valid.unwrap();
-
-        // Valid: addition constraint with zero value
-        let valid = validate_raw_constraint(CapacityPerYear(0.0));
-        valid.unwrap();
-
-        // Not valid: addition constraint with negative value
-        let invalid = validate_raw_constraint(CapacityPerYear(-10.0));
-        assert_error!(
-            invalid,
-            "Invalid value for addition constraint: '-10'; must be non-negative and finite."
+    #[rstest]
+    #[case(Some(CapacityPerYear(10.0)), None, None, None)]
+    #[case(Some(CapacityPerYear(0.0)), None, None, None)]
+    #[case(Some(CapacityPerYear(10.0)), Some(Dimensionless(0.5)), None, None)]
+    #[case(Some(CapacityPerYear(10.0)), Some(Dimensionless(0.0)), None, None)]
+    #[case(Some(CapacityPerYear(10.0)), None, None, Some(Capacity(100.0)))]
+    #[case(Some(CapacityPerYear(10.0)), None, None, Some(Capacity(0.0)))]
+    fn validate_constraints_valid(
+        #[case] addition_limit: Option<CapacityPerYear>,
+        #[case] capacity_growth_limit: Option<Dimensionless>,
+        #[case] growth_seed: Option<Dimensionless>,
+        #[case] total_capacity_limit: Option<Capacity>,
+    ) {
+        // Valid: capacity constraints with values >= 0, and capacity_growth_limit and
+        // total_capacity_limit as None
+        let valid = validate_raw_constraint(
+            addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
         );
+        valid.unwrap();
+    }
+
+    #[rstest]
+    #[case(
+        Some(CapacityPerYear(-10.0)),
+        None,
+        None,
+        None,
+        "Invalid value for addition constraint: '-10'; must be non-negative and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        Some(Dimensionless(-0.5)),
+        None,
+        None,
+        "Invalid value for capacity growth constraint: '-0.5'; must be non-negative and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        None,
+        Some(Capacity(-100.0)),
+        "Invalid value for total capacity constraint: '-100'; must be non-negative and finite."
+    )]
+    fn validate_constraints_rejects_negative(
+        #[case] addition_limit: Option<CapacityPerYear>,
+        #[case] capacity_growth_limit: Option<Dimensionless>,
+        #[case] growth_seed: Option<Dimensionless>,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Not valid: capacity constraints with negative value
+        let invalid = validate_raw_constraint(
+            addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
+        );
+        assert_error!(invalid, error_msg);
+    }
+
+    #[rstest]
+    #[case(
+        Some(CapacityPerYear(f64::INFINITY)),
+        None,
+        None,
+        None,
+        "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        Some(Dimensionless(f64::INFINITY)),
+        None,
+        None,
+        "Invalid value for capacity growth constraint: 'inf'; must be non-negative and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        None,
+        Some(Capacity(f64::INFINITY)),
+        "Invalid value for total capacity constraint: 'inf'; must be non-negative and finite."
+    )]
+    fn validate_constraints_rejects_infinite(
+        #[case] addition_limit: Option<CapacityPerYear>,
+        #[case] capacity_growth_limit: Option<Dimensionless>,
+        #[case] growth_seed: Option<Dimensionless>,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Not valid: capacity constraints with infinite value
+        let invalid = validate_raw_constraint(
+            addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
+        );
+        assert_error!(invalid, error_msg);
+    }
+
+    #[rstest]
+    #[case(
+        Some(CapacityPerYear(f64::NAN)),
+        None,
+        None,
+        None,
+        "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        Some(Dimensionless(f64::NAN)),
+        None,
+        None,
+        "Invalid value for capacity growth constraint: 'NaN'; must be non-negative and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        None,
+        Some(Capacity(f64::NAN)),
+        "Invalid value for total capacity constraint: 'NaN'; must be non-negative and finite."
+    )]
+    fn validate_constraints_rejects_nan(
+        #[case] addition_limit: Option<CapacityPerYear>,
+        #[case] capacity_growth_limit: Option<Dimensionless>,
+        #[case] growth_seed: Option<Dimensionless>,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Not valid: capacity constraints with NaN value
+        let invalid = validate_raw_constraint(
+            addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
+        );
+        assert_error!(invalid, error_msg);
     }
 
     #[test]
-    fn validate_addition_rejects_infinite() {
-        // Invalid: infinite value
-        let invalid = validate_raw_constraint(CapacityPerYear(f64::INFINITY));
-        assert_error!(
-            invalid,
-            "Invalid value for addition constraint: 'inf'; must be non-negative and finite."
+    fn validate_capacity_growth_limit_warning() {
+        // Check warning raised if value above 1 provided
+        let mut logger = Logger::start();
+        let _ = validate_raw_constraint(
+            Some(CapacityPerYear(10.0)),
+            Some(Dimensionless(5.0)),
+            None,
+            None,
         );
+        assert_eq!(
+            logger.pop().unwrap().args(),
+            "Interpreting capacity growth constraint '5' as 500%"
+        );
+    }
 
-        // Invalid: NaN value
-        let invalid = validate_raw_constraint(CapacityPerYear(f64::NAN));
+    #[rstest]
+    #[case(Some(CapacityPerYear(10.0)), None, None, None)]
+    #[case(Some(CapacityPerYear(10.0)), None, Some(Dimensionless(1.0)), None)]
+    #[case(Some(CapacityPerYear(10.0)), None, Some(Dimensionless(42.0)), None)]
+    fn validate_growth_seed_valid(
+        #[case] addition_limit: Option<CapacityPerYear>,
+        #[case] capacity_growth_limit: Option<Dimensionless>,
+        #[case] growth_seed: Option<Dimensionless>,
+        #[case] total_capacity_limit: Option<Capacity>,
+    ) {
+        // Valid: growth seed with finite values >= 1, or None
+        let valid = validate_raw_constraint(
+            addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
+        );
+        valid.unwrap();
+    }
+
+    #[rstest]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        Some(Dimensionless(0.9)),
+        None,
+        "Invalid value for growth seed: '0.9'; must be greater than or equal to 1, and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        Some(Dimensionless(-42.0)),
+        None,
+        "Invalid value for growth seed: '-42'; must be greater than or equal to 1, and finite.",
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        Some(Dimensionless(f64::NAN)),
+        None,
+        "Invalid value for growth seed: 'NaN'; must be greater than or equal to 1, and finite."
+    )]
+    #[case(
+        Some(CapacityPerYear(10.0)),
+        None,
+        Some(Dimensionless(f64::INFINITY)),
+        None,
+        "Invalid value for growth seed: 'inf'; must be greater than or equal to 1, and finite."
+    )]
+    fn validate_growth_seed_invalid(
+        #[case] addition_limit: Option<CapacityPerYear>,
+        #[case] capacity_growth_limit: Option<Dimensionless>,
+        #[case] growth_seed: Option<Dimensionless>,
+        #[case] total_capacity_limit: Option<Capacity>,
+        #[case] error_msg: &str,
+    ) {
+        // Invalid: growth seed with values < 1, NaN or inf
+        let invalid = validate_raw_constraint(
+            addition_limit,
+            capacity_growth_limit,
+            growth_seed,
+            total_capacity_limit,
+        );
+        assert_error!(invalid, error_msg);
+    }
+
+    #[test]
+    fn validate_constraints_combination_rejects_all_undefined() {
+        // Check an error is raised if all of addition_limit, capacity_growth_limit and
+        // total_capacity_limit are undefined.
+        let invalid = validate_raw_constraint(None, None, Some(Dimensionless(1.25)), None);
         assert_error!(
             invalid,
-            "Invalid value for addition constraint: 'NaN'; must be non-negative and finite."
+            "Invalid investment constraints for 'test_process': cannot have all process \
+             investment constraints undefined; rather omit the record for that process/\
+             region/year."
         );
     }
 }
