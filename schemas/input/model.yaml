@@ -25,7 +25,7 @@ properties:
 
       Must be >0 and <=1.
       Lower values produce smaller investment increments, while higher values produce larger increments.
-  fallback_price_strategy:
+  fallback_pricing_strategy:
     type: string
     description: Pricing strategy used to calculate fallback prices in the mini dispatch optimisation during investment appraisal
     default: full_average

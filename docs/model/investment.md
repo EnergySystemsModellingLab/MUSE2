@@ -53,7 +53,7 @@ Investment appraisal uses two distinct price sets, both sourced from the previou
 - **Fallback prices** \\( \phi\_{c,r,t} \\): used to incentivise dispatch in the mini dispatch
   optimisation when shadow prices alone are insufficient (see
   [Mini Dispatch Optimisation](#mini-dispatch-optimisation)). Calculated using the strategy defined
-  by `fallback_price_strategy` in [`model.toml`][model-toml].
+  by `fallback_pricing_strategy` in [`model.toml`][model-toml].
 
 See [Commodity Prices][prices] for how these price sets are calculated.
 
@@ -214,7 +214,7 @@ The asset dispatches when \\( \alpha_t > 0 \\), i.e. when:
   \text{NetOperatingCost}_t < \text{FallbackCost}
 \\]
 
-\\( \phi_{c,r,t} \\) is calculated according to the strategy defined by `fallback_price_strategy`
+\\( \phi_{c,r,t} \\) is calculated according to the strategy defined by `fallback_pricing_strategy`
 in [`model.toml`][model-toml].
 
 ### Constraints

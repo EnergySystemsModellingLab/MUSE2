@@ -61,7 +61,7 @@ pub struct Prices {
     pub market: PriceMap,
     /// Commodity shadow prices
     pub shadow: PriceMap,
-    /// Commodity fallback prices calculated according to the model's `fallback_price_strategy`
+    /// Commodity fallback prices calculated according to the model's `fallback_pricing_strategy`
     pub fallback: PriceMap,
 }
 
@@ -114,7 +114,7 @@ pub fn calculate_prices(
             &mut market_prices,
             None,
         );
-        if model.parameters.fallback_price_strategy != PricingStrategy::Unpriced {
+        if model.parameters.fallback_pricing_strategy != PricingStrategy::Unpriced {
             price_market_set(
                 market_set,
                 model,
@@ -124,7 +124,7 @@ pub fn calculate_prices(
                 &shadow_prices,
                 &mut annual_activities,
                 &mut fallback_prices,
-                Some(model.parameters.fallback_price_strategy),
+                Some(model.parameters.fallback_pricing_strategy),
             );
         }
     }

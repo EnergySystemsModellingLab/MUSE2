@@ -88,7 +88,7 @@ pub struct ModelParameters {
     ///
     /// If set to `unpriced`, a fallback price of zero is used, which reverts to the
     /// pure shadow-price formulation.
-    pub fallback_price_strategy: PricingStrategy,
+    pub fallback_pricing_strategy: PricingStrategy,
     /// The cost applied to unmet demand.
     ///
     /// Currently this only applies to the LCOX appraisal.
@@ -126,7 +126,7 @@ impl Default for ModelParameters {
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
             capacity_limit_factor: Dimensionless(0.05),
-            fallback_price_strategy: PricingStrategy::FullCostAverage,
+            fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
@@ -338,7 +338,7 @@ impl ModelParameters {
 
         // capacity_limit_factor already validated with deserialise_proportion_nonzero
 
-        // fallback_price_strategy already validated by deserialisation
+        // fallback_pricing_strategy already validated by deserialisation
 
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
