@@ -674,6 +674,11 @@ impl Asset {
         matches!(self.state, AssetState::Parent { .. })
     }
 
+    /// Whether this asset is divisible
+    pub fn is_divisible(&self) -> bool {
+        matches!(self.capacity.get(), AssetCapacity::Discrete { .. })
+    }
+
     /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
