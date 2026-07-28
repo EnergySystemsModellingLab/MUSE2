@@ -342,8 +342,8 @@ impl ModelParameters {
         // commodity_balance_epsilon
         ensure!(
             self.commodity_balance_epsilon.is_finite()
-                && self.commodity_balance_epsilon > Flow(0.0),
-            "commodity_balance_epsilon must be a finite number greater than zero"
+                && self.commodity_balance_epsilon >= Flow(0.0),
+            "commodity_balance_epsilon must be a finite number greater than or equal to zero"
         );
 
         // value_of_lost_load
