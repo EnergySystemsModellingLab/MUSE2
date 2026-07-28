@@ -518,7 +518,7 @@ fn replace_child_assets_with_parents(
         remaining_capacities.insert(parent.clone(), parent.capacity());
 
         // Add parent asset (one unit)
-        assets.push(parent.make_partial_parent(1));
+        assets.push(parent.clone().with_subset_of_units(1));
     }
 
     children
