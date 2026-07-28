@@ -876,6 +876,11 @@ impl Asset {
         }
     }
 
+    /// Whether this asset is currently mothballed
+    pub fn is_mothballed(&self) -> bool {
+        self.get_mothballed_year().is_some()
+    }
+
     /// Get the unit size for this asset's capacity (if any)
     pub fn unit_size(&self) -> Option<Capacity> {
         match self.capacity() {

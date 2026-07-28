@@ -106,7 +106,7 @@ impl AssetPool {
             if in_pool {
                 // If not already set, we set the current year as the mothball year,
                 // i.e. the first one the asset was not used.
-                if asset.get_mothballed_year().is_none() {
+                if !asset.is_mothballed() {
                     asset.make_mut().mothball(year);
                 }
 
