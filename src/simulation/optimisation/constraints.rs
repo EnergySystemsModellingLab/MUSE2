@@ -179,9 +179,10 @@ where
                 }
             }
 
-            // Calculate the maximum output this commodity could receive from candidate assets in
-            // this region and time slice selection. This is used to ensure any epsilon we add to
-            // the lower bound is always satisfiable.
+            // Add a small epsilon to the lower bound to force some dispatch by candidate assets,
+            // ensuring they receive a nonzero shadow price. Only applied when the total maximum
+            // output from candidates exceeds epsilon, so the balance constraint remains
+            // satisfiable.
             let max_candidate_output: Flow = candidate_assets
                 .iter()
                 .filter(|a| a.region_id() == region_id)
@@ -193,11 +194,11 @@ where
                         })
                 })
                 .sum();
-
-            // Add a small epsilon to the lower bound to force some dispatch by candidate assets,
-            // so they receive a nonzero shadow price. Capped at the maximum candidate output to
-            // ensure the constraint is always satisfiable.
-            let epsilon = max_candidate_output.min(COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES);
+            let epsilon = if max_candidate_output > COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES {
+                COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
+            } else {
+                Flow(0.0)
+            };
 
             // For SVD commodities, the lower bound is the exogenous demand (or epsilon if larger).
             // For SED commodities, the lower bound is just epsilon.
