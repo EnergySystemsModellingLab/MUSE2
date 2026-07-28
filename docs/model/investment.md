@@ -50,7 +50,7 @@ Investment appraisal uses two distinct price sets, both sourced from the previou
   optimisation step of each appraisal (see [Mini Dispatch Optimisation](#mini-dispatch-optimisation)).
 - **Market prices** \\( \pi\_{c,r,t} \\): used to calculate the investment metric (Cost Index or
   SNAS) after dispatch.
-- **Fallback prices** \\( \phi_{c,r,t} \\): used to incentivise dispatch in the mini dispatch
+- **Fallback prices** \\( \phi\_{c,r,t} \\): used to incentivise dispatch in the mini dispatch
   optimisation when shadow prices alone are insufficient (see
   [Mini Dispatch Optimisation](#mini-dispatch-optimisation)). Calculated using the strategy defined
   by `fallback_price_strategy` in [`model.toml`][model-toml].
