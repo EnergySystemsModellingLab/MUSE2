@@ -184,11 +184,10 @@ where
                 .iter()
                 .filter(|a| a.region_id() == region_id)
                 .flat_map(|a| {
+                    let max_activity = *a.get_activity_limits_for_selection(&ts_selection).end();
                     a.iter_output_flows()
                         .filter(|flow| &flow.commodity.id == commodity_id)
-                        .map(|flow| {
-                            flow.coeff * *a.get_activity_limits_for_selection(&ts_selection).end()
-                        })
+                        .map(move |flow| flow.coeff * max_activity)
                 })
                 .sum();
             let epsilon = if max_candidate_output > model.parameters.commodity_balance_epsilon {
