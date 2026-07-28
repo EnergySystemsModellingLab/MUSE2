@@ -193,14 +193,14 @@ pub fn select_assets_for_single_market(
         .collect::<Vec<_>>();
 
         // Calculate investment limits for candidate assets
-        let investment_limits =
+        let candidate_investment_limits =
             collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
             opt_assets,
-            investment_limits,
+            candidate_investment_limits,
             commodity,
             agent,
             region_id,
