@@ -684,20 +684,6 @@ impl Asset {
         }
     }
 
-    /// Get the group ID for this asset, if any
-    pub fn group_id(&self) -> Option<AssetID> {
-        match &self.state {
-            AssetState::Commissioned { parent, .. } => {
-                // Get group ID from parent
-                parent
-                    .as_ref()
-                    // Safe because parents always have state `Parent`
-                    .map(|parent| parent.id().unwrap())
-            }
-            _ => None,
-        }
-    }
-
     /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
@@ -1038,7 +1024,6 @@ impl AssetRef {
                 self.region_id(),
                 self.commission_year,
                 self.agent_id(),
-                self.group_id(),
             ))
         }
     }
@@ -1167,15 +1152,7 @@ impl Hash for AssetRef {
 #[derive(PartialEq, PartialOrd, Eq, Ord, Hash)]
 enum AssetCmp<'a> {
     WithID(AssetID),
-    WithoutID(
-        (
-            &'a ProcessID,
-            &'a RegionID,
-            u32,
-            Option<&'a AgentID>,
-            Option<AssetID>, // group ID
-        ),
-    ),
+    WithoutID((&'a ProcessID, &'a RegionID, u32, Option<&'a AgentID>)),
 }
 
 /// Additional methods for iterating over assets
@@ -1515,7 +1492,7 @@ mod tests {
             AssetCapacity::Discrete(num_units, Capacity(4.0))
         );
         assert_eq!(partial_parent.num_children(), Some(num_units));
-        assert_eq!(partial_parent.group_id(), parent.group_id());
+        assert_eq!(partial_parent.id(), parent.id());
         assert_eq!(partial_parent.agent_id(), parent.agent_id());
         assert_eq!(Rc::ptr_eq(&partial_parent.0, &parent.0), expect_same_asset);
         assert_eq!(parent.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
