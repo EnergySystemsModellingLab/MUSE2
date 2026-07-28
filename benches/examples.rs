@@ -4,6 +4,7 @@ use muse2::cli::example::handle_example_run_command;
 use muse2::example::get_example_names;
 use std::hint::black_box;
 
+/// Benchmark the example run command for all examples
 fn criterion_benchmark(c: &mut Criterion) {
     let example_names = get_example_names();
     let options = RunOpts {
@@ -12,8 +13,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         debug_model: false,
         no_copy_input_files: false,
     };
+    let mut group = c.benchmark_group("example_run");
+    group
+        .noise_threshold(0.05) // Set a noise threshold of 5%
+        .sample_size(20); // Set the sample size to 20 iterations
+
     for name in example_names {
-        c.bench_function(&format!("{name} example"), |b| {
+        group.bench_function(format!("{name} example"), |b| {
             b.iter(|| {
                 handle_example_run_command(black_box(name), black_box(false), black_box(&options))
                     .unwrap_or(());
