@@ -77,6 +77,10 @@ pub struct ModelParameters {
     ///
     /// Don't change unless you know what you're doing.
     pub candidate_asset_capacity: Capacity,
+    /// The epsilon added to commodity balance lower bounds to force candidate dispatch.
+    ///
+    /// Don't change unless you know what you're doing.
+    pub commodity_balance_epsilon: Flow,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
@@ -118,6 +122,7 @@ impl Default for ModelParameters {
             // Default values for optional parameters
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
+            commodity_balance_epsilon: Flow(1e-6),
             capacity_limit_factor: Dimensionless(0.05),
             value_of_lost_load: MoneyPerFlow(1e9),
             max_ironing_out_iterations: 1,
@@ -333,6 +338,13 @@ impl ModelParameters {
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
             .context("Invalid value for candidate_asset_capacity")?;
+
+        // commodity_balance_epsilon
+        ensure!(
+            self.commodity_balance_epsilon.is_finite()
+                && self.commodity_balance_epsilon > Flow(0.0),
+            "commodity_balance_epsilon must be a finite number greater than zero"
+        );
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;

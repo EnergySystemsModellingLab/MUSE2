@@ -9,9 +9,6 @@ use crate::units::{Flow, UnitType};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
-/// Small epsilon to add to the commodity balance constraints for candidate assets
-const COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES: Flow = Flow(1e-6);
-
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
     /// Row offset in the solver's row ordering corresponding to the first key in `keys`.
@@ -194,8 +191,8 @@ where
                         })
                 })
                 .sum();
-            let epsilon = if max_candidate_output > COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES {
-                COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
+            let epsilon = if max_candidate_output > model.parameters.commodity_balance_epsilon {
+                model.parameters.commodity_balance_epsilon
             } else {
                 Flow(0.0)
             };
