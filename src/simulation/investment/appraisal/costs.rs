@@ -9,17 +9,13 @@ use crate::units::{MoneyPerCapacity, Year};
 /// - For a candidate asset, this includes both operating and capital costs.
 ///
 /// The return value is the annualised fixed cost expressed as `MoneyPerCapacity`.
-/// If `asset.state()` is not `Commissioned`, `Parent` or `Candidate` this function will panic.
+/// If `asset.state()` is not `Commissioned` or `Candidate` this function will panic.
 pub fn annual_fixed_cost(asset: &AssetRef) -> MoneyPerCapacity {
     match asset.state() {
-        AssetState::Commissioned { .. } | AssetState::Parent { .. } => {
-            annual_fixed_cost_for_existing(asset)
-        }
+        AssetState::Commissioned { .. } => annual_fixed_cost_for_existing(asset),
         AssetState::Candidate => annual_fixed_cost_for_candidate(asset),
         AssetState::Ready { .. } => {
-            panic!(
-                "annual_fixed_cost should only be called with Commissioned, Parent or Candidate assets"
-            )
+            panic!("annual_fixed_cost should only be called with Commissioned or Candidate assets")
         }
     }
 }

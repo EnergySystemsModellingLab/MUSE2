@@ -1,5 +1,5 @@
 //! Defines a data structure for representing the current active pool of assets.
-use super::{AssetID, AssetRef, AssetState, UserAsset};
+use super::{AssetID, AssetRef, AssetState, CommissionedType, UserAsset};
 use itertools::Itertools;
 use log::warn;
 use std::cmp::min;
@@ -49,9 +49,13 @@ impl AssetPool {
     /// Commission the specified asset or, if divisible, its children
     fn commission(&mut self, asset: AssetRef) {
         asset.into_for_each_child(&mut self.next_id, |parent, mut child, next_id| {
-            child
-                .make_mut()
-                .commission(AssetID(*next_id), parent.cloned());
+            let kind = match parent {
+                Some(parent) => CommissionedType::Child {
+                    parent: parent.clone(),
+                },
+                None => CommissionedType::NonDivisible,
+            };
+            child.make_mut().commission(AssetID(*next_id), kind);
             *next_id += 1;
             self.assets.push(child);
         });
@@ -161,7 +165,7 @@ impl AssetPool {
                 AssetState::Ready { .. } => {
                     self.commission(asset);
                 }
-                _ => panic!(
+                AssetState::Candidate => panic!(
                     "Cannot extend asset pool with asset in state {}. Only assets in \
                     Commissioned or Ready states are allowed.",
                     asset.state

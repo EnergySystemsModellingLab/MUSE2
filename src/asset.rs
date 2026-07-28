@@ -44,6 +44,20 @@ pub use pool::AssetPool;
 )]
 pub struct AssetID(u32);
 
+/// The type of commissioned asset
+#[derive(PartialEq, Debug, Clone)]
+pub enum CommissionedType {
+    /// A non-divisible asset
+    NonDivisible,
+    /// A parent asset
+    Parent,
+    /// A child asset
+    Child {
+        /// The parent of this child
+        parent: AssetRef,
+    },
+}
+
 /// The state of an asset
 ///
 /// New assets are created as either `Ready` or `Candidate` assets. `Ready` assets from the input
@@ -63,10 +77,8 @@ pub enum AssetState {
         agent_id: AgentID,
         /// Year in which the asset was mothballed. None, if it is not mothballed
         mothballed_year: Option<u32>,
-        /// Parent asset, if any.
-        ///
-        /// All divided assets have a parent, which tracks the total capacity across the children.
-        parent: Option<AssetRef>,
+        /// The type of commissioned asset (non-divisible, parent or child)
+        kind: CommissionedType,
     },
     /// The asset is ready for investment, but not yet confirmed
     Ready {
@@ -74,16 +86,6 @@ pub enum AssetState {
         agent_id: AgentID,
         /// The reason why this asset is due to be commissioned
         commission_reason: &'static str,
-    },
-    /// The asset is a parent of other assets.
-    ///
-    /// Parents are used for grouping (commissioned) divided assets, which can be used as an
-    /// optimisation.
-    Parent {
-        /// ID of this parent
-        id: AssetID,
-        /// The ID of the agent which owns this asset's children
-        agent_id: AgentID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -206,7 +208,7 @@ impl Asset {
                 id: AssetID(0),
                 agent_id,
                 mothballed_year: None,
-                parent: None,
+                kind: CommissionedType::NonDivisible,
             },
             process,
             region_id,
@@ -627,10 +629,7 @@ impl Asset {
 
     /// Whether this asset has been commissioned
     pub fn is_commissioned(&self) -> bool {
-        matches!(
-            &self.state,
-            AssetState::Commissioned { .. } | AssetState::Parent { .. }
-        )
+        matches!(&self.state, AssetState::Commissioned { .. })
     }
 
     /// Get the commission year for this asset
@@ -656,22 +655,30 @@ impl Asset {
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
-            AssetState::Commissioned { id, .. } | AssetState::Parent { id, .. } => Some(*id),
+            AssetState::Commissioned { id, .. } => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// Type of commissioned asset
+    fn commissioned_type(&self) -> Option<&CommissionedType> {
+        match &self.state {
+            AssetState::Commissioned { kind, .. } => Some(kind),
             _ => None,
         }
     }
 
     /// Get the parent asset of this asset, if any
     pub fn parent(&self) -> Option<&AssetRef> {
-        match &self.state {
-            AssetState::Commissioned { parent, .. } => parent.as_ref(),
+        match self.commissioned_type() {
+            Some(CommissionedType::Child { parent }) => Some(parent),
             _ => None,
         }
     }
 
     /// Whether this asset is a parent of divided assets
     pub fn is_parent(&self) -> bool {
-        matches!(self.state, AssetState::Parent { .. })
+        self.commissioned_type() == Some(&CommissionedType::Parent)
     }
 
     /// Whether this asset is divisible
@@ -682,9 +689,9 @@ impl Asset {
     /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
-            AssetState::Commissioned { agent_id, .. }
-            | AssetState::Ready { agent_id, .. }
-            | AssetState::Parent { agent_id, .. } => Some(agent_id),
+            AssetState::Commissioned { agent_id, .. } | AssetState::Ready { agent_id, .. } => {
+                Some(agent_id)
+            }
             AssetState::Candidate => None,
         }
     }
@@ -747,13 +754,10 @@ impl Asset {
 
     /// Decommission this asset
     fn decommission(&mut self, reason: &str) {
-        let (id, agent_id, parent) = match &self.state {
+        let (id, agent_id, kind) = match &self.state {
             AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent),
+                id, agent_id, kind, ..
+            } => (*id, agent_id.clone(), kind),
             _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
         };
         debug!(
@@ -765,7 +769,7 @@ impl Asset {
         );
 
         // If this is a child asset, we need to decrease the parent's capacity appropriately
-        if let Some(parent) = parent {
+        if let CommissionedType::Child { parent } = kind {
             parent.decrement_unit_count();
         }
     }
@@ -778,8 +782,8 @@ impl Asset {
     /// # Arguments
     ///
     /// * `id` - The ID to give the newly commissioned asset
-    /// * `parent` - The parent asset, if this is a child asset
-    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>) {
+    /// * `kind` - The type of commissioned asset to produce
+    fn commission(&mut self, id: AssetID, kind: CommissionedType) {
         let (agent_id, reason) = match &self.state {
             AssetState::Ready {
                 agent_id,
@@ -799,7 +803,7 @@ impl Asset {
             id,
             agent_id: agent_id.clone(),
             mothballed_year: None,
-            parent,
+            kind,
         };
     }
 
@@ -818,39 +822,33 @@ impl Asset {
 
     /// Set the year this asset was mothballed
     pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id, parent) = match &self.state {
+        let (id, agent_id, kind) = match &self.state {
             AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent.clone()),
+                id, agent_id, kind, ..
+            } => (*id, agent_id.clone(), kind.clone()),
             _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id,
             mothballed_year: Some(year),
-            parent,
+            kind,
         };
     }
 
     /// Remove the mothballed year - presumably because the asset has been used
     pub fn unmothball(&mut self) {
-        let (id, agent_id, parent) = match &self.state {
+        let (id, agent_id, kind) = match &self.state {
             AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent.clone()),
+                id, agent_id, kind, ..
+            } => (*id, agent_id.clone(), kind.clone()),
             _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
         };
         self.state = AssetState::Commissioned {
             id,
             agent_id,
             mothballed_year: None,
-            parent,
+            kind,
         };
     }
 
@@ -1022,6 +1020,8 @@ impl AssetRef {
 
     /// Apply a function to each of this asset's children, consuming the asset in the process.
     ///
+    /// Note that the original asset is converted to a commissioned state.
+    ///
     /// If this asset is divisible, the first argument to `f` will be this asset after it has been
     /// converted to a parent and the second will be each child.
     ///
@@ -1056,9 +1056,11 @@ impl AssetRef {
 
         // Turn this asset into a parent
         let agent_id = self.agent_id().unwrap().clone();
-        self.make_mut().state = AssetState::Parent {
-            agent_id,
+        self.make_mut().state = AssetState::Commissioned {
             id: AssetID(*next_id),
+            agent_id,
+            mothballed_year: None,
+            kind: CommissionedType::Parent,
         };
         *next_id += 1;
 
@@ -1409,9 +1411,7 @@ mod tests {
         asset
             .clone()
             .into_for_each_child(&mut 0, |parent, child, _| {
-                assert!(
-                    parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. }))
-                );
+                assert!(parent.is_some_and(|parent| parent.is_commissioned()));
 
                 // Check each child has capacity equal to unit_size
                 assert_eq!(
@@ -1520,7 +1520,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset.commission(AssetID(2), None);
+        asset.commission(AssetID(2), CommissionedType::NonDivisible);
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(2)));
     }
@@ -1530,7 +1530,7 @@ mod tests {
     fn commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), None);
+        asset.commission(AssetID(1), CommissionedType::NonDivisible);
     }
 
     #[test]
