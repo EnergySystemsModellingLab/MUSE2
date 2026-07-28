@@ -52,7 +52,7 @@ pub fn dangerous_model_options_enabled() -> bool {
 fn set_dangerous_model_options_flag(enabled: bool) {
     let result = DANGEROUS_OPTIONS_ENABLED.set(enabled);
     if result.is_err() {
-        if cfg!(test) {
+        if cfg!(test) || cfg!(feature = "bench") {
             // Sanity check
             assert_eq!(enabled, dangerous_model_options_enabled());
         } else {
