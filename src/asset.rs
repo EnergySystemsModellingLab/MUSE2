@@ -868,13 +868,12 @@ impl Asset {
 
     /// Get the mothballed year for the asset
     pub fn get_mothballed_year(&self) -> Option<u32> {
-        let AssetState::Commissioned {
-            mothballed_year, ..
-        } = &self.state
-        else {
-            panic!("Cannot get mothballed year for an asset that hasn't been commissioned")
-        };
-        *mothballed_year
+        match &self.state {
+            AssetState::Commissioned {
+                mothballed_year, ..
+            } => *mothballed_year,
+            _ => None,
+        }
     }
 
     /// Get the unit size for this asset's capacity (if any)
