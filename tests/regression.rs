@@ -24,6 +24,7 @@ mod regression {
     define_regression_test!(muse1_default);
     define_regression_test!(two_outputs);
     define_regression_test!(two_regions);
+    define_regression_test!(circularity);
 
     // Patched examples
     define_regression_test_with_patches!(simple_divisible);
@@ -33,10 +34,7 @@ mod regression {
     define_regression_test_with_patches!(simple_full);
     define_regression_test_with_patches!(simple_shadow);
     define_regression_test_with_patches!(simple_ironing_out);
-
-    // Currently not working. See: https://github.com/EnergySystemsModellingLab/MUSE2/issues/1368
-    // define_regression_test!(circularity);
-    // define_regression_test_with_patches!(circularity_npv);
+    define_regression_test_with_patches!(circularity_npv);
 }
 
 /// Tolerance for comparing floating-point values in CSV lines.

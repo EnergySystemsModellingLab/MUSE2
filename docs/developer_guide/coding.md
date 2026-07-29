@@ -74,3 +74,57 @@ just coverage --open
 
 This will generate a report in HTML format showing which lines are not currently covered by tests
 and open it in your default browser.
+
+## Working with the benchmarking framework
+
+MUSE2 includes a benchmarking framework to measure the performance of various components using the
+[Criterion.rs] library. To run all the available benchmarks, use the following command:
+
+```sh
+cargo bench --features bench
+```
+
+The `--features bench` flag disables some aspects of the code that are incompatible with the
+benchmarking, like singleton objects that can be only instantiated once and throw an error otherwise.
+See `rust` documentation for more information about [features].
+
+You can also run specific benchmarks by specifying their names:
+
+```sh
+cargo bench --features bench --bench <benchmark_name>
+```
+
+For example, to run the `examples` benchmark, you would use:
+
+```sh
+cargo bench --features bench --bench examples
+```
+
+If run more than once, the benchmarking framework will compare the results of the current run with the
+previous run and report the differences. This is useful for checking whether a change has
+introduced a performance regression.
+
+[Criterion.rs] automatically generates an HTML report that can be found in the
+`target/criterion/report` directory. You can open it with your web browser to see the results and
+navigate through the different benchmarks.
+
+### Adding new benchmarks
+
+To add a new benchmark, i.e. a collection of related performance tests, creat a new file in the
+`benches` directory with the name of your benchmark. For example, to add a benchmark for the `foo`
+functionality, you would create a file called `benches/foo.rs`. Then `foo` will need to be added to
+`cargo.toml` under the `[bench]` section, like so:
+
+```toml
+[[bench]]
+name = "foo"
+harness = false
+```
+
+The `harness = false` line is necessary because Criterion.rs provides its own test harness, which
+is incompatible with the default Rust test harness. Within the new benchmark file, you can then add
+your performance tests using the Criterion.rs API. Check `benches/examples.rs` for an example of how
+to do this. More information about writing benchmarks can be found in the [Criterion.rs] documentation.
+
+[Criterion.rs]: https://bheisler.github.io/criterion.rs/book/index.html
+[features]: https://doc.rust-lang.org/cargo/reference/features.html

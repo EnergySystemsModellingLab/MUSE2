@@ -90,7 +90,7 @@ pub enum CommodityType {
 }
 
 /// The strategy used for calculating commodity prices
-#[derive(Debug, PartialEq, Clone, Deserialize, Hash, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize, Hash, Eq)]
 pub enum PricingStrategy {
     /// Take commodity prices directly from the shadow prices
     #[serde(rename = "shadow")]

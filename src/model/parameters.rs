@@ -4,6 +4,7 @@
 //! `model.toml` configuration used by the model. Validation functions ensure sensible numeric
 //! ranges and invariants for runtime use.
 use crate::asset::check_capacity_valid_for_asset;
+use crate::commodity::PricingStrategy;
 use crate::input::{
     deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
 };
@@ -77,11 +78,21 @@ pub struct ModelParameters {
     ///
     /// Don't change unless you know what you're doing.
     pub candidate_asset_capacity: Capacity,
+    /// The epsilon added to commodity balance lower bounds to force candidate dispatch.
+    ///
+    /// Don't change unless you know what you're doing.
+    pub commodity_balance_epsilon: Flow,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
     #[serde(deserialize_with = "deserialise_proportion_nonzero")]
     pub capacity_limit_factor: Dimensionless,
+    /// The pricing strategy used to calculate fallback prices for the mini dispatch optimisation
+    /// during investment appraisal.
+    ///
+    /// If set to `unpriced`, a fallback price of zero is used, which reverts to the
+    /// pure shadow-price formulation.
+    pub fallback_pricing_strategy: PricingStrategy,
     /// The cost applied to unmet demand.
     ///
     /// Currently this only applies to the LCOX appraisal.
@@ -118,7 +129,9 @@ impl Default for ModelParameters {
             // Default values for optional parameters
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
+            commodity_balance_epsilon: Flow(1e-6),
             capacity_limit_factor: Dimensionless(0.05),
+            fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
@@ -330,9 +343,18 @@ impl ModelParameters {
 
         // capacity_limit_factor already validated with deserialise_proportion_nonzero
 
+        // fallback_pricing_strategy already validated by deserialisation
+
         // candidate_asset_capacity
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
             .context("Invalid value for candidate_asset_capacity")?;
+
+        // commodity_balance_epsilon
+        ensure!(
+            self.commodity_balance_epsilon.is_finite()
+                && self.commodity_balance_epsilon >= Flow(0.0),
+            "commodity_balance_epsilon must be a finite number greater than or equal to zero"
+        );
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;
