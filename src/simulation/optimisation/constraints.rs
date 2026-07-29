@@ -177,24 +177,14 @@ where
             }
 
             // Add a small epsilon to the lower bound to force some dispatch by candidate assets,
-            // ensuring they receive a nonzero shadow price. Only applied when the total maximum
-            // output from candidates exceeds epsilon, so the balance constraint remains
-            // satisfiable.
-            let max_candidate_output: Flow = candidate_assets
-                .iter()
-                .filter_region(region_id)
-                .flat_map(|a| {
-                    let max_activity = *a.get_activity_limits_for_selection(&ts_selection).end();
-                    a.iter_output_flows()
-                        .filter(|flow| &flow.commodity.id == commodity_id)
-                        .map(move |flow| flow.coeff * max_activity)
-                })
-                .sum();
-            let epsilon = if max_candidate_output > model.parameters.commodity_balance_epsilon {
-                model.parameters.commodity_balance_epsilon
-            } else {
-                Flow(0.0)
-            };
+            // ensuring they receive a nonzero shadow price.
+            let epsilon = candidate_balance_epsilon(
+                candidate_assets,
+                region_id,
+                commodity_id,
+                &ts_selection,
+                model.parameters.commodity_balance_epsilon,
+            );
 
             // For SVD commodities, the lower bound is the exogenous demand (or epsilon if larger).
             // For SED commodities, the lower bound is just epsilon.
@@ -217,6 +207,36 @@ where
     }
 
     CommodityBalanceKeys { offset, keys }
+}
+
+/// Calculate the epsilon to add to the lower bound of a commodity balance constraint, to force
+/// some dispatch by candidate assets so they receive a nonzero shadow price.
+///
+/// Returns `epsilon` if the total maximum output from candidate assets in `region_id` for
+/// `commodity_id` in `ts_selection` exceeds `epsilon`, otherwise returns zero (to avoid making
+/// the balance constraint infeasible).
+fn candidate_balance_epsilon(
+    candidate_assets: &[AssetRef],
+    region_id: &RegionID,
+    commodity_id: &CommodityID,
+    ts_selection: &TimeSliceSelection,
+    epsilon: Flow,
+) -> Flow {
+    let max_candidate_output: Flow = candidate_assets
+        .iter()
+        .filter_region(region_id)
+        .flat_map(|a| {
+            let max_activity = *a.get_activity_limits_for_selection(ts_selection).end();
+            a.iter_output_flows()
+                .filter(|flow| &flow.commodity.id == commodity_id)
+                .map(move |flow| flow.coeff * max_activity)
+        })
+        .sum();
+    if max_candidate_output > epsilon {
+        epsilon
+    } else {
+        Flow(0.0)
+    }
 }
 
 /// Add constraints on the activity of different assets.
