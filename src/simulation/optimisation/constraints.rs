@@ -182,7 +182,7 @@ where
             // satisfiable.
             let max_candidate_output: Flow = candidate_assets
                 .iter()
-                .filter(|a| a.region_id() == region_id)
+                .filter_region(region_id)
                 .flat_map(|a| {
                     let max_activity = *a.get_activity_limits_for_selection(&ts_selection).end();
                     a.iter_output_flows()

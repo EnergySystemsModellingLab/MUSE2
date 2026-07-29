@@ -18,7 +18,7 @@ properties:
   commodity_balance_epsilon:
     type: number
     description: Epsilon added to commodity balance lower bounds to force some dispatch by candidate assets
-    default: 0.000001
+    default: 1e-6
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
   capacity_limit_factor:
