@@ -43,8 +43,8 @@ fn load_bench_model() -> (Model, DataWriter, TempDir, TempDir) {
     let example_dir = TempDir::new().expect("Failed to create temp dir for example");
     let model_path = example_dir.path().join(EXAMPLE_NAME);
     Example::from_name(EXAMPLE_NAME)
-        .and_then(|example| example.extract(&model_path))
-        .expect("Failed to extract example");
+        .expect("Invalid example name")
+        .extract(&model_path)
     let model = load_model(&model_path).expect("Failed to load model");
 
     let output_dir = TempDir::new().expect("Failed to create temp dir for output");
