@@ -329,3 +329,53 @@ where
 
     ActivityKeys { offset, keys }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commodity::Commodity;
+    use crate::fixture::{asset, process, process_flows_map, svd_commodity};
+    use crate::process::Process;
+    use crate::process::{FlowType, ProcessFlow};
+    use crate::time_slice::TimeSliceSelection;
+    use crate::units::{FlowPerActivity, MoneyPerFlow};
+    use indexmap::indexmap;
+    use rstest::rstest;
+    use std::rc::Rc;
+
+    #[rstest]
+    // Max candidate output (2.0) < epsilon (10.0) → zero (guard prevents infeasibility)
+    #[case(10.0, 0.0)]
+    // Max candidate output (2.0) > epsilon (1.0) → epsilon returned
+    #[case(1.0, 1.0)]
+    fn candidate_balance_epsilon_works(
+        #[case] epsilon: f64,
+        #[case] expected: f64,
+        svd_commodity: Commodity,
+        mut process: Process,
+    ) {
+        let commodity_rc = Rc::new(svd_commodity);
+
+        // Add an output flow for the commodity to the process. With capacity 2.0, cap2act 1.0,
+        // and full availability over a single annual time slice, max_candidate_output = 2.0.
+        let flow = ProcessFlow {
+            commodity: Rc::clone(&commodity_rc),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+        process.flows = process_flows_map(
+            process.regions.clone(),
+            Rc::new(indexmap! { commodity_rc.id.clone() => flow }),
+        );
+
+        let result = candidate_balance_epsilon(
+            &[AssetRef::from(asset(process))],
+            &"GBR".into(),
+            &commodity_rc.id,
+            &TimeSliceSelection::Annual,
+            Flow(epsilon),
+        );
+        assert_eq!(result, Flow(expected));
+    }
+}
