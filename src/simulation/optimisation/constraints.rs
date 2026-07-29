@@ -5,12 +5,9 @@ use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
-use crate::units::{Activity, UnitType};
+use crate::units::{Flow, UnitType};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
-
-/// Small epsilon to add to the commodity balance constraints for candidate assets
-const COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES: f64 = 1e-6;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -179,33 +176,28 @@ where
                 }
             }
 
-            // If any candidate asset in this region produces this commodity, and has a
-            // nonzero activity limit for this time slice selection, then we add a small epsilon
-            // to the *lower bound* of the balance constraints to force some dispatch.
-            let epsilon = if candidate_assets.iter().any(|a| {
-                a.region_id() == region_id
-                    && a.iter_output_flows()
-                        .any(|flow| &flow.commodity.id == commodity_id)
-                    && a.get_activity_limits_for_selection(&ts_selection).end() > &Activity(0.0)
-            }) {
-                COMMODITY_BALANCE_EPSILON_FOR_CANDIDATES
-            } else {
-                0.0
-            };
+            // Add a small epsilon to the lower bound to force some dispatch by candidate assets,
+            // ensuring they receive a nonzero shadow price.
+            let epsilon = candidate_balance_epsilon(
+                candidate_assets,
+                region_id,
+                commodity_id,
+                &ts_selection,
+                model.parameters.commodity_balance_epsilon,
+            );
 
-            // For SED commodities, enforce net production >= epsilon, and for SVD commodities
-            // enforce net production >= exogenous demand (with a lower cap of epsilon).
+            // For SVD commodities, the lower bound is the exogenous demand (or epsilon if larger).
+            // For SED commodities, the lower bound is just epsilon.
             let min = match commodity.kind {
-                CommodityType::ServiceDemand => commodity.demand
-                    [&(region_id.clone(), year, ts_selection.clone())]
-                    .value()
-                    .max(epsilon),
+                CommodityType::ServiceDemand => {
+                    commodity.demand[&(region_id.clone(), year, ts_selection.clone())].max(epsilon)
+                }
                 _ => epsilon,
             };
 
             // Consume collected terms into a row. `terms.drain(..)` ensures the vector is
             // emptied for the next selection.
-            problem.add_row(min.., terms.drain(..));
+            problem.add_row(min.value().., terms.drain(..));
             keys.push((
                 commodity_id.clone(),
                 region_id.clone(),
@@ -215,6 +207,36 @@ where
     }
 
     CommodityBalanceKeys { offset, keys }
+}
+
+/// Calculate the epsilon to add to the lower bound of a commodity balance constraint, to force
+/// some dispatch by candidate assets so they receive a nonzero shadow price.
+///
+/// Returns `epsilon` if the total maximum output from candidate assets in `region_id` for
+/// `commodity_id` in `ts_selection` exceeds `epsilon`, otherwise returns zero (to avoid making
+/// the balance constraint infeasible).
+fn candidate_balance_epsilon(
+    candidate_assets: &[AssetRef],
+    region_id: &RegionID,
+    commodity_id: &CommodityID,
+    ts_selection: &TimeSliceSelection,
+    epsilon: Flow,
+) -> Flow {
+    let max_candidate_output: Flow = candidate_assets
+        .iter()
+        .filter_region(region_id)
+        .flat_map(|a| {
+            let max_activity = *a.get_activity_limits_for_selection(ts_selection).end();
+            a.iter_output_flows()
+                .filter(|flow| &flow.commodity.id == commodity_id)
+                .map(move |flow| flow.coeff * max_activity)
+        })
+        .sum();
+    if max_candidate_output > epsilon {
+        epsilon
+    } else {
+        Flow(0.0)
+    }
 }
 
 /// Add constraints on the activity of different assets.
@@ -306,4 +328,54 @@ where
     }
 
     ActivityKeys { offset, keys }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commodity::Commodity;
+    use crate::fixture::{asset, process, process_flows_map, svd_commodity};
+    use crate::process::Process;
+    use crate::process::{FlowType, ProcessFlow};
+    use crate::time_slice::TimeSliceSelection;
+    use crate::units::{FlowPerActivity, MoneyPerFlow};
+    use indexmap::indexmap;
+    use rstest::rstest;
+    use std::rc::Rc;
+
+    #[rstest]
+    // Max candidate output (2.0) < epsilon (10.0) → zero (guard prevents infeasibility)
+    #[case(10.0, 0.0)]
+    // Max candidate output (2.0) > epsilon (1.0) → epsilon returned
+    #[case(1.0, 1.0)]
+    fn candidate_balance_epsilon_works(
+        #[case] epsilon: f64,
+        #[case] expected: f64,
+        svd_commodity: Commodity,
+        mut process: Process,
+    ) {
+        let commodity_rc = Rc::new(svd_commodity);
+
+        // Add an output flow for the commodity to the process. With capacity 2.0, cap2act 1.0,
+        // and full availability over a single annual time slice, max_candidate_output = 2.0.
+        let flow = ProcessFlow {
+            commodity: Rc::clone(&commodity_rc),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+        process.flows = process_flows_map(
+            process.regions.clone(),
+            Rc::new(indexmap! { commodity_rc.id.clone() => flow }),
+        );
+
+        let result = candidate_balance_epsilon(
+            &[AssetRef::from(asset(process))],
+            &"GBR".into(),
+            &commodity_rc.id,
+            &TimeSliceSelection::Annual,
+            Flow(epsilon),
+        );
+        assert_eq!(result, Flow(expected));
+    }
 }
