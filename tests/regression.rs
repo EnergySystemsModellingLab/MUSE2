@@ -97,11 +97,11 @@ fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model
     );
 }
 
-fn diff_csv_file(output_dir1: &Path, output_dir2: &Path, file_name: &str) -> Option<String> {
-    let lines1 = read_lines(&output_dir1.join(file_name));
-    let lines2 = read_lines(&output_dir2.join(file_name));
+fn diff_csv_file(old_output_dir: &Path, new_output_dir: &Path, file_name: &str) -> Option<String> {
+    let old_lines = read_lines(&old_output_dir.join(file_name));
+    let new_lines = read_lines(&new_output_dir.join(file_name));
 
-    compute_normalised_diff(&lines1, &lines2)
+    compute_normalised_diff(&old_lines, &new_lines)
 }
 
 /// Compute a line diff after replacing tolerance-equivalent rows with a shared canonical row.
