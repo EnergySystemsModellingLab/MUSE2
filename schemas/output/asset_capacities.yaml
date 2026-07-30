@@ -8,15 +8,6 @@ fields:
   - name: asset_id
     type: string
     description: The ID of this asset
-    notes: |
-      Filled for non-divisible assets. Empty for divisible assets, which use `group_id` instead. See
-      the `assets.csv` output file for further information about assets.
-  - name: group_id
-    type: string
-    description: The group ID of this asset group
-    notes: |
-      Filled for divisible assets. Empty for non-divisible assets, which use `asset_id` instead. See
-      the `assets.csv` output file for further information about groups.
   - name: capacity
     type: number
     description: The total capacity of the asset in this year

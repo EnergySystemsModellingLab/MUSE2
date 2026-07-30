@@ -44,22 +44,6 @@ pub use pool::AssetPool;
 )]
 pub struct AssetID(u32);
 
-/// A unique identifier for an asset group
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    derive_more::Display,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Deserialize,
-    Serialize,
-)]
-pub struct AssetGroupID(u32);
-
 /// The state of an asset
 ///
 /// New assets are created as either `Ready` or `Candidate` assets. `Ready` assets from the input
@@ -96,10 +80,10 @@ pub enum AssetState {
     /// Parents are used for grouping (commissioned) divided assets, which can be used as an
     /// optimisation.
     Parent {
+        /// ID of this parent
+        id: AssetID,
         /// The ID of the agent which owns this asset's children
         agent_id: AgentID,
-        /// ID of the asset group
-        group_id: AssetGroupID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -672,7 +656,7 @@ impl Asset {
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
-            AssetState::Commissioned { id, .. } => Some(*id),
+            AssetState::Commissioned { id, .. } | AssetState::Parent { id, .. } => Some(*id),
             _ => None,
         }
     }
@@ -696,21 +680,6 @@ impl Asset {
     pub fn num_children(&self) -> Option<u32> {
         match &self.state {
             AssetState::Parent { .. } => Some(self.capacity().n_units().unwrap()),
-            _ => None,
-        }
-    }
-
-    /// Get the group ID for this asset, if any
-    pub fn group_id(&self) -> Option<AssetGroupID> {
-        match &self.state {
-            AssetState::Commissioned { parent, .. } => {
-                // Get group ID from parent
-                parent
-                    .as_ref()
-                    // Safe because parents always have state `Parent`
-                    .map(|parent| parent.group_id().unwrap())
-            }
-            AssetState::Parent { group_id, .. } => Some(*group_id),
             _ => None,
         }
     }
@@ -1055,7 +1024,6 @@ impl AssetRef {
                 self.region_id(),
                 self.commission_year,
                 self.agent_id(),
-                self.group_id(),
             ))
         }
     }
@@ -1072,9 +1040,9 @@ impl AssetRef {
     /// unit of the original asset's unit size.
     ///
     /// Panics if this asset's state is not `Ready`.
-    fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
+    fn into_for_each_child<F>(mut self, next_id: &mut u32, mut f: F)
     where
-        F: FnMut(Option<&AssetRef>, AssetRef),
+        F: FnMut(Option<&AssetRef>, AssetRef, &mut u32),
     {
         assert!(
             matches!(self.state, AssetState::Ready { .. }),
@@ -1084,7 +1052,7 @@ impl AssetRef {
 
         let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
             // Asset is non-divisible
-            f(None, self);
+            f(None, self, next_id);
             return;
         };
 
@@ -1098,13 +1066,13 @@ impl AssetRef {
         let agent_id = self.agent_id().unwrap().clone();
         self.make_mut().state = AssetState::Parent {
             agent_id,
-            group_id: AssetGroupID(*next_group_id),
+            id: AssetID(*next_id),
         };
-        *next_group_id += 1;
+        *next_id += 1;
 
         // Run `f` over each child
         for child in iter::repeat_n(child, n_units as usize) {
-            f(Some(&self), child);
+            f(Some(&self), child, next_id);
         }
     }
 
@@ -1184,15 +1152,7 @@ impl Hash for AssetRef {
 #[derive(PartialEq, PartialOrd, Eq, Ord, Hash)]
 enum AssetCmp<'a> {
     WithID(AssetID),
-    WithoutID(
-        (
-            &'a ProcessID,
-            &'a RegionID,
-            u32,
-            Option<&'a AgentID>,
-            Option<AssetGroupID>,
-        ),
-    ),
+    WithoutID((&'a ProcessID, &'a RegionID, u32, Option<&'a AgentID>)),
 }
 
 /// Additional methods for iterating over assets
@@ -1228,6 +1188,36 @@ where
         commodity_id: &'a CommodityID,
     ) -> impl Iterator<Item = (&'a AssetRef, &'a ProcessFlow)> + 'a {
         self.filter_map(|asset| Some((asset, asset.get_flow(commodity_id)?)))
+    }
+
+    /// Get the parent for each asset, if it has one, or itself.
+    ///
+    /// Child assets are converted to their parents and non-divisible assets are returned as is. Each
+    /// parent asset is returned only once.
+    ///
+    /// If only a subset of a parent's children are present in this iterator, a new parent asset
+    /// representing a portion of the total capacity will be created. This will have the same hash
+    /// as the original parent.
+    fn into_parent_or_self(self) -> Vec<AssetRef> {
+        let mut child_counts: IndexMap<&AssetRef, u32> = IndexMap::new();
+        let mut out = Vec::new();
+
+        for asset in self {
+            if let Some(parent) = asset.parent() {
+                // For child assets, keep count of number of children per parent
+                *child_counts.entry(parent).or_default() += 1;
+            } else {
+                // Non-divisible assets can be returned as is
+                out.push(asset.clone());
+            }
+        }
+
+        for (parent, child_count) in child_counts {
+            // Convert to an object representing the appropriate portion of the parent's capacity
+            out.push(parent.make_partial_parent(child_count));
+        }
+
+        out
     }
 }
 
@@ -1424,19 +1414,23 @@ mod tests {
 
         let mut count = 0;
         let mut total_child_capacity = Capacity(0.0);
-        asset.clone().into_for_each_child(&mut 0, |parent, child| {
-            assert!(parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. })));
+        asset
+            .clone()
+            .into_for_each_child(&mut 0, |parent, child, _| {
+                assert!(
+                    parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. }))
+                );
 
-            // Check each child has capacity equal to unit_size
-            assert_eq!(
-                child.total_capacity(),
-                unit_size,
-                "Child capacity should equal unit_size"
-            );
+                // Check each child has capacity equal to unit_size
+                assert_eq!(
+                    child.total_capacity(),
+                    unit_size,
+                    "Child capacity should equal unit_size"
+                );
 
-            total_child_capacity += child.total_capacity();
-            count += 1;
-        });
+                total_child_capacity += child.total_capacity();
+                count += 1;
+            });
         assert_eq!(count, n_expected_children, "Unexpected number of children");
 
         // Check total capacity is >= parent capacity
@@ -1455,11 +1449,13 @@ mod tests {
 
         let asset = AssetRef::from(asset);
         let mut count = 0;
-        asset.clone().into_for_each_child(&mut 0, |parent, child| {
-            assert!(parent.is_none());
-            assert_eq!(child, asset);
-            count += 1;
-        });
+        asset
+            .clone()
+            .into_for_each_child(&mut 0, |parent, child, _| {
+                assert!(parent.is_none());
+                assert_eq!(child, asset);
+                count += 1;
+            });
         assert_eq!(count, 1);
     }
 
@@ -1468,7 +1464,7 @@ mod tests {
         let asset = AssetRef::from(asset_divisible);
         let mut parent = None;
 
-        asset.into_for_each_child(&mut 0, |maybe_parent, _| {
+        asset.into_for_each_child(&mut 0, |maybe_parent, _, _| {
             if parent.is_none() {
                 parent = maybe_parent.cloned();
             }
@@ -1496,7 +1492,7 @@ mod tests {
             AssetCapacity::Discrete(num_units, Capacity(4.0))
         );
         assert_eq!(partial_parent.num_children(), Some(num_units));
-        assert_eq!(partial_parent.group_id(), parent.group_id());
+        assert_eq!(partial_parent.id(), parent.id());
         assert_eq!(partial_parent.agent_id(), parent.agent_id());
         assert_eq!(Rc::ptr_eq(&partial_parent.0, &parent.0), expect_same_asset);
         assert_eq!(parent.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));

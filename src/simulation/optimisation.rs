@@ -1,7 +1,7 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
-use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::CommodityID;
 use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
@@ -473,36 +473,6 @@ fn filter_input_prices(
         .collect()
 }
 
-/// Get the parent for each asset, if it has one, or itself.
-///
-/// Child assets are converted to their parents and non-divisible assets are returned as is. Each
-/// parent asset is returned only once.
-///
-/// If only a subset of a parent's children are present in `assets`, a new parent asset representing
-/// a portion of the total capacity will be created. This will have the same hash as the original
-/// parent.
-fn get_parent_or_self(assets: &[AssetRef]) -> Vec<AssetRef> {
-    let mut child_counts: IndexMap<&AssetRef, u32> = IndexMap::new();
-    let mut out = Vec::new();
-
-    for asset in assets {
-        if let Some(parent) = asset.parent() {
-            // For child assets, keep count of number of children per parent
-            *child_counts.entry(parent).or_default() += 1;
-        } else {
-            // Non-divisible assets can be returned as is
-            out.push(asset.clone());
-        }
-    }
-
-    for (parent, child_count) in child_counts {
-        // Convert to an object representing the appropriate portion of the parent's capacity
-        out.push(parent.make_partial_parent(child_count));
-    }
-
-    out
-}
-
 /// Provides the interface for running the dispatch optimisation.
 ///
 /// The run will attempt to meet unmet demand: if the solver reports infeasibility
@@ -680,7 +650,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         allow_unmet_demand: bool,
         input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
-        let existing_assets_with_parents = get_parent_or_self(self.existing_assets);
+        let existing_assets_with_parents = self.existing_assets.iter().into_parent_or_self();
 
         // Set up problem
         let mut problem = Problem::default();
