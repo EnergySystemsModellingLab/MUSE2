@@ -752,28 +752,6 @@ impl Asset {
             .set(AssetCapacity::Discrete(n_units - 1, unit_size));
     }
 
-    /// Decommission this asset
-    fn decommission(&mut self, reason: &str) {
-        let (id, agent_id, kind) = match &self.state {
-            AssetState::Commissioned {
-                id, agent_id, kind, ..
-            } => (*id, agent_id.clone(), kind),
-            _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
-        };
-        debug!(
-            "Decommissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
-            self.process_id(),
-            id,
-            agent_id,
-            reason
-        );
-
-        // If this is a child asset, we need to decrease the parent's capacity appropriately
-        if let CommissionedType::Child { parent } = kind {
-            parent.decrement_unit_count();
-        }
-    }
-
     /// Commission the asset.
     ///
     /// Only assets with an [`AssetState`] of `Ready` can be commissioned. If the asset's state is
@@ -1108,6 +1086,28 @@ impl AssetRef {
             capacity: Cell::new(AssetCapacity::Discrete(num_units, unit_size)),
             ..Rc::unwrap_or_clone(self.0)
         })
+    }
+
+    /// Decommission this asset
+    fn decommission(self, reason: &str) {
+        let (id, agent_id, kind) = match &self.state {
+            AssetState::Commissioned {
+                id, agent_id, kind, ..
+            } => (*id, agent_id.clone(), kind),
+            _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
+        };
+        debug!(
+            "Decommissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
+            self.process_id(),
+            id,
+            agent_id,
+            reason
+        );
+
+        // If this is a child asset, we need to decrease the parent's capacity appropriately
+        if let CommissionedType::Child { parent } = kind {
+            parent.decrement_unit_count();
+        }
     }
 }
 

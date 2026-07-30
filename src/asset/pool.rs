@@ -65,8 +65,8 @@ impl AssetPool {
     pub fn decommission_old(&mut self, year: u32) {
         self.assets
             .extract_if(.., |asset| asset.max_decommission_year() <= year)
-            .for_each(|mut asset| {
-                asset.make_mut().decommission("end of life");
+            .for_each(|asset| {
+                asset.decommission("end of life");
             });
     }
 
@@ -78,8 +78,8 @@ impl AssetPool {
                     .get_mothballed_year()
                     .is_some_and(|myear| myear <= year - min(mothball_years, year))
             })
-            .for_each(|mut asset| {
-                asset.make_mut().decommission(&format!(
+            .for_each(|asset| {
+                asset.decommission(&format!(
                     "The asset has not been used for the set mothball years ({mothball_years} \
                         years)."
                 ));
