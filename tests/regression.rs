@@ -85,7 +85,7 @@ fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model
 
     let mut errors = Vec::new();
     for file_name in file_names1 {
-        if let Some(diff) = diff_csv_file(cur_output_dir1, test_data_dir, &file_name) {
+        if let Some(diff) = diff_csv_file(test_data_dir, cur_output_dir1, &file_name) {
             errors.push(format!("{file_name}: output differs\n{diff}"));
         }
     }
