@@ -84,6 +84,11 @@ pub struct ModelParameters {
     /// Don't change unless you know what you're doing.
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub commodity_balance_epsilon: Flow,
+    /// Small penalty on L1 utilisation deviation to encourage even dispatch across assets.
+    ///
+    /// Set to zero to disable. Should be much smaller than the smallest meaningful cost
+    /// difference between assets.
+    pub dispatch_activity_equalisation_epsilon: f64,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
@@ -135,6 +140,7 @@ impl Default for ModelParameters {
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
             commodity_balance_epsilon: Flow(1e-6),
+            dispatch_activity_equalisation_epsilon: 1e6,
             capacity_limit_factor: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
@@ -331,6 +337,13 @@ impl ModelParameters {
             .context("Invalid value for candidate_asset_capacity")?;
 
         // commodity_balance_epsilon already validated with deserialise_finite_non_negative
+
+        // dispatch_activity_equalisation_epsilon
+        ensure!(
+            self.dispatch_activity_equalisation_epsilon.is_finite()
+                && self.dispatch_activity_equalisation_epsilon >= 0.0,
+            "dispatch_activity_equalisation_epsilon must be a finite number greater than or equal to zero"
+        );
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;

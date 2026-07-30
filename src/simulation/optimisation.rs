@@ -642,16 +642,32 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
+        let all_assets: Vec<_> = chain(
+            self.existing_assets.iter(),
+            self.candidate_assets.iter(),
+        )
+        .collect();
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
             self.model,
-            &all_assets,
+            &all_assets.iter().copied(),
             markets_to_balance,
             self.year,
             self.candidate_assets,
         );
+
+        // Add secondary objective to encourage even dispatch across assets, if enabled
+        let epsilon = self.model.parameters.dispatch_activity_equalisation_epsilon;
+        if epsilon > 0.0 {
+            add_activity_equalisation(
+                &mut problem,
+                &variables,
+                all_assets.iter().copied(),
+                self.model,
+                epsilon,
+            );
+        }
 
         // Create model and apply any user-supplied HiGHS options to it
         let mut model = problem.optimise(Sense::Minimise);
@@ -699,6 +715,55 @@ fn add_activity_variables(
     }
 
     start..problem.num_cols()
+}
+
+/// Add secondary objective variables and constraints to encourage even dispatch across assets.
+///
+/// The secondary objective is `epsilon * mean(d)`, where each `d[a,t]` is the L1 deviation of
+/// asset `a`'s utilisation fraction from a single free centre variable `m`:
+///
+/// ```text
+/// d[a,t] = |act[a,t] / cap[a] - m|
+/// ```
+///
+/// `|x|` is linearised via two constraints per `d`: `d >= x` and `d >= -x` (both with `d >= 0`).
+/// Both are needed because we minimise `d` — without the second constraint HiGHS would set `d = 0`
+/// whenever `x < 0`, missing half the deviation.
+///
+/// `m` is a free variable (bounded below at zero since all utilisation fractions are
+/// non-negative). The LP sets it to the L1-optimal centre (the median of utilisations), so the
+/// penalty measures spread rather than deviation from any fixed target. This makes `epsilon`
+/// independent of the absolute utilisation level, which is determined by the primary objective.
+fn add_activity_equalisation<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    assets: I,
+    model: &Model,
+    epsilon: f64,
+) where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    // m is the free L1-centre variable in utilisation-fraction space; bounded below at zero
+    // since all utilisation fractions are non-negative
+    let m = problem.add_column(0.0, 0.0..);
+
+    for asset in assets {
+        // Flexible capacity assets use their current capacity as an approximation
+        let cap = asset.total_capacity().value();
+        if cap <= 1e-9 {
+            continue;
+        }
+        let inv_cap = 1.0 / cap;
+
+        for time_slice in model.time_slice_info.iter_ids() {
+            let act = variables.get_activity_var(asset, time_slice);
+            let d = problem.add_column(epsilon, 0.0..);
+            // d >= act/cap - m
+            problem.add_row(0.0.., [(d, 1.0), (act, -inv_cap), (m, 1.0)]);
+            // d >= m - act/cap
+            problem.add_row(0.0.., [(d, 1.0), (act, inv_cap), (m, -1.0)]);
+        }
+    }
 }
 
 fn add_capacity_variables(
