@@ -2,7 +2,6 @@
 use super::{AssetID, AssetRef, AssetState, CommissionedType, UserAsset};
 use itertools::Itertools;
 use log::warn;
-use std::cmp::min;
 
 /// The active pool of [`super::Asset`]s
 #[derive(Default, derive_more::Deref)]
@@ -72,18 +71,13 @@ impl AssetPool {
 
     /// Decommission mothballed assets if mothballed long enough
     pub fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
-        self.assets
-            .extract_if(.., |asset| {
-                asset
-                    .get_mothballed_year()
-                    .is_some_and(|myear| myear <= year - min(mothball_years, year))
-            })
-            .for_each(|asset| {
-                asset.decommission(&format!(
-                    "The asset has not been used for the set mothball years ({mothball_years} \
-                        years)."
-                ));
-            });
+        // Empty the Vec and reconstruct it with only the remaining units of the remaining assets
+        // after decommissioning. This sadly means we always allocate a new Vec, but modifying the
+        // Vec in place leads to uglier code and unnecessary deep clones of assets.
+        self.assets = std::mem::take(&mut self.assets)
+            .into_iter()
+            .filter_map(|asset| asset.with_decommission_mothballed(year, mothball_years))
+            .collect();
     }
 
     /// Mothball the specified assets if they are no longer in the active pool and put them back
@@ -101,22 +95,30 @@ impl AssetPool {
     where
         I: IntoIterator<Item = AssetRef>,
     {
-        for mut asset in assets {
-            let in_pool = match asset.state {
-                AssetState::Commissioned { .. } => !self.assets.contains(&asset),
-                _ => panic!("Cannot mothball asset that has not been commissioned"),
-            };
+        for old_asset in assets {
+            let id = old_asset
+                .id()
+                .expect("Cannot mothball asset that has not been commissioned");
 
-            if in_pool {
-                // If not already set, we set the current year as the mothball year,
-                // i.e. the first one the asset was not used.
-                if !asset.is_mothballed() {
-                    asset.make_mut().mothball(year);
-                }
-
-                // And we put it back to the pool, so they can be chosen the next milestone year
-                // if not decommissioned earlier.
-                self.assets.push(asset);
+            // Note that we cannot use a binary search here, as `self.assets` may have become
+            // unsorted by new assets added below
+            if let Some(new_asset) = self
+                .assets
+                .iter_mut()
+                .find(|asset| asset.id().unwrap() == id)
+            {
+                // At least some of the asset's units have made it back into the pool. Increase the
+                // capacity back to what it was before, with the unselected units set as mothballed.
+                let num_mothballed = old_asset
+                    .num_units()
+                    .checked_sub(new_asset.num_units())
+                    .expect("Number of units has increased");
+                *new_asset = old_asset.with_mothballed_units(num_mothballed, Some(year));
+            } else {
+                // Put back into pool, with all units mothballed
+                let num_mothballed = old_asset.num_units();
+                self.assets
+                    .push(old_asset.with_mothballed_units(num_mothballed, Some(year)));
             }
         }
         self.assets.sort();
@@ -193,6 +195,7 @@ impl AssetPool {
 mod tests {
     use super::super::Asset;
     use super::*;
+    use crate::asset::MothballEvent;
     use crate::fixture::{asset, asset_divisible, process, process_parameter_map};
     use crate::process::{Process, ProcessParameter};
     use crate::units::{
@@ -656,7 +659,13 @@ mod tests {
 
         // Only the removed asset should be mothballed (since it's not in active pool)
         assert_eq!(asset_pool.assets.len(), 2); // And should be back into the pool
-        assert_eq!(asset_pool.assets[0].get_mothballed_year(), Some(2025));
+        assert_equal(
+            asset_pool.assets[0].get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2025,
+                num_units: 1,
+            }],
+        );
     }
 
     #[rstest]
@@ -668,13 +677,16 @@ mod tests {
 
         // Make an asset unused for a few years
         let mothball_years: u32 = 10;
-        asset_pool.assets[0]
-            .make_mut()
-            .mothball(2025 - mothball_years);
+        asset_pool.assets[0] = asset_pool[0]
+            .clone()
+            .with_mothballed_units(1, Some(2025 - mothball_years));
 
-        assert_eq!(
-            asset_pool.assets[0].get_mothballed_year(),
-            Some(2025 - mothball_years)
+        assert_equal(
+            asset_pool.assets[0].get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2025 - mothball_years,
+                num_units: 1,
+            }],
         );
 
         // Decommission unused assets
@@ -700,9 +712,21 @@ mod tests {
         // All assets should be mothballed
         assert_eq!(asset_pool.assets.len(), 2);
         assert_eq!(asset_pool.assets[0].id(), all_assets[0].id());
-        assert_eq!(asset_pool.assets[0].get_mothballed_year(), Some(2025));
+        assert_equal(
+            asset_pool.assets[0].get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2025,
+                num_units: 1,
+            }],
+        );
         assert_eq!(asset_pool.assets[1].id(), all_assets[1].id());
-        assert_eq!(asset_pool.assets[1].get_mothballed_year(), Some(2025));
+        assert_equal(
+            asset_pool.assets[1].get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2025,
+                num_units: 1,
+            }],
+        );
     }
 
     #[rstest]
@@ -722,5 +746,86 @@ mod tests {
         // This should panic because the asset was never commissioned
         let mut asset_pool = AssetPool::new();
         asset_pool.mothball_unretained(vec![non_commissioned_asset], 2025);
+    }
+
+    /// A commissioned divisible (parent) asset with three units.
+    #[fixture]
+    fn commissioned_divisible(asset_divisible: Asset) -> AssetRef {
+        let asset = AssetRef::from(asset_divisible);
+        let mut parent = None;
+        asset.into_for_each_child(&mut 0, |maybe_parent, _, _| {
+            if parent.is_none() {
+                parent = maybe_parent.cloned();
+            }
+        });
+        let parent = parent.expect("Divisible asset should create a parent");
+        assert_eq!(parent.num_units(), 3);
+        parent
+    }
+
+    #[rstest]
+    fn asset_pool_mothball_unretained_partial(commissioned_divisible: AssetRef) {
+        // The full asset has three units; only two of them were retained in the pool
+        let full = commissioned_divisible;
+        let retained = full.clone().with_subset_of_units(2);
+
+        let mut asset_pool = AssetPool::new();
+        asset_pool.assets.push(retained);
+
+        asset_pool.mothball_unretained(vec![full], 2025);
+
+        // The asset is restored to its full capacity, with the unretained unit mothballed
+        assert_eq!(asset_pool.assets.len(), 1);
+        let asset = &asset_pool.assets[0];
+        assert_eq!(asset.num_units(), 3);
+        assert_eq!(asset.get_num_mothballed_units(), 1);
+        assert_equal(
+            asset.get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2025,
+                num_units: 1,
+            }],
+        );
+    }
+
+    #[rstest]
+    fn asset_pool_decommission_mothballed_partial(commissioned_divisible: AssetRef) {
+        // Mothball one unit in 2010 and one in 2020, leaving one active
+        let asset = commissioned_divisible
+            .with_mothballed_units(1, Some(2010))
+            .with_mothballed_units(2, Some(2020));
+
+        let mut asset_pool = AssetPool::new();
+        asset_pool.assets.push(asset);
+
+        // Threshold of 2015: only the unit mothballed in 2010 is old enough to decommission
+        asset_pool.decommission_mothballed(2025, 10);
+
+        assert_eq!(asset_pool.assets.len(), 1);
+        let asset = &asset_pool.assets[0];
+        assert_eq!(asset.num_units(), 2);
+        assert_eq!(asset.get_num_mothballed_units(), 1);
+        assert_equal(
+            asset.get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2020,
+                num_units: 1,
+            }],
+        );
+    }
+
+    #[rstest]
+    fn asset_pool_decommission_mothballed_removes_fully_mothballed(
+        commissioned_divisible: AssetRef,
+    ) {
+        // All three units mothballed long enough ago: the whole asset is removed from the pool
+        let asset = commissioned_divisible.with_mothballed_units(3, Some(2010));
+
+        let mut asset_pool = AssetPool::new();
+        asset_pool.assets.push(asset);
+
+        asset_pool.decommission_mothballed(2025, 10);
+
+        assert!(asset_pool.assets.is_empty());
     }
 }

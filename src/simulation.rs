@@ -165,7 +165,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 /// from a run with both existing and candidate assets. If either flows or prices cannot be
 /// calculated, empty maps are returned.
 ///
-/// Mothballed assets are excluded.
+/// Fully mothballed assets or mothballed units thereof are excluded.
 #[context_manager::wrap(DispatchTimer)]
 fn run_dispatch_for_year(
     model: &Model,
@@ -177,13 +177,18 @@ fn run_dispatch_for_year(
     // Sanity check
     debug_assert!(candidates.iter().all(|asset| !asset.is_commissioned()));
 
-    // Exclude mothballed assets
+    // Only include non-mothballed units
     let assets_vec: Vec<AssetRef>;
-    let assets = if assets.iter().any(|asset| asset.is_mothballed()) {
+    let assets = if assets.iter().any(|asset| asset.has_any_mothballed_units()) {
         assets_vec = assets
             .iter()
-            .filter(|asset| !asset.is_mothballed())
             .cloned()
+            .filter_map(|asset| {
+                // Exclude fully mothballed assets entirely. If assets are partially mothballed,
+                // get a new asset without the mothballed units.
+                let num_units = asset.get_num_nonmothballed_units();
+                (num_units > 0).then(|| asset.with_subset_of_units(num_units))
+            })
             .collect();
         &assets_vec
     } else {

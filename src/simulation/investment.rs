@@ -569,7 +569,7 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
-    mut best_asset: AssetRef,
+    best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
@@ -581,11 +581,6 @@ fn update_assets(
     } else {
         panic!("Invalid asset type");
     };
-
-    // As this asset has been selected, it should be unmothballed
-    if best_asset.is_mothballed() {
-        best_asset.make_mut().unmothball();
-    }
 
     if capacity_accumulates {
         // Track remaining capacity for assets that have limits

@@ -405,13 +405,16 @@ fn get_asset_options<'a>(
     year: u32,
     capacity_limit_factor: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
-    // Get existing assets which produce the commodity of interest
+    // Get existing assets which produce the commodity of interest. We discard information about
+    // mothballed units here; it is preserved in the original collection of assets and is fed back
+    // into `AssetPool` later.
     let existing_assets = all_existing_assets
         .iter()
         .filter_agent(&agent.id)
         .filter_region(region_id)
         .filter_primary_producers_of(&commodity.id)
-        .cloned();
+        .cloned()
+        .map(AssetRef::with_unmothball_all);
 
     // Get candidates assets which produce the commodity of interest
     let candidate_assets = get_candidate_assets(
