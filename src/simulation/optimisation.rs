@@ -659,7 +659,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         // Add secondary objective to encourage even dispatch across existing assets, if enabled
         let epsilon = self.model.parameters.dispatch_activity_equalisation_epsilon;
         if epsilon > 0.0 {
-            add_activity_equalisation(
+            add_activity_regularisation(
                 &mut problem,
                 &variables,
                 self.existing_assets.iter(),
@@ -716,27 +716,35 @@ fn add_activity_variables(
     start..problem.num_cols()
 }
 
-/// Add secondary objective variables and constraints to encourage even dispatch across assets.
+/// Add a regularisation term to the dispatch objective to discourage "corner" solutions.
 ///
-/// The secondary objective is `epsilon * sum(d)`, where each `d[a,t]` is the L1 deviation of
-/// asset `a`'s utilisation fraction from a single free centre variable `m`:
+/// Without regularisation, when multiple assets have identical costs the LP may concentrate all
+/// activity on a single asset rather than spreading it evenly — both solutions are equally optimal
+/// from the primary objective's perspective, but the former is less physically realistic.
+///
+/// The regularisation adds `epsilon * sum(d[a,t])` to the objective, where `d[a,t]` is a
+/// variable representing the L1 deviation of asset `a`'s utilisation fraction from a free centre
+/// variable `m` (shared across all assets and time slices):
 ///
 /// ```text
 /// d[a,t] = |act[a,t] / cap[a] - m|
 /// ```
 ///
-/// `|x|` is linearised via two constraints per `d`: `d >= x` and `d >= -x` (both with `d >= 0`).
-/// Both are needed because we minimise `d` — without the second constraint HiGHS would set `d = 0`
-/// whenever `x < 0`, missing half the deviation.
+/// The absolute value is linearised as two inequality constraints per `(a, t)`:
 ///
-/// `m` is a free variable (bounded below at zero since all utilisation fractions are
-/// non-negative). The LP sets it to the L1-optimal centre (the median of utilisations), so the
-/// penalty measures spread rather than deviation from any fixed target. This makes `epsilon`
-/// independent of the absolute utilisation level, which is determined by the primary objective.
+/// ```text
+/// d[a,t] >= act[a,t] / cap[a] - m
+/// d[a,t] >= m - act[a,t] / cap[a]
+/// ```
 ///
-/// Candidate assets are excluded: they exist only to receive shadow prices and have artificially
-/// small capacity, so including them would distort `m` without meaningfully affecting dispatch.
-fn add_activity_equalisation<'a, I>(
+/// `m` is optimised by the LP and settles at the median utilisation across all assets and time
+/// slices, so the regularisation penalises *spread* rather than deviation from any fixed target.
+/// This means it acts as a pure tiebreaker: `epsilon` should be chosen small enough that no
+/// change to the primary objective cost is acceptable as a trade for reduced spread.
+///
+/// Candidate assets are excluded because they have artificially small capacity and exist only to
+/// receive shadow prices, not to make real dispatch decisions.
+fn add_activity_regularisation<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
     assets: I,
@@ -750,9 +758,17 @@ fn add_activity_equalisation<'a, I>(
     let m = problem.add_column(0.0, 0.0..);
 
     for asset in assets {
-        // Flexible capacity assets use their current capacity as an approximation
+        // Get capacity for the asset, since we're regularising utilisation (activity/capacity).
+        //
+        // Note: for flexible capacity assets this is their _initial_ capacity, which may end up
+        // different from their final capacity in the solution - therefore, this is an
+        // approximation, but shouldn't be too far off since final capacities are bound within a
+        // tolerance of the initial capacity. We can't use the actual capacity variable here because
+        // that would make the problem non-linear.
         let cap = asset.total_capacity().value();
         if cap <= 1e-9 {
+            // Skip very small capacities to avoid numerical issues. Unlikely to ever have assets
+            // this small in practice.
             continue;
         }
         let inv_cap = 1.0 / cap;
