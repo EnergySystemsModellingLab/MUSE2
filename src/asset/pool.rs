@@ -106,7 +106,7 @@ impl AssetPool {
             if in_pool {
                 // If not already set, we set the current year as the mothball year,
                 // i.e. the first one the asset was not used.
-                if asset.get_mothballed_year().is_none() {
+                if !asset.is_mothballed() {
                     asset.make_mut().mothball(year);
                 }
 
@@ -153,10 +153,9 @@ impl AssetPool {
 
         // Check all assets are either Commissioned or Ready, and, if the latter,
         // then commission them
-        for mut asset in assets {
+        for asset in assets {
             match &asset.state {
                 AssetState::Commissioned { .. } => {
-                    asset.make_mut().unmothball();
                     self.assets.push(asset);
                 }
                 AssetState::Ready { .. } => {

@@ -36,6 +36,7 @@ ready to be released, carry out the following steps:
   investment ([#1349])
 - Updated input data validation to ensure `capacity_to_activity > 0`. Previously,
  `capacity_to_activity = 0` was permitted.
+- Mothballed assets are now excluded from the main dispatch run ([#1458])
 
 [highs-opts-docs]: ../developer_guide/custom_highs_options.md
 [#1259]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1259
@@ -45,3 +46,4 @@ ready to be released, carry out the following steps:
 [#1319]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1319
 [#1349]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1349
 [#1376]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1376
+[#1458]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1458

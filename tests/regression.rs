@@ -35,6 +35,7 @@ mod regression {
     define_regression_test_with_patches!(simple_shadow);
     define_regression_test_with_patches!(simple_ironing_out);
     define_regression_test_with_patches!(circularity_npv);
+    define_regression_test_with_patches!(simple_mothball);
 }
 
 /// Tolerance for comparing floating-point values in CSV lines.

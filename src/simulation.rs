@@ -159,7 +159,13 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     Ok(())
 }
 
-// Run dispatch to get flows and prices for a milestone year
+/// Run dispatch to get flows and prices for a milestone year.
+///
+/// Tries to get commodity flows from a dispatch run which just includes existing assets and prices
+/// from a run with both existing and candidate assets. If either flows or prices cannot be
+/// calculated, empty maps are returned.
+///
+/// Mothballed assets are excluded.
 #[context_manager::wrap(DispatchTimer)]
 fn run_dispatch_for_year(
     model: &Model,
@@ -168,6 +174,22 @@ fn run_dispatch_for_year(
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<(Prices, FlowMap)> {
+    // Sanity check
+    debug_assert!(candidates.iter().all(|asset| !asset.is_commissioned()));
+
+    // Exclude mothballed assets
+    let assets_vec: Vec<AssetRef>;
+    let assets = if assets.iter().any(|asset| asset.is_mothballed()) {
+        assets_vec = assets
+            .iter()
+            .filter(|asset| !asset.is_mothballed())
+            .cloned()
+            .collect();
+        &assets_vec
+    } else {
+        assets
+    };
+
     // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
     // flows (i.e. all are zero)
     let (solution_existing, flow_map) = if assets.is_empty() {

@@ -158,6 +158,11 @@ fn get_all_patches() -> PatchMap {
             "simple_ironing_out",
             PatchInfo::new("simple", vec![], Some("max_ironing_out_iterations = 10")),
         ),
+        // The simple example with mothball_years set to a value >0
+        (
+            "simple_mothball",
+            PatchInfo::new("simple", vec![], Some("mothball_years = 10")),
+        ),
     ]
     .into_iter()
     .collect()
