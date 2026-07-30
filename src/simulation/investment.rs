@@ -569,7 +569,7 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
-    best_asset: AssetRef,
+    mut best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
@@ -578,6 +578,12 @@ fn update_assets(
         AssetState::Commissioned { .. } => {
             // Remove this asset from the options
             opt_assets.retain(|asset| *asset != best_asset);
+
+            // As this asset has been selected, it should be unmothballed
+            if best_asset.is_mothballed() {
+                best_asset.make_mut().unmothball();
+            }
+
             best_assets.push(best_asset);
         }
         AssetState::Candidate | AssetState::Parent { .. } => {

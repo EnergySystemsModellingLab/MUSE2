@@ -153,10 +153,9 @@ impl AssetPool {
 
         // Check all assets are either Commissioned or Ready, and, if the latter,
         // then commission them
-        for mut asset in assets {
+        for asset in assets {
             match &asset.state {
                 AssetState::Commissioned { .. } => {
-                    asset.make_mut().unmothball();
                     self.assets.push(asset);
                 }
                 AssetState::Ready { .. } => {
