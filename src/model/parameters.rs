@@ -140,7 +140,7 @@ impl Default for ModelParameters {
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
             commodity_balance_epsilon: Flow(1e-6),
-            dispatch_activity_equalisation_epsilon: 1e6,
+            dispatch_activity_equalisation_epsilon: 1e-6,
             capacity_limit_factor: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),

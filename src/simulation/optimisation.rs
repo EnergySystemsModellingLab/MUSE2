@@ -642,28 +642,27 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets: Vec<_> = chain(
+        let all_assets = chain(
             self.existing_assets.iter(),
             self.candidate_assets.iter(),
-        )
-        .collect();
+        );
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
             self.model,
-            &all_assets.iter().copied(),
+            &all_assets,
             markets_to_balance,
             self.year,
             self.candidate_assets,
         );
 
-        // Add secondary objective to encourage even dispatch across assets, if enabled
+        // Add secondary objective to encourage even dispatch across existing assets, if enabled
         let epsilon = self.model.parameters.dispatch_activity_equalisation_epsilon;
         if epsilon > 0.0 {
             add_activity_equalisation(
                 &mut problem,
                 &variables,
-                all_assets.iter().copied(),
+                self.existing_assets.iter(),
                 self.model,
                 epsilon,
             );
@@ -719,7 +718,7 @@ fn add_activity_variables(
 
 /// Add secondary objective variables and constraints to encourage even dispatch across assets.
 ///
-/// The secondary objective is `epsilon * mean(d)`, where each `d[a,t]` is the L1 deviation of
+/// The secondary objective is `epsilon * sum(d)`, where each `d[a,t]` is the L1 deviation of
 /// asset `a`'s utilisation fraction from a single free centre variable `m`:
 ///
 /// ```text
@@ -734,6 +733,9 @@ fn add_activity_variables(
 /// non-negative). The LP sets it to the L1-optimal centre (the median of utilisations), so the
 /// penalty measures spread rather than deviation from any fixed target. This makes `epsilon`
 /// independent of the absolute utilisation level, which is determined by the primary objective.
+///
+/// Candidate assets are excluded: they exist only to receive shadow prices and have artificially
+/// small capacity, so including them would distort `m` without meaningfully affecting dispatch.
 fn add_activity_equalisation<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
