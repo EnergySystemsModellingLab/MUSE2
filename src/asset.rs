@@ -746,10 +746,12 @@ impl Asset {
         let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
             panic!("Cannot decrement unit count of non-divisible asset");
         };
-        assert!(n_units > 0, "Unit count has dropped below zero");
 
+        let new_n_units = n_units
+            .checked_sub(1)
+            .expect("Unit count has dropped below zero");
         self.capacity
-            .set(AssetCapacity::Discrete(n_units - 1, unit_size));
+            .set(AssetCapacity::Discrete(new_n_units, unit_size));
     }
 
     /// Commission the asset.
