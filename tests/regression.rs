@@ -86,7 +86,7 @@ fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model
 
     let mut errors = Vec::new();
     for file_name in file_names1 {
-        if let Some(diff) = diff_csv_file(cur_output_dir1, test_data_dir, &file_name) {
+        if let Some(diff) = diff_csv_file(test_data_dir, cur_output_dir1, &file_name) {
             errors.push(format!("{file_name}: output differs\n{diff}"));
         }
     }
@@ -98,11 +98,11 @@ fn compare_output_dirs(cur_output_dir1: &Path, test_data_dir: &Path, debug_model
     );
 }
 
-fn diff_csv_file(output_dir1: &Path, output_dir2: &Path, file_name: &str) -> Option<String> {
-    let lines1 = read_lines(&output_dir1.join(file_name));
-    let lines2 = read_lines(&output_dir2.join(file_name));
+fn diff_csv_file(old_output_dir: &Path, new_output_dir: &Path, file_name: &str) -> Option<String> {
+    let old_lines = read_lines(&old_output_dir.join(file_name));
+    let new_lines = read_lines(&new_output_dir.join(file_name));
 
-    compute_normalised_diff(&lines1, &lines2)
+    compute_normalised_diff(&old_lines, &new_lines)
 }
 
 /// Compute a line diff after replacing tolerance-equivalent rows with a shared canonical row.
