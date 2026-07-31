@@ -43,6 +43,6 @@ fields:
       (i.e. rounding up the number of units, which may result in a total capacity greater than C, if
       C is not an exact multiple of U).
 
-      It should be noted that making this number too small with respect to the typical size of an
-      asset might create hundreds or thousands of children assets, with a very negative effect on
-      the performance. Users are advised to use this feature with care.
+      Note that divisible assets are appraised one unit at a time, so if this number is much smaller
+      than the typical size of an asset, this will potentially lead to many rounds of appraisal,
+      with an adverse effect on performance.

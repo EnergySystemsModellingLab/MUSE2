@@ -12,8 +12,7 @@ fields:
     type: number
     description: The total capacity of the asset in this year
     notes: |
-      For divisible assets, this is the total capacity across all active child assets
-      (i.e. unit size multiplied by the number of active units).
+      For divisible assets, this is the total capacity across all units.
   - name: num_units
     type: integer
     description: The number of active units making up the asset in this year

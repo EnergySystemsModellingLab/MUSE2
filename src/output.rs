@@ -617,10 +617,7 @@ impl DataWriter {
         Ok(())
     }
 
-    /// Append newly commissioned asset definitions to the assets CSV file.
-    ///
-    /// For divisible asset groups, a single row is emitted per group (using the parent asset's
-    /// metadata).
+    /// Append newly commissioned asset definitions to the assets CSV file
     pub fn write_assets(&mut self, assets: &[AssetRef]) -> Result<()> {
         for asset in assets {
             self.assets.serialize(AssetRow::new(asset))?;

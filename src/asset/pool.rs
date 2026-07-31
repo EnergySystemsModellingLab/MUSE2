@@ -21,7 +21,7 @@ impl AssetPool {
 
     /// Commission new assets for the specified milestone year from the input data.
     ///
-    /// Returns the newly commissioned assets (children, for divisible assets).
+    /// Returns the newly commissioned assets.
     pub fn commission_new(&mut self, year: u32, user_assets: &mut Vec<UserAsset>) -> &[AssetRef] {
         let start = self.assets.len();
         let to_commission = user_assets.extract_if(.., |asset| asset.commission_year <= year);
@@ -45,7 +45,7 @@ impl AssetPool {
         &self.assets[start..]
     }
 
-    /// Commission the specified asset or, if divisible, its children
+    /// Commission the specified asset
     fn commission(&mut self, mut asset: AssetRef) {
         asset.make_mut().commission(AssetID(self.next_id));
         self.next_id += 1;
