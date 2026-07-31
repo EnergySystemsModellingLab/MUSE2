@@ -1,6 +1,6 @@
 //! The module responsible for writing output data to disk.
 use crate::agent::AgentID;
-use crate::asset::{Asset, AssetID, AssetIterator, AssetRef};
+use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
@@ -622,8 +622,8 @@ impl DataWriter {
     /// For divisible asset groups, a single row is emitted per group (using the parent asset's
     /// metadata).
     pub fn write_assets(&mut self, assets: &[AssetRef]) -> Result<()> {
-        for asset in assets.iter().into_parent_or_self() {
-            self.assets.serialize(AssetRow::new(&asset))?;
+        for asset in assets {
+            self.assets.serialize(AssetRow::new(asset))?;
         }
 
         Ok(())
@@ -638,7 +638,7 @@ impl DataWriter {
         milestone_year: u32,
         assets: &[AssetRef],
     ) -> Result<()> {
-        for asset in assets.iter().into_parent_or_self() {
+        for asset in assets {
             let row = AssetCapacityRow {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
