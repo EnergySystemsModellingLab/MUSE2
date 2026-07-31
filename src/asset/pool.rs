@@ -107,7 +107,8 @@ impl AssetPool {
                     .expect("Number of units has increased");
                 *new_asset = old_asset.with_mothballed_units(num_mothballed, Some(year));
             } else {
-                // Put back into pool, with all units mothballed
+                // None of this asset's units were selected. We mothball _all_ units and return to
+                // the pool.
                 let num_mothballed = old_asset.num_units();
                 self.assets
                     .push(old_asset.with_mothballed_units(num_mothballed, Some(year)));
