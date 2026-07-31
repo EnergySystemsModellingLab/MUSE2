@@ -626,10 +626,7 @@ impl DataWriter {
         Ok(())
     }
 
-    /// Write asset capacities for the current milestone year to a CSV file.
-    ///
-    /// This file is appended to on each invocation. For divisible asset groups, a single row is
-    /// emitted per group with the total capacity.
+    /// Write asset capacities for the current milestone year to a CSV file
     pub fn write_asset_capacities(
         &mut self,
         milestone_year: u32,
