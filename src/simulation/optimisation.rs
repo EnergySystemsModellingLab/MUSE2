@@ -744,6 +744,16 @@ fn add_activity_variables(
 ///
 /// Candidate assets are excluded because they have artificially small capacity and exist only to
 /// receive shadow prices, not to make real dispatch decisions.
+///
+/// # Limitations
+///
+/// `m` settles at the median utilisation, so the regularisation is only effective when fewer than
+/// half of the included `(asset, timeslice)` pairs are at zero. If the majority are zero (e.g.
+/// many off-peak timeslices where most assets are idle), the median collapses to zero and the
+/// tiebreaking effect for the active assets is lost. Assets with hard-constrained activity limits
+/// (`min == max`) are excluded from the regularisation to avoid distorting `m`; cost-driven zeros
+/// (assets at zero due to high cost or absent demand) are not excluded and contribute to this
+/// limitation.
 fn add_activity_regularisation<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
