@@ -1,7 +1,7 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
-use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
 use crate::commodity::CommodityID;
 use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
@@ -454,7 +454,7 @@ fn filter_input_prices(
 #[must_use = "Must call run() method on DispatchRun struct"]
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
-    existing_assets: Vec<AssetRef>,
+    existing_assets: &'run [AssetRef],
     flexible_capacity_assets: &'run [AssetRef],
     capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
     candidate_assets: &'run [AssetRef],
@@ -469,8 +469,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn new(model: &'model Model, assets: &'run [AssetRef], year: u32) -> Self {
         Self {
             model,
-            // **HACK**: For now, keep ordering of assets as before to preserve output files
-            existing_assets: assets.iter().into_parent_or_self(),
+            existing_assets: assets,
             flexible_capacity_assets: &[],
             capacity_limits: None,
             candidate_assets: &[],
@@ -626,7 +625,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             &mut problem,
             self.model,
             input_prices,
-            self.existing_assets.as_slice(),
+            self.existing_assets,
             self.candidate_assets,
             self.year,
         );

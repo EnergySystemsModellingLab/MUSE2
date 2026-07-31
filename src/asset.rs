@@ -14,7 +14,6 @@ use crate::units::{
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
-use itertools::Itertools;
 use log::debug;
 use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
@@ -1215,25 +1214,6 @@ where
         commodity_id: &'a CommodityID,
     ) -> impl Iterator<Item = (&'a AssetRef, &'a ProcessFlow)> + 'a {
         self.filter_map(|asset| Some((asset, asset.get_flow(commodity_id)?)))
-    }
-
-    /// Get the parent for each asset, if it has one, or itself.
-    ///
-    /// Child assets are converted to their parents and non-divisible assets are returned as is. Each
-    /// parent asset is returned only once.
-    ///
-    /// If only a subset of a parent's children are present in this iterator, a new parent asset
-    /// representing a portion of the total capacity will be created. This will have the same hash
-    /// as the original parent.
-    fn into_parent_or_self(self) -> Vec<AssetRef> {
-        // **HACK**: Put commissioned divisible assets at end to maintain ordering of output files
-        let mut out = self.cloned().collect_vec();
-        out.sort_by(|a, b| {
-            (a.is_commissioned() && a.is_divisible())
-                .cmp(&(b.is_commissioned() && b.is_divisible()))
-        });
-
-        out
     }
 }
 
