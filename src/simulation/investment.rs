@@ -1,7 +1,7 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::{Agent, AgentID};
-use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
@@ -393,7 +393,7 @@ pub fn select_best_assets(
             // For candidates, cap the asset's capacity by the current demand-limiting capacity
             // and, where an addition constraint exists, the remaining installable capacity.
             let mut asset = asset.clone();
-            if !asset.is_commissioned() {
+            if asset.is_candidate() {
                 let dlc = AssetCapacity::from_capacity(
                     get_demand_limiting_capacity(
                         &model.time_slice_info,
@@ -479,7 +479,7 @@ pub fn select_best_assets(
     // Convert Candidate assets to Ready
     // At this point we also assign the agent ID to the asset
     for asset in &mut best_assets {
-        if let AssetState::Candidate = asset.state() {
+        if asset.is_candidate() {
             asset
                 .make_mut()
                 .select_candidate_for_investment(agent.id.clone());
@@ -576,7 +576,7 @@ fn update_assets(
 ) {
     let capacity_accumulates = if best_asset.is_commissioned() {
         best_asset.is_divisible()
-    } else if best_asset.state() == &AssetState::Candidate {
+    } else if best_asset.is_candidate() {
         true
     } else {
         panic!("Invalid asset type");

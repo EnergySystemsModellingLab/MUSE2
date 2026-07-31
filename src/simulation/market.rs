@@ -474,7 +474,7 @@ pub fn collect_investment_limits_for_candidates(
 ) -> HashMap<AssetRef, AssetCapacity> {
     opt_assets
         .iter()
-        .filter(|asset| !asset.is_commissioned())
+        .filter(|asset| asset.is_candidate())
         .filter_map(|asset| {
             asset
                 .max_installable_capacity(commodity_portion)

@@ -813,7 +813,7 @@ impl Asset {
     /// Select a Candidate asset for investment, converting it to a Ready state
     pub fn select_candidate_for_investment(&mut self, agent_id: AgentID) {
         assert!(
-            self.state == AssetState::Candidate,
+            self.is_candidate(),
             "select_candidate_for_investment can only be called on Candidate assets"
         );
         check_capacity_valid_for_asset(self.total_capacity()).unwrap();
