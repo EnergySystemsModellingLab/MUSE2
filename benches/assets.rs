@@ -16,6 +16,7 @@ use muse2::simulation::market::{
 };
 use muse2::simulation::optimisation::DispatchRun;
 use muse2::simulation::prices::{Prices, calculate_prices};
+use rayon::ThreadPoolBuilder;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::time::Duration;
@@ -129,6 +130,11 @@ fn build_synthetic_processes(templates: &[Arc<Process>], n: usize) -> Vec<Arc<Pr
 
 /// Benchmark [`select_best_assets`] using inputs derived from the `two_outputs` example model,
 /// scaling the number of competing candidate technologies over `N_TECHNOLOGIES_RANGE`.
+///
+/// Two groups are run:
+/// - `parallel`: uses the default Rayon global thread pool (all available cores).
+/// - `sequential`: installs a single-thread Rayon pool so that `par_iter` degenerates to serial
+///   execution, giving a fair like-for-like comparison with the overhead of parallelism removed.
 fn criterion_benchmark(c: &mut Criterion) {
     let (model, mut writer, _example_dir, _output_dir) = load_bench_model();
     let (base_year_assets, existing_assets, candidates) = build_assets_for_investment_year(&model);
@@ -163,62 +169,79 @@ fn criterion_benchmark(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let mut group = c.benchmark_group("select_best_assets");
-    group
-        .noise_threshold(0.05)
-        .sample_size(20)
-        .measurement_time(Duration::from_secs(3));
+    // Single-thread pool used to run `select_best_assets` sequentially for comparison.
+    // Because `select_best_assets` uses `par_iter` internally, installing this pool makes it
+    // degenerate to serial execution while keeping all other code paths identical.
+    let sequential_pool = ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .expect("Failed to build sequential thread pool");
 
-    for n in N_TECHNOLOGIES_RANGE {
-        // Give the agent a synthetic search space of `n` competing technologies for this market
-        let mut agent = agent.clone();
-        agent.search_space.insert(
-            (commodity.id.clone(), region_id.clone(), YEAR),
-            Arc::new(build_synthetic_processes(&templates, n)),
-        );
+    for (group_name, use_parallel) in &[("parallel", true), ("sequential", false)] {
+        let mut group = c.benchmark_group(format!("select_best_assets/{group_name}"));
+        group
+            .noise_threshold(0.05)
+            .sample_size(20)
+            .measurement_time(Duration::from_secs(3));
 
-        let opt_assets: Vec<AssetRef> = get_asset_options(
-            &existing_assets,
-            &demand,
-            &agent,
-            commodity,
-            region_id,
-            YEAR,
-            model.parameters.capacity_limit_factor,
-        )
-        .collect();
-        let investment_limits =
-            collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
-
-        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
-            b.iter_batched(
-                || {
-                    (
-                        opt_assets.clone(),
-                        investment_limits.clone(),
-                        demand.clone(),
-                    )
-                },
-                |(opt_assets, investment_limits, demand)| {
-                    select_best_assets(
-                        black_box(&model),
-                        opt_assets,
-                        investment_limits,
-                        black_box(commodity),
-                        black_box(&agent),
-                        black_box(region_id),
-                        black_box(&prices),
-                        demand,
-                        black_box(YEAR),
-                        &mut writer,
-                    )
-                    .expect("select_best_assets failed")
-                },
-                BatchSize::SmallInput,
+        for n in N_TECHNOLOGIES_RANGE {
+            // Give the agent a synthetic search space of `n` competing technologies
+            let mut agent = agent.clone();
+            agent.search_space.insert(
+                (commodity.id.clone(), region_id.clone(), YEAR),
+                Arc::new(build_synthetic_processes(&templates, n)),
             );
-        });
+
+            let opt_assets: Vec<AssetRef> = get_asset_options(
+                &existing_assets,
+                &demand,
+                &agent,
+                commodity,
+                region_id,
+                YEAR,
+                model.parameters.capacity_limit_factor,
+            )
+            .collect();
+            let investment_limits =
+                collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
+
+            group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
+                b.iter_batched(
+                    || {
+                        (
+                            opt_assets.clone(),
+                            investment_limits.clone(),
+                            demand.clone(),
+                        )
+                    },
+                    |(opt_assets, investment_limits, demand)| {
+                        let run = || {
+                            select_best_assets(
+                                black_box(&model),
+                                opt_assets,
+                                investment_limits,
+                                black_box(commodity),
+                                black_box(&agent),
+                                black_box(region_id),
+                                black_box(&prices),
+                                demand,
+                                black_box(YEAR),
+                                &mut writer,
+                            )
+                            .expect("select_best_assets failed")
+                        };
+                        if *use_parallel {
+                            run()
+                        } else {
+                            sequential_pool.install(run)
+                        }
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+        }
+        group.finish();
     }
-    group.finish();
 }
 
 criterion_group!(benches, criterion_benchmark);
