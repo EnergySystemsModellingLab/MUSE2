@@ -47,16 +47,9 @@ impl AssetPool {
 
     /// Commission the specified asset or, if divisible, its children
     fn commission(&mut self, mut asset: AssetRef) {
-        let n_units = asset.capacity().n_units();
         asset.make_mut().commission(AssetID(self.next_id));
         self.next_id += 1;
         self.assets.push(asset);
-
-        // **HACK**: Skip IDs that would have been allocated to child assets to maintain output
-        // files
-        if let Some(n_units) = n_units {
-            self.next_id += n_units;
-        }
     }
 
     /// Decommission old assets for the specified milestone year
@@ -273,7 +266,7 @@ mod tests {
         asset_pool.commission_new(commission_year, &mut user_assets);
         assert!(user_assets.is_empty());
         assert_eq!(asset_pool.assets.len(), 1);
-        assert_eq!(asset_pool.next_id, 4); // account for child asset IDs
+        assert_eq!(asset_pool.next_id, 1);
     }
 
     #[rstest]
