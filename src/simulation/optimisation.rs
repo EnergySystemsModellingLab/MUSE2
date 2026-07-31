@@ -907,3 +907,72 @@ fn calculate_capacity_coefficient(asset: &AssetRef) -> MoneyPerCapacity {
     annual_fixed_operating_cost
         + annual_capital_cost(param.capital_cost, param.lifetime, param.discount_rate)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::patch::{FilePatch, ModelPatch};
+    use indexmap::IndexMap;
+    use serde::Deserialize;
+    use std::fs;
+
+    #[derive(Debug, Deserialize)]
+    struct DispatchRow {
+        milestone_year: u32,
+        run_description: String,
+        process_id: String,
+        time_slice: String,
+        activity: Option<f64>,
+    }
+
+    // Verifies that two identical assets receive equal dispatch under L1 regularisation.
+    // With epsilon=0 this test is expected to fail (LP corner solutions).
+    #[test]
+    fn two_identical_assets_dispatch_evenly() {
+        let tmp = ModelPatch::from_example("simple")
+            .with_file_patches([
+                FilePatch::new("assets.csv").with_addition("GASCGT,GBR,A0_ELC,2.430,2020")
+            ])
+            .build_to_tempdir()
+            .unwrap();
+
+        let output_path = tmp.path().join("output");
+        fs::create_dir_all(&output_path).unwrap();
+
+        let model = crate::input::load_model(tmp.path()).unwrap();
+        crate::simulation::run(&model, &output_path, /*debug_model=*/ true).unwrap();
+
+        // Read per-asset activity for GASCGT, grouped by time slice
+        let mut activities: IndexMap<String, Vec<f64>> = IndexMap::new();
+        let mut reader =
+            csv::Reader::from_path(output_path.join("debug_dispatch_assets.csv")).unwrap();
+        for result in reader.deserialize::<DispatchRow>() {
+            let row = result.unwrap();
+            if row.milestone_year == 2020
+                && row.run_description == "final without candidates"
+                && row.process_id == "GASCGT"
+                && let Some(act) = row.activity
+            {
+                activities.entry(row.time_slice).or_default().push(act);
+            }
+        }
+
+        // Every time slice where at least one GASCGT is active should have equal activities
+        for (time_slice, acts) in &activities {
+            assert_eq!(
+                acts.len(),
+                2,
+                "Expected 2 GASCGT entries for time slice {time_slice}"
+            );
+            let [a, b] = acts.as_slice() else {
+                unreachable!()
+            };
+            if *a > 0.0 || *b > 0.0 {
+                let diff = (a - b).abs() / a.max(*b);
+                assert!(
+                    diff < 1e-6,
+                    "GASCGT activities not equal in time slice {time_slice}: {a} vs {b}"
+                );
+            }
+        }
+    }
+}
