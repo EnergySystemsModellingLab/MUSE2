@@ -18,6 +18,8 @@ ready to be released, carry out the following steps:
 
 - Users can now optionally pass [custom options][highs-opts-docs] to the HiGHS solver ([#1276])
 - Implement a new appraisal approach for the LCOX objective type ([#1319])
+- Memory usage and performance has been drastically improved for divisible assets with many units
+  ([#1464])
 
 ## Breaking changes
 
@@ -47,3 +49,4 @@ ready to be released, carry out the following steps:
 [#1349]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1349
 [#1376]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1376
 [#1458]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1458
+[#1464]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1464

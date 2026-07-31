@@ -174,8 +174,9 @@ fn run_dispatch_for_year(
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<(Prices, FlowMap)> {
-    // Sanity check
-    debug_assert!(candidates.iter().all(|asset| !asset.is_commissioned()));
+    // Sanity checks
+    debug_assert!(assets.iter().all(|asset| !asset.is_candidate()));
+    debug_assert!(candidates.iter().all(|asset| asset.is_candidate()));
 
     // Only include non-mothballed units
     let assets_vec: Vec<AssetRef>;

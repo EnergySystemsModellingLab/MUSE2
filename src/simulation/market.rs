@@ -405,9 +405,7 @@ fn get_asset_options<'a>(
     year: u32,
     capacity_limit_factor: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
-    // Get existing assets which produce the commodity of interest. We discard information about
-    // mothballed units here; it is preserved in the original collection of assets and is fed back
-    // into `AssetPool` later.
+    // Get existing assets which produce the commodity of interest
     let existing_assets = all_existing_assets
         .iter()
         .filter_agent(&agent.id)
@@ -474,7 +472,7 @@ pub fn collect_investment_limits_for_candidates(
 ) -> HashMap<AssetRef, AssetCapacity> {
     opt_assets
         .iter()
-        .filter(|asset| !asset.is_commissioned())
+        .filter(|asset| asset.is_candidate())
         .filter_map(|asset| {
             asset
                 .max_installable_capacity(commodity_portion)
