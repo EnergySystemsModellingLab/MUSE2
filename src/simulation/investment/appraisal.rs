@@ -15,7 +15,7 @@ use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub mod coefficients;
 mod constraints;
@@ -59,7 +59,7 @@ pub struct AppraisalOutput {
     /// The comparison metric to compare investment decisions
     pub metric: Option<Box<dyn MetricTrait>>,
     /// Activity coefficients and market costs used in the appraisal
-    pub coefficients: Rc<ObjectiveCoefficients>,
+    pub coefficients: Arc<ObjectiveCoefficients>,
 }
 
 impl AppraisalOutput {
@@ -68,7 +68,7 @@ impl AppraisalOutput {
         asset: AssetRef,
         results: ResultsMap,
         metric: Option<T>,
-        coefficients: Rc<ObjectiveCoefficients>,
+        coefficients: Arc<ObjectiveCoefficients>,
     ) -> Self {
         Self {
             asset,
@@ -216,7 +216,7 @@ fn calculate_lcox(
     model: &Model,
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &Rc<ObjectiveCoefficients>,
+    coefficients: &Arc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
@@ -245,7 +245,7 @@ fn calculate_npv(
     model: &Model,
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &Rc<ObjectiveCoefficients>,
+    coefficients: &Arc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
@@ -282,7 +282,7 @@ pub fn appraise_investment(
     asset: &AssetRef,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
-    coefficients: &Rc<ObjectiveCoefficients>,
+    coefficients: &Arc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let appraisal_method = match objective_type {
@@ -354,7 +354,7 @@ mod tests {
     use crate::units::{Capacity, MoneyPerActivity};
     use float_cmp::assert_approx_eq;
     use rstest::rstest;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     /// Parametrised tests for LCOX metric comparison.
     #[rstest]
@@ -400,7 +400,7 @@ mod tests {
 
     #[rstest]
     fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
-        let process = Rc::new(process);
+        let process = Arc::new(process);
         let capacity = Capacity(2.0);
         let asset1 = Asset::new_commissioned(
             agent_id.clone(),
@@ -426,8 +426,8 @@ mod tests {
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 
-    fn objective_coeffs() -> Rc<ObjectiveCoefficients> {
-        Rc::new(ObjectiveCoefficients {
+    fn objective_coeffs() -> Arc<ObjectiveCoefficients> {
+        Arc::new(ObjectiveCoefficients {
             activity_coefficients: IndexMap::new(),
             market_costs: IndexMap::new(),
         })
@@ -530,7 +530,7 @@ mod tests {
         region_id: RegionID,
         agent_id: AgentID,
     ) {
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let capacity = Capacity(10.0);
         let commission_years = [2015, 2020, 2010];
 
@@ -567,7 +567,7 @@ mod tests {
     /// Test that when metrics and commission years are equal, the original order is preserved
     #[rstest]
     fn appraisal_sort_maintains_order_when_all_equal(process: Process, region_id: RegionID) {
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let capacity = Capacity(10.0);
         let commission_year = 2015;
         let agent_ids = ["agent1", "agent2", "agent3"];
@@ -608,7 +608,7 @@ mod tests {
         region_id: RegionID,
         agent_id: AgentID,
     ) {
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let capacity = Capacity(10.0);
 
         // Create a mix of commissioned and candidate (non-commissioned) assets
@@ -669,7 +669,7 @@ mod tests {
         region_id: RegionID,
         agent_id: AgentID,
     ) {
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let capacity = Capacity(10.0);
 
         // Create a mix of commissioned and candidate (non-commissioned) assets
@@ -784,7 +784,7 @@ mod tests {
         region_id: RegionID,
         agent_id: AgentID,
     ) {
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let capacity = Capacity(10.0);
 
         let commissioned = Asset::new_commissioned(
@@ -818,7 +818,7 @@ mod tests {
         region_id: RegionID,
         agent_id: AgentID,
     ) {
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let capacity = Capacity(10.0);
         let year = 2020;
 

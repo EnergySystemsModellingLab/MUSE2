@@ -14,7 +14,7 @@ use indexmap::IndexSet;
 use log::warn;
 use serde::Deserialize;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 mod availability;
 use availability::read_process_availabilities;
@@ -71,7 +71,7 @@ pub fn read_processes(
     // Add data to Process objects
     for (id, process) in &mut processes {
         // This will always succeed as we know there will only be one reference to the process here
-        let process = Rc::get_mut(process).unwrap();
+        let process = Arc::get_mut(process).unwrap();
 
         // We have already checked that there are maps for every process so this will succeed
         process.activity_limits = activity_limits.remove(id).unwrap();

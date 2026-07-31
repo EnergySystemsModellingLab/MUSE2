@@ -17,7 +17,7 @@ use muse2::simulation::market::{
 use muse2::simulation::optimisation::DispatchRun;
 use muse2::simulation::prices::{Prices, calculate_prices};
 use std::hint::black_box;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -115,11 +115,11 @@ fn calculate_seed_prices(
 ///
 /// Each synthetic process is a copy of one of `templates`, but given a unique ID so that it is
 /// treated as a distinct candidate technology.
-fn build_synthetic_processes(templates: &[Rc<Process>], n: usize) -> Vec<Rc<Process>> {
+fn build_synthetic_processes(templates: &[Arc<Process>], n: usize) -> Vec<Arc<Process>> {
     (0..n)
         .map(|i| {
             let template = &templates[i % templates.len()];
-            Rc::new(Process {
+            Arc::new(Process {
                 id: ProcessID::new(&format!("{}#{i}", template.id)),
                 ..(**template).clone()
             })
@@ -158,7 +158,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     // Real candidate technologies for this market, used as templates to build up to
     // `N_TECHNOLOGIES_RANGE.end()` synthetic competing technologies
-    let templates: Vec<Rc<Process>> = agent
+    let templates: Vec<Arc<Process>> = agent
         .iter_search_space(region_id, &commodity.id, YEAR)
         .cloned()
         .collect();
@@ -174,7 +174,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let mut agent = agent.clone();
         agent.search_space.insert(
             (commodity.id.clone(), region_id.clone(), YEAR),
-            Rc::new(build_synthetic_processes(&templates, n)),
+            Arc::new(build_synthetic_processes(&templates, n)),
         );
 
         let opt_assets: Vec<AssetRef> = get_asset_options(

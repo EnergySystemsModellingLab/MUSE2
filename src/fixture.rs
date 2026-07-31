@@ -30,7 +30,7 @@ use itertools::Itertools;
 use rstest::fixture;
 use std::collections::HashMap;
 use std::iter;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Assert that an error with the given message occurs
 macro_rules! assert_error {
@@ -215,7 +215,7 @@ pub fn asset_divisible(mut process: Process) -> Asset {
     process.unit_size = Some(Capacity(4.0));
     Asset::new_ready(
         "agent1".into(),
-        Rc::new(process),
+        Arc::new(process),
         "GBR".into(),
         Capacity(11.0),
         2010,
@@ -248,7 +248,7 @@ pub fn process_parameter_map(
     region_ids: IndexSet<RegionID>,
     process_parameter: ProcessParameter,
 ) -> ProcessParameterMap {
-    let parameter = Rc::new(process_parameter);
+    let parameter = Arc::new(process_parameter);
     region_ids
         .into_iter()
         .cartesian_product(2010..=2020)
@@ -271,28 +271,28 @@ pub fn process_activity_limits_map(
     region_ids
         .into_iter()
         .cartesian_product(2010..=2020)
-        .map(|(region_id, year)| ((region_id, year), Rc::new(process_activity_limits.clone())))
+        .map(|(region_id, year)| ((region_id, year), Arc::new(process_activity_limits.clone())))
         .collect()
 }
 
 #[fixture]
 /// Create an empty set of `ProcessInvestmentConstraints` for a given region/year
-/// Returns a `HashMap` keyed by (`RegionID`, year) with empty Rc<ProcessInvestmentConstraint>
+/// Returns a `HashMap` keyed by (`RegionID`, year) with empty Arc<ProcessInvestmentConstraint>
 pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
     HashMap::new()
 }
 
 #[fixture]
 /// Create an empty set of `ProcessFlows` for a given region/year
-pub fn process_flows() -> Rc<IndexMap<CommodityID, ProcessFlow>> {
-    Rc::new(IndexMap::new())
+pub fn process_flows() -> Arc<IndexMap<CommodityID, ProcessFlow>> {
+    Arc::new(IndexMap::new())
 }
 
 #[fixture]
 /// Create a `ProcessFlowsMap` with the provided flows for each region/year
 pub fn process_flows_map(
     region_ids: IndexSet<RegionID>,
-    process_flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
+    process_flows: Arc<IndexMap<CommodityID, ProcessFlow>>,
 ) -> ProcessFlowsMap {
     region_ids
         .into_iter()
@@ -406,7 +406,7 @@ pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutpu
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
     AppraisalOutput {
         asset: AssetRef::from(asset),
-        coefficients: Rc::new(ObjectiveCoefficients {
+        coefficients: Arc::new(ObjectiveCoefficients {
             activity_coefficients,
             market_costs,
         }),

@@ -237,7 +237,7 @@ mod tests {
     use crate::fixture::{assert_error, other_commodity, sed_commodity, svd_commodity};
     use petgraph::graph::Graph;
     use rstest::rstest;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[rstest]
     fn validate_commodities_graph_works(
@@ -249,9 +249,9 @@ mod tests {
         let mut commodities = CommodityMap::new();
 
         // Add test commodities (all have DayNight time slice level)
-        commodities.insert("A".into(), Rc::new(other_commodity));
-        commodities.insert("B".into(), Rc::new(sed_commodity));
-        commodities.insert("C".into(), Rc::new(svd_commodity));
+        commodities.insert("A".into(), Arc::new(other_commodity));
+        commodities.insert("B".into(), Arc::new(sed_commodity));
+        commodities.insert("C".into(), Arc::new(svd_commodity));
 
         // Build valid graph: A(OTH) -> B(SED) -> C(SVD) ->D(DEMAND)
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
@@ -276,9 +276,9 @@ mod tests {
         let mut commodities = CommodityMap::new();
 
         // Add test commodities (all have DayNight time slice level)
-        commodities.insert("A".into(), Rc::new(svd_commodity));
-        commodities.insert("B".into(), Rc::new(sed_commodity));
-        commodities.insert("C".into(), Rc::new(other_commodity));
+        commodities.insert("A".into(), Arc::new(svd_commodity));
+        commodities.insert("B".into(), Arc::new(sed_commodity));
+        commodities.insert("C".into(), Arc::new(other_commodity));
 
         // Build invalid graph: C(OTH) -> A(SVD) -> B(SED) - SVD cannot be consumed
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
@@ -300,7 +300,7 @@ mod tests {
         let mut commodities = CommodityMap::new();
 
         // Add test commodities (all have DayNight time slice level)
-        commodities.insert("A".into(), Rc::new(svd_commodity));
+        commodities.insert("A".into(), Arc::new(svd_commodity));
 
         // Build invalid graph: A(SVD) -> B(DEMAND) - SVD must be produced
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
@@ -320,8 +320,8 @@ mod tests {
         let mut commodities = CommodityMap::new();
 
         // Add test commodities (all have DayNight time slice level)
-        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Rc::new(sed_commodity));
+        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Arc::new(sed_commodity));
 
         // Build invalid graph: B(SED) -> A(SED)
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
@@ -344,9 +344,9 @@ mod tests {
         let mut commodities = CommodityMap::new();
 
         // Add test commodities (all have DayNight time slice level)
-        commodities.insert("A".into(), Rc::new(other_commodity));
-        commodities.insert("B".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("C".into(), Rc::new(sed_commodity));
+        commodities.insert("A".into(), Arc::new(other_commodity));
+        commodities.insert("B".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("C".into(), Arc::new(sed_commodity));
 
         // Build invalid graph: B(SED) -> A(OTH) -> C(SED)
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
