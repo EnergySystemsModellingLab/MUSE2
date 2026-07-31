@@ -1186,7 +1186,7 @@ impl AssetRef {
     pub fn with_mothballed_units(mut self, num_units: u32, year: Option<u32>) -> Self {
         if num_units == 0 {
             // Small optimisation
-            return self.with_unmothball_all();
+            return self.with_no_mothballed_units();
         }
 
         let num_already_mothballed = self.get_num_mothballed_units();
@@ -1244,7 +1244,7 @@ impl AssetRef {
     /// Returns a new [`AssetRef`] with no mothballed units.
     ///
     /// If the asset has no mothballed units, the original asset is returned.
-    pub fn with_unmothball_all(mut self) -> Self {
+    pub fn with_no_mothballed_units(mut self) -> Self {
         if self.has_any_mothballed_units() {
             // Only commissioned assets can have mothballed units, so this is safe
             self.make_mut().get_mothball_events_mut().unwrap().clear();
@@ -1898,17 +1898,17 @@ mod tests {
     }
 
     #[rstest]
-    fn with_unmothball_all_clears_events(parent_asset: AssetRef) {
+    fn with_no_mothballed_units_clears_events(parent_asset: AssetRef) {
         let asset = parent_asset.with_mothballed_units(2, Some(2020));
-        let asset = asset.with_unmothball_all();
+        let asset = asset.with_no_mothballed_units();
         assert!(!asset.has_any_mothballed_units());
         assert_eq!(asset.get_num_mothballed_units(), 0);
     }
 
     #[rstest]
-    fn with_unmothball_all_noop_returns_same_rc(parent_asset: AssetRef) {
+    fn with_no_mothballed_units_noop_returns_same_rc(parent_asset: AssetRef) {
         // `parent_asset` has no mothballed units, so the original Rc is returned unchanged
-        let same = parent_asset.clone().with_unmothball_all();
+        let same = parent_asset.clone().with_no_mothballed_units();
         assert!(Rc::ptr_eq(&parent_asset.0, &same.0));
     }
 

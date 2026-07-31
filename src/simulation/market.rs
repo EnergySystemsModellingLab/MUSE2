@@ -414,7 +414,7 @@ fn get_asset_options<'a>(
         .filter_region(region_id)
         .filter_primary_producers_of(&commodity.id)
         .cloned()
-        .map(AssetRef::with_unmothball_all);
+        .map(AssetRef::with_no_mothballed_units);
 
     // Get candidates assets which produce the commodity of interest
     let candidate_assets = get_candidate_assets(
