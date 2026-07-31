@@ -110,7 +110,7 @@ navigate through the different benchmarks.
 
 ### Adding new benchmarks
 
-To add a new benchmark, i.e. a collection of related performance tests, creat a new file in the
+To add a new benchmark, i.e. a collection of related performance tests, create a new file in the
 `benches` directory with the name of your benchmark. For example, to add a benchmark for the `foo`
 functionality, you would create a file called `benches/foo.rs`. Then `foo` will need to be added to
 `cargo.toml` under the `[bench]` section, like so:
