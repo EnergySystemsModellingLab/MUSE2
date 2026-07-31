@@ -774,6 +774,12 @@ fn add_activity_regularisation<'a, I>(
         let inv_cap = 1.0 / cap;
 
         for time_slice in model.time_slice_info.iter_ids() {
+            let limits = asset.get_activity_per_capacity_limits(time_slice);
+            // Skip variables with no freedom — they distort m without contributing to spreading
+            if limits.start() == limits.end() {
+                continue;
+            }
+
             let act = variables.get_activity_var(asset, time_slice);
             let d = problem.add_column(epsilon, 0.0..);
             // d >= act/cap - m
