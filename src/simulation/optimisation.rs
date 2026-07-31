@@ -7,6 +7,7 @@ use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
@@ -724,21 +725,25 @@ fn add_activity_variables(
 ///
 /// The regularisation adds `epsilon * sum(d[a,t])` to the objective, where `d[a,t]` is a
 /// variable representing the L1 deviation of asset `a`'s utilisation fraction from a free centre
-/// variable `m` (shared across all assets and time slices):
+/// variable `m[p]` shared across all assets and time slices **of the same process** `p`:
 ///
 /// ```text
-/// d[a,t] = |act[a,t] / cap[a] - m|
+/// d[a,t] = |act[a,t] / cap[a] - m[p]|
 /// ```
 ///
 /// The absolute value is linearised as two inequality constraints per `(a, t)`:
 ///
 /// ```text
-/// d[a,t] >= act[a,t] / cap[a] - m
-/// d[a,t] >= m - act[a,t] / cap[a]
+/// d[a,t] >= act[a,t] / cap[a] - m[p]
+/// d[a,t] >= m[p] - act[a,t] / cap[a]
 /// ```
 ///
-/// `m` is optimised by the LP and settles at the median utilisation across all assets and time
-/// slices, so the regularisation penalises *spread* rather than deviation from any fixed target.
+/// `m[p]` is optimised by the LP and settles at the median utilisation across all assets and time
+/// slices **belonging to process `p`**, so the regularisation penalises *spread within each
+/// process* rather than deviation from any fixed target. Using a per-process `m` instead of a
+/// single global `m` prevents the median from being contaminated by idle assets of other
+/// processes, which would otherwise collapse it to zero.
+///
 /// This means it acts as a pure tiebreaker: `epsilon` should be chosen small enough that no
 /// change to the primary objective cost is acceptable as a trade for reduced spread.
 ///
@@ -747,13 +752,12 @@ fn add_activity_variables(
 ///
 /// # Limitations
 ///
-/// `m` settles at the median utilisation, so the regularisation is only effective when fewer than
-/// half of the included `(asset, timeslice)` pairs are at zero. If the majority are zero (e.g.
-/// many off-peak timeslices where most assets are idle), the median collapses to zero and the
-/// tiebreaking effect for the active assets is lost. Assets with hard-constrained activity limits
-/// (`min == max`) are excluded from the regularisation to avoid distorting `m`; cost-driven zeros
-/// (assets at zero due to high cost or absent demand) are not excluded and contribute to this
-/// limitation.
+/// `m[p]` settles at the median utilisation within process `p`, so the regularisation is only
+/// effective when fewer than half of that process's included `(asset, timeslice)` pairs are at
+/// zero. If the majority are zero (e.g. a process whose commodity is only demanded in some
+/// seasons), the within-process median still collapses to zero and the tiebreaking effect is lost.
+/// Assets with hard-constrained activity limits (`min == max`) are excluded from the
+/// regularisation to avoid distorting `m[p]`.
 fn add_activity_regularisation<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -763,9 +767,8 @@ fn add_activity_regularisation<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef>,
 {
-    // m is the free L1-centre variable in utilisation-fraction space; bounded below at zero
-    // since all utilisation fractions are non-negative
-    let m = problem.add_column(0.0, 0.0..);
+    // One m per process: bounded below at zero since all utilisation fractions are non-negative
+    let mut process_m: IndexMap<ProcessID, Variable> = IndexMap::new();
 
     for asset in assets {
         // Get capacity for the asset, since we're regularising utilisation (activity/capacity).
@@ -782,6 +785,10 @@ fn add_activity_regularisation<'a, I>(
             continue;
         }
         let inv_cap = 1.0 / cap;
+
+        let m = *process_m
+            .entry(asset.process_id().clone())
+            .or_insert_with(|| problem.add_column(0.0, 0.0..));
 
         for time_slice in model.time_slice_info.iter_ids() {
             let limits = asset.get_activity_per_capacity_limits(time_slice);
