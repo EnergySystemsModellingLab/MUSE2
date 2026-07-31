@@ -15,6 +15,7 @@ use context_manager;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::{debug, warn};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
@@ -387,45 +388,54 @@ pub fn select_best_assets(
             region_id
         );
 
-        // Appraise all options
-        let mut outputs = Vec::new();
-        for asset in &opt_assets {
-            // For candidates, cap the asset's capacity by the current demand-limiting capacity
-            // and, where an addition constraint exists, the remaining installable capacity.
-            let mut asset = asset.clone();
-            if asset.is_candidate() {
-                let dlc = AssetCapacity::from_capacity(
-                    get_demand_limiting_capacity(
-                        &model.time_slice_info,
-                        &asset,
-                        commodity,
-                        &demand,
-                    ),
-                    asset.unit_size(),
-                );
-                let cap = asset.capacity().min(dlc);
-                let max_capacity = remaining_capacities
-                    .get(&asset)
-                    .copied()
-                    .map_or(cap, |remaining| cap.min(remaining));
-                asset.make_mut().set_capacity(max_capacity);
-            }
+        // Appraise all options in parallel: each asset's appraisal is independent (all shared
+        // state is read-only within this block), so we can safely use Rayon here.
+        // Each HiGHS solve inside `appraise_investment` is configured to use only one thread
+        // (via `parallel="off"`) to avoid over-subscription.
+        let mut outputs: Vec<AppraisalOutput> = opt_assets
+            .par_iter()
+            .map(|asset| -> Result<Option<AppraisalOutput>> {
+                // For candidates, cap the asset's capacity by the current demand-limiting
+                // capacity and, where an addition constraint exists, the remaining installable
+                // capacity. `make_mut` creates a new Arc allocation for the modified clone so
+                // there is no shared mutable state between iterations.
+                let mut asset = asset.clone();
+                if asset.is_candidate() {
+                    let dlc = AssetCapacity::from_capacity(
+                        get_demand_limiting_capacity(
+                            &model.time_slice_info,
+                            &asset,
+                            commodity,
+                            &demand,
+                        ),
+                        asset.unit_size(),
+                    );
+                    let cap = asset.capacity().min(dlc);
+                    let max_capacity = remaining_capacities
+                        .get(&asset)
+                        .copied()
+                        .map_or(cap, |remaining| cap.min(remaining));
+                    asset.make_mut().set_capacity(max_capacity);
+                }
 
-            // Skip assets with zero capacity
-            if asset.capacity().total_capacity() <= Capacity(0.0) {
-                continue;
-            }
+                // Skip assets with zero capacity
+                if asset.capacity().total_capacity() <= Capacity(0.0) {
+                    return Ok(None);
+                }
 
-            let output = appraise_investment(
-                model,
-                &asset,
-                commodity,
-                objective_type,
-                &coefficients[&asset],
-                &demand,
-            )?;
-            outputs.push(output);
-        }
+                Ok(Some(appraise_investment(
+                    model,
+                    &asset,
+                    commodity,
+                    objective_type,
+                    &coefficients[&asset],
+                    &demand,
+                )?))
+            })
+            .collect::<Result<Vec<_>>>()? // propagate any solver error
+            .into_iter()
+            .flatten()
+            .collect();
 
         // Save appraisal results
         writer.write_appraisal_debug_info(
