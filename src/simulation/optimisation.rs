@@ -211,7 +211,8 @@ fn create_flow_map<'a>(
         let num_children_in_this_run = existing_assets_with_parents
             .get(parent)
             .unwrap()
-            .num_children()
+            .capacity()
+            .n_units()
             .unwrap();
         let n_units = Dimensionless(num_children_in_this_run as f64);
 

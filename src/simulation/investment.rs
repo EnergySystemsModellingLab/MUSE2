@@ -518,7 +518,7 @@ fn replace_child_assets_with_parents(
         remaining_capacities.insert(parent.clone(), parent.capacity());
 
         // Add parent asset (one unit)
-        assets.push(parent.make_partial_parent(1));
+        assets.push(parent.clone().with_subset_of_units(1));
     }
 
     children
@@ -569,56 +569,49 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
 
 /// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
 fn update_assets(
-    mut best_asset: AssetRef,
+    best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
 ) {
-    match best_asset.state() {
-        AssetState::Commissioned { .. } => {
-            // Remove this asset from the options
-            opt_assets.retain(|asset| *asset != best_asset);
+    let capacity_accumulates = if best_asset.is_commissioned() {
+        best_asset.is_divisible()
+    } else if best_asset.state() == &AssetState::Candidate {
+        true
+    } else {
+        panic!("Invalid asset type");
+    };
 
-            // As this asset has been selected, it should be unmothballed
-            if best_asset.is_mothballed() {
-                best_asset.make_mut().unmothball();
-            }
+    if capacity_accumulates {
+        // Track remaining capacity for assets that have limits
+        if let Some(remaining_capacity) = remaining_capacities.get_mut(&best_asset) {
+            *remaining_capacity = *remaining_capacity - best_asset.capacity();
 
-            best_assets.push(best_asset);
-        }
-        AssetState::Candidate | AssetState::Parent { .. } => {
-            // Track remaining capacity for assets that have limits
-            if let Some(remaining_capacity) = remaining_capacities.get_mut(&best_asset) {
-                *remaining_capacity = *remaining_capacity - best_asset.capacity();
+            // If there's no capacity remaining, remove the asset from the options
+            if remaining_capacity.total_capacity() <= Capacity(0.0) {
+                let old_idx = opt_assets
+                    .iter()
+                    .position(|asset| *asset == best_asset)
+                    .unwrap();
 
-                // If there's no capacity remaining, remove the asset from the options
-                if remaining_capacity.total_capacity() <= Capacity(0.0) {
-                    let old_idx = opt_assets
-                        .iter()
-                        .position(|asset| *asset == best_asset)
-                        .unwrap();
-
-                    opt_assets.swap_remove(old_idx);
-                    remaining_capacities.remove(&best_asset);
-                }
-            }
-
-            if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset)
-            {
-                // If the asset is already in the list of best assets, add the additional required capacity
-                existing_asset
-                    .make_mut()
-                    .increase_capacity(best_asset.capacity());
-            } else {
-                // Otherwise add it to the list of best assets
-                best_assets.push(best_asset);
+                opt_assets.swap_remove(old_idx);
+                remaining_capacities.remove(&best_asset);
             }
         }
-        AssetState::Ready { .. } => {
-            panic!(
-                "update_assets should only be called with Commissioned, Parent or Candidate assets"
-            )
+
+        if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset) {
+            // If the asset is already in the list of best assets, add the additional required capacity
+            existing_asset
+                .make_mut()
+                .increase_capacity(best_asset.capacity());
+        } else {
+            // Otherwise add it to the list of best assets. Selected assets are unmothballed.
+            best_assets.push(best_asset.with_no_mothballed_units());
         }
+    } else {
+        // Remove this asset from the options. Selected assets are unmothballed.
+        opt_assets.retain(|asset| *asset != best_asset);
+        best_assets.push(best_asset.with_no_mothballed_units());
     }
 }
 
