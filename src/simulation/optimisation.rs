@@ -60,6 +60,8 @@ pub struct VariableMap {
     capacity_var_idx: Range<usize>,
     unmet_demand_vars: UnmetDemandVariableMap,
     unmet_demand_var_idx: Range<usize>,
+    /// Cost coefficients for every variable, captured at construction for reuse in the second solve
+    cost_terms: Vec<(Variable, f64)>,
 }
 
 impl VariableMap {
@@ -82,9 +84,11 @@ impl VariableMap {
         year: u32,
     ) -> Self {
         let mut activity_vars = ActivityVariableMap::new();
+        let mut cost_terms = Vec::new();
         let existing_asset_var_idx = add_activity_variables(
             problem,
             &mut activity_vars,
+            &mut cost_terms,
             &model.time_slice_info,
             input_prices,
             existing_assets,
@@ -93,6 +97,7 @@ impl VariableMap {
         let candidate_asset_var_idx = add_activity_variables(
             problem,
             &mut activity_vars,
+            &mut cost_terms,
             &model.time_slice_info,
             input_prices,
             candidate_assets,
@@ -107,6 +112,7 @@ impl VariableMap {
             capacity_var_idx: Range::default(),
             unmet_demand_vars: UnmetDemandVariableMap::default(),
             unmet_demand_var_idx: Range::default(),
+            cost_terms,
         }
     }
 
@@ -138,6 +144,7 @@ impl VariableMap {
             .map(|((commodity_id, region_id), time_slice)| {
                 let key = (commodity_id.clone(), region_id.clone(), time_slice.clone());
                 let var = problem.add_column(voll.value(), 0.0..);
+                self.cost_terms.push((var, voll.value()));
                 (key, var)
             }),
         );
@@ -599,6 +606,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Run dispatch to balance the specified markets, optionally including unmet demand variables
+    #[allow(clippy::too_many_lines)]
     fn run_internal(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
@@ -639,6 +647,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 self.capacity_limits,
                 self.capacity_margin,
             );
+            let capacity_costs: Vec<_> = variables
+                .iter_capacity_vars()
+                .map(|(asset, var)| (var, calculate_capacity_coefficient(asset).value()))
+                .collect();
+            variables.cost_terms.extend(capacity_costs);
         }
 
         // Add constraints
@@ -656,31 +669,71 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.candidate_assets,
         );
 
-        // Add secondary objective to encourage even dispatch across existing assets, if enabled
-        let epsilon = self.model.parameters.dispatch_activity_equalisation_epsilon;
-        if epsilon > 0.0 {
-            add_activity_regularisation(
-                &mut problem,
+        // Take pre-computed cost terms (stored during problem construction, not recomputed here)
+        let cost_terms = std::mem::take(&mut variables.cost_terms);
+
+        // First solve: minimise cost
+        let mut highs_model = problem.optimise(Sense::Minimise);
+        apply_highs_options_from_toml(
+            &mut highs_model,
+            &self.model.parameters.highs.dispatch_options,
+        )
+        .context("Failed to apply custom HiGHS options to dispatch optimisation")?;
+        let solved1 = solve_optimal(highs_model)?;
+
+        // Second lexicographic solve: minimise L1 utilisation spread subject to cost <= Z*
+        let z_star;
+        let solved2 = if self.model.parameters.dispatch_activity_equalisation {
+            z_star = solved1.objective_value();
+            let tolerance = self
+                .model
+                .parameters
+                .dispatch_activity_equalisation_tolerance;
+
+            let mut highs_model2 = highs::Model::from(solved1);
+
+            // Zero all linear objective coefficients so only the spreading objective remains
+            for &var in variables.activity_vars.values() {
+                highs_model2.change_column_cost(var, 0.0);
+            }
+            for &var in variables.unmet_demand_vars.values() {
+                highs_model2.change_column_cost(var, 0.0);
+            }
+            for (_, var) in variables.iter_capacity_vars() {
+                highs_model2.change_column_cost(var, 0.0);
+            }
+
+            // Constrain total cost to be no worse than z_star * (1 + tolerance)
+            highs_model2.add_row(..=(z_star * (1.0 + tolerance)), cost_terms);
+
+            // Add L1 spreading variables and constraints
+            add_activity_equalisation_to_model(
+                &mut highs_model2,
                 &variables,
                 self.existing_assets.iter(),
                 self.model,
-                epsilon,
             );
-        }
 
-        // Create model and apply any user-supplied HiGHS options to it
-        let mut model = problem.optimise(Sense::Minimise);
-        apply_highs_options_from_toml(&mut model, &self.model.parameters.highs.dispatch_options)
-            .context("Failed to apply custom HiGHS options to dispatch optimisation")?;
-        let solution = solve_optimal(model)?;
+            apply_highs_options_from_toml(
+                &mut highs_model2,
+                &self.model.parameters.highs.dispatch_options,
+            )
+            .context("Failed to apply custom HiGHS options to dispatch equalisation solve")?;
+            solve_optimal(highs_model2)?
+        } else {
+            z_star = solved1.objective_value();
+            solved1
+        };
 
-        Ok(Solution {
-            solution: solution.get_solution(),
+        let solution = Solution {
+            solution: solved2.get_solution(),
             variables,
             time_slice_info: &self.model.time_slice_info,
             constraint_keys,
-            objective_value: Money(solution.objective_value()),
-        })
+            // Always report the primary cost objective, not the spreading objective value
+            objective_value: Money(z_star),
+        };
+        Ok(solution)
     }
 }
 
@@ -697,6 +750,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
 fn add_activity_variables(
     problem: &mut Problem,
     variables: &mut ActivityVariableMap,
+    cost_terms: &mut Vec<(Variable, f64)>,
     time_slice_info: &TimeSliceInfo,
     input_prices: Option<&PriceMap>,
     assets: &[AssetRef],
@@ -708,6 +762,7 @@ fn add_activity_variables(
     for (asset, time_slice) in iproduct!(assets.iter(), time_slice_info.iter_ids()) {
         let coeff = calculate_activity_coefficient(asset, year, time_slice, input_prices);
         let var = problem.add_column(coeff.value(), 0.0..);
+        cost_terms.push((var, coeff.value()));
         let key = (asset.clone(), time_slice.clone());
         let existing = variables.insert(key, var).is_some();
         assert!(!existing, "Duplicate entry for var");
@@ -716,86 +771,54 @@ fn add_activity_variables(
     start..problem.num_cols()
 }
 
-/// Add a regularisation term to the dispatch objective to discourage "corner" solutions.
+/// Add L1 utilisation-spreading variables and constraints to a [`highs::Model`].
 ///
-/// Without regularisation, when multiple assets have identical costs the LP may concentrate all
-/// activity on a single asset rather than spreading it evenly — both solutions are equally optimal
-/// from the primary objective's perspective, but the former is less physically realistic.
+/// This is the second-solve counterpart to the primary cost minimisation. It adds a free centre
+/// variable `m` and per-`(asset, timeslice)` deviation variables `d[a,t]` that linearise
+/// `|act[a,t] / cap[a] - m|`, with each `d` carrying objective coefficient 1. Minimising
+/// `sum(d[a,t])` subject to the constraints produces an L1 spreading of utilisation fractions
+/// around their median.
 ///
-/// The regularisation adds `epsilon * sum(d[a,t])` to the objective, where `d[a,t]` is a
-/// variable representing the L1 deviation of asset `a`'s utilisation fraction from a free centre
-/// variable `m` (shared across all assets and time slices):
-///
-/// ```text
-/// d[a,t] = |act[a,t] / cap[a] - m|
-/// ```
-///
-/// The absolute value is linearised as two inequality constraints per `(a, t)`:
-///
-/// ```text
-/// d[a,t] >= act[a,t] / cap[a] - m
-/// d[a,t] >= m - act[a,t] / cap[a]
-/// ```
-///
-/// `m` is optimised by the LP and settles at the median utilisation across all assets and time
-/// slices, so the regularisation penalises *spread* rather than deviation from any fixed target.
-/// This means it acts as a pure tiebreaker: `epsilon` should be chosen small enough that no
-/// change to the primary objective cost is acceptable as a trade for reduced spread.
-///
-/// Candidate assets are excluded because they have artificially small capacity and exist only to
-/// receive shadow prices, not to make real dispatch decisions.
+/// Candidate assets are excluded: they exist only to receive shadow prices.
 ///
 /// # Limitations
 ///
-/// `m` settles at the median utilisation, so the regularisation is only effective when fewer than
-/// half of the included `(asset, timeslice)` pairs are at zero. If the majority are zero (e.g.
-/// many off-peak timeslices where most assets are idle), the median collapses to zero and the
-/// tiebreaking effect for the active assets is lost. Assets with hard-constrained activity limits
-/// (`min == max`) are excluded from the regularisation to avoid distorting `m`; cost-driven zeros
-/// (assets at zero due to high cost or absent demand) are not excluded and contribute to this
-/// limitation.
-fn add_activity_regularisation<'a, I>(
-    problem: &mut Problem,
+/// `m` settles at the median utilisation across all included `(asset, timeslice)` pairs. When the
+/// majority of those pairs are at zero (many idle assets or timeslices), the median collapses to
+/// zero and the spreading effect is lost. This is a known limitation of the L1-from-median
+/// formulation.
+fn add_activity_equalisation_to_model<'a, I>(
+    model: &mut highs::Model,
     variables: &VariableMap,
     assets: I,
-    model: &Model,
-    epsilon: f64,
+    muse_model: &Model,
 ) where
     I: Iterator<Item = &'a AssetRef>,
 {
     // m is the free L1-centre variable in utilisation-fraction space; bounded below at zero
     // since all utilisation fractions are non-negative
-    let m = problem.add_column(0.0, 0.0..);
+    let m = model.add_col(0.0, 0.0.., []);
 
     for asset in assets {
-        // Get capacity for the asset, since we're regularising utilisation (activity/capacity).
-        //
-        // Note: for flexible capacity assets this is their _initial_ capacity, which may end up
-        // different from their final capacity in the solution - therefore, this is an
-        // approximation, but shouldn't be too far off since final capacities are bound within a
-        // tolerance of the initial capacity. We can't use the actual capacity variable here because
-        // that would make the problem non-linear.
+        // Use initial capacity as proxy; see comment in calculate_activity_coefficient for why
+        // flexible-capacity assets are an approximation here.
         let cap = asset.total_capacity().value();
         if cap <= 1e-9 {
-            // Skip very small capacities to avoid numerical issues. Unlikely to ever have assets
-            // this small in practice.
             continue;
         }
         let inv_cap = 1.0 / cap;
 
-        for time_slice in model.time_slice_info.iter_ids() {
+        for time_slice in muse_model.time_slice_info.iter_ids() {
             let limits = asset.get_activity_per_capacity_limits(time_slice);
-            // Skip variables with no freedom — they distort m without contributing to spreading
             if limits.start() == limits.end() {
                 continue;
             }
 
             let act = variables.get_activity_var(asset, time_slice);
-            let d = problem.add_column(epsilon, 0.0..);
-            // d >= act/cap - m
-            problem.add_row(0.0.., [(d, 1.0), (act, -inv_cap), (m, 1.0)]);
-            // d >= m - act/cap
-            problem.add_row(0.0.., [(d, 1.0), (act, inv_cap), (m, -1.0)]);
+            // d >= act/cap - m  and  d >= m - act/cap
+            let d = model.add_col(1.0, 0.0.., []);
+            model.add_row(0.0.., [(d, 1.0), (act, -inv_cap), (m, 1.0)]);
+            model.add_row(0.0.., [(d, 1.0), (act, inv_cap), (m, -1.0)]);
         }
     }
 }
@@ -924,8 +947,8 @@ mod tests {
         activity: Option<f64>,
     }
 
-    // Verifies that two identical assets receive equal dispatch under L1 regularisation.
-    // With epsilon=0 this test is expected to fail (LP corner solutions).
+    // Verifies that two identical assets receive even-ish dispatch under L1 lexicographic equalisation.
+    // May still fail when the L1 median collapses to zero (known limitation of the L1 formulation).
     #[test]
     fn two_identical_assets_dispatch_evenly() {
         let tmp = ModelPatch::from_example("simple")

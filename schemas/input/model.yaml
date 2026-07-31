@@ -21,14 +21,21 @@ properties:
     default: 1e-6
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
-  dispatch_activity_equalisation_epsilon:
-    type: number
-    description: Small penalty on L1 utilisation deviation to encourage even dispatch across assets
-    default: 1e-6
+  dispatch_activity_equalisation:
+    type: boolean
+    description: Whether to run a second lexicographic solve to encourage even dispatch across assets
+    default: true
     notes: |
-      Discourages corner solutions where all activity is concentrated on a single asset when
-      equally good alternatives exist. Must be much smaller than the smallest meaningful cost
-      difference between assets. Set to zero to disable.
+      When enabled, a second LP solve minimises the L1 spread of utilisation fractions subject
+      to total cost remaining within dispatch_activity_equalisation_tolerance of the optimal.
+      Discourages corner solutions where all activity is concentrated on a single asset.
+  dispatch_activity_equalisation_tolerance:
+    type: number
+    description: Fractional cost tolerance for the lexicographic second solve
+    default: 0.0
+    notes: |
+      The second solve constrains total cost to at most Z* * (1 + tolerance) where Z* is the
+      optimal cost from the first solve. Defaults to zero (exact cost preservation).
   capacity_limit_factor:
     type: number
     description: Scales the capacity assigned to candidate assets
