@@ -644,6 +644,11 @@ impl Asset {
         matches!(&self.state, AssetState::Commissioned { .. })
     }
 
+    /// Whether this asset is a candidate
+    pub fn is_candidate(&self) -> bool {
+        matches!(&self.state, AssetState::Candidate)
+    }
+
     /// Get the commission year for this asset
     pub fn commission_year(&self) -> u32 {
         self.commission_year
