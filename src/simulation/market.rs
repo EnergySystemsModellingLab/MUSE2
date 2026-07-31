@@ -405,9 +405,7 @@ fn get_asset_options<'a>(
     year: u32,
     capacity_limit_factor: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
-    // Get existing assets which produce the commodity of interest. We discard information about
-    // mothballed units here; it is preserved in the original collection of assets and is fed back
-    // into `AssetPool` later.
+    // Get existing assets which produce the commodity of interest
     let existing_assets = all_existing_assets
         .iter()
         .filter_agent(&agent.id)
