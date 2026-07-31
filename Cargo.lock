@@ -1082,6 +1082,7 @@ dependencies = [
  "ordered-float",
  "petgraph",
  "platform-info",
+ "rayon",
  "rstest",
  "serde",
  "similar",
