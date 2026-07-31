@@ -654,11 +654,6 @@ impl DataWriter {
     /// Write commodity flows to a CSV file
     pub fn write_flows(&mut self, milestone_year: u32, flow_map: &FlowMap) -> Result<()> {
         for ((asset, commodity_id, time_slice), flow) in flow_map {
-            if asset.parent().is_some() {
-                // Skip child assets, as their flows are included in the parent asset's flow
-                continue;
-            }
-
             let row = CommodityFlowRow {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
@@ -720,9 +715,7 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{
-        appraisal_output, asset, asset_divisible, assets, commodity_id, region_id, time_slice,
-    };
+    use crate::fixture::{appraisal_output, asset, assets, commodity_id, region_id, time_slice};
     use crate::simulation::investment::appraisal::AppraisalOutput;
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
@@ -782,85 +775,6 @@ mod tests {
                 .try_collect()
                 .unwrap();
         assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_assets_divisible_group_deduplicated(asset_divisible: Asset) {
-        let milestone_year = asset_divisible.commission_year();
-        let mut assets = AssetPool::new();
-        let mut user_assets = vec![asset_divisible.into()];
-
-        // Commission a divisible asset so the active pool contains multiple children in one group
-        let commissioned = assets
-            .commission_new(milestone_year, &mut user_assets)
-            .to_vec();
-        assert!(commissioned.len() > 1);
-
-        let dir = tempdir().unwrap();
-
-        // Write all active assets: divisible children should collapse to one group row
-        {
-            let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
-            writer.write_assets(&assets).unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare: we expect a single group row with parent-derived metadata
-        let records: Vec<AssetRow> = csv::Reader::from_path(dir.path().join(ASSETS_FILE_NAME))
-            .unwrap()
-            .into_deserialize()
-            .try_collect()
-            .unwrap();
-        assert_eq!(records.len(), 1);
-
-        let first_child = commissioned.first().unwrap();
-        let parent = first_child.parent().unwrap();
-        let expected = AssetRow::new(parent);
-        assert_eq!(records[0], expected);
-        assert_eq!(records[0].asset_id, parent.id().unwrap());
-    }
-
-    #[rstest]
-    fn write_asset_capacities_divisible_group_deduplicated(asset_divisible: Asset) {
-        let milestone_year = asset_divisible.commission_year();
-        let mut assets = AssetPool::new();
-        let mut user_assets = vec![asset_divisible.into()];
-
-        // Commission a divisible asset so we get several children under one parent/group
-        let commissioned = assets
-            .commission_new(milestone_year, &mut user_assets)
-            .to_vec();
-        assert!(commissioned.len() > 1);
-
-        let dir = tempdir().unwrap();
-
-        // Write capacities: divisible children should be deduplicated to one group entry
-        {
-            let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
-            writer
-                .write_asset_capacities(milestone_year, &assets)
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare: group capacity and unit count must match the parent
-        let records: Vec<AssetCapacityRow> =
-            csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_eq!(records.len(), 1);
-
-        let first_child = commissioned.first().unwrap();
-        let parent = first_child.parent().unwrap();
-        let expected = AssetCapacityRow {
-            milestone_year,
-            asset_id: parent.id().unwrap(),
-            capacity: parent.total_capacity(),
-            num_units: parent.capacity().n_units(),
-        };
-        assert_eq!(records[0], expected);
     }
 
     #[rstest]

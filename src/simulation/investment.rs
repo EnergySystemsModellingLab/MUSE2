@@ -365,8 +365,8 @@ pub fn select_best_assets(
     // Remaining capacity for candidates and divisible assets
     let mut remaining_capacities = candidate_investment_limits;
 
-    // Swap child assets for parents representing a single unit
-    let children = replace_child_assets_with_parents(&mut opt_assets, &mut remaining_capacities);
+    // Store capacities for divisible assets and replace with single units
+    prepare_commissioned_divisible_assets(&mut opt_assets, &mut remaining_capacities);
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
@@ -486,80 +486,29 @@ pub fn select_best_assets(
         }
     }
 
-    // Convert parent assets back to children
-    replace_parent_assets_with_children(&mut best_assets, children, remaining_capacities);
-
     Ok(best_assets)
 }
 
-/// Replace all child assets with parent assets representing a single unit.
+/// Prepare divisible assets for appraisal.
 ///
-/// Non-divisible assets are left as is. `remaining_capacities` is updated to include total capacity
-/// for each parent asset.
-///
-/// # Returns
-///
-/// The child assets previously in `assets`.
-fn replace_child_assets_with_parents(
-    assets: &mut Vec<AssetRef>,
+/// Divisible assets are replaced in `assets` with an asset representing a single unit, as they are
+/// appraised one unit at a time. Their total capacity is stored in `remaining_capacities`.
+fn prepare_commissioned_divisible_assets(
+    assets: &mut [AssetRef],
     remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
-) -> Vec<AssetRef> {
-    // Extract all child assets
-    let children = assets
-        .extract_if(.., |asset| asset.parent().is_some())
-        .collect_vec();
-
-    let parents = children
-        .iter()
-        .map(|child| child.parent().unwrap())
-        .unique();
-    for parent in parents {
-        // Store remaining capacity
-        remaining_capacities.insert(parent.clone(), parent.capacity());
-
-        // Add parent asset (one unit)
-        assets.push(parent.clone().with_subset_of_units(1));
-    }
-
-    children
-}
-
-/// Replace parent assets with their corresponding children.
-///
-/// If only a portion of a parent's capacity was selected, some child assets will be dropped,
-/// starting with those with the highest ID.
-fn replace_parent_assets_with_children(
-    assets: &mut Vec<AssetRef>,
-    mut children: Vec<AssetRef>,
-    mut remaining_capacities: HashMap<AssetRef, AssetCapacity>,
 ) {
-    // Drop parent assets. We can figure out which ones were selected from `children` and
-    // `remaining_capacities`.
-    assets.retain(|asset| !asset.is_parent());
+    for asset in assets
+        .iter_mut()
+        .filter(|asset| asset.is_commissioned() && asset.is_divisible())
+    {
+        let full_capacity = asset.capacity();
 
-    // Sort children in reverse order, so higher IDs come first
-    children.sort_by(|a, b| a.cmp(b).reverse());
+        // Replace with single unit as we appraise one unit at a time
+        *asset = asset.clone().with_subset_of_units(1);
 
-    // Drop any surplus children
-    children.retain(|child| {
-        let parent = child.parent().unwrap();
-
-        let Some(remaining) = remaining_capacities.get_mut(parent) else {
-            return true;
-        };
-
-        // Decrease remaining capacity
-        if remaining.n_units() == Some(1) {
-            remaining_capacities.remove(parent);
-        } else {
-            *remaining = *remaining - child.capacity();
-        }
-
-        false
-    });
-
-    // Add child assets back into `assets`
-    assets.extend(children);
+        // Store remaining capacity
+        remaining_capacities.insert(asset.clone(), full_capacity);
+    }
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice

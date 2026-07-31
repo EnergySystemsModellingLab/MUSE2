@@ -19,7 +19,7 @@ use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Range;
 
@@ -182,9 +182,6 @@ impl VariableMap {
 
 /// Create a map of commodity flows for each asset's coeffs at every time slice
 fn create_flow_map<'a>(
-    existing_assets_with_children: &[AssetRef],
-    existing_assets_with_parents: &HashSet<AssetRef>,
-    time_slice_info: &TimeSliceInfo,
     activity: impl IntoIterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
 ) -> FlowMap {
     // The decision variables represent assets' activity levels, not commodity flows. We
@@ -195,35 +192,6 @@ fn create_flow_map<'a>(
             let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
             let flow_value = activity * flow.coeff;
             flows.insert(flow_key, flow_value);
-        }
-    }
-
-    // Copy flows for each child asset
-    for asset in existing_assets_with_children {
-        let Some(parent) = asset.parent() else {
-            continue;
-        };
-
-        // We want the number of children that were included in **this** dispatch run, which may be
-        // less than the number of children that the parent has overall. `get_parent_or_self`
-        // creates "partial parents" in this case, which are available in
-        // `existing_assets_with_parents`.
-        let num_children_in_this_run = existing_assets_with_parents
-            .get(parent)
-            .unwrap()
-            .capacity()
-            .n_units()
-            .unwrap();
-        let n_units = Dimensionless(num_children_in_this_run as f64);
-
-        for time_slice in time_slice_info.iter_ids() {
-            for commodity_id in asset.iter_flows().map(|flow| &flow.commodity.id) {
-                let flow = flows[&(parent.clone(), commodity_id.clone(), time_slice.clone())];
-                flows.insert(
-                    (asset.clone(), commodity_id.clone(), time_slice.clone()),
-                    flow / n_units,
-                );
-            }
         }
     }
 
@@ -486,7 +454,7 @@ fn filter_input_prices(
 #[must_use = "Must call run() method on DispatchRun struct"]
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
-    existing_assets: &'run [AssetRef],
+    existing_assets: Vec<AssetRef>,
     flexible_capacity_assets: &'run [AssetRef],
     capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
     candidate_assets: &'run [AssetRef],
@@ -501,7 +469,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn new(model: &'model Model, assets: &'run [AssetRef], year: u32) -> Self {
         Self {
             model,
-            existing_assets: assets,
+            // **HACK**: For now, keep ordering of assets as before to preserve output files
+            existing_assets: assets.iter().into_parent_or_self(),
             flexible_capacity_assets: &[],
             capacity_limits: None,
             candidate_assets: &[],
@@ -651,15 +620,13 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         allow_unmet_demand: bool,
         input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
-        let existing_assets_with_parents = self.existing_assets.iter().into_parent_or_self();
-
         // Set up problem
         let mut problem = Problem::default();
         let mut variables = VariableMap::new_with_activity_vars(
             &mut problem,
             self.model,
             input_prices,
-            &existing_assets_with_parents,
+            self.existing_assets.as_slice(),
             self.candidate_assets,
             self.year,
         );
@@ -671,11 +638,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Check flexible capacity assets is a subset of existing assets
-        let existing_assets_with_parents_set: HashSet<_> =
-            existing_assets_with_parents.iter().cloned().collect();
         for asset in self.flexible_capacity_assets {
             assert!(
-                existing_assets_with_parents_set.contains(asset),
+                self.existing_assets.contains(asset),
                 "Flexible capacity assets must be a subset of existing assets. Offending asset: {asset:?}"
             );
         }
@@ -692,10 +657,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(
-            existing_assets_with_parents.iter(),
-            self.candidate_assets.iter(),
-        );
+        let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
@@ -720,12 +682,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             flow_map: Cell::default(),
             objective_value: Money(solution.objective_value()),
         };
-        solution.flow_map.set(Some(create_flow_map(
-            self.existing_assets,
-            &existing_assets_with_parents_set,
-            &self.model.time_slice_info,
-            solution.iter_activity(),
-        )));
+        solution
+            .flow_map
+            .set(Some(create_flow_map(solution.iter_activity())));
         Ok(solution)
     }
 }

@@ -1,5 +1,5 @@
 //! Defines a data structure for representing the current active pool of assets.
-use super::{AssetID, AssetRef, AssetState, CommissionedType, UserAsset};
+use super::{AssetID, AssetRef, AssetState, UserAsset};
 use itertools::Itertools;
 use log::warn;
 
@@ -46,18 +46,17 @@ impl AssetPool {
     }
 
     /// Commission the specified asset or, if divisible, its children
-    fn commission(&mut self, asset: AssetRef) {
-        asset.into_for_each_child(&mut self.next_id, |parent, mut child, next_id| {
-            let kind = match parent {
-                Some(parent) => CommissionedType::Child {
-                    parent: parent.clone(),
-                },
-                None => CommissionedType::NonDivisible,
-            };
-            child.make_mut().commission(AssetID(*next_id), kind);
-            *next_id += 1;
-            self.assets.push(child);
-        });
+    fn commission(&mut self, mut asset: AssetRef) {
+        let n_units = asset.capacity().n_units();
+        asset.make_mut().commission(AssetID(self.next_id));
+        self.next_id += 1;
+        self.assets.push(asset);
+
+        // **HACK**: Skip IDs that would have been allocated to child assets to maintain output
+        // files
+        if let Some(n_units) = n_units {
+            self.next_id += n_units;
+        }
     }
 
     /// Decommission old assets for the specified milestone year
@@ -265,63 +264,16 @@ mod tests {
         assert!(asset_pool.iter().next().is_none()); // no active assets
     }
 
-    /// Number of expected children for divisible asset
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
-    fn expected_children_for_divisible(asset: &Asset) -> usize {
-        (asset.total_capacity() / asset.process.unit_size.expect("Asset is not divisible"))
-            .value()
-            .ceil() as usize
-    }
-
     #[rstest]
     fn asset_pool_commission_new_divisible(asset_divisible: Asset) {
         let commission_year = asset_divisible.commission_year;
-        let expected_children = expected_children_for_divisible(&asset_divisible);
         let mut asset_pool = AssetPool::new();
         let mut user_assets = vec![asset_divisible.into()];
         assert!(asset_pool.assets.is_empty());
         asset_pool.commission_new(commission_year, &mut user_assets);
         assert!(user_assets.is_empty());
-        assert!(!asset_pool.assets.is_empty());
-        assert_eq!(asset_pool.assets.len(), expected_children);
-        assert_eq!(asset_pool.next_id, 4);
-    }
-
-    #[rstest]
-    #[allow(clippy::cast_possible_truncation)]
-    fn asset_pool_commission_new_returns_only_assets_from_call(asset_divisible: Asset) {
-        let year = asset_divisible.commission_year();
-        let expected_children = expected_children_for_divisible(&asset_divisible);
-        let mut asset_pool = AssetPool::new();
-
-        // First call commissions one divisible asset and returns all of its children
-        let mut user_assets = vec![asset_divisible.clone().into()];
-        let first_batch = asset_pool.commission_new(year, &mut user_assets).to_vec();
-        assert_eq!(first_batch.len(), expected_children);
-        assert!(first_batch.iter().all(|asset| asset.parent().is_some()));
-
-        // IDs should form a contiguous sequence starting from 1 (0 represents parent)
-        let n = expected_children as u32;
-        assert_equal(first_batch.iter().map(|a| a.id().unwrap().0), 1..=n);
-
-        // Second call should return only assets commissioned in this second invocation
-        let mut later_assets = vec![asset_divisible.into()];
-        let second_batch = asset_pool
-            .commission_new(year + 1, &mut later_assets)
-            .to_vec();
-        assert_eq!(asset_pool.assets.len(), expected_children * 2);
-        assert!(
-            second_batch
-                .iter()
-                .all(|asset| !first_batch.iter().any(|old| old == asset))
-        );
-
-        // IDs of the second batch continue directly on from the first
-        assert_equal(
-            second_batch.iter().map(|a| a.id().unwrap().0),
-            n + 2..n * 2 + 2,
-        );
+        assert_eq!(asset_pool.assets.len(), 1);
+        assert_eq!(asset_pool.next_id, 4); // account for child asset IDs
     }
 
     #[rstest]
@@ -436,83 +388,6 @@ mod tests {
             asset_pool.assets[original_count + 1].agent_id(),
             Some(&"agent3".into())
         );
-    }
-
-    #[rstest]
-    fn asset_pool_extend_new_divisible_assets(
-        mut user_assets: Vec<UserAsset>,
-        mut process: Process,
-    ) {
-        // Start with some commissioned assets
-        let mut asset_pool = AssetPool::new();
-        asset_pool.commission_new(2020, &mut user_assets);
-        let original_count = asset_pool.assets.len();
-
-        // Create new non-commissioned assets
-        process.unit_size = Some(Capacity(4.0));
-        let process_rc = Rc::new(process);
-        let new_assets: Vec<AssetRef> = vec![
-            Asset::new_ready(
-                "agent2".into(),
-                Rc::clone(&process_rc),
-                "GBR".into(),
-                Capacity(11.0),
-                2015,
-            )
-            .unwrap()
-            .into(),
-        ];
-        let expected_children = expected_children_for_divisible(&new_assets[0]);
-        asset_pool.extend(new_assets);
-        assert_eq!(asset_pool.assets.len(), original_count + expected_children);
-    }
-
-    #[rstest]
-    #[allow(clippy::cast_possible_truncation)]
-    fn asset_pool_extend_returns_only_newly_commissioned_assets(
-        mut user_assets: Vec<UserAsset>,
-        mut process: Process,
-    ) {
-        let mut asset_pool = AssetPool::new();
-
-        // Seed pool with already commissioned assets and take them as the existing set
-        let initial_assets = asset_pool.commission_new(2020, &mut user_assets);
-        let initial_count = initial_assets.len();
-        let existing_assets = asset_pool.take();
-
-        // Add one ready divisible asset so extend() commissions multiple new children
-        process.unit_size = Some(Capacity(4.0));
-        let process_rc = Rc::new(process);
-        let ready_divisible: AssetRef = Asset::new_ready(
-            "agent_selected".into(),
-            Rc::clone(&process_rc),
-            "GBR".into(),
-            Capacity(11.0),
-            2020,
-        )
-        .unwrap()
-        .into();
-        let expected_new = expected_children_for_divisible(&ready_divisible);
-
-        // Extend with a mix of existing commissioned assets and one ready divisible asset
-        let returned = asset_pool
-            .extend(
-                existing_assets
-                    .iter()
-                    .cloned()
-                    .chain(iter::once(ready_divisible)),
-            )
-            .to_vec();
-
-        // Returned assets should be exactly the newly commissioned children
-        assert_eq!(returned.len(), expected_new);
-        assert_eq!(asset_pool.assets.len(), initial_count + expected_new);
-        assert!(returned.iter().all(|asset| asset.parent().is_some()));
-
-        // IDs form a contiguous range immediately after the pre-existing assets
-        let start = 1 + initial_count as u32;
-        let end = 1 + (initial_count + expected_new) as u32;
-        assert_equal(returned.iter().map(|a| a.id().unwrap().0), start..end);
     }
 
     #[rstest]
@@ -748,19 +623,12 @@ mod tests {
         asset_pool.mothball_unretained(vec![non_commissioned_asset], 2025);
     }
 
-    /// A commissioned divisible (parent) asset with three units.
+    /// A commissioned divisible asset with three units.
     #[fixture]
-    fn commissioned_divisible(asset_divisible: Asset) -> AssetRef {
-        let asset = AssetRef::from(asset_divisible);
-        let mut parent = None;
-        asset.into_for_each_child(&mut 0, |maybe_parent, _, _| {
-            if parent.is_none() {
-                parent = maybe_parent.cloned();
-            }
-        });
-        let parent = parent.expect("Divisible asset should create a parent");
-        assert_eq!(parent.num_units(), 3);
-        parent
+    fn commissioned_divisible(mut asset_divisible: Asset) -> AssetRef {
+        asset_divisible.commission(AssetID(0));
+        assert_eq!(asset_divisible.num_units(), 3);
+        AssetRef::from(asset_divisible)
     }
 
     #[rstest]
