@@ -605,13 +605,13 @@ fn update_assets(
                 .make_mut()
                 .increase_capacity(best_asset.capacity());
         } else {
-            // Otherwise add it to the list of best assets
-            best_assets.push(best_asset);
+            // Otherwise add it to the list of best assets. Selected assets are unmothballed.
+            best_assets.push(best_asset.with_no_mothballed_units());
         }
     } else {
-        // Remove this asset from the options
+        // Remove this asset from the options. Selected assets are unmothballed.
         opt_assets.retain(|asset| *asset != best_asset);
-        best_assets.push(best_asset);
+        best_assets.push(best_asset.with_no_mothballed_units());
     }
 }
 
