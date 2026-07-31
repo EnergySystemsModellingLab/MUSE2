@@ -211,7 +211,7 @@ mod tests {
     };
     use indexmap::IndexMap;
     use rstest::{fixture, rstest};
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[fixture]
     fn milestone_years() -> [u32; 1] {
@@ -221,8 +221,8 @@ mod tests {
     #[fixture]
     fn commodities(svd_commodity: Commodity, other_commodity: Commodity) -> CommodityMap {
         IndexMap::from([
-            ("commodity1".into(), Rc::new(svd_commodity)),
-            ("other_commodity".into(), Rc::new(other_commodity)),
+            ("commodity1".into(), Arc::new(svd_commodity)),
+            ("other_commodity".into(), Arc::new(other_commodity)),
         ])
     }
 
@@ -331,7 +331,7 @@ mod tests {
         sed_commodity: Commodity,
     ) {
         // Invalid case: SED commodity without associated commodity portions
-        commodities.insert(CommodityID::new("sed_commodity"), Rc::new(sed_commodity));
+        commodities.insert(CommodityID::new("sed_commodity"), Arc::new(sed_commodity));
         assert_error!(
             validate_agent_commodity_portions(
                 &agent_commodity_portions,

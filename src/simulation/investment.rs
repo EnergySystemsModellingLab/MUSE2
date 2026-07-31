@@ -578,7 +578,7 @@ mod tests {
     use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[rstest]
     fn get_demand_limiting_capacity_works(
@@ -588,15 +588,15 @@ mod tests {
         mut process: Process,
     ) {
         // Add flows for the process using the existing commodity fixture
-        let commodity_rc = Rc::new(svd_commodity);
+        let commodity_rc = Arc::new(svd_commodity);
         let process_flow = ProcessFlow {
-            commodity: Rc::clone(&commodity_rc),
+            commodity: Arc::clone(&commodity_rc),
             coeff: FlowPerActivity(2.0), // 2 units of flow per unit of activity
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+        let process_flows_map = process_flows_map(process.regions.clone(), Arc::new(process_flows));
         process.flows = process_flows_map;
 
         // Create asset with the configured process
@@ -624,15 +624,15 @@ mod tests {
             time_slice_info2.time_slices.keys().collect_tuple().unwrap();
 
         // Add flows for the process using the existing commodity fixture
-        let commodity_rc = Rc::new(svd_commodity);
+        let commodity_rc = Arc::new(svd_commodity);
         let process_flow = ProcessFlow {
-            commodity: Rc::clone(&commodity_rc),
+            commodity: Arc::clone(&commodity_rc),
             coeff: FlowPerActivity(1.0), // 1 unit of flow per unit of activity
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+        let process_flows_map = process_flows_map(process.regions.clone(), Arc::new(process_flows));
         process.flows = process_flows_map;
 
         // Add activity limits for the process
@@ -672,16 +672,16 @@ mod tests {
             time_slice_info2.time_slices.keys().collect_tuple().unwrap();
 
         // Configure a 1:1 activity-to-flow relationship.
-        let commodity_rc = Rc::new(svd_commodity);
+        let commodity_rc = Arc::new(svd_commodity);
         let process_flow = ProcessFlow {
-            commodity: Rc::clone(&commodity_rc),
+            commodity: Arc::clone(&commodity_rc),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
 
         let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        process.flows = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+        process.flows = process_flows_map(process.regions.clone(), Arc::new(process_flows));
 
         // Fine-grained limits imply a capacity requirement of 5:
         //   TS1: 5 / 1 = 5
@@ -738,16 +738,16 @@ mod tests {
         #[case] activity_limit: Dimensionless,
         #[case] expected: Capacity,
     ) {
-        let commodity_rc = Rc::new(svd_commodity);
+        let commodity_rc = Arc::new(svd_commodity);
         let process_flow = ProcessFlow {
-            commodity: Rc::clone(&commodity_rc),
+            commodity: Arc::clone(&commodity_rc),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         process.flows = process_flows_map(
             process.regions.clone(),
-            Rc::new(indexmap! { commodity_rc.id.clone() => process_flow }),
+            Arc::new(indexmap! { commodity_rc.id.clone() => process_flow }),
         );
 
         let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info);

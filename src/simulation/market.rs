@@ -497,8 +497,8 @@ mod tests {
     use crate::units::{ActivityPerCapacity, Capacity};
     use indexmap::IndexSet;
     use rstest::{fixture, rstest};
-    use std::rc::Rc;
     use std::slice::from_ref;
+    use std::sync::Arc;
 
     #[rstest]
     fn collect_investment_limits_for_candidates_empty_list() {
@@ -513,7 +513,7 @@ mod tests {
 
     #[fixture]
     fn uncommissioned_asset_without_limit(process: Process, region_id: RegionID) -> AssetRef {
-        Asset::new_candidate(Rc::new(process), region_id, Capacity(10.0), 2015)
+        Asset::new_candidate(Arc::new(process), region_id, Capacity(10.0), 2015)
             .unwrap()
             .into()
     }
@@ -531,7 +531,7 @@ mod tests {
 
         constraints.insert(
             (region_id.clone(), 2015),
-            Rc::new(ProcessInvestmentConstraint {
+            Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(10.0)),
             }),
         );
@@ -550,7 +550,7 @@ mod tests {
             unit_size: None,
         };
 
-        Asset::new_candidate(Rc::new(process), region_id, Capacity(15.0), 2015)
+        Asset::new_candidate(Arc::new(process), region_id, Capacity(15.0), 2015)
             .unwrap()
             .into()
     }

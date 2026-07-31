@@ -14,27 +14,27 @@ use itertools::Itertools;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
-use std::rc::Rc;
+use std::sync::Arc;
 
 define_id_type! {ProcessID, "process ID"}
 
 /// A map of [`Process`]es, keyed by process ID
-pub type ProcessMap = IndexMap<ProcessID, Rc<Process>>;
+pub type ProcessMap = IndexMap<ProcessID, Arc<Process>>;
 
 /// A map indicating activity limits for a [`Process`] throughout the year.
-pub type ProcessActivityLimitsMap = HashMap<(RegionID, u32), Rc<ActivityLimits>>;
+pub type ProcessActivityLimitsMap = HashMap<(RegionID, u32), Arc<ActivityLimits>>;
 
 /// A map of [`ProcessParameter`]s, keyed by region and year
-pub type ProcessParameterMap = HashMap<(RegionID, u32), Rc<ProcessParameter>>;
+pub type ProcessParameterMap = HashMap<(RegionID, u32), Arc<ProcessParameter>>;
 
 /// A map of process flows, keyed by region and year.
 ///
 /// The value is actually a map itself, keyed by commodity ID.
-pub type ProcessFlowsMap = HashMap<(RegionID, u32), Rc<IndexMap<CommodityID, ProcessFlow>>>;
+pub type ProcessFlowsMap = HashMap<(RegionID, u32), Arc<IndexMap<CommodityID, ProcessFlow>>>;
 
 /// Map of process investment constraints, keyed by region and year
 pub type ProcessInvestmentConstraintsMap =
-    HashMap<(RegionID, u32), Rc<ProcessInvestmentConstraint>>;
+    HashMap<(RegionID, u32), Arc<ProcessInvestmentConstraint>>;
 
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug)]
@@ -390,7 +390,7 @@ impl ActivityLimits {
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProcessFlow {
     /// The commodity produced or consumed by this flow
-    pub commodity: Rc<Commodity>,
+    pub commodity: Arc<Commodity>,
     /// Maximum annual commodity flow quantity relative to other commodity flows.
     ///
     /// Positive value indicates flow out and negative value indicates flow in.
@@ -528,10 +528,10 @@ mod tests {
     use float_cmp::assert_approx_eq;
     use rstest::{fixture, rstest};
     use std::collections::HashMap;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[fixture]
-    fn commodity_with_levy(region_id: RegionID, time_slice: TimeSliceID) -> Rc<Commodity> {
+    fn commodity_with_levy(region_id: RegionID, time_slice: TimeSliceID) -> Arc<Commodity> {
         let mut levies_prod = CommodityLevyMap::new();
         let mut levies_cons = CommodityLevyMap::new();
 
@@ -580,7 +580,7 @@ mod tests {
             MoneyPerFlow(-3.0),
         );
 
-        Rc::new(Commodity {
+        Arc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
@@ -597,11 +597,11 @@ mod tests {
     fn commodity_with_consumption_levy(
         region_id: RegionID,
         time_slice: TimeSliceID,
-    ) -> Rc<Commodity> {
+    ) -> Arc<Commodity> {
         let mut levies = CommodityLevyMap::new();
         levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
-        Rc::new(Commodity {
+        Arc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
@@ -618,11 +618,11 @@ mod tests {
     fn commodity_with_production_levy(
         region_id: RegionID,
         time_slice: TimeSliceID,
-    ) -> Rc<Commodity> {
+    ) -> Arc<Commodity> {
         let mut levies = CommodityLevyMap::new();
         levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
-        Rc::new(Commodity {
+        Arc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
@@ -636,7 +636,7 @@ mod tests {
     }
 
     #[fixture]
-    fn commodity_with_incentive(region_id: RegionID, time_slice: TimeSliceID) -> Rc<Commodity> {
+    fn commodity_with_incentive(region_id: RegionID, time_slice: TimeSliceID) -> Arc<Commodity> {
         let mut levies_prod = CommodityLevyMap::new();
         levies_prod.insert(
             (region_id.clone(), 2020, time_slice.clone()),
@@ -645,7 +645,7 @@ mod tests {
         let mut levies_cons = CommodityLevyMap::new();
         levies_cons.insert((region_id, 2020, time_slice), MoneyPerFlow(5.0));
 
-        Rc::new(Commodity {
+        Arc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
@@ -659,8 +659,8 @@ mod tests {
     }
 
     #[fixture]
-    fn commodity_no_levies() -> Rc<Commodity> {
-        Rc::new(Commodity {
+    fn commodity_no_levies() -> Arc<Commodity> {
+        Arc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
@@ -676,7 +676,7 @@ mod tests {
     #[fixture]
     fn flow_with_cost() -> ProcessFlow {
         ProcessFlow {
-            commodity: Rc::new(Commodity {
+            commodity: Arc::new(Commodity {
                 id: "test_commodity".into(),
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
@@ -699,7 +699,7 @@ mod tests {
         levies.insert((region_id, 2020, time_slice), MoneyPerFlow(10.0));
 
         ProcessFlow {
-            commodity: Rc::new(Commodity {
+            commodity: Arc::new(Commodity {
                 id: "test_commodity".into(),
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
@@ -722,7 +722,7 @@ mod tests {
         levies.insert((region_id, 2020, time_slice), MoneyPerFlow(-3.0));
 
         ProcessFlow {
-            commodity: Rc::new(Commodity {
+            commodity: Arc::new(Commodity {
                 id: "test_commodity".into(),
                 description: "Test commodity".into(),
                 kind: CommodityType::ServiceDemand,
@@ -741,7 +741,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_no_levies(
-        commodity_no_levies: Rc<Commodity>,
+        commodity_no_levies: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -760,7 +760,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_with_levy(
-        commodity_with_levy: Rc<Commodity>,
+        commodity_with_levy: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -779,7 +779,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_with_incentive(
-        commodity_with_incentive: Rc<Commodity>,
+        commodity_with_incentive: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -797,7 +797,7 @@ mod tests {
     }
 
     #[rstest]
-    fn get_levy_different_region(commodity_with_levy: Rc<Commodity>, time_slice: TimeSliceID) {
+    fn get_levy_different_region(commodity_with_levy: Arc<Commodity>, time_slice: TimeSliceID) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
             coeff: FlowPerActivity(1.0),
@@ -813,7 +813,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_different_year(
-        commodity_with_levy: Rc<Commodity>,
+        commodity_with_levy: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -831,7 +831,7 @@ mod tests {
     }
 
     #[rstest]
-    fn get_levy_different_time_slice(commodity_with_levy: Rc<Commodity>, region_id: RegionID) {
+    fn get_levy_different_time_slice(commodity_with_levy: Arc<Commodity>, region_id: RegionID) {
         let flow = ProcessFlow {
             commodity: commodity_with_levy,
             coeff: FlowPerActivity(1.0),
@@ -852,7 +852,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_consumption_positive_coeff(
-        commodity_with_consumption_levy: Rc<Commodity>,
+        commodity_with_consumption_levy: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -871,7 +871,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_consumption_negative_coeff(
-        commodity_with_consumption_levy: Rc<Commodity>,
+        commodity_with_consumption_levy: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -890,7 +890,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_production_positive_coeff(
-        commodity_with_production_levy: Rc<Commodity>,
+        commodity_with_production_levy: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -909,7 +909,7 @@ mod tests {
 
     #[rstest]
     fn get_levy_production_negative_coeff(
-        commodity_with_production_levy: Rc<Commodity>,
+        commodity_with_production_levy: Arc<Commodity>,
         region_id: RegionID,
         time_slice: TimeSliceID,
     ) {
@@ -990,7 +990,7 @@ mod tests {
 
     #[test]
     fn is_input_and_is_output() {
-        let commodity = Rc::new(Commodity {
+        let commodity = Arc::new(Commodity {
             id: "test_commodity".into(),
             description: "Test commodity".into(),
             kind: CommodityType::ServiceDemand,
@@ -1003,19 +1003,19 @@ mod tests {
         });
 
         let flow_in = ProcessFlow {
-            commodity: Rc::clone(&commodity),
+            commodity: Arc::clone(&commodity),
             coeff: FlowPerActivity(-1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let flow_out = ProcessFlow {
-            commodity: Rc::clone(&commodity),
+            commodity: Arc::clone(&commodity),
             coeff: FlowPerActivity(1.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let flow_zero = ProcessFlow {
-            commodity: Rc::clone(&commodity),
+            commodity: Arc::clone(&commodity),
             coeff: FlowPerActivity(0.0),
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),

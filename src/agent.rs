@@ -8,7 +8,7 @@ use crate::units::Dimensionless;
 use indexmap::{IndexMap, IndexSet};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 define_id_type! {AgentID, "agent ID"}
 
@@ -19,7 +19,7 @@ pub type AgentMap = IndexMap<AgentID, Agent>;
 pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
 
 /// A map for the agent's search space, keyed by commodity, region, and year
-pub type AgentSearchSpaceMap = HashMap<(CommodityID, RegionID, u32), Rc<Vec<Rc<Process>>>>;
+pub type AgentSearchSpaceMap = HashMap<(CommodityID, RegionID, u32), Arc<Vec<Arc<Process>>>>;
 
 /// A map of objectives for an agent, keyed by year.
 ///
@@ -59,7 +59,7 @@ impl Agent {
         region_id: &RegionID,
         commodity_id: &CommodityID,
         year: u32,
-    ) -> impl Iterator<Item = &Rc<Process>> {
+    ) -> impl Iterator<Item = &Arc<Process>> {
         self.search_space[&(commodity_id.clone(), region_id.clone(), year)].iter()
     }
 }

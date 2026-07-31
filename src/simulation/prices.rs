@@ -1355,11 +1355,11 @@ mod tests {
     use indexmap::{IndexMap, IndexSet};
     use rstest::rstest;
     use std::collections::{HashMap, HashSet};
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     fn build_process_flow(commodity: &Commodity, coeff: f64, cost: MoneyPerFlow) -> ProcessFlow {
         ProcessFlow {
-            commodity: Rc::new(commodity.clone()),
+            commodity: Arc::new(commodity.clone()),
             coeff: FlowPerActivity(coeff),
             kind: FlowType::Fixed,
             cost,
@@ -1379,7 +1379,7 @@ mod tests {
         discount_rate: Dimensionless,
     ) -> Process {
         let mut process_flows_map = HashMap::new();
-        process_flows_map.insert((region_id.clone(), year), Rc::new(flows));
+        process_flows_map.insert((region_id.clone(), year), Arc::new(flows));
 
         let mut process_parameter_map = HashMap::new();
         let proc_param = ProcessParameter {
@@ -1389,12 +1389,12 @@ mod tests {
             lifetime,
             discount_rate,
         };
-        process_parameter_map.insert((region_id.clone(), year), Rc::new(proc_param));
+        process_parameter_map.insert((region_id.clone(), year), Arc::new(proc_param));
 
         let mut activity_limits_map = HashMap::new();
         activity_limits_map.insert(
             (region_id.clone(), year),
-            Rc::new(ActivityLimits::new_with_full_availability(time_slice_info)),
+            Arc::new(ActivityLimits::new_with_full_availability(time_slice_info)),
         );
 
         let regions: IndexSet<RegionID> = IndexSet::from([region_id.clone()]);
@@ -1517,7 +1517,7 @@ mod tests {
         );
 
         let asset =
-            Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2015u32)
+            Asset::new_candidate(Arc::new(process), region_id.clone(), Capacity(1.0), 2015u32)
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
         let mut prices =
@@ -1527,8 +1527,8 @@ mod tests {
         markets.insert((c.id.clone(), region_id.clone()));
 
         let mut commodities = CommodityMap::new();
-        commodities.insert(b.id.clone(), Rc::new(b.clone()));
-        commodities.insert(c.id.clone(), Rc::new(c.clone()));
+        commodities.insert(b.id.clone(), Arc::new(b.clone()));
+        commodities.insert(c.id.clone(), Arc::new(c.clone()));
 
         let existing = vec![(&asset_ref, &time_slice, Activity(1.0))];
         let candidates = Vec::new();
@@ -1599,7 +1599,7 @@ mod tests {
         );
 
         let asset =
-            Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(4.0), 2015u32)
+            Asset::new_candidate(Arc::new(process), region_id.clone(), Capacity(4.0), 2015u32)
                 .unwrap();
         let asset_ref = AssetRef::from(asset);
         let mut prices =
@@ -1609,8 +1609,8 @@ mod tests {
         markets.insert((c.id.clone(), region_id.clone()));
 
         let mut commodities = CommodityMap::new();
-        commodities.insert(b.id.clone(), Rc::new(b.clone()));
-        commodities.insert(c.id.clone(), Rc::new(c.clone()));
+        commodities.insert(b.id.clone(), Arc::new(b.clone()));
+        commodities.insert(c.id.clone(), Arc::new(c.clone()));
 
         let existing = vec![(&asset_ref, &time_slice, Activity(2.0))];
         let candidates = Vec::new();

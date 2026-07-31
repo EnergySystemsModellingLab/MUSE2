@@ -14,7 +14,7 @@ use log::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 const PROCESS_INVESTMENT_CONSTRAINTS_FILE_NAME: &str = "process_investment_constraints.csv";
 
@@ -199,7 +199,7 @@ where
                 .addition_limit
                 .map(|limit| limit * Year(years_since_prev as f64));
 
-            let constraint = Rc::new(ProcessInvestmentConstraint { addition_limit });
+            let constraint = Arc::new(ProcessInvestmentConstraint { addition_limit });
 
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }

@@ -14,7 +14,7 @@ use itertools::iproduct;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 const PROCESS_FLOWS_FILE_NAME: &str = "process_flows.csv";
 
@@ -183,7 +183,7 @@ where
 
         // Create ProcessFlow object
         let process_flow = ProcessFlow {
-            commodity: Rc::clone(commodity),
+            commodity: Arc::clone(commodity),
             coeff: record.coeff,
             kind: FlowType::Fixed,
             cost: record.cost.unwrap_or(MoneyPerFlow(0.0)),
@@ -195,7 +195,7 @@ where
             let flows_map = region_year_map
                 .entry((region_id.clone(), year))
                 .or_default();
-            let existing = Rc::get_mut(flows_map)
+            let existing = Arc::get_mut(flows_map)
                 .unwrap() // safe: there will only be one copy
                 .insert(commodity.id.clone(), process_flow.clone())
                 .is_some();
@@ -264,7 +264,7 @@ fn validate_flows_and_update_primary_output(
         // Update primary output if needed
         if process.primary_output != primary_output {
             // Safe: There should only be one ref to process
-            Rc::get_mut(process).unwrap().primary_output = primary_output;
+            Arc::get_mut(process).unwrap().primary_output = primary_output;
         }
     }
 
@@ -404,9 +404,9 @@ mod tests {
     use map_macro::hash_map;
     use rstest::{fixture, rstest};
     use std::iter;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
-    fn flow(commodity: Rc<Commodity>, coeff: f64) -> ProcessFlow {
+    fn flow(commodity: Arc<Commodity>, coeff: f64) -> ProcessFlow {
         ProcessFlow {
             commodity,
             coeff: FlowPerActivity(coeff),
@@ -424,7 +424,7 @@ mod tests {
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
     {
         let years = years.unwrap_or(process.years.clone().collect());
-        let map: Rc<IndexMap<_, _>> = Rc::new(flows.collect());
+        let map: Arc<IndexMap<_, _>> = Arc::new(flows.collect());
         let flows_inner = iproduct!(&process.regions, years)
             .map(|(region_id, year)| ((region_id.clone(), year), map.clone()))
             .collect();
@@ -473,8 +473,8 @@ mod tests {
         // Both commodities have the same units
         assert_eq!(svd_commodity.units, sed_commodity.units);
 
-        let commodity1 = Rc::new(svd_commodity);
-        let commodity2 = Rc::new(sed_commodity);
+        let commodity1 = Arc::new(svd_commodity);
+        let commodity2 = Arc::new(sed_commodity);
         let (_, flows_map) = build_maps(
             process,
             [
@@ -498,8 +498,8 @@ mod tests {
         // Ensure the two commodities have different units
         assert_ne!(sed_commodity_pj.units, sed_commodity_tonnes.units);
 
-        let commodity1 = Rc::new(sed_commodity_pj);
-        let commodity2 = Rc::new(sed_commodity_tonnes);
+        let commodity1 = Arc::new(sed_commodity_pj);
+        let commodity2 = Arc::new(sed_commodity_tonnes);
         let (_, flows_map) = build_maps(
             process,
             [
@@ -531,8 +531,8 @@ mod tests {
         other_commodity.units = "tonnes".into();
         assert_ne!(sed_commodity_pj.units, other_commodity.units);
 
-        let sed_commodity = Rc::new(sed_commodity_pj);
-        let oth_commodity = Rc::new(other_commodity);
+        let sed_commodity = Arc::new(sed_commodity_pj);
+        let oth_commodity = Arc::new(other_commodity);
 
         let (_, flows_map) = build_maps(
             process,
@@ -550,7 +550,7 @@ mod tests {
 
     #[rstest]
     fn single_sed_svd_output(svd_commodity: Commodity, process: Process) {
-        let commodity = Rc::new(svd_commodity);
+        let commodity = Arc::new(svd_commodity);
         let (_, flows_map) = build_maps(
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
@@ -563,8 +563,8 @@ mod tests {
 
     #[rstest]
     fn no_sed_svd_outputs(other_commodity: Commodity, process: Process) {
-        let oth_commodity_1 = Rc::new(other_commodity.clone());
-        let oth_commodity_2 = Rc::new(other_commodity.clone());
+        let oth_commodity_1 = Arc::new(other_commodity.clone());
+        let oth_commodity_2 = Arc::new(other_commodity.clone());
         let (_, flows_map) = build_maps(
             process,
             [
@@ -592,9 +592,9 @@ mod tests {
         // Output commodity shares units with one input
         assert_eq!(svd_commodity.units, sed_commodity_pj.units);
 
-        let input1 = Rc::new(sed_commodity_pj);
-        let input2 = Rc::new(sed_commodity_tonnes);
-        let output = Rc::new(svd_commodity);
+        let input1 = Arc::new(sed_commodity_pj);
+        let input2 = Arc::new(sed_commodity_tonnes);
+        let output = Arc::new(svd_commodity);
 
         let (_, flows_map) = build_maps(
             process,
@@ -616,7 +616,7 @@ mod tests {
     #[rstest]
     fn single_output_infer_primary(#[from(svd_commodity)] commodity: Commodity, process: Process) {
         let milestone_years = vec![2010, 2020];
-        let commodity = Rc::new(commodity);
+        let commodity = Arc::new(commodity);
         let (mut processes, flows_map) = build_maps(
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
@@ -637,8 +637,8 @@ mod tests {
         process: Process,
     ) {
         let milestone_years: Vec<u32> = vec![2010, 2020];
-        let commodity1 = Rc::new(commodity1);
-        let commodity2 = Rc::new(commodity2);
+        let commodity1 = Arc::new(commodity1);
+        let commodity2 = Arc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
             process,
             [
@@ -660,8 +660,8 @@ mod tests {
         process: Process,
     ) {
         let milestone_years = vec![2010, 2020];
-        let commodity1 = Rc::new(commodity1);
-        let commodity2 = Rc::new(commodity2);
+        let commodity1 = Arc::new(commodity1);
+        let commodity2 = Arc::new(commodity2);
         let mut process = process;
         process.primary_output = Some(commodity2.id.clone());
         let (mut processes, flows_map) = build_maps(
@@ -688,8 +688,8 @@ mod tests {
         process: Process,
     ) {
         let milestone_years = vec![2010, 2020];
-        let commodity1 = Rc::new(commodity1);
-        let commodity2 = Rc::new(commodity2);
+        let commodity1 = Arc::new(commodity1);
+        let commodity2 = Arc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
             process,
             [
@@ -715,8 +715,8 @@ mod tests {
     ) {
         let milestone_years = vec![2010, 2015, 2020];
         let flow_years = vec![2010, 2020];
-        let commodity1 = Rc::new(commodity1);
-        let commodity2 = Rc::new(commodity2);
+        let commodity1 = Arc::new(commodity1);
+        let commodity2 = Arc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
             process,
             [
@@ -741,8 +741,8 @@ mod tests {
         process: Process,
     ) {
         let milestone_years = vec![2010, 2015, 2020];
-        let commodity1 = Rc::new(commodity1);
-        let commodity2 = Rc::new(commodity2);
+        let commodity1 = Arc::new(commodity1);
+        let commodity2 = Arc::new(commodity2);
         let (mut processes, flows_map) = build_maps(
             process,
             [

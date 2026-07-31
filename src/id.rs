@@ -30,7 +30,7 @@ macro_rules! define_id_type {
         )]
         /// An ID type (e.g. `AgentID`, `CommodityID`, etc.)
         #[from(forward)]
-        pub struct $name(pub std::rc::Rc<str>);
+        pub struct $name(pub std::sync::Arc<str>);
 
         impl std::borrow::Borrow<str> for $name {
             fn borrow(&self) -> &str {
@@ -71,7 +71,7 @@ macro_rules! define_id_type {
         impl $name {
             /// Create a new ID from a string slice
             pub fn new(id: &str) -> Self {
-                $name(std::rc::Rc::from(id))
+                $name(std::sync::Arc::from(id))
             }
         }
     };
