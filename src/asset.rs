@@ -17,7 +17,6 @@ use indexmap::IndexMap;
 use log::debug;
 use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
-use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
@@ -102,7 +101,7 @@ pub struct Asset {
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
-    capacity: Cell<AssetCapacity>,
+    capacity: AssetCapacity,
     /// The year the asset was/will be commissioned
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
@@ -281,7 +280,7 @@ impl Asset {
             flows,
             process_parameter,
             region_id,
-            capacity: Cell::new(capacity),
+            capacity,
             commission_year,
             max_decommission_year,
         })
@@ -661,7 +660,7 @@ impl Asset {
 
     /// Whether this asset is divisible
     pub fn is_divisible(&self) -> bool {
-        matches!(self.capacity.get(), AssetCapacity::Discrete { .. })
+        matches!(self.capacity, AssetCapacity::Discrete { .. })
     }
 
     /// Get the agent ID for this asset, if any
@@ -676,7 +675,7 @@ impl Asset {
 
     /// Get the capacity for this asset
     pub fn capacity(&self) -> AssetCapacity {
-        self.capacity.get()
+        self.capacity
     }
 
     /// Get the total capacity for this asset
@@ -698,9 +697,7 @@ impl Asset {
             "Cannot set capacity to a smaller number of units than are currently mothballed"
         );
 
-        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
-        // changing the capacity of immutable refs would be potentially dangerous
-        self.capacity.set(capacity);
+        self.capacity = capacity;
     }
 
     /// Increase the capacity for this asset
@@ -710,9 +707,7 @@ impl Asset {
             "Capacity increase must be positive"
         );
 
-        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
-        // changing the capacity of immutable refs would be potentially dangerous
-        self.capacity.update(|c| c + capacity);
+        self.capacity = self.capacity + capacity;
     }
 
     /// Commission the asset.
