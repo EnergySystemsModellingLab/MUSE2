@@ -10,7 +10,7 @@ use crate::output::DataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerFlow, Year,
@@ -794,15 +794,24 @@ fn add_pairwise_equalisation(model: &mut highs::Model, terms: &[(Variable, f64)]
     }
 }
 
+/// Returns the balance level of the asset's primary output commodity, defaulting to `DayNight`.
+fn activity_balance_level(asset: &AssetRef, muse_model: &Model) -> TimeSliceLevel {
+    asset
+        .primary_output_commodity()
+        .and_then(|id| muse_model.commodities.get(id))
+        .map_or(TimeSliceLevel::DayNight, |c| c.time_slice_level)
+}
+
 /// Add pairwise L1 utilisation-spreading variables and constraints to a [`highs::Model`].
 ///
 /// Applies two independent sets of equalisation groups, both contributing to the same objective:
 ///
 /// 1. **Asset groups** keyed by `(process, time_slice)`: equalises utilisation across assets
 ///    sharing the same process and time slice (`u = activity / capacity`).
-/// 2. **Time-slice groups** keyed by asset: equalises utilisation rate across time slices within
-///    each asset (`u = activity / (capacity * fraction)`), so longer time slices are not
-///    penalised for having proportionally higher activity.
+/// 2. **Time-slice groups** keyed by the balance level of the asset's primary output commodity:
+///    - `Annual`: one group per asset covering all time slices in the year.
+///    - `Season`: one group per `(asset, season)`.
+///    - `DayNight`: excluded, as these assets are balanced independently in every time slice.
 ///
 /// Candidate assets must be excluded by the caller before passing the iterator.
 fn add_activity_equalisation_to_model<'a, I>(
@@ -814,7 +823,8 @@ fn add_activity_equalisation_to_model<'a, I>(
     I: Iterator<Item = &'a AssetRef>,
 {
     let mut groups: IndexMap<(ProcessID, TimeSliceID), Vec<(Variable, f64)>> = IndexMap::new();
-    let mut ts_groups: IndexMap<AssetRef, Vec<(Variable, f64)>> = IndexMap::new();
+    let mut ts_groups: IndexMap<(AssetRef, TimeSliceSelection), Vec<(Variable, f64)>> =
+        IndexMap::new();
 
     for asset in assets {
         // Use initial capacity as proxy; see comment in calculate_activity_coefficient for why
@@ -825,28 +835,42 @@ fn add_activity_equalisation_to_model<'a, I>(
         }
         let inv_cap = 1.0 / cap;
 
+        // Add to process/time-slice group
         for time_slice in muse_model.time_slice_info.iter_ids() {
             let act = variables.get_activity_var(asset, time_slice);
-
             groups
                 .entry((asset.process_id().clone(), time_slice.clone()))
                 .or_default()
                 .push((act, inv_cap));
+        }
 
-            // Normalise by fraction so the objective equalises activity / (cap * fraction).
-            let fraction = muse_model.time_slice_info.time_slices[time_slice].value();
-            let inv_cap_ts = 1.0 / (cap * fraction);
-            ts_groups
-                .entry(asset.clone())
-                .or_default()
-                .push((act, inv_cap_ts));
+        // Create asset/time-slice-selection groups, using the balance level of the asset's primary
+        // output commodity to determine the selection
+        let balance_level = activity_balance_level(asset, muse_model);
+        if balance_level == TimeSliceLevel::DayNight {
+            // DayNight assets are balanced independently in every time slice, so there's no need
+            // to add a spreading objective for them
+            continue;
+        }
+        for selection in muse_model
+            .time_slice_info
+            .iter_selections_at_level(balance_level)
+        {
+            for (time_slice, _) in selection.iter(&muse_model.time_slice_info) {
+                let act = variables.get_activity_var(asset, time_slice);
+                let fraction = muse_model.time_slice_info.time_slices[time_slice].value();
+                ts_groups
+                    .entry((asset.clone(), selection.clone()))
+                    .or_default()
+                    .push((act, 1.0 / (cap * fraction)));
+            }
         }
     }
 
     for ((_process, _time_slice), terms) in groups {
         add_pairwise_equalisation(model, &terms);
     }
-    for (_asset, terms) in ts_groups {
+    for ((_asset, _selection), terms) in ts_groups {
         add_pairwise_equalisation(model, &terms);
     }
 }
