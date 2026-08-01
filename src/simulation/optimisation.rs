@@ -693,17 +693,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
 
             let mut highs_model2 = highs::Model::from(solved1);
 
-            // Zero all linear objective coefficients so only the spreading objective remains
-            for &var in variables.activity_vars.values() {
-                highs_model2.change_column_cost(var, 0.0);
-            }
-            for &var in variables.unmet_demand_vars.values() {
-                highs_model2.change_column_cost(var, 0.0);
-            }
-            for (_, var) in variables.iter_capacity_vars() {
-                highs_model2.change_column_cost(var, 0.0);
-            }
-
             // Constrain total cost to be no worse than z_star * (1 + tolerance)
             highs_model2.add_row(..=(z_star * (1.0 + tolerance)), cost_terms);
 
