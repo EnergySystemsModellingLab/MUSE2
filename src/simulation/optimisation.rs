@@ -1014,4 +1014,80 @@ mod tests {
             }
         }
     }
+
+    // Verifies that a single GASDRV asset dispatches evenly across time slices within each season.
+    // Gas is balanced at season level, so within a season all time slices are unconstrained and
+    // should have equal utilisation rate (activity / timeslice_fraction).
+    // Expected to fail until timeslice equalisation is implemented.
+    #[test]
+    fn single_asset_dispatches_evenly_across_timeslices() {
+        #[derive(Debug, serde::Deserialize)]
+        struct TimeSliceRow {
+            season: String,
+            time_of_day: String,
+            fraction: f64,
+        }
+
+        let tmp = ModelPatch::from_example("simple")
+            .build_to_tempdir()
+            .unwrap();
+
+        // Load time slice fractions so we can compute utilisation rate
+        let mut fractions: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
+        let mut ts_reader = csv::Reader::from_path(tmp.path().join("time_slices.csv")).unwrap();
+        for result in ts_reader.deserialize::<TimeSliceRow>() {
+            let row = result.unwrap();
+            fractions.insert(format!("{}.{}", row.season, row.time_of_day), row.fraction);
+        }
+
+        let output_path = tmp.path().join("output");
+        fs::create_dir_all(&output_path).unwrap();
+
+        let model = crate::input::load_model(tmp.path()).unwrap();
+        crate::simulation::run(&model, &output_path, /*debug_model=*/ true).unwrap();
+
+        // Read GASDRV activity, grouped by season, storing (fraction, activity) pairs
+        let mut season_rates: IndexMap<String, Vec<f64>> = IndexMap::new();
+        let mut reader =
+            csv::Reader::from_path(output_path.join("debug_dispatch_assets.csv")).unwrap();
+        for result in reader.deserialize::<DispatchRow>() {
+            let row = result.unwrap();
+            if row.milestone_year == 2020
+                && row.run_description == "final without candidates"
+                && row.process_id == "GASDRV"
+                && let Some(act) = row.activity
+            {
+                let fraction = fractions[&row.time_slice];
+                let season = row
+                    .time_slice
+                    .split('.')
+                    .next()
+                    .unwrap_or(&row.time_slice)
+                    .to_owned();
+                // Utilisation rate: activity per unit time
+                season_rates.entry(season).or_default().push(act / fraction);
+            }
+        }
+
+        assert!(
+            !season_rates.is_empty(),
+            "No GASDRV activity found in output"
+        );
+
+        // Within each season, every time slice should have equal utilisation rate
+        for (season, rates) in &season_rates {
+            let max = rates.iter().copied().fold(0.0_f64, f64::max);
+            if max <= 0.0 {
+                continue;
+            }
+            for &rate in rates {
+                let diff = (rate - max).abs() / max;
+                assert!(
+                    diff < 1e-6,
+                    "GASDRV utilisation rate not equal across time slices in season {season}: {rates:?}"
+                );
+            }
+        }
+    }
 }
