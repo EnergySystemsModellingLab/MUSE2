@@ -7,6 +7,7 @@ use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
@@ -771,22 +772,35 @@ fn add_activity_variables(
     start..problem.num_cols()
 }
 
-/// Add L1 utilisation-spreading variables and constraints to a [`highs::Model`].
+/// Add pairwise L1 equalisation constraints for a group of `(activity_variable, inv_cap)` terms.
 ///
-/// This is the second-solve counterpart to the primary cost minimisation. It adds a free centre
-/// variable `m` and per-`(asset, timeslice)` deviation variables `d[a,t]` that linearise
-/// `|act[a,t] / cap[a] - m|`, with each `d` carrying objective coefficient 1. Minimising
-/// `sum(d[a,t])` subject to the constraints produces an L1 spreading of utilisation fractions
-/// around their median.
+/// For every unordered pair `(i, j)` in `terms`, introduces a non-negative auxiliary variable
+/// `d` with objective coefficient 1 and the constraints `d >= u_i - u_j` and `d >= u_j - u_i`,
+/// where `u_k = act_k * inv_cap_k`. Minimising the sum of all `d` minimises total pairwise L1
+/// spread of utilisation within the group. Does nothing if `terms` has fewer than two entries.
+fn add_pairwise_equalisation(model: &mut highs::Model, terms: &[(Variable, f64)]) {
+    if terms.len() < 2 {
+        return;
+    }
+
+    for i in 0..terms.len() {
+        for j in (i + 1)..terms.len() {
+            let (act_a, inv_cap_a) = terms[i];
+            let (act_b, inv_cap_b) = terms[j];
+            let d = model.add_col(1.0, 0.0.., []);
+            model.add_row(0.0.., [(d, 1.0), (act_a, -inv_cap_a), (act_b, inv_cap_b)]);
+            model.add_row(0.0.., [(d, 1.0), (act_a, inv_cap_a), (act_b, -inv_cap_b)]);
+        }
+    }
+}
+
+/// Add pairwise L1 utilisation-spreading variables and constraints to a [`highs::Model`].
 ///
-/// Candidate assets are excluded: they exist only to receive shadow prices.
+/// Groups eligible assets by `(process, time_slice)` and, for each group with at least two
+/// members, calls [`add_pairwise_equalisation`] to minimise the total pairwise L1 spread of
+/// utilisation fractions within the group.
 ///
-/// # Limitations
-///
-/// `m` settles at the median utilisation across all included `(asset, timeslice)` pairs. When the
-/// majority of those pairs are at zero (many idle assets or timeslices), the median collapses to
-/// zero and the spreading effect is lost. This is a known limitation of the L1-from-median
-/// formulation.
+/// Candidate assets must be excluded by the caller before passing the iterator.
 fn add_activity_equalisation_to_model<'a, I>(
     model: &mut highs::Model,
     variables: &VariableMap,
@@ -795,9 +809,8 @@ fn add_activity_equalisation_to_model<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef>,
 {
-    // m is the free L1-centre variable in utilisation-fraction space; bounded below at zero
-    // since all utilisation fractions are non-negative
-    let m = model.add_col(0.0, 0.0.., []);
+    // Group eligible (activity_var, inv_cap) terms by (process, time_slice).
+    let mut groups: IndexMap<(ProcessID, TimeSliceID), Vec<(Variable, f64)>> = IndexMap::new();
 
     for asset in assets {
         // Use initial capacity as proxy; see comment in calculate_activity_coefficient for why
@@ -815,11 +828,15 @@ fn add_activity_equalisation_to_model<'a, I>(
             }
 
             let act = variables.get_activity_var(asset, time_slice);
-            // d >= act/cap - m  and  d >= m - act/cap
-            let d = model.add_col(1.0, 0.0.., []);
-            model.add_row(0.0.., [(d, 1.0), (act, -inv_cap), (m, 1.0)]);
-            model.add_row(0.0.., [(d, 1.0), (act, inv_cap), (m, -1.0)]);
+            groups
+                .entry((asset.process_id().clone(), time_slice.clone()))
+                .or_default()
+                .push((act, inv_cap));
         }
+    }
+
+    for ((_process, _time_slice), terms) in groups {
+        add_pairwise_equalisation(model, &terms);
     }
 }
 
@@ -947,8 +964,7 @@ mod tests {
         activity: Option<f64>,
     }
 
-    // Verifies that two identical assets receive even-ish dispatch under L1 lexicographic equalisation.
-    // May still fail when the L1 median collapses to zero (known limitation of the L1 formulation).
+    // Verifies that two identical assets receive equal dispatch under pairwise L1 equalisation.
     #[test]
     fn two_identical_assets_dispatch_evenly() {
         let tmp = ModelPatch::from_example("simple")
