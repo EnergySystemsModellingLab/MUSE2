@@ -796,9 +796,13 @@ fn add_pairwise_equalisation(model: &mut highs::Model, terms: &[(Variable, f64)]
 
 /// Add pairwise L1 utilisation-spreading variables and constraints to a [`highs::Model`].
 ///
-/// Groups eligible assets by `(process, time_slice)` and, for each group with at least two
-/// members, calls [`add_pairwise_equalisation`] to minimise the total pairwise L1 spread of
-/// utilisation fractions within the group.
+/// Applies two independent sets of equalisation groups, both contributing to the same objective:
+///
+/// 1. **Asset groups** keyed by `(process, time_slice)`: equalises utilisation across assets
+///    sharing the same process and time slice (`u = activity / capacity`).
+/// 2. **Time-slice groups** keyed by asset: equalises utilisation rate across time slices within
+///    each asset (`u = activity / (capacity * fraction)`), so longer time slices are not
+///    penalised for having proportionally higher activity.
 ///
 /// Candidate assets must be excluded by the caller before passing the iterator.
 fn add_activity_equalisation_to_model<'a, I>(
@@ -809,8 +813,8 @@ fn add_activity_equalisation_to_model<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef>,
 {
-    // Group eligible (activity_var, inv_cap) terms by (process, time_slice).
     let mut groups: IndexMap<(ProcessID, TimeSliceID), Vec<(Variable, f64)>> = IndexMap::new();
+    let mut ts_groups: IndexMap<AssetRef, Vec<(Variable, f64)>> = IndexMap::new();
 
     for asset in assets {
         // Use initial capacity as proxy; see comment in calculate_activity_coefficient for why
@@ -822,20 +826,27 @@ fn add_activity_equalisation_to_model<'a, I>(
         let inv_cap = 1.0 / cap;
 
         for time_slice in muse_model.time_slice_info.iter_ids() {
-            let limits = asset.get_activity_per_capacity_limits(time_slice);
-            if limits.start() == limits.end() {
-                continue;
-            }
-
             let act = variables.get_activity_var(asset, time_slice);
+
             groups
                 .entry((asset.process_id().clone(), time_slice.clone()))
                 .or_default()
                 .push((act, inv_cap));
+
+            // Normalise by fraction so the objective equalises activity / (cap * fraction).
+            let fraction = muse_model.time_slice_info.time_slices[time_slice].value();
+            let inv_cap_ts = 1.0 / (cap * fraction);
+            ts_groups
+                .entry(asset.clone())
+                .or_default()
+                .push((act, inv_cap_ts));
         }
     }
 
     for ((_process, _time_slice), terms) in groups {
+        add_pairwise_equalisation(model, &terms);
+    }
+    for (_asset, terms) in ts_groups {
         add_pairwise_equalisation(model, &terms);
     }
 }
