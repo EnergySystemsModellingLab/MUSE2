@@ -643,15 +643,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             variables.capacity_var_idx = add_capacity_variables(
                 &mut problem,
                 &mut variables.capacity_vars,
+                &mut variables.cost_terms,
                 self.flexible_capacity_assets,
                 self.capacity_limits,
                 self.capacity_margin,
             );
-            let capacity_costs: Vec<_> = variables
-                .iter_capacity_vars()
-                .map(|(asset, var)| (var, calculate_capacity_coefficient(asset).value()))
-                .collect();
-            variables.cost_terms.extend(capacity_costs);
         }
 
         // Add constraints
@@ -860,6 +856,7 @@ fn add_activity_equalisation_to_model<'a, I>(
 fn add_capacity_variables(
     problem: &mut Problem,
     variables: &mut CapacityVariableMap,
+    cost_terms: &mut Vec<(Variable, f64)>,
     assets: &[AssetRef],
     capacity_limits: Option<&HashMap<AssetRef, AssetCapacity>>,
     capacity_margin: Dimensionless,
@@ -897,7 +894,7 @@ fn add_capacity_variables(
         // Add a capacity variable for each asset
         // Bounds are calculated based on current capacity with wiggle-room defined by
         // `capacity_margin`, and limited by `capacity_limit` if provided.
-        let var = match current_capacity {
+        let (var, var_coeff) = match current_capacity {
             AssetCapacity::Continuous(cap) => {
                 // Continuous capacity: capacity variable represents total capacity
                 let lower = ((1.0 - capacity_margin) * cap.value()).max(0.0);
@@ -905,7 +902,8 @@ fn add_capacity_variables(
                 if let Some(limit) = capacity_limit {
                     upper = upper.min(limit.total_capacity().value());
                 }
-                problem.add_column(coeff.value(), lower..=upper)
+                let var_coeff = coeff.value();
+                (problem.add_column(var_coeff, lower..=upper), var_coeff)
             }
             AssetCapacity::Discrete(units, unit_size) => {
                 // Discrete capacity: capacity variable represents number of units
@@ -914,9 +912,14 @@ fn add_capacity_variables(
                 if let Some(limit) = capacity_limit {
                     upper = upper.min(limit.n_units().unwrap() as f64);
                 }
-                problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
+                let var_coeff = (coeff * unit_size).value();
+                (
+                    problem.add_integer_column(var_coeff, lower..=upper),
+                    var_coeff,
+                )
             }
         };
+        cost_terms.push((var, var_coeff));
 
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");
