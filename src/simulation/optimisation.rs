@@ -784,8 +784,8 @@ fn activity_balance_level(asset: &AssetRef, muse_model: &Model) -> TimeSliceLeve
 ///
 /// Applies two independent sets of equalisation groups, both contributing to the same objective:
 ///
-/// 1. **Asset groups** keyed by `(process, time_slice)`: equalises utilisation across assets
-///    sharing the same process and time slice (`u = activity / capacity`).
+/// 1. **Asset groups** keyed by `(process, region, time_slice)`: for each time slice, equalises
+///    utilisation across assets of the same process in the same region (`u = activity / capacity`).
 /// 2. **Time-slice groups** keyed by the balance level of the asset's primary output commodity:
 ///    - `Annual`: one group per asset covering all time slices in the year.
 ///    - `Season`: one group per `(asset, season)`.
@@ -800,7 +800,8 @@ fn add_activity_equalisation_to_model<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef>,
 {
-    let mut groups: IndexMap<(ProcessID, TimeSliceID), Vec<(Variable, f64)>> = IndexMap::new();
+    let mut groups: IndexMap<(ProcessID, RegionID, TimeSliceID), Vec<(Variable, f64)>> =
+        IndexMap::new();
     let mut ts_groups: IndexMap<(AssetRef, TimeSliceSelection), Vec<(Variable, f64)>> =
         IndexMap::new();
 
@@ -813,11 +814,15 @@ fn add_activity_equalisation_to_model<'a, I>(
         }
         let inv_cap = 1.0 / cap;
 
-        // Add to process/time-slice group
+        // Add to process/region/time-slice group
         for time_slice in muse_model.time_slice_info.iter_ids() {
             let act = variables.get_activity_var(asset, time_slice);
             groups
-                .entry((asset.process_id().clone(), time_slice.clone()))
+                .entry((
+                    asset.process_id().clone(),
+                    asset.region_id().clone(),
+                    time_slice.clone(),
+                ))
                 .or_default()
                 .push((act, inv_cap));
         }
@@ -845,7 +850,7 @@ fn add_activity_equalisation_to_model<'a, I>(
         }
     }
 
-    for ((_process, _time_slice), terms) in groups {
+    for ((_process, _region, _time_slice), terms) in groups {
         add_pairwise_equalisation(model, &terms);
     }
     for ((_asset, _selection), terms) in ts_groups {
