@@ -5,16 +5,6 @@ fields:
   - name: asset_id
     type: string
     description: The ID number of this asset
-    notes: |
-      Every commissioned non-divisible asset in the system is automatically assigned a numerical ID.
-      This includes assets supplied by the user in the `assets.csv` input file as well as those
-      selected by agents during the simulation. For divisible assets, this field will be empty and
-      `group_id` will be filled instead.
-  - name: group_id
-    type: string
-    description: The group ID number of this asset, if any
-    notes: |
-      Numerical identifier used for divisible assets.
   - name: process_id
     type: string
     description: The ID of this asset's associated process

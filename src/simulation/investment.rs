@@ -1,7 +1,7 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::{Agent, AgentID};
-use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
@@ -365,8 +365,8 @@ pub fn select_best_assets(
     // Remaining capacity for candidates and divisible assets
     let mut remaining_capacities = candidate_investment_limits;
 
-    // Swap child assets for parents representing a single unit
-    let children = replace_child_assets_with_parents(&mut opt_assets, &mut remaining_capacities);
+    // Store capacities for divisible assets and replace with single units
+    prepare_commissioned_divisible_assets(&mut opt_assets, &mut remaining_capacities);
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
@@ -393,7 +393,7 @@ pub fn select_best_assets(
             // For candidates, cap the asset's capacity by the current demand-limiting capacity
             // and, where an addition constraint exists, the remaining installable capacity.
             let mut asset = asset.clone();
-            if !asset.is_commissioned() {
+            if asset.is_candidate() {
                 let dlc = AssetCapacity::from_capacity(
                     get_demand_limiting_capacity(
                         &model.time_slice_info,
@@ -479,87 +479,36 @@ pub fn select_best_assets(
     // Convert Candidate assets to Ready
     // At this point we also assign the agent ID to the asset
     for asset in &mut best_assets {
-        if let AssetState::Candidate = asset.state() {
+        if asset.is_candidate() {
             asset
                 .make_mut()
                 .select_candidate_for_investment(agent.id.clone());
         }
     }
 
-    // Convert parent assets back to children
-    replace_parent_assets_with_children(&mut best_assets, children, remaining_capacities);
-
     Ok(best_assets)
 }
 
-/// Replace all child assets with parent assets representing a single unit.
+/// Prepare divisible assets for appraisal.
 ///
-/// Non-divisible assets are left as is. `remaining_capacities` is updated to include total capacity
-/// for each parent asset.
-///
-/// # Returns
-///
-/// The child assets previously in `assets`.
-fn replace_child_assets_with_parents(
-    assets: &mut Vec<AssetRef>,
+/// Divisible assets are replaced in `assets` with an asset representing a single unit, as they are
+/// appraised one unit at a time. Their total capacity is stored in `remaining_capacities`.
+fn prepare_commissioned_divisible_assets(
+    assets: &mut [AssetRef],
     remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
-) -> Vec<AssetRef> {
-    // Extract all child assets
-    let children = assets
-        .extract_if(.., |asset| asset.parent().is_some())
-        .collect_vec();
-
-    let parents = children
-        .iter()
-        .map(|child| child.parent().unwrap())
-        .unique();
-    for parent in parents {
-        // Store remaining capacity
-        remaining_capacities.insert(parent.clone(), parent.capacity());
-
-        // Add parent asset (one unit)
-        assets.push(parent.make_partial_parent(1));
-    }
-
-    children
-}
-
-/// Replace parent assets with their corresponding children.
-///
-/// If only a portion of a parent's capacity was selected, some child assets will be dropped,
-/// starting with those with the highest ID.
-fn replace_parent_assets_with_children(
-    assets: &mut Vec<AssetRef>,
-    mut children: Vec<AssetRef>,
-    mut remaining_capacities: HashMap<AssetRef, AssetCapacity>,
 ) {
-    // Drop parent assets. We can figure out which ones were selected from `children` and
-    // `remaining_capacities`.
-    assets.retain(|asset| !asset.is_parent());
+    for asset in assets
+        .iter_mut()
+        .filter(|asset| asset.is_commissioned() && asset.is_divisible())
+    {
+        let full_capacity = asset.capacity();
 
-    // Sort children in reverse order, so higher IDs come first
-    children.sort_by(|a, b| a.cmp(b).reverse());
+        // Replace with single unit as we appraise one unit at a time
+        *asset = asset.clone().with_subset_of_units(1);
 
-    // Drop any surplus children
-    children.retain(|child| {
-        let parent = child.parent().unwrap();
-
-        let Some(remaining) = remaining_capacities.get_mut(parent) else {
-            return true;
-        };
-
-        // Decrease remaining capacity
-        if remaining.n_units() == Some(1) {
-            remaining_capacities.remove(parent);
-        } else {
-            *remaining = *remaining - child.capacity();
-        }
-
-        false
-    });
-
-    // Add child assets back into `assets`
-    assets.extend(children);
+        // Store remaining capacity
+        remaining_capacities.insert(asset.clone(), full_capacity);
+    }
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
@@ -574,45 +523,44 @@ fn update_assets(
     remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
     best_assets: &mut Vec<AssetRef>,
 ) {
-    match best_asset.state() {
-        AssetState::Commissioned { .. } => {
-            // Remove this asset from the options
-            opt_assets.retain(|asset| *asset != best_asset);
-            best_assets.push(best_asset);
-        }
-        AssetState::Candidate | AssetState::Parent { .. } => {
-            // Track remaining capacity for assets that have limits
-            if let Some(remaining_capacity) = remaining_capacities.get_mut(&best_asset) {
-                *remaining_capacity = *remaining_capacity - best_asset.capacity();
+    let capacity_accumulates = if best_asset.is_commissioned() {
+        best_asset.is_divisible()
+    } else if best_asset.is_candidate() {
+        true
+    } else {
+        panic!("Invalid asset type");
+    };
 
-                // If there's no capacity remaining, remove the asset from the options
-                if remaining_capacity.total_capacity() <= Capacity(0.0) {
-                    let old_idx = opt_assets
-                        .iter()
-                        .position(|asset| *asset == best_asset)
-                        .unwrap();
+    if capacity_accumulates {
+        // Track remaining capacity for assets that have limits
+        if let Some(remaining_capacity) = remaining_capacities.get_mut(&best_asset) {
+            *remaining_capacity = *remaining_capacity - best_asset.capacity();
 
-                    opt_assets.swap_remove(old_idx);
-                    remaining_capacities.remove(&best_asset);
-                }
-            }
+            // If there's no capacity remaining, remove the asset from the options
+            if remaining_capacity.total_capacity() <= Capacity(0.0) {
+                let old_idx = opt_assets
+                    .iter()
+                    .position(|asset| *asset == best_asset)
+                    .unwrap();
 
-            if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset)
-            {
-                // If the asset is already in the list of best assets, add the additional required capacity
-                existing_asset
-                    .make_mut()
-                    .increase_capacity(best_asset.capacity());
-            } else {
-                // Otherwise add it to the list of best assets
-                best_assets.push(best_asset);
+                opt_assets.swap_remove(old_idx);
+                remaining_capacities.remove(&best_asset);
             }
         }
-        AssetState::Ready { .. } => {
-            panic!(
-                "update_assets should only be called with Commissioned, Parent or Candidate assets"
-            )
+
+        if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset) {
+            // If the asset is already in the list of best assets, add the additional required capacity
+            existing_asset
+                .make_mut()
+                .increase_capacity(best_asset.capacity());
+        } else {
+            // Otherwise add it to the list of best assets. Selected assets are unmothballed.
+            best_assets.push(best_asset.with_no_mothballed_units());
         }
+    } else {
+        // Remove this asset from the options. Selected assets are unmothballed.
+        opt_assets.retain(|asset| *asset != best_asset);
+        best_assets.push(best_asset.with_no_mothballed_units());
     }
 }
 
