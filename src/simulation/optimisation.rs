@@ -643,10 +643,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(
-            self.existing_assets.iter(),
-            self.candidate_assets.iter(),
-        );
+        let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
