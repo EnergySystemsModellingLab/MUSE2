@@ -182,8 +182,11 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
             .context("Failed to copy input files to output directory.")?;
     }
     // Initialise program logger
-    log::init(&settings.log_level, Some(output_path)).context("Failed to initialise logging.")?;
-
+    if !cfg!(feature = "bench") {
+        // Don't initialise logging when running bench, as it will interfere with the process
+        log::init(&settings.log_level, Some(output_path))
+            .context("Failed to initialise logging.")?;
+    }
     info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
 
     // Load the model to run

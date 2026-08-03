@@ -49,6 +49,7 @@ map-macro = "0.3.0"
 [dev-dependencies]
 assert_cmd = "2.2.2"
 colored = "3.0.0"
+criterion = "0.8.2"
 logtest = "2.0.0"
 ordered-float = "5.1.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
@@ -85,3 +86,10 @@ implicit_hasher = "allow"
 cast_lossless = "allow"
 return_self_not_must_use = "allow"
 from_iter_instead_of_collect = "allow"
+
+[[bench]]
+name = "examples"
+harness = false
+
+[features]
+bench = []
