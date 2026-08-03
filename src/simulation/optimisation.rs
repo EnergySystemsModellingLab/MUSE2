@@ -7,7 +7,6 @@ use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -784,8 +783,9 @@ fn activity_balance_level(asset: &AssetRef, muse_model: &Model) -> TimeSliceLeve
 ///
 /// Applies two independent sets of equalisation groups, both contributing to the same objective:
 ///
-/// 1. **Asset groups** keyed by `(process, region, time_slice)`: for each time slice, equalises
-///    utilisation across assets of the same process in the same region (`u = activity / capacity`).
+/// 1. **Asset groups** keyed by `(commodity, region, time_slice)`: for each time slice, equalises
+///    utilisation across assets with the same primary output in the same region
+///    (`u = activity / capacity`).
 /// 2. **Time-slice groups** keyed by the balance level of the asset's primary output commodity:
 ///    - `Annual`: one group per asset covering all time slices in the year.
 ///    - `Season`: one group per `(asset, season)`.
@@ -800,7 +800,7 @@ fn add_activity_equalisation_to_model<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef>,
 {
-    let mut groups: IndexMap<(ProcessID, RegionID, TimeSliceID), Vec<(Variable, f64)>> =
+    let mut groups: IndexMap<(CommodityID, RegionID, TimeSliceID), Vec<(Variable, f64)>> =
         IndexMap::new();
     let mut ts_groups: IndexMap<(AssetRef, TimeSliceSelection), Vec<(Variable, f64)>> =
         IndexMap::new();
@@ -814,17 +814,19 @@ fn add_activity_equalisation_to_model<'a, I>(
         }
         let inv_cap = 1.0 / cap;
 
-        // Add to process/region/time-slice group
-        for time_slice in muse_model.time_slice_info.iter_ids() {
-            let act = variables.get_activity_var(asset, time_slice);
-            groups
-                .entry((
-                    asset.process_id().clone(),
-                    asset.region_id().clone(),
-                    time_slice.clone(),
-                ))
-                .or_default()
-                .push((act, inv_cap));
+        // Add to commodity/region/time-slice group
+        if let Some(primary_output) = asset.primary_output_commodity() {
+            for time_slice in muse_model.time_slice_info.iter_ids() {
+                let act = variables.get_activity_var(asset, time_slice);
+                groups
+                    .entry((
+                        primary_output.clone(),
+                        asset.region_id().clone(),
+                        time_slice.clone(),
+                    ))
+                    .or_default()
+                    .push((act, inv_cap));
+            }
         }
 
         // Create asset/time-slice-selection groups, using the balance level of the asset's primary
