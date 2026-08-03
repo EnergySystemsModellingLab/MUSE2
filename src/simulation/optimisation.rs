@@ -607,7 +607,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     }
 
     /// Run dispatch to balance the specified markets, optionally including unmet demand variables
-    #[allow(clippy::too_many_lines)]
     fn run_internal(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
@@ -656,10 +655,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(
-            self.existing_assets.iter(),
-            self.candidate_assets.iter(),
-        );
+        let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
@@ -670,48 +666,45 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.candidate_assets,
         );
 
-        // Take pre-computed cost terms (stored during problem construction, not recomputed here)
+        // Take pre-computed cost terms (stored during problem construction)
         let cost_terms = std::mem::take(&mut variables.cost_terms);
 
         // First solve: minimise cost
-        let mut highs_model = problem.optimise(Sense::Minimise);
-        apply_highs_options_from_toml(
-            &mut highs_model,
-            &self.model.parameters.highs.dispatch_options,
-        )
-        .context("Failed to apply custom HiGHS options to dispatch optimisation")?;
-        let solved1 = solve_optimal(highs_model)?;
+        let mut model = problem.optimise(Sense::Minimise);
+        apply_highs_options_from_toml(&mut model, &self.model.parameters.highs.dispatch_options)
+            .context("Failed to apply custom HiGHS options to dispatch optimisation")?;
+        let solved1 = solve_optimal(model)?;
 
         // Second lexicographic solve: minimise L1 utilisation spread subject to cost <= Z*
-        let z_star;
+        let z_star = solved1.objective_value();
         let solved2 = if self.model.parameters.dispatch_activity_equalisation {
-            z_star = solved1.objective_value();
             let tolerance = self
                 .model
                 .parameters
-                .dispatch_activity_equalisation_tolerance;
+                .dispatch_activity_equalisation_tolerance
+                .value();
 
-            let mut highs_model2 = highs::Model::from(solved1);
+            let mut model = highs::Model::from(solved1);
 
             // Constrain total cost to be no worse than z_star * (1 + tolerance)
-            highs_model2.add_row(..=(z_star * (1.0 + tolerance)), cost_terms);
+            model.add_row(..=(z_star * (1.0 + tolerance)), cost_terms);
 
             // Add L1 spreading variables and constraints
             add_activity_equalisation_to_model(
-                &mut highs_model2,
+                &mut model,
                 &variables,
                 self.existing_assets.iter(),
                 self.model,
             );
 
             apply_highs_options_from_toml(
-                &mut highs_model2,
+                &mut model,
                 &self.model.parameters.highs.dispatch_options,
             )
             .context("Failed to apply custom HiGHS options to dispatch equalisation solve")?;
-            solve_optimal(highs_model2)?
+
+            solve_optimal(model)?
         } else {
-            z_star = solved1.objective_value();
             solved1
         };
 
@@ -720,7 +713,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             variables,
             time_slice_info: &self.model.time_slice_info,
             constraint_keys,
-            // Always report the primary cost objective, not the spreading objective value
+            // Report the primary cost objective, not the spreading objective value
             objective_value: Money(z_star),
         };
         Ok(solution)
@@ -1042,7 +1035,6 @@ mod tests {
     // Verifies that a single GASDRV asset dispatches evenly across time slices within each season.
     // Gas is balanced at season level, so within a season all time slices are unconstrained and
     // should have equal utilisation rate (activity / timeslice_fraction).
-    // Expected to fail until timeslice equalisation is implemented.
     #[test]
     fn single_asset_dispatches_evenly_across_timeslices() {
         #[derive(Debug, serde::Deserialize)]

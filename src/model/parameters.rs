@@ -89,8 +89,9 @@ pub struct ModelParameters {
     /// Fractional tolerance on the primary cost for the lexicographic second solve.
     ///
     /// The second solve constrains total cost to at most `Z* * (1 + tolerance)`, where `Z*` is
-    /// the optimal cost from the first solve. Defaults to zero (exact cost preservation).
-    pub dispatch_activity_equalisation_tolerance: f64,
+    /// the optimal cost from the first solve.
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
+    pub dispatch_activity_equalisation_tolerance: Dimensionless,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
@@ -143,7 +144,7 @@ impl Default for ModelParameters {
             candidate_asset_capacity: Capacity(1e-4),
             commodity_balance_epsilon: Flow(1e-6),
             dispatch_activity_equalisation: true,
-            dispatch_activity_equalisation_tolerance: 1e-6,
+            dispatch_activity_equalisation_tolerance: Dimensionless(1e-6),
             capacity_limit_factor: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
@@ -341,12 +342,7 @@ impl ModelParameters {
 
         // commodity_balance_epsilon already validated with deserialise_finite_non_negative
 
-        // dispatch_activity_equalisation_tolerance
-        ensure!(
-            self.dispatch_activity_equalisation_tolerance.is_finite()
-                && self.dispatch_activity_equalisation_tolerance >= 0.0,
-            "dispatch_activity_equalisation_tolerance must be a finite number greater than or equal to zero"
-        );
+        // dispatch_activity_equalisation_tolerance already validated with deserialise_finite_non_negative
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;

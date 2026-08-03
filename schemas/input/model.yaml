@@ -32,10 +32,10 @@ properties:
   dispatch_activity_equalisation_tolerance:
     type: number
     description: Fractional cost tolerance for the lexicographic second solve
-    default: 0.0
+    default: 1e-6
     notes: |
       The second solve constrains total cost to at most Z* * (1 + tolerance) where Z* is the
-      optimal cost from the first solve. Defaults to zero (exact cost preservation).
+      optimal cost from the first solve.
   capacity_limit_factor:
     type: number
     description: Scales the capacity assigned to candidate assets
