@@ -1,5 +1,7 @@
 //! Code for handling commodity demands. Demands may vary by region, year, and time slice.
-use super::super::{format_items_with_cap, input_err_msg, read_csv};
+use super::super::{
+    deserialise_finite_non_negative, format_items_with_cap, input_err_msg, read_csv,
+};
 use super::demand_slicing::{DemandSliceMap, read_demand_slices};
 use crate::commodity::{Commodity, CommodityID, CommodityType, DemandMap};
 use crate::id::IDCollection;
@@ -26,6 +28,7 @@ struct Demand {
     /// The year of the demand entry
     year: u32,
     /// Annual demand quantity
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     demand: Flow,
 }
 
@@ -130,11 +133,6 @@ where
             "Year {} is not a milestone year. \
             Input of non-milestone years is currently not supported.",
             demand.year
-        );
-
-        ensure!(
-            demand.demand.is_finite() && demand.demand >= Flow(0.0),
-            "Demand must be a finite number greater than or equal to zero"
         );
 
         ensure!(
@@ -327,30 +325,6 @@ mod tests {
             read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020]),
             "Year 2010 is not a milestone year. \
             Input of non-milestone years is currently not supported."
-        );
-    }
-
-    #[rstest]
-    #[case(-1.0)]
-    #[case(f64::NAN)]
-    #[case(f64::NEG_INFINITY)]
-    #[case(f64::INFINITY)]
-    fn read_demand_from_iter_bad_demand(
-        svd_commodity: Commodity,
-        region_ids: IndexSet<RegionID>,
-        #[case] quantity: f64,
-    ) {
-        // Bad demand quantity
-        let svd_commodities = get_svd_map(&svd_commodity);
-        let demand = [Demand {
-            year: 2020,
-            region_id: "GBR".to_string(),
-            commodity_id: "commodity1".to_string(),
-            demand: Flow(quantity),
-        }];
-        assert_error!(
-            read_demand_from_iter(demand.into_iter(), &svd_commodities, &region_ids, &[2020],),
-            "Demand must be a finite number greater than or equal to zero"
         );
     }
 

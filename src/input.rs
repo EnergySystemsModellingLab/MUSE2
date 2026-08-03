@@ -126,6 +126,22 @@ where
     Ok(T::new(value))
 }
 
+/// Read a value, checking that it is finite and greater than or equal to zero
+pub fn deserialise_finite_non_negative<'de, D, T>(deserialiser: D) -> Result<T, D::Error>
+where
+    T: UnitType,
+    D: Deserializer<'de>,
+{
+    let value = f64::deserialize(deserialiser)?;
+    if !(value.is_finite() && value >= 0.0) {
+        Err(serde::de::Error::custom(
+            "Value must be a finite number greater than or equal to zero",
+        ))?;
+    }
+
+    Ok(T::new(value))
+}
+
 /// Format an error message to include the file path. To be used with `anyhow::Context`.
 pub fn input_err_msg<P: AsRef<Path>>(file_path: P) -> String {
     format!("Error reading {}", file_path.as_ref().display())
@@ -470,6 +486,25 @@ mod tests {
         deserialise_f64(2.0).unwrap_err();
         deserialise_f64(f64::NAN).unwrap_err();
         deserialise_f64(f64::INFINITY).unwrap_err();
+    }
+
+    #[rstest]
+    #[case(0.0, true)] // Valid: zero
+    #[case(1e-10, true)] // Valid: small positive value
+    #[case(f64::MAX, true)] // Valid: maximum finite value
+    #[case(-1e-10, false)] // Invalid: negative value
+    #[case(-1.0, false)] // Invalid: negative value
+    #[case(f64::NAN, false)] // Invalid: NaN
+    #[case(f64::INFINITY, false)] // Invalid: positive infinity
+    #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinity
+    fn deserialise_finite_non_negative_works(#[case] value: f64, #[case] expected_valid: bool) {
+        let deserialiser: F64Deserializer<ValueError> = value.into_deserializer();
+        let result = deserialise_finite_non_negative(deserialiser);
+        if expected_valid {
+            assert_eq!(result, Ok(Dimensionless(value)));
+        } else {
+            result.unwrap_err();
+        }
     }
 
     #[test]
