@@ -14,6 +14,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/generate-docs
+        with:
+          build: all_with_old
 
       - name: Link Checker
         id: lychee
