@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use context_manager;
 use log::info;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub mod optimisation;
 use optimisation::{DispatchRun, FlowMap};
@@ -257,7 +257,7 @@ pub fn candidate_assets_for_next_year(
         for region_id in &process.regions {
             candidates.push(
                 Asset::new_candidate_for_dispatch(
-                    Rc::clone(process),
+                    Arc::clone(process),
                     region_id.clone(),
                     candidate_asset_capacity,
                     next_year,

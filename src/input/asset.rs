@@ -13,7 +13,7 @@ use itertools::Itertools;
 use log::warn;
 use serde::Deserialize;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 const ASSETS_FILE_NAME: &str = "assets.csv";
 
@@ -124,7 +124,7 @@ where
 
         UserAsset::new(
             agent_id.clone(),
-            Rc::clone(process),
+            Arc::clone(process),
             region_id.clone(),
             asset.capacity,
             asset.commission_year,
@@ -167,7 +167,7 @@ mod tests {
         };
         let asset_out = UserAsset::new(
             "agent1".into(),
-            Rc::clone(processes.values().next().unwrap()),
+            Arc::clone(processes.values().next().unwrap()),
             "GBR".into(),
             Capacity(1.0),
             2010,

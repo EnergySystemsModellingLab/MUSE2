@@ -504,7 +504,7 @@ mod tests {
     use crate::fixture::{sed_commodity, svd_commodity};
     use petgraph::graph::Graph;
     use rstest::rstest;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[test]
     fn order_sccs_simple_cycle() {
@@ -561,9 +561,9 @@ mod tests {
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Rc::new(sed_commodity));
-        commodities.insert("C".into(), Rc::new(svd_commodity));
+        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Arc::new(sed_commodity));
+        commodities.insert("C".into(), Arc::new(svd_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
@@ -590,8 +590,8 @@ mod tests {
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Rc::new(sed_commodity));
+        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Arc::new(sed_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
@@ -627,10 +627,10 @@ mod tests {
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("C".into(), Rc::new(sed_commodity));
-        commodities.insert("D".into(), Rc::new(svd_commodity));
+        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("C".into(), Arc::new(sed_commodity));
+        commodities.insert("D".into(), Arc::new(svd_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020);
@@ -663,9 +663,9 @@ mod tests {
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Rc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Rc::new(sed_commodity));
-        commodities.insert("C".into(), Rc::new(svd_commodity));
+        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
+        commodities.insert("B".into(), Arc::new(sed_commodity));
+        commodities.insert("C".into(), Arc::new(svd_commodity));
 
         // Duplicate the graph over two regions
         let graphs = IndexMap::from([

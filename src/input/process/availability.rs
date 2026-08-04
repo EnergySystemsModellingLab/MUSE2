@@ -12,7 +12,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 const PROCESS_AVAILABILITIES_FILE_NAME: &str = "process_availabilities.csv";
 
@@ -150,7 +150,7 @@ where
                 .with_context(|| {
                     format!("Error creating activity limits for process {process_id}")
                 })?;
-            inner_map.insert((region_id.clone(), year), Rc::new(availabilities));
+            inner_map.insert((region_id.clone(), year), Arc::new(availabilities));
         }
         map.insert(process_id.clone(), inner_map);
     }

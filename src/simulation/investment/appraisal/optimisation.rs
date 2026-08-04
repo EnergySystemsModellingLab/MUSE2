@@ -127,6 +127,12 @@ pub fn perform_optimisation(
     let mut highs_model = problem.optimise(Sense::Maximise);
     apply_highs_options_from_toml(&mut highs_model, &model.parameters.highs.appraisal_options)
         .context("Failed to apply custom HiGHS options to appraisal optimisation")?;
+    // Enforce single-threaded solving: when appraisals run in parallel via Rayon each HiGHS
+    // instance must not spawn additional worker threads. Setting `parallel="off"` disables
+    // HiGHS's concurrent simplex strategy without touching the global thread-pool scheduler
+    // (setting `threads=N` would fail if the scheduler was already initialised on this thread
+    // by a previous solve with a different count).
+    highs_model.set_option("parallel", "off");
     let solution = solve_optimal(highs_model)
         .map_err(ModelError::into_anyhow)?
         .get_solution();
