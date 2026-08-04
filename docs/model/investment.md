@@ -20,10 +20,10 @@ investment in electricity generation would happen before investment in gas produ
 This ordering ensures that when an upstream market is being invested in, the
 demand created by already-committed downstream assets is already known.
 
-After each commodity market is settled, a dispatch is run over all assets selected so far. This
-quantifies the input commodity flows consumed by newly committed assets — for example, a gas
-generator committed during electricity market investment will consume gas, creating demand that
-the gas market investment must subsequently meet.
+After each commodity market is settled, a [partial system dispatch](#partial-system-dispatch) is
+run over all assets selected so far. This quantifies the input commodity flows consumed by newly
+committed assets — for example, a gas generator committed during electricity market investment will
+consume gas, creating demand that the gas market investment must subsequently meet.
 
 Only commodities of type `ServiceDemand` and `SupplyEqualsDemand` are subject to
 investment decisions. Other commodity types (e.g. `OTH`) are excluded.
@@ -35,11 +35,11 @@ investment decisions. Other commodity types (e.g. `OTH`) are excluded.
 
 When commodity markets form a cycle (e.g. electricity → hydrogen → electricity), the markets in
 the cycle are resolved in sequence within one pass. After each market in the cycle is visited, a
-dispatch is run to rebalance demand. Newly committed assets within the cycle are given limited
-capacity flexibility, controlled by the `capacity_margin` parameter (defined in
-[`model.toml`][model-toml]), to absorb small demand shifts caused by later markets in the cycle.
-If these shifts exceed `capacity_margin`, the simulation terminates with an error, and the user
-should increase this parameter.
+[partial system dispatch](#partial-system-dispatch) is run to rebalance demand. Newly committed
+assets within the cycle are given limited capacity flexibility, controlled by the `capacity_margin`
+parameter (defined in [`model.toml`][model-toml]), to absorb small demand shifts caused by later
+markets in the cycle. If these shifts exceed `capacity_margin`, the simulation terminates with an
+error, and the user should increase this parameter.
 
 ## Commodity Prices Used in Appraisal
 
@@ -429,8 +429,67 @@ The negative SNAS indicates that at current market prices, this asset does not g
 over its annualised costs. It would still be selected if it has the highest SNAS among all
 available options.
 
+## Partial System Dispatch
+
+After each commodity market is settled during the investment loop, a **partial system dispatch** is
+run over all assets selected so far. This is a standard [dispatch optimisation][dispatch-optimisation]
+solve, with three key modifications described below.
+
+### Market subset
+
+Only the commodity markets visited so far — i.e. the current market and all those settled in
+earlier investment rounds — are subject to commodity balance constraints. Markets that are upstream
+of the current investment frontier are not yet constrained, because no assets have been committed
+to serve them yet.
+
+### Input prices for upstream commodities
+
+Because upstream markets are unconstrained, their commodities have no balance constraints and
+therefore no shadow prices in this dispatch. Without any signal on the cost of upstream inputs,
+those inputs would appear free to the solver.
+
+To avoid this, the shadow prices \\( \lambda_{c,r,t} \\) from the previous MSY (see
+[Commodity Prices Used in Appraisal](#commodity-prices-used-in-appraisal)) are passed as explicit
+cost penalties on any input flows corresponding to upstream, unconstrained commodities. This ensures
+the dispatch correctly accounts for the cost of consuming upstream resources, even before those
+markets have been invested in.
+
+### Capacity flexibility in circularities
+
+When markets form a cycle, the partial dispatch after each market in the cycle uses **flexible
+capacity variables** for all newly committed assets in the cycle. Rather
+than fixing the capacity of these assets at their committed value, the solver may adjust capacity
+within the bounds:
+
+\\[
+  \bigl[(1 - \text{capacity\_margin}) \cdot cap_a, \space
+        (1 + \text{capacity\_margin}) \cdot cap_a\bigr]
+\\]
+
+where \\( cap_a \\) is the committed capacity of asset \\( a \\). The upper bound is additionally
+capped by the asset's `MaxInstallableCapacity`. This allows the dispatch to absorb small demand
+shifts caused by subsequent markets in the cycle.
+
+Each flexible capacity variable enters the dispatch objective with a cost coefficient equal to the
+asset's AFC (annualised capital cost plus fixed O&M).
+
+If the demand shift for a previously settled market in the cycle exceeds what the flexible capacity
+can accommodate, the simulation terminates with an error. The user should increase the
+`capacity_margin` parameter (defined in [`model.toml`][model-toml]) in this case.
+
+### Using the partial dispatch result
+
+The flow map from the partial dispatch is used to update the **net demand** seen by each upstream
+market. For each newly committed asset, its input commodity flows are added to the demand for the
+corresponding upstream markets, and its primary output flows reduce the remaining demand for the
+current market. Only primary output flows are counted against demand; secondary outputs do not
+affect the demand targets of other commodity markets. These updated demands then drive the next
+investment decisions as the process moves along the investment order, with each market's committed
+assets shaping the demand seen by those upstream.
+
 [framework-overview]: index.html#framework-overview
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
 [processes-csv]: ../file_formats/input_files.md#processescsv
 [process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
+[dispatch-optimisation]: ./dispatch_optimisation.md
