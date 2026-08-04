@@ -20,10 +20,13 @@ investment in electricity generation would happen before investment in gas produ
 This ordering ensures that when an upstream market is being invested in, the
 demand created by already-committed downstream assets is already known.
 
-After each commodity market is settled, a [partial system dispatch](#partial-system-dispatch) is
-run over all assets selected so far. This quantifies the input commodity flows consumed by newly
-committed assets — for example, a gas generator committed during electricity market investment will
-consume gas, creating demand that the gas market investment must subsequently meet.
+Markets are processed in **layers**: a layer is a set of commodity markets that are independent of
+one another (i.e. at the same depth in the commodity graph and with no dependencies between them).
+All markets within a layer are settled before moving to the next layer. After each layer is
+settled, a single [partial system dispatch](#partial-system-dispatch) is run over all assets
+selected so far. This quantifies the input commodity flows consumed by newly committed assets —
+for example, a gas generator committed during electricity market investment will consume gas,
+creating demand that the gas market investment must subsequently meet.
 
 Only commodities of type `ServiceDemand` and `SupplyEqualsDemand` are subject to
 investment decisions. Other commodity types (e.g. `OTH`) are excluded.
@@ -431,9 +434,9 @@ available options.
 
 ## Partial System Dispatch
 
-After each commodity market is settled during the investment loop, a **partial system dispatch** is
-run over all assets selected so far. This is a standard [dispatch optimisation][dispatch-optimisation]
-solve, with three key modifications described below.
+After each layer of commodity markets is settled during the investment loop, a **partial system
+dispatch** is run over all assets selected so far. This is a standard
+[dispatch optimisation][dispatch-optimisation] solve, with three key modifications described below.
 
 ### Market subset
 
