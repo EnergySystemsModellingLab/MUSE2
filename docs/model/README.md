@@ -74,18 +74,26 @@ has remained mothballed for longer than `mothball_years` (defined in
 
 ### 4. Ironing-out loop
 
-Investment and dispatch are repeated iteratively to resolve any price instability introduced by new
-capacity commitments. Each iteration runs the full agent investment pass followed by a full system
-dispatch. The loop terminates when time-slice-weighted market prices have converged within
-`price_tolerance`, or when `max_ironing_out_iterations` is reached (both defined in
-[`model.toml`][model-toml]).
+New capacity commitments can shift commodity prices, which in turn may affect which investments are
+optimal. Investment and dispatch are therefore repeated iteratively until prices stabilise. Each
+iteration runs the full agent investment pass (using prices from the previous iteration's dispatch)
+followed by a full system dispatch. The loop terminates when time-slice-weighted market prices have
+converged within `price_tolerance`, or when `max_ironing_out_iterations` is reached (both defined
+in [`model.toml`][model-toml]).
 
 ### 5. Final dispatch
 
 A full [dispatch optimisation][dispatch-optimisation] is run over the settled asset pool. The
-resulting flows and commodity prices are written to the output files and carried forward as the
-price basis for the next MSY's investment appraisal.
+resulting flows are written to the output files.
+
+### 6. Price calculation
+
+**Shadow prices** and **market prices** are derived from the final dispatch solution for each
+commodity, region, and time slice. These are written to the output files and carried forward as the
+price basis for the next MSY's investment appraisal. See [Commodity Prices][prices] for how each
+price type is calculated.
 
 [investment]: ./investment.md
 [dispatch-optimisation]: ./dispatch_optimisation.md
+[prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
