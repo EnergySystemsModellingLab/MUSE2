@@ -1,7 +1,7 @@
 # Dispatch Optimisation
 
 This section describes the formulation of the dispatch optimisation model in MUSE2. For a given
-milestone year (MSY) and region, the dispatch model calculates the least-cost operation of the
+milestone year (MSY), the dispatch model calculates the least-cost operation of the
 energy system assets to satisfy commodity demands. It is solved as a Linear Programme (LP) using the
 HiGHS solver.
 
