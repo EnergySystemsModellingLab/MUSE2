@@ -13,6 +13,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+      - name: Set user name and email for git
+        run: |
+          # Needed so we can apply patches
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - uses: ./.github/actions/generate-docs
         with:
           build: all_with_old
