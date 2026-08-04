@@ -115,7 +115,7 @@ where
 /// commodity-balance constraint added to `problem` and `keys` lists the
 /// `(commodity, region, time_selection)` entries in the same order as the rows.
 ///
-#[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#commodity-balance-for--cin-mathbfcmathrmsed-"))]
+#[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#commodity-balance-constraints"))]
 fn add_commodity_balance_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -252,7 +252,7 @@ fn candidate_balance_epsilon(
 /// (upper and lower bounds) are added per selection; in that case the same key is
 /// stored twice to match the solver ordering.
 ///
-#[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-"))]
+#[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#asset-activity-limits"))]
 fn add_activity_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
