@@ -6,7 +6,8 @@
 use crate::asset::check_capacity_valid_for_asset;
 use crate::commodity::PricingStrategy;
 use crate::input::{
-    deserialise_proportion_nonzero, input_err_msg, is_sorted_and_unique, read_toml,
+    deserialise_finite_non_negative, deserialise_proportion_nonzero, input_err_msg,
+    is_sorted_and_unique, read_toml,
 };
 use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
@@ -81,6 +82,7 @@ pub struct ModelParameters {
     /// The epsilon added to commodity balance lower bounds to force candidate dispatch.
     ///
     /// Don't change unless you know what you're doing.
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub commodity_balance_epsilon: Flow,
     /// Affects the maximum capacity that can be given to a newly created asset.
     ///
@@ -100,16 +102,19 @@ pub struct ModelParameters {
     /// The maximum number of iterations to run the "ironing out" step of agent investment for
     pub max_ironing_out_iterations: u32,
     /// The relative tolerance for price convergence in the ironing out loop
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub price_tolerance: Dimensionless,
     /// Slack applied during cycle balancing, allowing newly selected assets to flex their capacity
     /// by this proportion.
     ///
     /// Existing assets remain fixed; this gives newly selected assets the wiggle-room to absorb
     /// small demand changes before we would otherwise need to break for re-investment.
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub capacity_margin: Dimensionless,
     /// Number of years an asset can remain unused before being decommissioned
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub remaining_demand_absolute_tolerance: Flow,
     /// Options for the HiGHS solver.
     ///
@@ -246,25 +251,11 @@ fn check_max_ironing_out_iterations(value: u32) -> Result<()> {
     Ok(())
 }
 
-/// Check the `price_tolerance` parameter is valid
-fn check_price_tolerance(value: Dimensionless) -> Result<()> {
-    ensure!(
-        value.is_finite() && value >= Dimensionless(0.0),
-        "price_tolerance must be a finite number greater than or equal to zero"
-    );
-
-    Ok(())
-}
-
+/// Check that the `remaining_demand_absolute_tolerance` parameter is valid.
 fn check_remaining_demand_absolute_tolerance(
     dangerous_options_enabled: bool,
     value: Flow,
 ) -> Result<()> {
-    ensure!(
-        value.is_finite() && value >= Flow(0.0),
-        "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero"
-    );
-
     if !dangerous_options_enabled {
         ensure!(
             value == DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
@@ -274,16 +265,6 @@ fn check_remaining_demand_absolute_tolerance(
             DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE.value()
         );
     }
-
-    Ok(())
-}
-
-/// Check that the `capacity_margin` parameter is valid
-fn check_capacity_margin(value: Dimensionless) -> Result<()> {
-    ensure!(
-        value.is_finite() && value >= Dimensionless(0.0),
-        "capacity_margin must be a finite number greater than or equal to zero"
-    );
 
     Ok(())
 }
@@ -349,12 +330,7 @@ impl ModelParameters {
         check_capacity_valid_for_asset(self.candidate_asset_capacity)
             .context("Invalid value for candidate_asset_capacity")?;
 
-        // commodity_balance_epsilon
-        ensure!(
-            self.commodity_balance_epsilon.is_finite()
-                && self.commodity_balance_epsilon >= Flow(0.0),
-            "commodity_balance_epsilon must be a finite number greater than or equal to zero"
-        );
+        // commodity_balance_epsilon already validated with deserialise_finite_non_negative
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;
@@ -362,13 +338,12 @@ impl ModelParameters {
         // max_ironing_out_iterations
         check_max_ironing_out_iterations(self.max_ironing_out_iterations)?;
 
-        // price_tolerance
-        check_price_tolerance(self.price_tolerance)?;
+        // price_tolerance already validated with deserialise_finite_non_negative
 
-        // capacity_margin
-        check_capacity_margin(self.capacity_margin)?;
+        // capacity_margin already validated with deserialise_finite_non_negative
 
-        // remaining_demand_absolute_tolerance
+        // remaining_demand_absolute_tolerance already validated with
+        // deserialise_finite_non_negative; check remaining constraints here
         check_remaining_demand_absolute_tolerance(
             self.allow_dangerous_options,
             self.remaining_demand_absolute_tolerance,
@@ -580,43 +555,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case(0.0, true)] // Valid minimum value (exactly zero)
-    #[case(1e-10, true)] // Valid very small positive value
-    #[case(1e-6, true)] // Valid default value
-    #[case(1.0, true)] // Valid larger value
-    #[case(f64::MAX, true)] // Valid maximum finite value
-    #[case(-1e-10, false)] // Invalid: negative value
-    #[case(-1.0, false)] // Invalid: negative value
-    #[case(f64::INFINITY, false)] // Invalid: infinite value
-    #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
-    #[case(f64::NAN, false)] // Invalid: NaN value
-    fn check_price_tolerance_works(#[case] value: f64, #[case] expected_valid: bool) {
-        let dimensionless = Dimensionless::new(value);
-        let result = check_price_tolerance(dimensionless);
-
-        assert_validation_result(
-            result,
-            expected_valid,
-            value,
-            "price_tolerance must be a finite number greater than or equal to zero",
-        );
-    }
-
-    #[rstest]
-    #[case(true, 0.0, true)] // Valid minimum value dangerous options allowed
-    #[case(true, 1e-10, true)] // Valid value with dangerous options allowed
-    #[case(true, 1e-15, true)] // Valid value with dangerous options allowed
-    #[case(false, 1e-12, true)] // Valid value same as default, no dangerous options needed
-    #[case(true, 1.0, true)] // Valid larger value with dangerous options allowed
-    #[case(true, f64::MAX, true)] // Valid maximum finite value with dangerous options allowed
-    #[case(true, -1e-10, false)] // Invalid: negative value
-    #[case(true, f64::INFINITY, false)] // Invalid: positive infinity
-    #[case(true, f64::NEG_INFINITY, false)] // Invalid: negative infinity
-    #[case(true, f64::NAN, false)] // Invalid: NaN
-    #[case(false, -1e-10, false)] // Invalid: negative value
-    #[case(false, f64::INFINITY, false)] // Invalid: positive infinity
-    #[case(false, f64::NEG_INFINITY, false)] // Invalid: negative infinity
-    #[case(false, f64::NAN, false)] // Invalid: NaN
+    #[case(true, 1e-12, true)] // Valid: default value, dangerous options allowed
+    #[case(true, 1.0, true)] // Valid: non-default value with dangerous options allowed
+    #[case(false, 1e-12, true)] // Valid: default value, no dangerous options needed
+    #[case(false, 1.0, false)] // Invalid: non-default value without dangerous options
     fn check_remaining_demand_absolute_tolerance_works(
         #[case] allow_dangerous_options: bool,
         #[case] value: f64,
@@ -629,7 +571,9 @@ mod tests {
             result,
             expected_valid,
             value,
-            "remaining_demand_absolute_tolerance must be a finite number greater than or equal to zero",
+            "Setting a remaining_demand_absolute_tolerance different from the default value of \
+            1e-12 is potentially dangerous, set please_give_me_broken_results to true if you want \
+            to allow this.",
         );
     }
 
@@ -650,25 +594,6 @@ mod tests {
             "Setting a remaining_demand_absolute_tolerance different from the default value of \
             1e-12 is potentially dangerous, set please_give_me_broken_results to true if you want \
             to allow this.",
-        );
-    }
-
-    #[rstest]
-    #[case(0.0, true)] // Valid minimum value
-    #[case(0.2, true)] // Valid default value
-    #[case(10.0, true)] // Valid large value
-    #[case(-1e-6, false)] // Invalid: negative margin
-    #[case(f64::INFINITY, false)] // Invalid: infinite value
-    #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
-    #[case(f64::NAN, false)] // Invalid: NaN value
-    fn check_capacity_margin_works(#[case] value: f64, #[case] expected_valid: bool) {
-        let result = check_capacity_margin(Dimensionless(value));
-
-        assert_validation_result(
-            result,
-            expected_valid,
-            value,
-            "capacity_margin must be a finite number greater than or equal to zero",
         );
     }
 }

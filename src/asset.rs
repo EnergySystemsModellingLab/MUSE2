@@ -15,11 +15,11 @@ use crate::units::{
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use log::debug;
+use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
-use std::cell::Cell;
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
-use std::iter;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
@@ -44,21 +44,12 @@ pub use pool::AssetPool;
 )]
 pub struct AssetID(u32);
 
-/// A unique identifier for an asset group
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    derive_more::Display,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Deserialize,
-    Serialize,
-)]
-pub struct AssetGroupID(u32);
+/// Indicates the year and number of units mothballed
+#[derive(PartialEq, Debug, Clone)]
+pub struct MothballEvent {
+    year: u32,
+    num_units: u32,
+}
 
 /// The state of an asset
 ///
@@ -77,12 +68,11 @@ pub enum AssetState {
         id: AssetID,
         /// The ID of the agent that owns the asset
         agent_id: AgentID,
-        /// Year in which the asset was mothballed. None, if it is not mothballed
-        mothballed_year: Option<u32>,
-        /// Parent asset, if any.
+        /// Years in which all of some of the asset was mothballed.
         ///
-        /// All divided assets have a parent, which tracks the total capacity across the children.
-        parent: Option<AssetRef>,
+        /// Invariants: This **must** be sorted by year with older years first and the total number
+        /// of units must not exceed the total for this asset.
+        mothball_events: VecDeque<MothballEvent>,
     },
     /// The asset is ready for investment, but not yet confirmed
     Ready {
@@ -90,16 +80,6 @@ pub enum AssetState {
         agent_id: AgentID,
         /// The reason why this asset is due to be commissioned
         commission_reason: &'static str,
-    },
-    /// The asset is a parent of other assets.
-    ///
-    /// Parents are used for grouping (commissioned) divided assets, which can be used as an
-    /// optimisation.
-    Parent {
-        /// The ID of the agent which owns this asset's children
-        agent_id: AgentID,
-        /// ID of the asset group
-        group_id: AssetGroupID,
     },
     /// The asset is a candidate for investment but has not yet been selected by an agent
     Candidate,
@@ -121,7 +101,7 @@ pub struct Asset {
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
-    capacity: Cell<AssetCapacity>,
+    capacity: AssetCapacity,
     /// The year the asset was/will be commissioned
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
@@ -221,8 +201,7 @@ impl Asset {
             AssetState::Commissioned {
                 id: AssetID(0),
                 agent_id,
-                mothballed_year: None,
-                parent: None,
+                mothball_events: vec_deque![],
             },
             process,
             region_id,
@@ -301,7 +280,7 @@ impl Asset {
             flows,
             process_parameter,
             region_id,
-            capacity: Cell::new(capacity),
+            capacity,
             commission_year,
             max_decommission_year,
         })
@@ -643,10 +622,12 @@ impl Asset {
 
     /// Whether this asset has been commissioned
     pub fn is_commissioned(&self) -> bool {
-        matches!(
-            &self.state,
-            AssetState::Commissioned { .. } | AssetState::Parent { .. }
-        )
+        matches!(&self.state, AssetState::Commissioned { .. })
+    }
+
+    /// Whether this asset is a candidate
+    pub fn is_candidate(&self) -> bool {
+        matches!(&self.state, AssetState::Candidate)
     }
 
     /// Get the commission year for this asset
@@ -677,57 +658,24 @@ impl Asset {
         }
     }
 
-    /// Get the parent asset of this asset, if any
-    pub fn parent(&self) -> Option<&AssetRef> {
-        match &self.state {
-            AssetState::Commissioned { parent, .. } => parent.as_ref(),
-            _ => None,
-        }
-    }
-
-    /// Whether this asset is a parent of divided assets
-    pub fn is_parent(&self) -> bool {
-        matches!(self.state, AssetState::Parent { .. })
-    }
-
-    /// Get the number of children this asset has.
-    ///
-    /// If this asset is not a parent, then `None` is returned.
-    pub fn num_children(&self) -> Option<u32> {
-        match &self.state {
-            AssetState::Parent { .. } => Some(self.capacity().n_units().unwrap()),
-            _ => None,
-        }
-    }
-
-    /// Get the group ID for this asset, if any
-    pub fn group_id(&self) -> Option<AssetGroupID> {
-        match &self.state {
-            AssetState::Commissioned { parent, .. } => {
-                // Get group ID from parent
-                parent
-                    .as_ref()
-                    // Safe because parents always have state `Parent`
-                    .map(|parent| parent.group_id().unwrap())
-            }
-            AssetState::Parent { group_id, .. } => Some(*group_id),
-            _ => None,
-        }
+    /// Whether this asset is divisible
+    pub fn is_divisible(&self) -> bool {
+        matches!(self.capacity, AssetCapacity::Discrete { .. })
     }
 
     /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
-            AssetState::Commissioned { agent_id, .. }
-            | AssetState::Ready { agent_id, .. }
-            | AssetState::Parent { agent_id, .. } => Some(agent_id),
+            AssetState::Commissioned { agent_id, .. } | AssetState::Ready { agent_id, .. } => {
+                Some(agent_id)
+            }
             AssetState::Candidate => None,
         }
     }
 
     /// Get the capacity for this asset
     pub fn capacity(&self) -> AssetCapacity {
-        self.capacity.get()
+        self.capacity
     }
 
     /// Get the total capacity for this asset
@@ -735,82 +683,31 @@ impl Asset {
         self.capacity().total_capacity()
     }
 
-    /// Set the capacity for this asset (only for Candidate or Ready assets)
+    /// Set the capacity of this asset.
+    ///
+    /// Note that this should be done with care!
     pub fn set_capacity(&mut self, capacity: AssetCapacity) {
-        assert!(
-            matches!(self.state, AssetState::Candidate | AssetState::Ready { .. }),
-            "set_capacity can only be called on Candidate or Ready assets"
-        );
         assert!(
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
         self.capacity().assert_same_type(capacity);
+        assert!(
+            self.get_num_mothballed_units() <= capacity.n_units().unwrap_or(1),
+            "Cannot set capacity to a smaller number of units than are currently mothballed"
+        );
 
-        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
-        // changing the capacity of immutable refs would be potentially dangerous
-        self.capacity.set(capacity);
+        self.capacity = capacity;
     }
 
-    /// Increase the capacity for this asset (only for Candidate and Parent assets)
+    /// Increase the capacity for this asset
     pub fn increase_capacity(&mut self, capacity: AssetCapacity) {
-        assert!(
-            matches!(
-                self.state,
-                AssetState::Candidate | AssetState::Parent { .. }
-            ),
-            "increase_capacity can only be called on Candidate or Parent assets"
-        );
         assert!(
             capacity.total_capacity() > Capacity(0.0),
             "Capacity increase must be positive"
         );
 
-        // As `capacity` is a `Cell`, we don't actually need a `mut` ref to `self`, but allowing for
-        // changing the capacity of immutable refs would be potentially dangerous
-        self.capacity.update(|c| c + capacity);
-    }
-
-    /// Decrease the unit count (number of units) of this asset by one.
-    ///
-    /// Note that this method uses interior mutability so that we can operate on an immutable ref to
-    /// `self`. Accordingly, calling this method will result in a change in the capacity for all
-    /// `Rc` copies of the asset, which is potentially dangerous. This method is therefore private
-    /// and should **only** be used for the case where we want to decrease the unit count for parent
-    /// assets.
-    fn decrement_unit_count(&self) {
-        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
-            panic!("Cannot decrement unit count of non-divisible asset");
-        };
-        assert!(n_units > 0, "Unit count has dropped below zero");
-
-        self.capacity
-            .set(AssetCapacity::Discrete(n_units - 1, unit_size));
-    }
-
-    /// Decommission this asset
-    fn decommission(&mut self, reason: &str) {
-        let (id, agent_id, parent) = match &self.state {
-            AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent),
-            _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
-        };
-        debug!(
-            "Decommissioning '{}' asset (ID: {}) for agent '{}' (reason: {})",
-            self.process_id(),
-            id,
-            agent_id,
-            reason
-        );
-
-        // If this is a child asset, we need to decrease the parent's capacity appropriately
-        if let Some(parent) = parent {
-            parent.decrement_unit_count();
-        }
+        self.capacity = self.capacity + capacity;
     }
 
     /// Commission the asset.
@@ -821,8 +718,7 @@ impl Asset {
     /// # Arguments
     ///
     /// * `id` - The ID to give the newly commissioned asset
-    /// * `parent` - The parent asset, if this is a child asset
-    fn commission(&mut self, id: AssetID, parent: Option<AssetRef>) {
+    fn commission(&mut self, id: AssetID) {
         let (agent_id, reason) = match &self.state {
             AssetState::Ready {
                 agent_id,
@@ -841,15 +737,14 @@ impl Asset {
         self.state = AssetState::Commissioned {
             id,
             agent_id: agent_id.clone(),
-            mothballed_year: None,
-            parent,
+            mothball_events: vec_deque![],
         };
     }
 
     /// Select a Candidate asset for investment, converting it to a Ready state
     pub fn select_candidate_for_investment(&mut self, agent_id: AgentID) {
         assert!(
-            self.state == AssetState::Candidate,
+            self.is_candidate(),
             "select_candidate_for_investment can only be called on Candidate assets"
         );
         check_capacity_valid_for_asset(self.total_capacity()).unwrap();
@@ -859,53 +754,55 @@ impl Asset {
         };
     }
 
-    /// Set the year this asset was mothballed
-    pub fn mothball(&mut self, year: u32) {
-        let (id, agent_id, parent) = match &self.state {
+    /// Get the mothball events for this asset, if commissioned
+    fn get_mothball_events(&self) -> Option<&VecDeque<MothballEvent>> {
+        match &self.state {
             AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent.clone()),
-            _ => panic!("Cannot mothball an asset that hasn't been commissioned"),
-        };
-        self.state = AssetState::Commissioned {
-            id,
-            agent_id,
-            mothballed_year: Some(year),
-            parent,
-        };
+                mothball_events, ..
+            } => Some(mothball_events),
+            _ => None,
+        }
     }
 
-    /// Remove the mothballed year - presumably because the asset has been used
-    pub fn unmothball(&mut self) {
-        let (id, agent_id, parent) = match &self.state {
+    /// Get the mothball events (mutably) for this asset, if commissioned
+    fn get_mothball_events_mut(&mut self) -> Option<&mut VecDeque<MothballEvent>> {
+        match &mut self.state {
             AssetState::Commissioned {
-                id,
-                agent_id,
-                parent,
-                ..
-            } => (*id, agent_id.clone(), parent.clone()),
-            _ => panic!("Cannot unmothball an asset that hasn't been commissioned"),
-        };
-        self.state = AssetState::Commissioned {
-            id,
-            agent_id,
-            mothballed_year: None,
-            parent,
-        };
+                mothball_events, ..
+            } => Some(mothball_events),
+            _ => None,
+        }
     }
 
-    /// Get the mothballed year for the asset
-    pub fn get_mothballed_year(&self) -> Option<u32> {
-        let AssetState::Commissioned {
-            mothballed_year, ..
-        } = &self.state
-        else {
-            panic!("Cannot get mothballed year for an asset that hasn't been commissioned")
+    /// Whether this asset has any units mothballed
+    pub fn has_any_mothballed_units(&self) -> bool {
+        self.get_mothball_events()
+            .is_some_and(|events| !events.is_empty())
+    }
+
+    /// Get the number of units which are mothballed.
+    ///
+    /// For non-commissioned assets, this always returns zero.
+    pub fn get_num_mothballed_units(&self) -> u32 {
+        let Some(events) = self.get_mothball_events() else {
+            return 0;
         };
-        *mothballed_year
+
+        events.iter().map(|event| event.num_units).sum()
+    }
+
+    /// Get the remaining number of units that are not mothballed.
+    ///
+    /// For non-commissioned assets, this always returns the total number of units.
+    pub fn get_num_nonmothballed_units(&self) -> u32 {
+        self.num_units() - self.get_num_mothballed_units()
+    }
+
+    /// The number of units this asset represents
+    ///
+    /// If divisible, returns the total number of units, otherwise returns one.
+    pub fn num_units(&self) -> u32 {
+        self.capacity().n_units().unwrap_or(1)
     }
 
     /// Get the unit size for this asset's capacity (if any)
@@ -1031,6 +928,23 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     Ok(())
 }
 
+/// Log that the specified number of units has been decommissioned for the given asset
+fn log_decommissioning(asset: &Asset, num_units: u32, reason: &str) {
+    let (id, agent_id) = match &asset.state {
+        AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
+        _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
+    };
+    debug!(
+        "Decommissioning {}/{} units of '{}' asset (ID: {}) for agent '{}' (reason: {})",
+        num_units,
+        asset.num_units(),
+        asset.process_id(),
+        id,
+        agent_id,
+        reason
+    );
+}
+
 /// A wrapper containing a reference-counted [`Asset`].
 ///
 /// [`AssetRef`] implements equality, ordering, and hashing using an [`AssetID`], if available, but
@@ -1055,92 +969,167 @@ impl AssetRef {
                 self.region_id(),
                 self.commission_year,
                 self.agent_id(),
-                self.group_id(),
             ))
         }
     }
 
-    /// Apply a function to each of this asset's children, consuming the asset in the process.
+    /// Get an [`AssetRef`] representing a subset of this asset's units.
     ///
-    /// If this asset is divisible, the first argument to `f` will be this asset after it has been
-    /// converted to a parent and the second will be each child.
-    ///
-    /// If this asset is non-divisible (i.e. does not have a discrete capacity), then `f` will be
-    /// called with the first argument set to `None` and the second will be `self`.
-    ///
-    /// When the asset has a discrete capacity, each of the children will be made up of a single
-    /// unit of the original asset's unit size.
-    ///
-    /// Panics if this asset's state is not `Ready`.
-    fn into_for_each_child<F>(mut self, next_group_id: &mut u32, mut f: F)
-    where
-        F: FnMut(Option<&AssetRef>, AssetRef),
-    {
-        assert!(
-            matches!(self.state, AssetState::Ready { .. }),
-            "Assets with state {} cannot be divided. Only Ready assets can be divided",
-            self.state
-        );
-
-        let AssetCapacity::Discrete(n_units, unit_size) = self.capacity() else {
-            // Asset is non-divisible
-            f(None, self);
-            return;
-        };
-
-        // Create a child of size `unit_size`
-        let child = AssetRef::from(Asset {
-            capacity: Cell::new(AssetCapacity::Discrete(1, unit_size)),
-            ..Asset::clone(&self)
-        });
-
-        // Turn this asset into a parent
-        let agent_id = self.agent_id().unwrap().clone();
-        self.make_mut().state = AssetState::Parent {
-            agent_id,
-            group_id: AssetGroupID(*next_group_id),
-        };
-        *next_group_id += 1;
-
-        // Run `f` over each child
-        for child in iter::repeat_n(child, n_units as usize) {
-            f(Some(&self), child);
-        }
-    }
-
-    /// Get an [`AssetRef`] representing a subset of this parent's children.
+    /// For non-divisible assets, `new_num_units` must be one. If some of the asset's units are
+    /// mothballed, these are discarded before non-mothballed units. For example, if an asset has
+    /// seven units of which four are mothballed and we are reducing the number of units to four,
+    /// the new asset will have one mothballed unit.
     ///
     /// # Panics
     ///
-    /// Panics if this asset is not a parent asset or `num_units` is zero or exceeds the total
-    /// capacity of this asset.
-    pub fn make_partial_parent(&self, num_units: u32) -> Self {
-        assert!(
-            self.is_parent(),
-            "Cannot make a partial parent from a non-parent asset"
-        );
-        assert!(
-            num_units > 0,
-            "Cannot make a partial parent with zero units"
-        );
+    /// Panics if `new_num_units` is zero or exceeds the total capacity of this asset.
+    pub fn with_subset_of_units(self, new_num_units: u32) -> Self {
+        if new_num_units == self.num_units() {
+            return self;
+        }
+
+        assert!(new_num_units > 0, "Cannot make an asset with zero units");
 
         let (max_num_units, unit_size) = match self.capacity() {
             AssetCapacity::Discrete(max_num_units, unit_size) => (max_num_units, unit_size),
-            // We know asset capacity type is discrete as this is a parent asset
-            AssetCapacity::Continuous(_) => unreachable!(),
-        };
-        match num_units.cmp(&max_num_units) {
-            // Make a new Asset with fewer units
-            Ordering::Less => Self::from(Asset {
-                capacity: Cell::new(AssetCapacity::Discrete(num_units, unit_size)),
-                ..Asset::clone(self)
-            }),
-            // Same number of units as self
-            Ordering::Equal => self.clone(),
-            Ordering::Greater => {
-                panic!("Cannot make a partial parent with more units than original")
+            AssetCapacity::Continuous(_) => {
+                panic!("Non-divisible assets can only have one unit");
             }
+        };
+
+        assert!(
+            new_num_units <= max_num_units,
+            "Cannot make an asset with more units than original"
+        );
+
+        // Make a new Asset with fewer units. If there are more mothballed units than the new asset
+        // will have, we reduce this number to avoid there being more mothballed units than the new
+        // asset has, which would be a logic error. We discard mothballed before non-mothballed
+        // units.
+        let new_num_mothballed = new_num_units.saturating_sub(self.get_num_nonmothballed_units());
+        let mut asset = self.with_mothballed_units(new_num_mothballed, None);
+        asset
+            .make_mut()
+            .set_capacity(AssetCapacity::Discrete(new_num_units, unit_size));
+        asset
+    }
+
+    /// Decommission this asset
+    fn decommission(self, reason: &str) {
+        log_decommissioning(&self, self.num_units(), reason);
+    }
+
+    /// Decommission any units that were mothballed at least `mothball_years` ago.
+    ///
+    /// If the asset still has some units remaining, it is returned, else None.
+    fn with_decommission_mothballed(self, year: u32, mothball_years: u32) -> Option<Self> {
+        let events = self
+            .get_mothball_events()
+            .expect("Can only decommission mothballed units in commissioned assets");
+
+        // Mothball events are ordered oldest-first, so this sums the units mothballed longest ago
+        let units_to_remove: u32 = events
+            .iter()
+            .take_while(|event| event.year <= year.saturating_sub(mothball_years))
+            .map(|event| event.num_units)
+            .sum();
+        if units_to_remove == 0 {
+            // Nothing to do. Return self unmodified.
+            return Some(self);
         }
+
+        let reason = format!(
+            "The asset has not been used for the set mothball years ({mothball_years} years)."
+        );
+        let new_num_units = self.num_units() - units_to_remove;
+        if new_num_units == 0 {
+            self.decommission(&reason);
+            return None;
+        }
+
+        // `with_subset_of_units` discards the oldest mothballed units first, which are exactly the
+        // ones being decommissioned here.
+        log_decommissioning(&self, units_to_remove, &reason);
+        Some(self.with_subset_of_units(new_num_units))
+    }
+
+    /// Return a new [`AssetRef`] with the specified number of units mothballed.
+    ///
+    /// If `num_units` equals the number of already mothballed units, the original asset is
+    /// returned. If additional units may be mothballed, a value must be provided for `year`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if attempting to mothball more units than the asset represents or if attempting to
+    /// change the number of mothballed units for a non-commissioned asset.
+    pub fn with_mothballed_units(mut self, num_units: u32, year: Option<u32>) -> Self {
+        if num_units == 0 {
+            // Small optimisation
+            return self.with_no_mothballed_units();
+        }
+
+        let num_already_mothballed = self.get_num_mothballed_units();
+        if num_units == num_already_mothballed {
+            // Nothing to do. Return self unmodified.
+            return self;
+        }
+
+        assert!(
+            num_units <= self.num_units(),
+            "Cannot mothball more units than asset represents"
+        );
+
+        // Now that we know we have to modify self, call make_mut().
+        let events = self.make_mut().get_mothball_events_mut().expect(
+            "Cannot change number of mothballed units for an asset that hasn't been commissioned",
+        );
+        if num_units < num_already_mothballed {
+            // Remove mothballing events until only required num of mothballed units remains,
+            // starting with oldest
+            let mut remaining = num_already_mothballed - num_units;
+            while remaining > 0
+                && let Some(event) = events.front_mut()
+            {
+                let to_remove = event.num_units.min(remaining);
+                event.num_units -= to_remove;
+                remaining -= to_remove;
+                if event.num_units == 0 {
+                    events.pop_front();
+                }
+            }
+        } else {
+            let year =
+                year.expect("Cannot increase number of mothballed units without supplying year");
+
+            if let Some(event) = events.back() {
+                // Need to check this as adding events in the past breaks the expected invariant for
+                // `mothball_events`
+                assert!(
+                    event.year <= year,
+                    "Attempting to mothball units in a year in the past"
+                );
+            }
+
+            // Mothball extra units in specified year
+            events.push_back(MothballEvent {
+                year,
+                num_units: num_units - num_already_mothballed,
+            });
+        }
+
+        self
+    }
+
+    /// Returns a new [`AssetRef`] with no mothballed units.
+    ///
+    /// If the asset has no mothballed units, the original asset is returned.
+    pub fn with_no_mothballed_units(mut self) -> Self {
+        if self.has_any_mothballed_units() {
+            // Only commissioned assets can have mothballed units, so this is safe
+            self.make_mut().get_mothball_events_mut().unwrap().clear();
+        }
+
+        self
     }
 }
 
@@ -1184,15 +1173,7 @@ impl Hash for AssetRef {
 #[derive(PartialEq, PartialOrd, Eq, Ord, Hash)]
 enum AssetCmp<'a> {
     WithID(AssetID),
-    WithoutID(
-        (
-            &'a ProcessID,
-            &'a RegionID,
-            u32,
-            Option<&'a AgentID>,
-            Option<AssetGroupID>,
-        ),
-    ),
+    WithoutID((&'a ProcessID, &'a RegionID, u32, Option<&'a AgentID>)),
 }
 
 /// Additional methods for iterating over assets
@@ -1252,8 +1233,17 @@ mod tests {
     };
     use float_cmp::assert_approx_eq;
     use indexmap::indexmap;
+    use itertools::assert_equal;
     use rstest::{fixture, rstest};
     use std::rc::Rc;
+
+    /// A commissioned divisible asset with three units.
+    #[fixture]
+    fn commissioned_divisible(mut asset_divisible: Asset) -> AssetRef {
+        asset_divisible.commission(AssetID(0));
+        assert_eq!(asset_divisible.num_units(), 3);
+        AssetRef::from(asset_divisible)
+    }
 
     #[rstest]
     fn get_input_cost_from_prices_works(
@@ -1400,125 +1390,52 @@ mod tests {
     }
 
     #[rstest]
-    #[case::exact_multiple(Capacity(12.0), Capacity(4.0), 3)] // 12 / 4 = 3
-    #[case::rounded_up(Capacity(11.0), Capacity(4.0), 3)] // 11 / 4 = 2.75 -> 3
-    #[case::unit_size_equals_capacity(Capacity(4.0), Capacity(4.0), 1)] // 4 / 4 = 1
-    #[case::unit_size_greater_than_capacity(Capacity(3.0), Capacity(4.0), 1)] // 3 / 4 = 0.75 -> 1
-    fn into_for_each_child_divisible(
-        mut process: Process,
-        #[case] capacity: Capacity,
-        #[case] unit_size: Capacity,
-        #[case] n_expected_children: usize,
-    ) {
-        process.unit_size = Some(unit_size);
-        let asset = AssetRef::from(
-            Asset::new_ready(
-                "agent1".into(),
-                Rc::new(process),
-                "GBR".into(),
-                capacity,
-                2010,
-            )
-            .unwrap(),
-        );
-
-        let mut count = 0;
-        let mut total_child_capacity = Capacity(0.0);
-        asset.clone().into_for_each_child(&mut 0, |parent, child| {
-            assert!(parent.is_some_and(|parent| matches!(parent.state, AssetState::Parent { .. })));
-
-            // Check each child has capacity equal to unit_size
-            assert_eq!(
-                child.total_capacity(),
-                unit_size,
-                "Child capacity should equal unit_size"
-            );
-
-            total_child_capacity += child.total_capacity();
-            count += 1;
-        });
-        assert_eq!(count, n_expected_children, "Unexpected number of children");
-
-        // Check total capacity is >= parent capacity
-        assert!(
-            total_child_capacity >= asset.total_capacity(),
-            "Total capacity should be >= parent capacity"
-        );
-    }
-
-    #[rstest]
-    fn into_for_each_child_nondivisible(asset: Asset) {
-        assert!(
-            asset.process.unit_size.is_none(),
-            "Asset should be non-divisible"
-        );
-
-        let asset = AssetRef::from(asset);
-        let mut count = 0;
-        asset.clone().into_for_each_child(&mut 0, |parent, child| {
-            assert!(parent.is_none());
-            assert_eq!(child, asset);
-            count += 1;
-        });
-        assert_eq!(count, 1);
-    }
-
-    #[fixture]
-    fn parent_asset(asset_divisible: Asset) -> AssetRef {
-        let asset = AssetRef::from(asset_divisible);
-        let mut parent = None;
-
-        asset.into_for_each_child(&mut 0, |maybe_parent, _| {
-            if parent.is_none() {
-                parent = maybe_parent.cloned();
-            }
-        });
-
-        parent.expect("Divisible asset should create a parent")
-    }
-
-    #[rstest]
-    #[case::subset_of_children(2, false)]
-    #[case::all_children(3, true)]
-    fn make_partial_parent(
-        parent_asset: AssetRef,
+    #[case::subset(2, false)]
+    #[case::all_all_units(3, true)]
+    fn with_subset_of_units(
+        asset_divisible: Asset,
         #[case] num_units: u32,
         #[case] expect_same_asset: bool,
     ) {
-        let parent = parent_asset;
-        assert!(parent.is_parent());
+        let asset = AssetRef::from(asset_divisible);
+        let asset_subset = asset.clone().with_subset_of_units(num_units);
 
-        let partial_parent = parent.make_partial_parent(num_units);
-
-        assert!(partial_parent.is_parent());
         assert_eq!(
-            partial_parent.capacity(),
+            asset_subset.capacity(),
             AssetCapacity::Discrete(num_units, Capacity(4.0))
         );
-        assert_eq!(partial_parent.num_children(), Some(num_units));
-        assert_eq!(partial_parent.group_id(), parent.group_id());
-        assert_eq!(partial_parent.agent_id(), parent.agent_id());
-        assert_eq!(Rc::ptr_eq(&partial_parent.0, &parent.0), expect_same_asset);
-        assert_eq!(parent.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
+        assert_eq!(asset_subset.capacity().n_units(), Some(num_units));
+        assert_eq!(asset_subset.id(), asset.id());
+        assert_eq!(asset_subset.agent_id(), asset.agent_id());
+        assert_eq!(Rc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
+        assert_eq!(asset.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot make a partial parent from a non-parent asset")]
-    fn make_partial_parent_panics_for_non_parent_asset(asset_divisible: Asset) {
-        let asset = AssetRef::from(asset_divisible);
-        asset.make_partial_parent(1);
+    fn with_subset_of_units_non_divisible_asset(asset: Asset) {
+        let asset = AssetRef::from(asset);
+        assert!(Rc::ptr_eq(
+            &asset.0,
+            &asset.clone().with_subset_of_units(1).0
+        ));
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot make a partial parent with zero units")]
-    fn make_partial_parent_panics_for_zero_units(parent_asset: AssetRef) {
-        parent_asset.make_partial_parent(0);
+    #[should_panic(expected = "Non-divisible assets can only have one unit")]
+    fn with_subset_of_units_panics_for_non_divisible_asset(asset: Asset) {
+        AssetRef::from(asset).with_subset_of_units(2);
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot make a partial parent with more units than original")]
-    fn make_partial_parent_panics_for_too_many_units(parent_asset: AssetRef) {
-        parent_asset.make_partial_parent(4);
+    #[should_panic(expected = "Cannot make an asset with zero units")]
+    fn with_subset_of_units_panics_for_zero_units(commissioned_divisible: AssetRef) {
+        commissioned_divisible.with_subset_of_units(0);
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Cannot make an asset with more units than original")]
+    fn with_subset_of_units_panics_for_too_many_units(commissioned_divisible: AssetRef) {
+        commissioned_divisible.with_subset_of_units(4);
     }
 
     #[rstest]
@@ -1532,7 +1449,7 @@ mod tests {
             2020,
         )
         .unwrap();
-        asset.commission(AssetID(2), None);
+        asset.commission(AssetID(2));
         assert!(asset.is_commissioned());
         assert_eq!(asset.id(), Some(AssetID(2)));
     }
@@ -1542,7 +1459,7 @@ mod tests {
     fn commission_wrong_states(process: Process) {
         let mut asset =
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap();
-        asset.commission(AssetID(1), None);
+        asset.commission(AssetID(1));
     }
 
     #[test]
@@ -1613,5 +1530,207 @@ mod tests {
         // commodity_portion = 0.5 -> limit = 3 * 0.5 = 1.5
         let result = asset.max_installable_capacity(Dimensionless(0.5));
         assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(1.5))));
+    }
+
+    #[rstest]
+    #[case::none(0)]
+    #[case::some(2)]
+    #[case::all(3)]
+    fn mothball_unit_counts(commissioned_divisible: AssetRef, #[case] num_mothballed: u32) {
+        assert_eq!(commissioned_divisible.num_units(), 3);
+        let asset = commissioned_divisible.with_mothballed_units(num_mothballed, Some(2020));
+        assert_eq!(asset.get_num_mothballed_units(), num_mothballed);
+        assert_eq!(asset.get_num_nonmothballed_units(), 3 - num_mothballed);
+        assert_eq!(asset.has_any_mothballed_units(), num_mothballed > 0);
+    }
+
+    #[rstest]
+    fn mothball_counts_non_commissioned(asset: Asset, process: Process) {
+        // Non-commissioned assets never have mothballed units, regardless of state
+        let ready = AssetRef::from(asset);
+        let candidate = AssetRef::from(
+            Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap(),
+        );
+        for asset in [ready, candidate] {
+            assert!(!asset.has_any_mothballed_units());
+            assert_eq!(asset.get_num_mothballed_units(), 0);
+            assert_eq!(asset.get_num_nonmothballed_units(), asset.num_units());
+        }
+    }
+
+    #[rstest]
+    fn with_mothballed_units_accumulates_events(commissioned_divisible: AssetRef) {
+        // Mothball one unit in 2020
+        let asset = commissioned_divisible.with_mothballed_units(1, Some(2020));
+        assert_equal(
+            asset.get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2020,
+                num_units: 1,
+            }],
+        );
+
+        // Mothball a second unit in 2022: events are retained in chronological order
+        let asset = asset.with_mothballed_units(2, Some(2022));
+        assert_equal(
+            asset.get_mothball_events().unwrap().iter(),
+            &[
+                MothballEvent {
+                    year: 2020,
+                    num_units: 1,
+                },
+                MothballEvent {
+                    year: 2022,
+                    num_units: 1,
+                },
+            ],
+        );
+    }
+
+    #[rstest]
+    fn with_mothballed_units_decrease_removes_oldest_first(commissioned_divisible: AssetRef) {
+        // Mothball 1 unit in 2020, then 2 more (3 total) in 2022
+        let asset = commissioned_divisible
+            .with_mothballed_units(1, Some(2020))
+            .with_mothballed_units(3, Some(2022));
+        assert_equal(
+            asset.get_mothball_events().unwrap().iter(),
+            &[
+                MothballEvent {
+                    year: 2020,
+                    num_units: 1,
+                },
+                MothballEvent {
+                    year: 2022,
+                    num_units: 2,
+                },
+            ],
+        );
+
+        // Reduce to a single mothballed unit: the oldest event is fully removed and the newer
+        // event is partially reduced, leaving exactly one mothballed unit
+        let asset = asset.with_mothballed_units(1, None);
+        assert_eq!(asset.get_num_mothballed_units(), 1);
+        assert_equal(
+            asset.get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2022,
+                num_units: 1,
+            }],
+        );
+    }
+
+    #[rstest]
+    fn with_mothballed_units_noop_returns_same_rc(commissioned_divisible: AssetRef) {
+        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+        // Requesting the same number of mothballed units is a no-op (the year is ignored)
+        let same = asset.clone().with_mothballed_units(2, Some(2099));
+        assert!(Rc::ptr_eq(&asset.0, &same.0));
+    }
+
+    #[rstest]
+    fn with_mothballed_units_zero_unmothballs(commissioned_divisible: AssetRef) {
+        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+        assert!(asset.has_any_mothballed_units());
+
+        let asset = asset.with_mothballed_units(0, None);
+        assert!(!asset.has_any_mothballed_units());
+        assert_eq!(asset.get_num_mothballed_units(), 0);
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Cannot mothball more units than asset represents")]
+    fn with_mothballed_units_panics_for_too_many_units(commissioned_divisible: AssetRef) {
+        commissioned_divisible.with_mothballed_units(4, Some(2020));
+    }
+
+    #[rstest]
+    #[should_panic(
+        expected = "Cannot change number of mothballed units for an asset that hasn't been commissioned"
+    )]
+    fn with_mothballed_units_panics_for_non_commissioned(asset: Asset) {
+        AssetRef::from(asset).with_mothballed_units(1, Some(2020));
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Cannot increase number of mothballed units without supplying year")]
+    fn with_mothballed_units_panics_when_increasing_without_year(commissioned_divisible: AssetRef) {
+        commissioned_divisible.with_mothballed_units(1, None);
+    }
+
+    #[rstest]
+    #[should_panic(expected = "Attempting to mothball units in a year in the past")]
+    fn with_mothballed_units_panics_when_mothballing_in_the_past(commissioned_divisible: AssetRef) {
+        // Mothball a unit in 2020, then attempt to mothball another in an earlier year, which would
+        // break the chronological ordering invariant of the mothball events
+        commissioned_divisible
+            .with_mothballed_units(1, Some(2020))
+            .with_mothballed_units(2, Some(2019));
+    }
+
+    #[rstest]
+    fn with_no_mothballed_units_clears_events(commissioned_divisible: AssetRef) {
+        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+        let asset = asset.with_no_mothballed_units();
+        assert!(!asset.has_any_mothballed_units());
+        assert_eq!(asset.get_num_mothballed_units(), 0);
+    }
+
+    #[rstest]
+    fn with_no_mothballed_units_noop_returns_same_rc(commissioned_divisible: AssetRef) {
+        // `asset_divisble` has no mothballed units, so the original Rc is returned unchanged
+        let asset = commissioned_divisible;
+        let same = asset.clone().with_no_mothballed_units();
+        assert!(Rc::ptr_eq(&asset.0, &same.0));
+    }
+
+    #[rstest]
+    fn with_subset_of_units_caps_mothballed(commissioned_divisible: AssetRef) {
+        // Mothball all 3 units
+        let asset = commissioned_divisible.with_mothballed_units(3, Some(2020));
+        assert_eq!(asset.get_num_mothballed_units(), 3);
+
+        // Taking a subset of 2 units caps the mothballed count at the new number of units
+        let subset = asset.with_subset_of_units(2);
+        assert_eq!(subset.num_units(), 2);
+        assert_eq!(subset.get_num_mothballed_units(), 2);
+    }
+
+    #[rstest]
+    fn with_decommission_mothballed_nothing_old_enough(commissioned_divisible: AssetRef) {
+        let asset = commissioned_divisible.with_mothballed_units(1, Some(2020));
+        // Threshold is 2005, so the 2020 event is not old enough: the asset is returned unchanged
+        let result = asset
+            .clone()
+            .with_decommission_mothballed(2025, 20)
+            .unwrap();
+        assert!(Rc::ptr_eq(&asset.0, &result.0));
+    }
+
+    #[rstest]
+    fn with_decommission_mothballed_partial(commissioned_divisible: AssetRef) {
+        // Mothball 1 unit in 2010 and 1 unit in 2020 (leaving 1 unit active)
+        let asset = commissioned_divisible
+            .with_mothballed_units(1, Some(2010))
+            .with_mothballed_units(2, Some(2020));
+
+        // With a threshold of 2015, only the 2010 event is old enough to decommission
+        let result = asset.with_decommission_mothballed(2025, 10).unwrap();
+        assert_eq!(result.num_units(), 2);
+        assert_eq!(result.get_num_mothballed_units(), 1);
+        assert_equal(
+            result.get_mothball_events().unwrap().iter(),
+            &[MothballEvent {
+                year: 2020,
+                num_units: 1,
+            }],
+        );
+    }
+
+    #[rstest]
+    fn with_decommission_mothballed_all(commissioned_divisible: AssetRef) {
+        // All units mothballed long enough ago: the whole asset is decommissioned
+        let asset = commissioned_divisible.with_mothballed_units(3, Some(2010));
+        assert!(asset.with_decommission_mothballed(2025, 10).is_none());
     }
 }
