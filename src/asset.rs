@@ -1407,14 +1407,14 @@ mod tests {
         assert_eq!(asset_subset.capacity().n_units(), Some(num_units));
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
-        assert_eq!(Rc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
+        assert_eq!(Arc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
         assert_eq!(asset.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
     }
 
     #[rstest]
     fn with_subset_of_units_non_divisible_asset(asset: Asset) {
         let asset = AssetRef::from(asset);
-        assert!(Rc::ptr_eq(
+        assert!(Arc::ptr_eq(
             &asset.0,
             &asset.clone().with_subset_of_units(1).0
         ));
@@ -1625,7 +1625,7 @@ mod tests {
         let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
         // Requesting the same number of mothballed units is a no-op (the year is ignored)
         let same = asset.clone().with_mothballed_units(2, Some(2099));
-        assert!(Rc::ptr_eq(&asset.0, &same.0));
+        assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
@@ -1681,7 +1681,7 @@ mod tests {
         // `asset_divisble` has no mothballed units, so the original Rc is returned unchanged
         let asset = commissioned_divisible;
         let same = asset.clone().with_no_mothballed_units();
-        assert!(Rc::ptr_eq(&asset.0, &same.0));
+        assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
@@ -1704,7 +1704,7 @@ mod tests {
             .clone()
             .with_decommission_mothballed(2025, 20)
             .unwrap();
-        assert!(Rc::ptr_eq(&asset.0, &result.0));
+        assert!(Arc::ptr_eq(&asset.0, &result.0));
     }
 
     #[rstest]
