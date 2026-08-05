@@ -23,10 +23,16 @@ groupings at different levels (e.g. a single time slice, a season, or the entire
 
 ## Decision Variables
 
-The dispatch model determines the following variables:
+The dispatch model determines the activity level of all assets \\( a \in \mathbf{A} \\) in all time
+slices \\( t \in \mathbf{T}\\):
 
-- \\( \mathrm{Activity}_{a, t} \ge 0 \\): Activity level of asset \\( a \\) during time slice
-\\( t \\) (in units of activity, e.g. PJ/year or MW).
+\\[
+  \mathrm{Activity}_{a, t} \ge 0 \text{ for all } a \in \mathbf{A}, t \in \mathbf{T}
+\\]
+
+Activity is a dimensionless quantity representing the level of operation of the asset. It is
+multiplied by flow coefficients to give the corresponding commodity flows in the units of that
+commodity (e.g. PJ of energy for an energy flow).
 
 ## Objective Function
 
