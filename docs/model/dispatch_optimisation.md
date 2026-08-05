@@ -162,7 +162,7 @@ demand, \\( \mathrm{UnmetD}\_{c, r, t} \ge 0 \\), is added to the commodity bala
      \mathrm{Activity}\_{a, t} +
      \sum\_{t \in s} \mathrm{UnmetD}\_{c, r, t} \ge \mathrm{Bound}\_{c, r, s}
    \\]
-3. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is physically
+3. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is mathematically
 impossible to satisfy it, these variables are heavily penalised in the diagnostic objective function
 using the `value_of_lost_load` parameter (\\( \mathrm{VoLL} \\)):
    \\[

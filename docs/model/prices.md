@@ -35,13 +35,14 @@ shared between outputs according to output flow coefficients.
 The generic activity cost comprises all operating expenditures, input purchases, and flow costs/levies
 not associated with specific SED/SVD outputs:
 \\[
-\text{GenericActivityCost} = \text{VariableOpex} + \text{InputPurchases} + \sum \text{GenericFlowCosts}
+\mathrm{GenericActivityCost} = \mathrm{VariableOpex} + \mathrm{InputPurchases} + \sum \mathrm{GenericFlowCosts}
 \\]
 
 This is shared equally over all SED/SVD outputs in proportion to their output coefficients to
 compute a generic cost per unit of output flow:
 \\[
-\text{GenericCostPerOutput} = \frac{\text{GenericActivityCost}}{\sum_{c \in \text{SED, SVD}} \text{OutputCoefficient}_c}
+\mathrm{GenericCostPerOutput} = \frac{\mathrm{GenericActivityCost}}{\sum_{c \in \mathrm{SED,\,SVD}}
+\mathrm{OutputCoefficient}_c}
 \\]
 
 #### Marginal Cost
@@ -49,7 +50,7 @@ compute a generic cost per unit of output flow:
 The marginal cost of an output commodity \\( c \\) is the sum of the generic cost per output and any
 commodity-specific costs (e.g., production levies, flow costs):
 \\[
-\text{MarginalCost}_c = \text{GenericCostPerOutput} + \text{SpecificCostPerOutput}_c
+\mathrm{MarginalCost}_c = \mathrm{GenericCostPerOutput} + \mathrm{SpecificCostPerOutput}_c
 \\]
 
 #### Full Cost
@@ -58,23 +59,23 @@ The full cost includes the marginal cost plus annualised capital and fixed opera
 
 Annualised capital costs are calculated using the [Capital Recovery Factor] (CRF):
 \\[
-\text{AnnualCapitalCostPerCapacity} = \text{TotalCapitalCostPerCapacity} \times \text{CRF}
+\mathrm{AnnualCapitalCostPerCapacity} = \mathrm{TotalCapitalCostPerCapacity} \times \mathrm{CRF}
 \\]
 
 The annualised fixed cost (AFC) is:
 \\[
-\text{AFC} = (\text{AnnualCapitalCostPerCapacity} + \text{AnnualFixedOpex}) \times \text{TotalCapacity}
+\mathrm{AFC} = (\mathrm{AnnualCapitalCostPerCapacity} + \mathrm{AnnualFixedOpex}) \times \mathrm{TotalCapacity}
 \\]
 
 This is divided by annual activity to get a cost per unit of activity:
 \\[
-\text{AnnualFixedCostPerActivity} = \frac{\text{AFC}}{\text{AnnualActivity}}
+\mathrm{AnnualFixedCostPerActivity} = \frac{\mathrm{AFC}}{\mathrm{AnnualActivity}}
 \\]
 
 This is divided again by the sum of SED/SVD output coefficients to get a cost per unit output:
 \\[
-\text{AnnualFixedCostPerOutput} = \frac{\text{AnnualFixedCostPerActivity}}{\sum_{c \in \text{SED,
-SVD}} \text{OutputCoefficient}_c}
+\mathrm{AnnualFixedCostPerOutput} =
+\frac{\mathrm{AnnualFixedCostPerActivity}}{\sum_{c \in \mathrm{SED,\,SVD}} \mathrm{OutputCoefficient}_c}
 \\]
 
 > Note: this only works if all output commodities are measured in the same energy units (e.g. PJ).
@@ -82,7 +83,7 @@ SVD}} \text{OutputCoefficient}_c}
 
 The final full cost of output commodity \\( c \\) is:
 \\[
-\text{FullCost}_c = \text{MarginalCost}_c + \text{AnnualFixedCostPerOutput}
+\mathrm{FullCost}_c = \mathrm{MarginalCost}_c + \mathrm{AnnualFixedCostPerOutput}
 \\]
 
 ### Candidate asset fallback
@@ -146,7 +147,7 @@ dispatch results).
 The asset incurs a CO₂ levy (0.04/unit) and a variable operating cost of 2.0:
 
 \\[
-\text{MarginalCost}_{\text{GASPRD}} = ( 5.113 \times 0.04) + 2.0 = 2.20452
+\mathrm{MarginalCost}_{\mathrm{GASPRD}} = ( 5.113 \times 0.04) + 2.0 = 2.20452
 \\]
 
 #### Full Cost
@@ -156,24 +157,24 @@ and a total capital cost of 10 per unit capacity:
 
 \\[
 \begin{aligned}
-\text{CRF} &= 0.11016807219 \\\\
-\text{AnnualFixedCostPerCapacity} &= (10 \times 0.11016807219 + 0.3) = 1.4016807219
+\mathrm{CRF} &= 0.11016807219 \\\\
+\mathrm{AnnualFixedCostPerCapacity} &= (10 \times 0.11016807219 + 0.3) = 1.4016807219
 \end{aligned}
 \\]
 
 Accounting for annual utilisation:
 \\[
-\text{AnnualFixedCostPerActivity} = \frac{1.4016807219}{0.20786471743} = 6.7432354044
+\mathrm{AnnualFixedCostPerActivity} = \frac{1.4016807219}{0.20786471743} = 6.7432354044
 \\]
 
 Accounting for the output coefficient:
 \\[
-\text{AnnualFixedCostPerOutput} = \frac{6.7432354044}{1} = 6.7432354044
+\mathrm{AnnualFixedCostPerOutput} = \frac{6.7432354044}{1} = 6.7432354044
 \\]
 
 The full cost is:
 \\[
-\text{FullCost}_{\text{GASPRD}} = 2.20452 + 6.7432354044 = 8.9477554044
+\mathrm{FullCost}_{\mathrm{GASPRD}} = 2.20452 + 6.7432354044 = 8.9477554044
 \\]
 
 ### GASNAT
@@ -190,9 +191,9 @@ The asset incurs a CO₂ levy (0.04/unit), a variable operating cost of 0.5 and 
 
 \\[
 \begin{aligned}
-\text{CO2Levy} &= 2.5565 \times 0.04 = 0.10226 \\\\
-\text{InputPurchases} &= 8.9477554044 \times 1.05 = 9.39514317462 \\\\
-\text{MarginalCost}_{\text{GASNAT}} &= 0.10226 + 0.5 + 9.39514317462 = 9.99740317462
+\mathrm{CO2Levy} &= 2.5565 \times 0.04 = 0.10226 \\\\
+\mathrm{InputPurchases} &= 8.9477554044 \times 1.05 = 9.39514317462 \\\\
+\mathrm{MarginalCost}_{\mathrm{GASNAT}} &= 0.10226 + 0.5 + 9.39514317462 = 9.99740317462
 \end{aligned}
 \\]
 
@@ -203,24 +204,24 @@ and a total capital cost of 7 per unit capacity:
 
 \\[
 \begin{aligned}
-\text{CRF} &= 0.11016807219 \\\\
-\text{AnnualFixedCostPerCapacity} &= (7 \times 0.11016807219 + 0.21) = 0.98117650533
+\mathrm{CRF} &= 0.11016807219 \\\\
+\mathrm{AnnualFixedCostPerCapacity} &= (7 \times 0.11016807219 + 0.21) = 0.98117650533
 \end{aligned}
 \\]
 
 Accounting for annual utilisation:
 \\[
-\text{AnnualFixedCostPerActivity} = \frac{0.98117650533}{0.2094885671} = 4.6836756722
+\mathrm{AnnualFixedCostPerActivity} = \frac{0.98117650533}{0.2094885671} = 4.6836756722
 \\]
 
 Accounting for the output coefficient:
 \\[
-\text{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 4.6836756722
+\mathrm{AnnualFixedCostPerOutput} = \frac{4.6836756722}{1} = 4.6836756722
 \\]
 
 The full cost is:
 \\[
-\text{FullCost}_{\text{GASNAT}} = 9.99740317462 + 4.6836756722 = 14.6810788468
+\mathrm{FullCost}_{\mathrm{GASNAT}} = 9.99740317462 + 4.6836756722 = 14.6810788468
 \\]
 
 This example illustrates the sequential nature of price calculation: the GASPRD price is

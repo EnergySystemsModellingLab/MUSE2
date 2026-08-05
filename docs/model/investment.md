@@ -85,23 +85,23 @@ For each commodity market, agents consider two categories of supply option:
 The annualised fixed cost (AFC) per unit of capacity differs between the two categories:
 
 - **Existing assets**: AFC comprises only the fixed operations and maintenance (O&M) cost
-(\\( \text{FOM} \\)):
+(\\( \mathrm{FOM} \\)):
   \\[
-    \text{AFC}_\text{existing} = \text{FOM}
+    \mathrm{AFC}_{\mathrm{existing}} = \mathrm{FOM}
   \\]
 
 - **Candidate assets**: AFC includes annualised capital expenditure plus fixed O&M:
   \\[
-    \text{AFC}_\text{candidate} = \text{CAPEX} \times \text{CRF} + \text{FOM}
+    \mathrm{AFC}_{\mathrm{candidate}} = \mathrm{CAPEX} \times \mathrm{CRF} + \mathrm{FOM}
   \\]
 
   where the Capital Recovery Factor (CRF) annualises the upfront capital cost over the asset's
   lifetime \\( L \\) at discount rate \\( d \\):
   \\[
-    \text{CRF} = \frac{d \cdot (1 + d)^L}{(1 + d)^L - 1}
+    \mathrm{CRF} = \frac{d \cdot (1 + d)^L}{(1 + d)^L - 1}
   \\]
 
-  If \\( d = 0 \\), then \\( \text{CRF} = 1/L \\).
+  If \\( d = 0 \\), then \\( \mathrm{CRF} = 1/L \\).
 
 ## Asset Capacity
 
@@ -135,8 +135,8 @@ capacity can be installed in a single investment round (subject to further
   total remaining demand if the asset operated at its maximum annual rate:
 
   \\[
-    \text{TrialCapacity} = \frac{\sum_t \text{Demand}_t}{\text{MaxAnnualSupplyPerCapacity}}
-    \times \text{CapacityLimitFactor}
+    \mathrm{TrialCapacity} = \frac{\sum_t \mathrm{Demand}_t}{\mathrm{MaxAnnualSupplyPerCapacity}}
+    \times \mathrm{CapacityLimitFactor}
   \\]
 
   `capacity_limit_factor` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
@@ -150,8 +150,8 @@ In each investment round, a candidate's trial capacity is further capped by the
 across all time-slice selections:
 
 \\[
-  \text{DLC} = \max_{\text{selection}} \frac{\sum_{t \in \text{selection}} \text{Demand}\_t}
-    {\text{MaxSupplyPerCapacity}_\text{selection}}
+  \mathrm{DLC} = \max_{\mathrm{selection}} \frac{\sum_{t \in \mathrm{selection}} \mathrm{Demand}\_t}
+    {\mathrm{MaxSupplyPerCapacity}_{\mathrm{selection}}}
 \\]
 
 Selections where the asset has zero maximum supply are excluded. The cap prevents over-investment
@@ -164,12 +164,12 @@ Processes may have an `addition_limit` (see
 maximum new capacity that can be built per year. The installable capacity limit for a given MSY is:
 
 \\[
-  \text{MaxInstallableCapacity} = \text{AdditionLimit} \times \Delta_\text{MSY}
-    \times \text{AgentPortion}
+  \mathrm{MaxInstallableCapacity} = \mathrm{AdditionLimit} \times \Delta_{\mathrm{MSY}}
+    \times \mathrm{AgentPortion}
 \\]
 
-where \\( \Delta_\text{MSY} \\) is the number of years since the previous MSY and
-\\( \text{AgentPortion} \\) is the fraction of the commodity market for which this agent is
+where \\( \Delta_{\mathrm{MSY}} \\) is the number of years since the previous MSY and
+\\( \mathrm{AgentPortion} \\) is the fraction of the commodity market for which this agent is
 responsible.
 
 If the remaining installable capacity is exhausted, the candidate is excluded from further
@@ -185,27 +185,27 @@ optimal activity profile given the current remaining demand.
 The mini dispatch optimisation implicitly frames each time slice as a choice: the asset can either
 produce the commodity of interest, or it can be treated as procured from an alternative source at
 the **fallback price** \\( \phi_{c,r,t} \\). Each unit of activity produces
-\\( f_{c,\text{primary}} \\) units of output, displacing that quantity from the fallback source.
+\\( f_{c,\mathrm{primary}} \\) units of output, displacing that quantity from the fallback source.
 The optimiser therefore dispatches the asset whenever doing so is cheaper than procuring from
 elsewhere.
 
 This is captured by the activity coefficient \\( \alpha_t \\), which combines two components:
 
 \\[
-  \text{NetOperatingCost}_t = \text{OperatingCost}(t) - \text{RevenueFromFlows}(\lambda, t)
+  \mathrm{NetOperatingCost}_t = \mathrm{OperatingCost}(t) - \mathrm{RevenueFromFlows}(\lambda, t)
 \\]
 
 \\[
-  \text{FallbackCost} = \phi_{c,r,t} \cdot f_{c,\text{primary}}
+  \mathrm{FallbackCost} = \phi_{c,r,t} \cdot f_{c,\mathrm{primary}}
 \\]
 
 \\[
-  \alpha_t = \text{FallbackCost} - \text{NetOperatingCost}_t + \varepsilon
+  \alpha_t = \mathrm{FallbackCost} - \mathrm{NetOperatingCost}_t + \varepsilon
 \\]
 
-where \\( \text{RevenueFromFlows} \\) is the sum of all commodity flow revenues and costs (positive
-for outputs, negative for inputs) valued at shadow prices, \\( \text{OperatingCost} \\) is the
-variable operating cost plus levies and flow costs, \\( f_{c,\text{primary}} \\) is the primary
+where \\( \mathrm{RevenueFromFlows} \\) is the sum of all commodity flow revenues and costs (positive
+for outputs, negative for inputs) valued at shadow prices, \\( \mathrm{OperatingCost} \\) is the
+variable operating cost plus levies and flow costs, \\( f_{c,\mathrm{primary}} \\) is the primary
 output flow coefficient, and \\( \varepsilon \\) is a small positive constant added to ensure that
 break-even assets are still dispatched.
 
@@ -218,7 +218,7 @@ alternative source at the fallback price.
 The asset dispatches when \\( \alpha_t > 0 \\), i.e. when:
 
 \\[
-  \text{NetOperatingCost}_t < \text{FallbackCost}
+  \mathrm{NetOperatingCost}_t < \mathrm{FallbackCost}
 \\]
 
 \\( \phi_{c,r,t} \\) is calculated according to the strategy defined by `fallback_pricing_strategy`
@@ -238,7 +238,7 @@ The optimisation maximises the total net revenue across all time slices, subject
 constraints:
 
 \\[
-  \max \sum_t \alpha_t \cdot \text{Activity}_t
+  \max \sum_t \alpha_t \cdot \mathrm{Activity}_t
 \\]
 
 ## Metric Calculation
@@ -252,14 +252,14 @@ The market cost \\( \mu_t \\) is calculated differently depending on the objecti
 
 - **LCOX**: the net cost of operating, excluding revenues from the primary output commodity:
   \\[
-    \mu_t^\text{LCOX} = \text{OperatingCost}(t) -
-      \text{RevenueFromNonPrimaryFlows}(\pi, t)
+    \mu_t^{\mathrm{LCOX}} = \mathrm{OperatingCost}(t) -
+      \mathrm{RevenueFromNonPrimaryFlows}(\pi, t)
   \\]
 
 - **NPV**: the net cost of operating, including all commodity flows (so negative values represent
   profit):
   \\[
-    \mu_t^\text{NPV} = \text{OperatingCost}(t) - \text{RevenueFromFlows}(\pi, t)
+    \mu_t^{\mathrm{NPV}} = \mathrm{OperatingCost}(t) - \mathrm{RevenueFromFlows}(\pi, t)
   \\]
 
 ### LCOX metric (`objective_type = "lcox"`)
@@ -268,8 +268,9 @@ The LCOX metric is calculated as the total annualised cost divided by total annu
 the above defined market costs which *exclude* the primary output commodity:
 
 \\[
-  \text{LCOXMetric} = \frac{\text{AFC} \times \text{cap} + \sum_t \text{Activity}_t \times \mu_t^\text{LCOX}}
-    {\sum_t \text{Activity}_t}
+  \mathrm{LCOXMetric} = \frac{\mathrm{AFC} \times \mathrm{Capacity} + \sum_t \mathrm{Activity}_t
+  \times \mu_t^{\mathrm{LCOX}}}
+    {\sum_t \mathrm{Activity}_t}
 \\]
 
 Lower values indicate lower-cost investments.
@@ -280,8 +281,8 @@ The NPV metric is based on the Specific Net Annualised Surplus (SNAS). This the 
 unit of activity, using market costs that *include* the primary output commodity:
 
 \\[
-  \text{SNAS} = \frac{-\left(\text{AFC} \times \text{cap} + \sum_t \text{Activity}_t \times
-    \mu_t^\text{NPV}\right)}{\sum_t \text{Activity}_t}
+  \mathrm{SNAS} = \frac{-\left(\mathrm{AFC} \times \mathrm{Capacity} + \sum_t \mathrm{Activity}_t \times
+    \mu_t^{\mathrm{NPV}}\right)}{\sum_t \mathrm{Activity}_t}
 \\]
 
 Higher values indicate more profitable investments.
@@ -346,10 +347,11 @@ plant, evaluated across two time slices: \\( t_0 \\) (peak) and \\( t_1 \\) (off
 | Electricity output | \\( +1.0 \\) MWh/MWh activity | Primary output |
 | Heat output | \\( +0.5 \\) MWh/MWh activity | By-product |
 | Natural gas input | \\( -2.5 \\) MWh/MWh activity | Fuel |
-| \\( \text{OperatingCost} \\) | £5/MWh activity | Constant across time slices |
+| \\( \mathrm{OperatingCost} \\) | £5/MWh activity | Constant across time slices |
 <!-- markdownlint-enable MD013 -->
 
-All per-flow costs (\\( cost_\text{input} \\), \\( cost_\text{output} \\)) are zero.
+All per-flow costs (\\( \mathrm{cost}\_{\mathrm{input}} \\),
+\\( \mathrm{cost}\_{\mathrm{output}} \\)) are zero.
 
 #### Fixed costs and capacity
 
@@ -382,11 +384,12 @@ Activity coefficients use shadow prices:
 = \text{£}{-10}\text{/MWh}
 \\]
 
-The optimiser maximises \\( 10 \cdot act_{t_0} + (-10) \cdot act_{t_1} \\), so it prefers to
-dispatch during \\( t_0 \\) and minimise activity during \\( t_1 \\), subject to demand and
-availability constraints.
+The optimiser maximises \\( 10 \cdot \mathrm{Activity}_{t_0} + (-10) \cdot \mathrm{Activity}_{t_1} \\),
+so it prefers to dispatch during \\( t_0 \\) and minimise activity during \\( t_1 \\), subject to
+demand and availability constraints.
 
-Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 20 \\) MWh.
+Suppose the optimiser determines \\( \mathrm{Activity}_{t_0} = 80 \\) MWh and
+\\( \mathrm{Activity}_{t_1} = 20 \\) MWh.
 
 ### LCOX Metric
 
@@ -394,15 +397,15 @@ Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 
 
 \\[
 \begin{aligned}
-\mu_{t_0}^\text{LCOX} &= 5 + (2.5 \times 35) - (0.5 \times 25) = \text{£80/MWh} \\\\
-\mu_{t_1}^\text{LCOX} &= 5 + (2.5 \times 25) - (0.5 \times 15) = \text{£60/MWh}
+\mu_{t_0}^{\mathrm{LCOX}} &= 5 + (2.5 \times 35) - (0.5 \times 25) = \text{£80/MWh} \\\\
+\mu_{t_1}^{\mathrm{LCOX}} &= 5 + (2.5 \times 25) - (0.5 \times 15) = \text{£60/MWh}
 \end{aligned}
 \\]
 
 **Cost Index:**
 \\[
 \begin{aligned}
-\text{CostIndex} &= \frac{(1{,}000 \times 100) + (80 \times 80) + (20 \times 60)}{80 + 20} \\\\
+\mathrm{CostIndex} &= \frac{(1{,}000 \times 100) + (80 \times 80) + (20 \times 60)}{80 + 20} \\\\
 &= \text{£1,076/MWh}
 \end{aligned}
 \\]
@@ -413,16 +416,16 @@ Suppose the optimiser determines \\( act_{t_0} = 80 \\) MWh and \\( act_{t_1} = 
 
 \\[
 \begin{aligned}
-\mu_{t_0}^\text{NPV} &= 5 - (1.0 \times 90) - (0.5 \times 25) + (2.5 \times 35)
+\mu_{t_0}^{\mathrm{NPV}} &= 5 - (1.0 \times 90) - (0.5 \times 25) + (2.5 \times 35)
 = \text{£}{-10}\text{/MWh} \\\\
-\mu_{t_1}^\text{NPV} &= 5 - (1.0 \times 50) - (0.5 \times 15) + (2.5 \times 25) = \text{£10/MWh}
+\mu_{t_1}^{\mathrm{NPV}} &= 5 - (1.0 \times 50) - (0.5 \times 15) + (2.5 \times 25) = \text{£10/MWh}
 \end{aligned}
 \\]
 
 **SNAS:**
 \\[
 \begin{aligned}
-\text{SNAS} &= \frac{-\left[(1{,}000 \times 100) + (80 \times (-10)) + (20 \times 10)\right]}
+\mathrm{SNAS} &= \frac{-\left[(1{,}000 \times 100) + (80 \times (-10)) + (20 \times 10)\right]}
 {80 + 20} \\\\
 &= \text{£}{-994}\text{/MWh}
 \end{aligned}
@@ -460,18 +463,17 @@ markets have been invested in.
 ### Capacity flexibility in circularities
 
 When markets form a cycle, the partial dispatch after each market in the cycle uses **flexible
-capacity variables** for all newly committed assets in the cycle. Rather
-than fixing the capacity of these assets at their committed value, the solver may adjust capacity
-within the bounds:
+capacity variables** for all newly committed assets in the cycle. Rather than fixing the capacity of
+these assets at their committed value, the solver may adjust capacity within the bounds:
 
 \\[
-  \bigl[(1 - \text{capacity\_margin}) \cdot cap_a, \space
-        (1 + \text{capacity\_margin}) \cdot cap_a\bigr]
+  \bigl[(1 - \mathrm{capacity\_margin}) \cdot \mathrm{Capacity}_a, \space
+        (1 + \mathrm{capacity\_margin}) \cdot \mathrm{Capacity}_a\bigr]
 \\]
 
-where \\( cap_a \\) is the committed capacity of asset \\( a \\). The upper bound is additionally
-capped by the asset's `MaxInstallableCapacity`. This allows the dispatch to absorb small demand
-shifts caused by subsequent markets in the cycle.
+where \\( \mathrm{Capacity}\_a \\) is the committed capacity of asset \\( a \\). The upper bound is
+additionally capped by the asset's `MaxInstallableCapacity`. This allows the dispatch to absorb
+small demand shifts caused by subsequent markets in the cycle.
 
 Each flexible capacity variable enters the dispatch objective with a cost coefficient equal to the
 asset's AFC (annualised capital cost plus fixed O&M).

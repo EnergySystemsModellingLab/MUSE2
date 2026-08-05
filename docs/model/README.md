@@ -49,7 +49,7 @@ At a high level, the user defines:
 The model operates sequentially across a series of milestone years (MSYs). For the base year,
 existing assets are commissioned and a [dispatch optimisation][dispatch-optimisation] is run to
 establish [commodity prices][prices] for the first investment year. For each subsequent MSY, the
-model performs the following steps.
+model performs the following steps:
 
 ### 1. Decommission end-of-life assets
 
