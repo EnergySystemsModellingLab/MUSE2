@@ -1,426 +1,184 @@
-# Dispatch Optimisation Formulation
+# Dispatch Optimisation
 
-<!-- We sometimes need a space after an underscore to make equations render properly -->
-<!-- markdownlint-disable MD037 -->
+This section describes the formulation of the dispatch optimisation model in MUSE2. For a given
+milestone year (MSY), the dispatch model calculates the least-cost operation of the
+energy system assets to satisfy commodity demands. It is solved as a Linear Programme (LP) using the
+HiGHS solver.
 
-This dispatch optimisation model calculates the least-cost operation of the energy system for a
-given configuration of assets and capacities, subject to demands and constraints. It is the core
-engine used for each dispatch run referenced in the overall MUSE2 workflow. A key general
-assumption is that SVD commodities represent final demands only and are not consumed as inputs by
-any asset.
+## Sets and Indices
 
-## General Sets
+The energy system is defined using the following sets:
 
-These define the fundamental categories used to define the energy system.
+- \\( r \in \mathbf{R} \\): Regions. Represents distinct geographical areas.
+- \\( t \in \mathbf{T} \\): Time Slices. Discrete operational sub-periods within a year.
+- \\( s \in \mathbf{S} \\): Time Slice Selections. Collections of time slices representing temporal
+groupings at different levels (e.g. a single time slice, a season, or the entire year).
+- \\( a \in \mathbf{A} \\): Assets. All commissioned production, consumption, or conversion technologies.
+- \\( c \in \mathbf{C} \\): Commodities. All energy carriers, emissions, or materials, partitioned into:
+  - \\( \mathbf{C}^{\mathrm{SVD}} \\): Service Demand commodities (representing final end-use demands).
+  - \\( \mathbf{C}^{\mathrm{SED}} \\): Supply-Equals-Demand commodities (intermediate carrier flows
+  like electricity or hydrogen).
+  - \\( \mathbf{C}^{\mathrm{OTH}} \\): Other commodities (e.g. emissions or tracked flows not
+  subject to supply-demand balancing).
 
-- \\( \mathbf{R} \\): Set of Regions (indexed by \\( r \\)). Represents distinct geographical or
-  modelling areas.
+## Decision Variables
 
-- \\( \mathbf{T} \\): Set of Time Slices (indexed by \\( t \\)). Discrete operational periods within
-  a year.
-
-- \\( \mathbf{H} \\): Set of Seasons (indexed by \\( h \\)). Collections of time slices.
-
-- \\( \mathbf{A} \\): Set of All Assets (indexed by \\( a \\)). All existing and candidate
-  production, consumption, or conversion technologies.
-
-- \\( \mathbf{A}^{flex} \subseteq \mathbf{A} \\): Subset of Flexible Assets (variable input/output
-  ratios).
-
-- \\( \mathbf{A}^{std} = \mathbf{A} \setminus \mathbf{A}^{flex} \\): Subset of Standard Assets
-  (fixed input/output coefficients).
-
-- \\( \mathbf{C} \\): Set of Commodities (indexed by \\( c \\)). All energy carriers, materials, or
-  tracked flows. Partitioned into:
-
-  - \\( \mathbf{C}^{\mathrm{SVD}} \\): Supply-Driven Commodities (final demands; not consumed by
-    assets).
-
-  - \\( \mathbf{C}^{\mathrm{SED}} \\): Supply-Equals-Demand Commodities (intermediate system flows
-    like grid electricity).
-
-  - \\( \mathbf{C}^{\mathrm{OTH}} \\): Other Tracked Flows (e.g., losses, raw emissions).
-
-- \\( \mathbf{C}^{VoLL} \subseteq \mathbf{C}^{\mathrm{SVD}} \cup \mathbf{C}^{\mathrm{SED}} \\):
-  Subset of commodities where unserved demand is modelled with a penalty.
-
-- \\( \mathbf{P} \\): Set of External Pools/Markets (indexed by \\( p \\)).
-
-- \\( \mathbf{S} \\): Set of Scopes (indexed by \\( s \\)). Sets of \\( (r,t) \\) pairs for policy
-  application.
-
-## A. Core Model (Standard Assets: \\( a \in \mathbf{A}^{std} \\))
-
-**Purpose:** Defines the operation of assets with fixed, predefined input-output relationships.
-
-### A.1. Parameters (for \\( a \in \mathbf{A}^{std} \\) or global)
-
-- \\( duration[t] \\): Duration of time slice \\( t \\) as a fraction of the year (\\( \in (0,1]
-  \\)). Represents the portion of the year covered by this slice.
-
-- \\( season\\_ slice[h,t] \\): Binary indicator; \\( 1 \\) if time slice \\( t \\) is in season \\(
-  h \\), \\( 0 \\) otherwise. Facilitates seasonal aggregation.
-
-- \\( balance\\_ level[c,r] \\): Defines the temporal resolution ('timeslice', 'seasonal', 'annual')
-  at which the supply-demand balance for commodity \\( c \\) in region \\( r \\) must be enforced.
-
-- \\( demand[r,c] \\): Total annual exogenously specified demand (\\( \ge 0 \\)) for commodity \\( c
-  \in \mathbf{C}^{\mathrm{SVD}} \\) in region \\( r \\). This is the final demand to be met.
-
-- \\( timeslice\\_ share[c,t] \\): Fraction (\\( \in [0,1] \\)) of the annual \\( demand[r,c] \\)
-  for \\( c \in \mathbf{C}^{\mathrm{SVD}} \\) that occurs during time slice \\( t \\). (\\(
-  \sum_{t}timeslice\\_ share[c,t]=1 \\)). Defines the demand profile.
-
-- \\( capacity[a,r] \\): Installed operational capacity (\\( \ge 0 \\)) of asset \\( a \\) in region
-  \\( r \\) (e.g., MW for power plants). This value is an input to each dispatch run.
-
-- \\( cap2act[a] \\): Conversion factor (\\( >0 \\)) from asset capacity units to activity units,
-  ensuring consistency between capacity (e.g., MW) and activity (e.g., MWh produced in a slice)
-  considering \\( duration[t] \\).
-
-- \\( avail_{UB}[a,r,t], avail_{LB}[a,r,t], avail_{EQ}[a,r,t] \\): Availability factors (\\( \in
-  [0,1] \\)) for asset \\( a \\) in time slice \\( t \\). \\( UB \\) is maximum availability, \\( LB
-  \\) is minimum operational level, \\( EQ \\) specifies exact operation if required.
-
-- \\( cost_{var}[a,r,t] \\): Variable operating cost (\\( \ge 0 \\)) per unit of activity for asset
-  \\( a \\) (e.g., non-fuel O&M).
-
-- \\( input_{coeff}[a,c] \\): Units (\\( \ge 0 \\)) of commodity \\( c \in
-  (\mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{OTH}}) \\) consumed by asset \\( a \\) per
-  unit of its activity. (By assumption, \\( input_{coeff}[a,c]=0 \\) if \\( c \in
-  \mathbf{C}^{\mathrm{SVD}} \\)).
-
-- \\( output_{coeff}[a,c] \\): Units (\\( \ge 0 \\)) of commodity \\( c \in \mathbf{C} \\) produced
-  by asset \\( a \\) per unit of its activity.
-
-- \\( cost_{input}[a,c] \\): Specific cost (\\( \ge 0 \\)) per unit of input commodity \\( c \\)
-  consumed by asset \\( a \\). Useful if \\( c \\) attracts a levy/incentive \\( only \\) if it is
-  consumed by this type of asset.
-
-- \\( cost_{output}[a,c] \\): Specific cost (if positive) or revenue (if negative) per unit of
-  output commodity \\( c \\) produced by asset \\( a \\). Useful if levy/incentive applies \\( only
-  \\) when the commodity is produced by this type of asset.
-
-- \\( VoLL[c,r] \\): Value of Lost Load. A very high penalty cost applied per unit of unserved
-  demand for \\( c \in \mathbf{C}^{VoLL} \\) in region \\( r \\).
-
-### A.2. Decision Variables
-
-These are the quantities the dispatch optimisation model determines.
-
-- \\( act[a,r,t]\ge0 \\): Activity level of asset \\( a \\) in region \\( r \\) during time slice
-  \\( t \\). This is the primary operational decision for each asset.
-
-- \\( UnmetD[c,r,t]\ge0 \\): Unserved demand for commodity \\( c \in \mathbf{C}^{VoLL} \\) in region
-  \\( r \\) during time slice \\( t \\). This variable allows the model to find a solution even if
-  capacity is insufficient.
-
-### A.3. Objective Contribution (for standard assets \\( a \in \mathbf{A}^{std} \\))
-
-This term represents the sum of operational costs associated with standard assets, forming a
-component of the overall system cost that the model seeks to minimise.
+The dispatch model determines the activity level of all assets \\( a \in \mathbf{A} \\) in all time
+slices \\( t \in \mathbf{T}\\):
 
 \\[
-  \sum_{a\in \mathbf{A}^{std}}\sum_{r,t} act[a,r,t]
-  \Biggl(
-    cost_{var}[a,r,t] +
-    \sum_{c \notin \mathbf{C}^{\mathrm{SVD}}} cost_{input}[a,c]\\,input_{coeff}[a,c] +
-    \sum_{c \in \mathbf{C}} cost_{output}[a,c]\\,output_{coeff}[a,c]
-  \Biggr)
+  \mathrm{Activity}_{a, t} \ge 0 \text{ for all } a \in \mathbf{A}, t \in \mathbf{T}
 \\]
 
-### A.4. Constraints (Capacity & Availability for standard assets \\( a \in \mathbf{A}^{std} \\))
+Activity is a dimensionless quantity representing the level of operation of the asset. It is
+multiplied by flow coefficients to give the corresponding commodity flows in the units of that
+commodity (e.g. PJ of energy for an energy flow).
 
-These constraints ensure that each standard asset's operation respects its physical capacity and
-time-varying availability limits. For all \\( a \in \mathbf{A}^{std}, r, t \\):
+## Objective Function
 
-- Asset activity \\( act[a,r,t] \\) is constrained by its available capacity, considering its
-  minimum operational level (lower bound, LB) and maximum availability (upper bound, UB):
-
-    \\[
-      \begin{aligned}
-        capacity[a,r]\\,cap2act[a]\\,avail_{LB}[a,t]\\,duration[t] &\le act[a,r,t] \\\\
-        act[a,r,t] &\le capacity[a,r]\\,cap2act[a]\\,avail_{UB}[a,t]\\,duration[t]
-      \end{aligned}
-    \\]
-
-- If an exact operational level is mandated (e.g., for some renewables based on forecast, or fixed
-  generation profiles for specific assets):
-
-  \\[ act[a,r,t] = capacity[a,r]\\,cap2act[a]\\,avail_{EQ}[a,t]\\,duration[t] \\]
-
-## B. Flexible Assets (\\( a \in \mathbf{A}^{flex} \\))
-
-**Purpose:** This section defines the operational characteristics of flexible assets, which can
-adjust their input consumption mix and/or output product shares, governed by an overall process
-efficiency. The generic activity variable \\( act[a,r,t] \\) (linked to the asset's physical \\(
-capacity[a,r] \\)) is connected to the scale of this flexible conversion process via a reference
-output parameter. It is assumed that SVD commodities cannot be efficiency-constrained or auxiliary
-inputs to these assets.
-
-### B.1. Asset-Specific Sets (Defined for each flexible asset \\( a \in \mathbf{A}^{flex} \\))
-
-These sets categorize the commodities involved in the flexible asset's operation.
-
-- \\( \mathbf{C}^{eff\\_ in}_a \subseteq (\mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{OTH}})
-  \\): Set of input commodities for asset \\( a \\) whose combined energy or mass content is subject
-  to the main process efficiency \\( \eta[a] \\).
-
-- \\( \mathbf{C}^{eff\\_ out}_a \subseteq \mathbf{C} \\): Set of main output commodities from asset
-  \\( a \\) whose combined energy or mass content is determined by \\( \eta[a] \\) and the processed
-  inputs.
-
-- \\( \mathbf{C}^{aux\\_ in}_a \subseteq (\mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{OTH}})
-  \\): Set of auxiliary input commodities for asset \\( a \\) (e.g., water, catalysts) whose
-  consumption is typically proportional to the main activity \\( act[a,r,t] \\) but which are not
-  part of the primary energy/mass balance for the efficiency calculation.
-
-- \\( \mathbf{C}^{aux\\_ out}_a \subseteq \mathbf{C} \\): Set of auxiliary output commodities for
-  asset \\( a \\) (e.g., specific emissions, waste streams) whose production is typically
-  proportional to \\( act[a,r,t] \\) but which are not counted in the efficiency calculation for the
-  primary products.
-
-### B.2. Parameters (for \\( a \in \mathbf{A}^{flex} \\))
-
-These parameters define the technical and economic behavior of flexible assets.
-
-- \\( \eta[a] \\): The overall process efficiency (\\( \in (0,1] \\)) of flexible asset \\( a \\),
-  relating total common units of outputs in \\( \mathbf{C}^{eff\\_out}_a \\) to inputs in \\(
-  \mathbf{C}^{eff\\_in}_a \\).
-
-- \\( factor_{CU}[c] \\): A commodity-specific factor to convert its native physical units (e.g.,
-  tonnes, m³) to a common unit (e.g., MWh of energy content, or tonnes of mass if it's a mass
-  balance) used for consistent efficiency and input/output share calculations.
-
-- \\( RefEffOutPerAct[a] \\): Reference Total Efficiency-constrained Output per unit of Activity.
-  This crucial parameter defines the total quantity of efficiency-constrained outputs (summed in
-  common units using \\( factor_{CU}[c] \\)) that are produced when asset \\( a \\) operates at one
-  unit of its generic activity level \\( act[a,r,t] \\).
-
-- \\( minInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Minimum fractional share
-  of input commodity \\( c \\) (in common units) relative to the total efficiency-constrained input
-  (in common units).
-
-- \\( maxInputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ in}_a \\)): Maximum fractional share
-  for input \\( c \\).
-
-- \\( minOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Minimum fractional
-  share of output commodity \\( c \\) (in common units) relative to the total efficiency-constrained
-  output.
-
-- \\( maxOutputShare[a,c] \\) (for \\( c \in \mathbf{C}^{eff\\_ out}_a \\)): Maximum fractional
-  share for output \\( c \\).
-
-- \\( coeff_{aux\\_ in}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ in}_a \\)): Quantity of auxiliary
-  input \\( c \\) consumed per unit of \\( act[a,r,t] \\).
-
-- \\( coeff_{aux\\_ out}[a,c] \\) (for \\( c \in \mathbf{C}^{aux\\_ out}_a \\)): Quantity of
-  auxiliary output \\( c \\) produced per unit of \\( act[a,r,t] \\).
-
-### B.3. Decision Variables (for \\( a \in \mathbf{A}^{flex} \\))
-
-These variables represent the operational choices for flexible assets.
-
-- \\( act[a,r,t]\ge0 \\): Generic activity level of flexible asset \\( a \\) (linked to its \\(
-  capacity[a,r] \\)).
-
-- \\( InputSpec[a,c,r,t]\ge0 \quad \forall c \in \mathbf{C}^{eff\\_ in}\_a \\): Actual amount of
-  efficiency-constrained input commodity \\( c \\) consumed by asset \\( a \\) in region \\( r \\),
-  time \\( t \\) (in its native physical units).
-
-- \\( OutputSpec[a,c,r,t]\ge0 \quad \forall c \in \mathbf{C}^{eff\\_ out}\_a \\): Actual amount of
-  efficiency-constrained output commodity \\( c \\) produced by asset \\( a \\) in region \\( r \\),
-  time \\( t \\) (in its native physical units).
-
-### B.4. Objective Contribution (for \\( a \in \mathbf{A}^{flex} \\))
-
-The cost contribution from flexible assets includes costs related to their generic activity,
-specific costs for efficiency-constrained inputs and outputs (if defined separately from system
-commodity values), and costs/revenues for auxiliary inputs and outputs.
+The objective is to minimise the total operating cost of the energy system:
 
 \\[
-  \begin{aligned}
-    &act[a,r,t] \cdot cost\_{var}[a,r,t] \\\\
-    &+ \sum\_{c \in \mathbf{C}^{eff\\_ in}\_a} InputSpec[a,c,r,t] \cdot cost\_{input}[a,c] \\\\
-    &+ \sum\_{c \in \mathbf{C}^{eff\\_ out}\_a} OutputSpec[a,c,r,t] \cdot cost\_{output}[a,c] \\\\
-    &+ \sum\_{c \in \mathbf{C}^{aux\\_ in}\_a} (act[a,r,t] \cdot coeff\_{aux\\_ in}[a,c])
-      \cdot cost\_{input}[a,c] \\\\
-    &+ \sum\_{c \in \mathbf{C}^{aux\\_ out}\_a} (act[a,r,t] \cdot coeff\_{aux\\_ out}[a,c])
-      \cdot cost\_{output}[a,c] \\\\
-  \end{aligned}
+  \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} \mathrm{Activity}\_{a, t} \cdot
+  \mathrm{Cost}\_{\mathrm{Activity},a,t}
 \\]
 
-### B.5. Constraints (for \\( a \in \mathbf{A}^{flex}, r \in \mathbf{R}, t \in \mathbf{T} \\))
+### Activity Cost Coefficient \\( \mathrm{Cost}_{\mathrm{Activity},a,t} \\)
 
-These rules govern the internal operation and conversion process of flexible assets. Let \\(
-ActualTotalEffOutputCU[a,r,t] = RefEffOutPerAct[a] \cdot act[a,r,t] \\) (This is the total
-efficiency-constrained output in common units). Let \\( ActualTotalEffInputCU[a,r,t] =
-(RefEffOutPerAct[a] / \eta[a]) \cdot act[a,r,t] \\) (This is the total efficiency-constrained input
-in common units, derived from the output and efficiency).
-
-- **Capacity & Availability:** Standard capacity and availability constraints (as in A.4) apply to
-  the generic activity variable \\( act[a,r,t] \\) of the flexible asset.
-
-- **Total Efficiency-Constrained Input Definition:** The sum of all specific efficiency-constrained
-  inputs, when converted to common units by \\( factor_{CU}[c] \\), must equal the total
-  efficiency-constrained input derived from \\( act[a,r,t] \\) and the asset's efficiency:
-
-  \\[
-    \sum\_{c \in \mathbf{C}^{eff\\_ in}\_a} InputSpec[a,c,r,t] \cdot factor\_{CU}[c]
-      = ActualTotalEffInputCU[a,r,t]
-  \\]
-
-- **Total Efficiency-Constrained Output Definition:** Similarly, the sum of all specific main
-  outputs (in common units) must equal the total defined by \\( act[a,r,t] \\) and the reference
-  output parameter:
-
-  \\[
-    \sum\_{c \in \mathbf{C}^{eff\\_out}\_a} OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
-      = ActualTotalEffOutputCU[a,r,t]
-  \\]
-
-- **Input Share Constraints** (for each \\( c \in \mathbf{C}^{eff\\_in}_a \\)): Ensure that each
-  individual efficiency-constrained input (in common units) stays within its defined minimum (\\(
-  minInputShare[a,c] \\)) and maximum (\\( maxInputShare[a,c] \\)) fractional share of the \\(
-  ActualTotalEffInputCU[a,r,t] \\).
-
-  \\[
-    \begin{aligned}
-      InputSpec[a,c,r,t] \cdot factor\_{CU}[c]
-        &\ge minInputShare[a,c] \cdot ActualTotalEffInputCU[a,r,t] \\\\
-      InputSpec[a,c,r,t] \cdot factor\_{CU}[c]
-        &\le maxInputShare[a,c] \cdot ActualTotalEffInputCU[a,r,t]
-    \end{aligned}
-  \\]
-
-- **Output Share Constraints** (for each \\( c \in \mathbf{C}^{eff\\_out}_a \\)): Ensure that each
-  individual efficiency-constrained output (in common units) stays within its defined minimum (\\(
-  minOutputShare[a,c] \\)) and maximum (\\( maxOutputShare[a,c] \\)) fractional share of the \\(
-  ActualTotalEffOutputCU[a,r,t] \\).
-
-  \\[
-    \begin{aligned}
-      OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
-        &\ge minOutputShare[a,c] \cdot ActualTotalEffOutputCU[a,r,t] \\\\
-      OutputSpec[a,c,r,t] \cdot factor\_{CU}[c]
-        &\le maxOutputShare[a,c] \cdot ActualTotalEffOutputCU[a,r,t]
-    \end{aligned}
-  \\]
-
-## C. Full Model Construction
-
-> Note: This section includes references to many features that are not described elsewhere in this
-> document or implemented yet (e.g. region-to-region trade), but these are included for
-> completeness. This represents the roadmap for future MUSE2 development.
-
-This section describes how all preceding components are integrated to form the complete dispatch
-optimisation problem.
-
-### C.1. Objective Function
-
-The overall objective is to minimise the total system cost, which is the sum of all operational
-costs from assets (standard and flexible), financial impacts from policy scopes (taxes minus
-credits), costs of inter-regional trade, costs of pool-based trade, and importantly, the high
-economic penalties associated with any unserved demand for critical commodities:
+The cost per unit of activity for asset \\( a \\) in time slice \\( t \\) is composed of variable
+operating costs, flow costs, and levies:
 
 \\[
-  \begin{aligned}
-    \text{Minimise: } &(\text{Core Asset Operational Costs from A.3 and B.4}) \\\\
-    &+ \sum_{c \in \mathbf{C}^{VoLL},r,t} UnmetD[c,r,t] \cdot VoLL[c,r]
-    \quad \text{(Penalty for Unserved Demand)}
-  \end{aligned}
+  \mathrm{Cost}\_{\mathrm{Activity},a,t} = \mathrm{VariableOpex}\_a +
+  \sum\_{f \in \mathrm{Flows}\_a} |f\_{\mathrm{coeff}}| \cdot
+  \left( f\_{\mathrm{cost}} + \mathrm{Levy}\_{f,t} \right)
 \\]
 
-Note that the unmet demand variables (\\( UnmetD[c,r,t] \\)) are normally not included in the
-optimisation and are currently only used to diagnose the source of errors when running the model.
+- \\( \mathrm{VariableOpex} \\): The non-fuel variable O&M cost of the process.
+- \\( f_{\mathrm{coeff}} \\): The flow coefficient for a commodity flow associated with the asset
+(positive for output/production, negative for input/consumption).
+- \\( f_{\mathrm{cost}} \\): The cost per unit of commodity flow.
+- \\( \mathrm{Levy}_{f,t} \\): The regional levy (or subsidy, if negative) per unit of commodity flow
+in time slice \\( t \\).
 
-### C.2. Constraints
+## Constraints
 
-The complete set of constraints that the optimisation must satisfy includes:
+### Asset Activity Limits
 
-- Capacity & Availability constraints for all assets \\( a \in \mathbf{A} \\)
-  (as per [A.4] and [B.5])
-
-- [Flexible Asset operational constraints][B.5]
-
-[A.4]: #a4-constraints-capacity--availability-for-standard-assets--a-in-mathbfastd-
-[B.5]: #b5-constraints-for--a-in-mathbfaflex-r-in-mathbfr-t-in-mathbft-
-
-#### Demand Satisfaction for \\( c\in \mathbf{C}^{\mathrm{SVD}} \\)
-
-These constraints ensure that exogenously defined final demands for SVDs are met in each region \\(
-r \\) and time slice \\( t \\), or any shortfall is explicitly accounted for.
-
-For all \\( r,t,c \in \mathbf{C}^{\mathrm{SVD}} \\): Let \\( TotalSystemProduction_{SVD}[c,r,t] \\)
-be the sum of all production of \\( c \\) from standard assets (\\( output_{coeff}[a,c]\\,act[a,r,t]
-\\)) and flexible assets (the relevant \\( OutputSpec[a,c,r,t] \\) if \\( c \in
-\mathbf{C}\_a^{eff\\_out} \\), or \\( act[a,r,t] \cdot coeff\_{aux\\_out}[a,c] \\) if \\( c \in
-\mathbf{C}^{aux\\_out}\_a \\)).
-
-Let \\( NetImports_{SVD}[c,r,t] \\) be net imports of \\( c \\) from R2R and Pool trade if SVDs are
-tradeable. If \\( c \in \mathbf{C}^{VoLL} \\) (meaning unserved demand for this SVD is permitted at
-a penalty):
+For each asset \\( a \\) and every time slice selection \\( s \\):
 
 \\[
-  TotalSystemProduction_{SVD}[c,r,t] + NetImports_{SVD}[c,r,t] + UnmetD[c,r,t]
-    \ge demand[r,c] \times timeslice\\_ share[c,t]
+  \mathrm{Avail}\_{\mathrm{LB},a,s} \cdot \Delta\_s \cdot \mathrm{Capacity}\_a \cdot \mathrm{cap2act}\_a
+  \le \sum\_{t \in s} \mathrm{Activity}\_{a, t} \le
+  \mathrm{Avail}\_{\mathrm{UB},a,s} \cdot \Delta\_s \cdot \mathrm{Capacity}\_a \cdot \mathrm{cap2act}\_a
 \\]
 
-Else (if SVD \\( c \\) must be strictly met and is not included in \\( \mathbf{C}^{VoLL} \\)):
+where:
+
+- \\( \mathrm{Capacity}_a \\) is the fixed installed capacity of the asset.
+- \\( \mathrm{cap2act}_a \\) is the conversion factor from capacity to activity units.
+- \\( \Delta_s = \sum_{t \in s} \Delta_t \\) is the total duration of selection \\( s \\) as a
+fraction of the year.
+- \\( \mathrm{Avail}\_{\mathrm{LB},a,s} \\) and \\( \mathrm{Avail}\_{\mathrm{UB},a,s} \\) are the
+lower and upper availability fractions from `process_activity_limits.csv`, defaulting to
+\\( 0 \\) and \\( 1 \\) respectively for any selection not explicitly defined.
+
+### Commodity Balance Constraints
+
+For each balanced commodity \\( c \in \mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{SVD}} \\)
+in region \\( r \\) and time slice selection \\( s \\) at the commodity's temporal resolution
+(`time_slice_level`), the sum of production across all assets minus consumption must satisfy
+demands:
 
 \\[
-  TotalSystemProduction_{SVD}[c,r,t] + NetImports_{SVD}[c,r,t]
-    \ge demand[r,c] \times timeslice\\_ share[c,t]
+  \sum_{a \in \mathbf{A}\_r} f_{\mathrm{coeff},a,c} \cdot
+  \sum_{t \in s} \mathrm{Activity}_{a, t} \ge \mathrm{Bound}\_{c, r, s}
 \\]
 
-#### Commodity Balance for \\( c\in \mathbf{C}^{\mathrm{SED}} \\)
+where:
 
-These constraints ensure that for all intermediate SED commodities, total supply equals total demand
-within each region \\( r \\) and for each balancing period defined by \\( balance\\_ level[c,r] \\)
-(e.g., timeslice, seasonal, annual).
+- \\( f_{\mathrm{coeff},a,c} \\) is the flow coefficient of commodity \\( c \\) for asset
+\\( a \\) (positive for outputs, negative for inputs).
+- \\( \mathrm{Bound}\_{c, r, s} \\) is the constraint lower bound:
+  - For **Service Demand** (`SVD`): \\( \mathrm{Demand}\_{c, r, s} \\)
+  - For **Supply-Equals-Demand** (`SED`): \\( 0 \\)
 
-For a timeslice balance (\\( \forall r,t,c \in \mathbf{C}^{\mathrm{SED}} \\)):
+## Shadow Prices
 
-Total Inflows (Local Production by all assets + Imports from other regions and pools + Unserved SED
-if \\( c \in \mathbf{C}^{VoLL} \\)) = Total Outflows (Local Consumption by all assets + Exports to
-other regions).
+The dual values (shadow prices) of the commodity balance constraints represent the marginal cost of
+satisfying an additional unit of demand for that commodity in region \\( r \\) during selection
+ \\( s \\). These shadow prices are critical outputs of the dispatch model and are used to seed and
+ guide investment appraisal in subsequent steps.
+
+---
+
+## Candidate Dispatch Run
+
+After the primary dispatch run, MUSE2 performs a second dispatch run that includes
+**candidate assets** — technologies not yet commissioned but available for investment — alongside
+the existing assets. The purpose of this run is to obtain shadow prices for commodities that are
+not consumed or produced in the primary dispatch solution.
+
+In the primary dispatch, a commodity balance constraint will only have a non-zero shadow price if
+the corresponding constraint is binding (i.e. supply exactly meets demand). For a commodity that is
+neither produced nor consumed by any active asset, the constraint is trivially satisfied and its
+dual value is zero. This gives no signal to the investment model about the potential value of new
+capacity for that commodity.
+
+By including candidate assets in the second run, MUSE2 ensures that every commodity served by at
+least one candidate process has a balance constraint that can be binding, yielding a meaningful
+shadow price. To guarantee a non-zero shadow price even when there is no existing demand for the
+commodity, a small epsilon is added to the lower bound of commodity balance constraints where
+candidate assets are present:
 
 \\[
-  \begin{aligned}
-    &\sum\_{a \in \mathbf{A}^{std}} output_{coeff}[a,c]\\,act[a,r,t]
-      && \text{(Std Asset Production)} \\\\
-    &+ \sum\_{a \in \mathbf{A}^{flex}}
-      \left(
-        \begin{cases}
-          OutputSpec[a,c,r,t] & \text{if } c \in \mathbf{C}^{eff\\_out}\_a \\\\
-          act[a,r,t] \cdot coeff\_{aux\\_out}[a,c] & \text{if } c \in \mathbf{C}^{aux\\_out}\_a \\\\
-          0 & \text{otherwise}
-        \end{cases}
-      \right)
-      && \text{(Flex Asset Production)} \\\\
-    &-\sum\_{a \in \mathbf{A}^{std}} input\_{coeff}[a,c]\\,act[a,r,t]
-      && \text{(Std Asset Consumption)} \\\\
-    &- \sum\_{a \in \mathbf{A}^{flex}}
-      \left(
-        \begin{cases}
-          InputSpec[a,c,r,t] & \text{if } c \in \mathbf{C}^{eff\\_in}\_a \\\\
-          act[a,r,t] \cdot coeff\_{aux\\_in}[a,c] & \text{if } c \in \mathbf{C}^{aux\\_in}\_a \\\\
-          0 & \text{otherwise}
-        \end{cases}
-      \right)
-      && \text{(Flex Asset Consumption)} \\\\
-    &+ \sum\_{r'\neq r, c \in \mathbf{C}^R} ship\_{R2R}[r',r,c,t](1 - loss\_{R2R}[r',r,c,t])
-      && \text{(R2R Imports)} \\\\
-    &+ \sum\_{p, c \in \mathbf{C}^P} ship\_{pool}[p,r,c,t](1 - loss\_{pool}[p,r,c,t])
-      && \text{(Pool Imports)} \\\\
-    &- \sum\_{r'\neq r, c \in \mathbf{C}^R} ship\_{R2R}[r,r',c,t]
-      && \text{(R2R Exports)} \\\\
-    &+ \mathbb{I}(c \in \mathbf{C}^{VoLL}) \cdot UnmetD[c,r,t]
-      && \text{(Unserved SED, if modelled)} \\\\
-    &\ge 0
-  \end{aligned}
+  \mathrm{Bound}\_{c, r, s} = \begin{cases}
+    \max\left( \mathrm{Demand}\_{c, r, s}\, \epsilon \right) &
+      \text{if } c \in \mathbf{C}^{\mathrm{SVD}} \text{ and candidate assets serve } (c, r, s) \\\\
+    \epsilon &
+      \text{if } c \in \mathbf{C}^{\mathrm{SED}} \text{ and candidate assets serve } (c, r, s) \\\\
+    \mathrm{Demand}\_{c, r, s} &
+      \text{if } c \in \mathbf{C}^{\mathrm{SVD}} \\\\
+    0 &
+      \text{if } c \in \mathbf{C}^{\mathrm{SED}}
+  \end{cases}
 \\]
 
-(where \\( \mathbb{I}(c \in \mathbf{C}^{VoLL}) \\) is an indicator function, \\( 1 \\) if \\( c \\)
-is in \\( \mathbf{C}^{VoLL} \\), \\( 0 \\) otherwise. Note that SVDs are not consumed by assets, so
-\\( input_{coeff}[a,c] \\) and related terms for SVDs on the consumption side are zero).
+where \\( \epsilon \\) is the `commodity_balance_epsilon` parameter. The shadow prices from this
+candidate dispatch run are then used to seed and guide investment appraisal in subsequent steps.
+
+---
+
+## Diagnosing Infeasible Models
+
+In practice, a dispatch optimisation run can fail if the problem is **infeasible** — typically
+because the installed asset capacity in the region is insufficient to meet the required exogenous or
+intermediate commodity demands.
+
+To help debug and pinpoint the exact source of failure, MUSE2 employs a diagnostic mechanism using
+**unmet demand variables**:
+
+1. **First-Pass Run:** MUSE2 first attempts to solve the dispatch model in its standard form
+(without unmet demand variables).
+2. **Diagnostic Re-Run:** If the solver reports that the problem is infeasible, MUSE2 automatically
+spawns a second, diagnostic dispatch run. In this run, a set of slack variables representing unmet
+demand, \\( \mathrm{UnmetD}\_{c, r, t} \ge 0 \\), is added to the commodity balance constraints:
+   \\[
+     \sum_{a \in \mathbf{A}\_r} f\_{\mathrm{coeff},a,c} \cdot \sum\_{t \in s}
+     \mathrm{Activity}\_{a, t} +
+     \sum\_{t \in s} \mathrm{UnmetD}\_{c, r, t} \ge \mathrm{Bound}\_{c, r, s}
+   \\]
+3. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is mathematically
+impossible to satisfy it, these variables are heavily penalised in the diagnostic objective function
+using the `value_of_lost_load` parameter (\\( \mathrm{VoLL} \\)):
+   \\[
+     \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} \mathrm{Activity}\_{a, t} \cdot
+      \mathrm{Cost}\_{\mathrm{Activity},a,t} +
+    \mathrm{VoLL} \cdot \sum\_{c, r, t} \mathrm{UnmetD}\_{c, r, t}
+   \\]
+4. **Isolating Shortfalls:** The addition of \\( \mathrm{UnmetD}\_{c, r, t} \\) guarantees that the
+LP remains mathematically feasible. When solved, any time slice, region, or commodity with a
+shortfall will have \\( \mathrm{UnmetD}_{c, r, t} > 0 \\).
+5. **Error Reporting:** MUSE2 scans the solution, identifies all balanced markets \\( (c, r) \\)
+where unmet demand occurred, outputs detailed diagnostic CSV files, and aborts the simulation with
+an error identifying the exact out-of-balance markets.
