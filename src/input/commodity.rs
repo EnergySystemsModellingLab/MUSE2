@@ -2,8 +2,8 @@
 use super::{input_err_msg, read_csv};
 use crate::ISSUES_URL;
 use crate::commodity::{
-    BalanceType, Commodity, CommodityID, CommodityLevyMap, CommodityMap, CommodityType, DemandMap,
-    PricingStrategy,
+    BalanceType, Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityMap,
+    CommodityType, DemandMap, PricingStrategy,
 };
 use crate::model::{ALLOW_DANGEROUS_OPTION_NAME, dangerous_model_options_enabled};
 use crate::region::RegionID;
@@ -16,6 +16,8 @@ use std::path::Path;
 
 mod levy;
 use levy::read_commodity_levies;
+mod constraints;
+use constraints::read_commodity_constraints;
 mod demand;
 use demand::read_demand;
 mod demand_slicing;
@@ -54,6 +56,13 @@ pub fn read_commodities(
     // Read commodities table
     let commodities = read_commodities_file(model_dir)?;
     let commodity_ids = commodities.keys().cloned().collect();
+    let constraints = read_commodity_constraints(
+        model_dir,
+        &commodity_ids,
+        region_ids,
+        time_slice_info,
+        milestone_years,
+    )?;
 
     // Read costs table
     let mut costs = read_commodity_levies(
