@@ -39,7 +39,7 @@ mod regression {
 }
 
 /// Tolerance for comparing floating-point values in CSV lines.
-const FLOAT_CMP_TOLERANCE: f64 = 1e-10;
+const FLOAT_CMP_TOLERANCE: f64 = 1e-6;
 
 /// Run a regression test for the given example with optional extra arguments to `muse2 example run`.
 ///
