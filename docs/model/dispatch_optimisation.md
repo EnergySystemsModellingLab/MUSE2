@@ -112,6 +112,57 @@ satisfying an additional unit of demand for that commodity in region \\( r \\) d
 
 ---
 
+## Secondary Activity Equalisation Solve
+
+In some dispatch runs, multiple activity patterns have identical (or near-identical) total system
+cost. For LP solvers, this is a degenerate optimum: the algorithm returns an extreme-point
+solution, which can concentrate activity in a small subset of assets or time slices even when many
+alternatives have the same primary cost. This can look arbitrary and can vary between otherwise
+similar runs.
+
+To make dispatch patterns more stable and interpretable, MUSE2 can optionally run a second
+lexicographic solve when `dispatch_activity_equalisation` is enabled:
+
+1. Primary solve: minimise total dispatch cost, giving optimal value \\( Z^* \\).
+2. Secondary solve: minimise activity spread, while constraining cost to remain near-optimal:
+   \\[
+     \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}}
+     \mathrm{Activity}\_{a,t} \cdot \mathrm{Cost}\_{\mathrm{Activity},a,t}
+     \le Z^*(1+\tau)
+   \\]
+   where \\( \tau \\) is the `dispatch_activity_equalisation_tolerance` model parameter.
+
+The secondary objective minimises pairwise \\( L_1 \\) differences in utilisation rates \\( u \\)
+(activity as a fraction of the maximum), using auxiliary variables. For each pair
+\\( (i,j) \\) in an equalisation group:
+\\[
+  d_{ij} \ge u_i - u_j,\qquad d_{ij} \ge u_j - u_i
+\\]
+so \\( d_{ij} \\) represents \\( |u_i-u_j| \\). The secondary objective is:
+\\[
+  \mathrm{Minimise } \sum_{(i,j)} d_{ij}
+\\]
+
+Equalisation is applied across two group types:
+
+- Asset groups by commodity, region, and time slice, to spread utilisation across assets with the
+  same primary output commodity in the same market.
+- Time-slice groups within each asset (at annual or seasonal balancing levels), to spread activity
+  across time slices that are not independently balanced.
+
+Assets balanced at day-night level are excluded from the time-slice equalisation groups, since
+their activity is already constrained at that finer resolution.
+
+This secondary solve does not replace the economic objective. Reported dispatch objective values
+remain the primary cost objective \\( Z^* \\); the equalisation objective is only a tie-breaker among
+near-optimal cost solutions.
+
+There is a performance cost. Enabling equalisation adds a second full LP solve plus extra
+auxiliary variables and constraints (pairwise terms grow approximately quadratically with group
+size), which can increase runtime and memory use for large dispatch problems.
+
+---
+
 ## Candidate Dispatch Run
 
 After the primary dispatch run, MUSE2 performs a second dispatch run that includes
