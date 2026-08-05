@@ -11,7 +11,7 @@ The energy system is defined using the following sets:
 
 - \\( r \in \mathbf{R} \\): Regions. Represents distinct geographical areas.
 - \\( t \in \mathbf{T} \\): Time Slices. Discrete operational sub-periods within a year.
-- \\( S \in \mathbf{S} \\): Time Slice Selections. Collections of time slices representing temporal
+- \\( s \in \mathbf{S} \\): Time Slice Selections. Collections of time slices representing temporal
 groupings at different levels (e.g. a single time slice, a season, or the entire year).
 - \\( a \in \mathbf{A} \\): Assets. All commissioned production, consumption, or conversion technologies.
 - \\( c \in \mathbf{C} \\): Commodities. All energy carriers, emissions, or materials, partitioned into:
@@ -25,83 +25,83 @@ groupings at different levels (e.g. a single time slice, a season, or the entire
 
 The dispatch model determines the following variables:
 
-- \\( Activity_{a, t} \ge 0 \\): Activity level of asset \\( a \\) during time slice \\( t \\) (in units
-of activity, e.g. PJ/year or MW).
+- \\( \mathrm{Activity}_{a, t} \ge 0 \\): Activity level of asset \\( a \\) during time slice
+\\( t \\) (in units of activity, e.g. PJ/year or MW).
 
 ## Objective Function
 
 The objective is to minimise the total operating cost of the energy system:
 
 \\[
-  \text{Minimise } \sum_{a \in \mathbf{A}} \sum_{t \in \mathbf{T}} Activity_{a, t} \cdot
-  Cost_{\mathrm{Activity}}(a, t)
+  \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} \mathrm{Activity}\_{a, t} \cdot
+  \mathrm{Cost}\_{\mathrm{Activity},a,t}
 \\]
 
-### Activity Cost Coefficient \\( Cost_{\mathrm{Activity}}(a, t) \\)
+### Activity Cost Coefficient \\( \mathrm{Cost}_{\mathrm{Activity},a,t} \\)
 
 The cost per unit of activity for asset \\( a \\) in time slice \\( t \\) is composed of variable
 operating costs, flow costs, and levies:
 
 \\[
-  Cost\_{\mathrm{Activity}}(a, t) = \text{VariableOpex}\_a +
-  \sum\_{f \in \text{Flows}\_a} |f\_{\mathrm{coeff}}| \cdot
-  \left( f\_{\mathrm{cost}} + \mathrm{levy}\_f(t) \right)
+  \mathrm{Cost}\_{\mathrm{Activity},a,t} = \mathrm{VariableOpex}\_a +
+  \sum\_{f \in \mathrm{Flows}\_a} |f\_{\mathrm{coeff}}| \cdot
+  \left( f\_{\mathrm{cost}} + \mathrm{Levy}\_{f,t} \right)
 \\]
 
-- **VariableOpex**: The non-fuel variable O&M cost of the process.
+- \\( \mathrm{VariableOpex} \\): The non-fuel variable O&M cost of the process.
 - \\( f_{\mathrm{coeff}} \\): The flow coefficient for a commodity flow associated with the asset
 (positive for output/production, negative for input/consumption).
 - \\( f_{\mathrm{cost}} \\): The cost per unit of commodity flow.
-- \\( \mathrm{levy}_f(t) \\): The regional levy (or subsidy, if negative) per unit of commodity flow
+- \\( \mathrm{Levy}_{f,t} \\): The regional levy (or subsidy, if negative) per unit of commodity flow
 in time slice \\( t \\).
 
 ## Constraints
 
 ### Asset Activity Limits
 
-For each asset \\( a \\) and every time slice selection \\( S \\):
+For each asset \\( a \\) and every time slice selection \\( s \\):
 
 \\[
-  Avail\_{\mathrm{LB}}(a, S) \cdot \Delta\_S \cdot Capacity\_a \cdot \text{cap2act}\_a \le
-  \sum\_{t \in S} Activity\_{a, t} \le
-  Avail\_{\mathrm{UB}}(a, S) \cdot \Delta\_S \cdot Capacity\_a \cdot \text{cap2act}\_a
+  \mathrm{Avail}\_{\mathrm{LB},a,s} \cdot \Delta\_s \cdot \mathrm{Capacity}\_a \cdot \mathrm{cap2act}\_a
+  \le \sum\_{t \in s} \mathrm{Activity}\_{a, t} \le
+  \mathrm{Avail}\_{\mathrm{UB},a,s} \cdot \Delta\_s \cdot \mathrm{Capacity}\_a \cdot \mathrm{cap2act}\_a
 \\]
 
 where:
 
-- \\( Capacity_a \\) is the fixed installed capacity of the asset.
-- \\( \text{cap2act}_a \\) is the conversion factor from capacity to activity units.
-- \\( \Delta_S = \sum_{t \in S} \Delta_t \\) is the total duration of selection \\( S \\) as a
+- \\( \mathrm{Capacity}_a \\) is the fixed installed capacity of the asset.
+- \\( \mathrm{cap2act}_a \\) is the conversion factor from capacity to activity units.
+- \\( \Delta_s = \sum_{t \in s} \Delta_t \\) is the total duration of selection \\( s \\) as a
 fraction of the year.
-- \\( Avail_{\mathrm{LB}}(a, S) \\) and \\( Avail_{\mathrm{UB}}(a, S) \\) are the
+- \\( \mathrm{Avail}\_{\mathrm{LB},a,s} \\) and \\( \mathrm{Avail}\_{\mathrm{UB},a,s} \\) are the
 lower and upper availability fractions from `process_activity_limits.csv`, defaulting to
 \\( 0 \\) and \\( 1 \\) respectively for any selection not explicitly defined.
 
 ### Commodity Balance Constraints
 
 For each balanced commodity \\( c \in \mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{SVD}} \\)
-in region \\( r \\) and time slice selection \\( S \\) at the commodity's temporal resolution
+in region \\( r \\) and time slice selection \\( s \\) at the commodity's temporal resolution
 (`time_slice_level`), the sum of production across all assets minus consumption must satisfy
 demands:
 
 \\[
-  \sum_{a \in \mathbf{A}(r)} f_{\mathrm{coeff}}(a, c) \cdot
-  \sum_{t \in S} Activity_{a, t} \ge \text{Bound}_{c, r, S}
+  \sum_{a \in \mathbf{A}\_r} f_{\mathrm{coeff},a,c} \cdot
+  \sum_{t \in s} \mathrm{Activity}_{a, t} \ge \mathrm{Bound}\_{c, r, s}
 \\]
 
 where:
 
-- \\( f_{\mathrm{coeff}}(a, c) \\) is the flow coefficient of commodity \\( c \\) for asset
+- \\( f_{\mathrm{coeff},a,c} \\) is the flow coefficient of commodity \\( c \\) for asset
 \\( a \\) (positive for outputs, negative for inputs).
-- \\( \text{Bound}\_{c, r, S} \\) is the constraint lower bound:
-  - For **Service Demand** (`SVD`): \\( \text{Demand}\_{c,r,S} \\)
+- \\( \mathrm{Bound}\_{c, r, s} \\) is the constraint lower bound:
+  - For **Service Demand** (`SVD`): \\( \mathrm{Demand}\_{c, r, s} \\)
   - For **Supply-Equals-Demand** (`SED`): \\( 0 \\)
 
 ## Shadow Prices
 
 The dual values (shadow prices) of the commodity balance constraints represent the marginal cost of
 satisfying an additional unit of demand for that commodity in region \\( r \\) during selection
- \\( S \\). These shadow prices are critical outputs of the dispatch model and are used to seed and
+ \\( s \\). These shadow prices are critical outputs of the dispatch model and are used to seed and
  guide investment appraisal in subsequent steps.
 
 ---
@@ -126,12 +126,12 @@ commodity, a small epsilon is added to the lower bound of commodity balance cons
 candidate assets are present:
 
 \\[
-  \text{Bound}\_{c, r, S} = \begin{cases}
-    \max\left( \text{Demand}\_{c, r, S}\, \epsilon \right) &
-      \text{if } c \in \mathbf{C}^{\mathrm{SVD}} \text{ and candidate assets serve } (c, r, S) \\\\
+  \mathrm{Bound}\_{c, r, s} = \begin{cases}
+    \max\left( \mathrm{Demand}\_{c, r, s}\, \epsilon \right) &
+      \text{if } c \in \mathbf{C}^{\mathrm{SVD}} \text{ and candidate assets serve } (c, r, s) \\\\
     \epsilon &
-      \text{if } c \in \mathbf{C}^{\mathrm{SED}} \text{ and candidate assets serve } (c, r, S) \\\\
-    \text{Demand}\_{c, r, S} &
+      \text{if } c \in \mathbf{C}^{\mathrm{SED}} \text{ and candidate assets serve } (c, r, s) \\\\
+    \mathrm{Demand}\_{c, r, s} &
       \text{if } c \in \mathbf{C}^{\mathrm{SVD}} \\\\
     0 &
       \text{if } c \in \mathbf{C}^{\mathrm{SED}}
@@ -156,22 +156,23 @@ To help debug and pinpoint the exact source of failure, MUSE2 employs a diagnost
 (without unmet demand variables).
 2. **Diagnostic Re-Run:** If the solver reports that the problem is infeasible, MUSE2 automatically
 spawns a second, diagnostic dispatch run. In this run, a set of slack variables representing unmet
-demand, \\( UnmetD_{c, r, t} \ge 0 \\), is added to the commodity balance constraints:
+demand, \\( \mathrm{UnmetD}\_{c, r, t} \ge 0 \\), is added to the commodity balance constraints:
    \\[
-     \sum_{a \in \mathbf{A}(r)} f_{\mathrm{coeff}}(a, c) \cdot \sum_{t \in S} Activity_{a, t} +
-      \sum_{t \in S} UnmetD_{c, r, t} \ge \text{Bound}_{c, r, S}
+     \sum_{a \in \mathbf{A}\_r} f\_{\mathrm{coeff},a,c} \cdot \sum\_{t \in s}
+     \mathrm{Activity}\_{a, t} +
+     \sum\_{t \in s} \mathrm{UnmetD}\_{c, r, t} \ge \mathrm{Bound}\_{c, r, s}
    \\]
 3. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is physically
 impossible to satisfy it, these variables are heavily penalised in the diagnostic objective function
 using the `value_of_lost_load` parameter (\\( \mathrm{VoLL} \\)):
    \\[
-     \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} Activity\_{a, t} \cdot
-      Cost\_{\mathrm{Activity}}(a, t) +
-    \mathrm{VoLL} \cdot \sum\_{c, r, t} UnmetD\_{c, r, t}
+     \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} \mathrm{Activity}\_{a, t} \cdot
+      \mathrm{Cost}\_{\mathrm{Activity},a,t} +
+    \mathrm{VoLL} \cdot \sum\_{c, r, t} \mathrm{UnmetD}\_{c, r, t}
    \\]
-4. **Isolating Shortfalls:** The addition of \\( UnmetD_{c, r, t} \\) guarantees that the LP remains
-mathematically feasible. When solved, any time slice, region, or commodity with a shortfall
-will have \\( UnmetD_{c, r, t} > 0 \\).
+4. **Isolating Shortfalls:** The addition of \\( \mathrm{UnmetD}\_{c, r, t} \\) guarantees that the
+LP remains mathematically feasible. When solved, any time slice, region, or commodity with a
+shortfall will have \\( \mathrm{UnmetD}_{c, r, t} > 0 \\).
 5. **Error Reporting:** MUSE2 scans the solution, identifies all balanced markets \\( (c, r) \\)
 where unmet demand occurred, outputs detailed diagnostic CSV files, and aborts the simulation with
 an error identifying the exact out-of-balance markets.
