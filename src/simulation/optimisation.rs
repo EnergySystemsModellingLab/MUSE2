@@ -785,7 +785,7 @@ fn activity_balance_level(asset: &AssetRef, muse_model: &Model) -> TimeSliceLeve
 ///
 /// 1. **Asset groups** keyed by `(commodity, region, time_slice)`: for each time slice, equalises
 ///    utilisation across assets with the same primary output in the same region
-///    (`u = activity / capacity`).
+///    (`u = activity / max_activity`).
 /// 2. **Time-slice groups** keyed by the balance level of the asset's primary output commodity:
 ///    - `Annual`: one group per asset covering all time slices in the year.
 ///    - `Season`: one group per `(asset, season)`.
@@ -806,18 +806,20 @@ fn add_activity_equalisation_to_model<'a, I>(
         IndexMap::new();
 
     for asset in assets {
-        // Use initial capacity as proxy; see comment in calculate_activity_coefficient for why
-        // flexible-capacity assets are an approximation here.
-        let cap = asset.total_capacity().value();
-        if cap <= 1e-9 {
+        // Max activity across the year based on capacity (not accounting for availability limits)
+        // For flexible capacity assets, this is the initial capacity, not the actual capacity
+        // variable, as this would introduce a non-linearity. This is an approximation, but should
+        // be reasonable as capacity is bound to within a small range of the initial capacity.
+        let max_annual_activity = asset.max_activity();
+        if max_annual_activity <= Activity(1e-9) {
             continue;
         }
-        let inv_cap = 1.0 / cap;
 
         // Add to commodity/region/time-slice group
         if let Some(primary_output) = asset.primary_output_commodity() {
-            for time_slice in muse_model.time_slice_info.iter_ids() {
+            for (time_slice, fraction) in muse_model.time_slice_info.iter() {
                 let act = variables.get_activity_var(asset, time_slice);
+                let max_activity = max_annual_activity * Dimensionless(fraction.value());
                 groups
                     .entry((
                         primary_output.clone(),
@@ -825,7 +827,7 @@ fn add_activity_equalisation_to_model<'a, I>(
                         time_slice.clone(),
                     ))
                     .or_default()
-                    .push((act, inv_cap));
+                    .push((act, 1.0 / max_activity.value()));
             }
         }
 
@@ -841,13 +843,13 @@ fn add_activity_equalisation_to_model<'a, I>(
             .time_slice_info
             .iter_selections_at_level(balance_level)
         {
-            for (time_slice, _) in selection.iter(&muse_model.time_slice_info) {
+            for (time_slice, fraction) in selection.iter(&muse_model.time_slice_info) {
                 let act = variables.get_activity_var(asset, time_slice);
-                let fraction = muse_model.time_slice_info.time_slices[time_slice].value();
+                let max_activity = max_annual_activity * Dimensionless(fraction.value());
                 ts_groups
                     .entry((asset.clone(), selection.clone()))
                     .or_default()
-                    .push((act, 1.0 / (cap * fraction)));
+                    .push((act, 1.0 / max_activity.value()));
             }
         }
     }
