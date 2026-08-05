@@ -1,4 +1,4 @@
-commodity_constraint,commodity_id,region_id,balance_type,year,time_slice,limits
-commd_constr0,GASPRD,GBR,prod,2020,winter.day,12.34..56.78
-commd_constr1,ELCTRI,GBR,cons,2020,summer,3.14..
-commd_constr2,CO2EMT,GBR,net,2030,annual,..1.618034
+commodity_id,region_id,balance_type,years,time_slice,limits
+GASPRD,GBR,prod,2020,winter.day,12.34..56.78
+ELCTRI,GBR,cons,2020,summer,3.14..
+CO2EMT,GBR,net,2030,annual,..1.618034

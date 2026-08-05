@@ -17,16 +17,14 @@ const COMMODITY_CONSTRAINTS_FILE_NAME: &str = "commodity_constraints.csv";
 /// Constraints for each commodity
 #[derive(PartialEq, Debug, Deserialize)]
 struct CommodityConstraintRaw {
-    /// The type of commodity constraint?
-    commodity_constraint: String,
     /// Unique identifier for the commodity
     commodity_id: String,
     /// Region id
     region_id: String,
     /// Type of balance
     balance_type: BalanceType,
-    /// The year to which the constraint applies
-    year: String,
+    /// The year(s) to which the constraint applies
+    years: String,
     /// The time slice to which the constraint applies
     time_slice: String,
     /// Limits on the value of the commodity
@@ -103,10 +101,9 @@ where
         record.validate()?;
 
         // Parse fields in the record
-        let commodity_constraint = &record.commodity_constraint;
         let commodity_id = commodity_ids.get_id(&record.commodity_id)?;
         let region_id = parse_region_str(&record.region_id, region_ids)?;
-        let year = parse_year_str(&record.year, milestone_years)?;
+        let years = parse_year_str(&record.years, milestone_years)?;
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
         let limits = parse_range(&record.limits, 0.0..=f64::INFINITY)
             .with_context(|| format!("Could not parse availabilities range: {}", record.limits))?;

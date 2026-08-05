@@ -2,9 +2,6 @@ $schema: https://specs.frictionlessdata.io/schemas/table-schema.json
 description: Specifies constraints on commodities.
 
 fields:
-  - name: commodity_constraint
-    type: string
-    description: The name of the commodity constraint
   - name: commodity_id
     type: string
     description: The commodity to which this constraint applies
@@ -14,7 +11,7 @@ fields:
   - name: balance_type
     type: string
     description: The type of balance to which this is applied
-  - name: year
+  - name: years
     type: string
     description: The year(s) to which this entry applies
   - name: time_slice
