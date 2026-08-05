@@ -16,6 +16,9 @@ pub type CommodityMap = IndexMap<CommodityID, Rc<Commodity>>;
 /// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
 pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
 
+/// A map of [`CommodityConstraint`]s, keyed by commodity ID
+pub type CommodityConstraintsMap = HashMap<CommodityID, Rc<CommodityConstraint>>;
+
 /// A map of demand values, keyed by region ID, year and time slice selection
 pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
 
@@ -114,6 +117,12 @@ pub enum PricingStrategy {
     #[serde(rename = "unpriced")]
     Unpriced,
 }
+
+/// A constraint imposed on commodity values
+#[derive(PartialEq, Debug, Clone)]
+pub struct CommodityConstraint {}
+
+impl CommodityConstraint {}
 
 #[cfg(test)]
 mod tests {
