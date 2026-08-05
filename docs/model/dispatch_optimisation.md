@@ -25,7 +25,7 @@ groupings at different levels (e.g. a single time slice, a season, or the entire
 
 The dispatch model determines the following variables:
 
-- \\( act_{a, t} \ge 0 \\): Activity level of asset \\( a \\) during time slice \\( t \\) (in units
+- \\( Activity_{a, t} \ge 0 \\): Activity level of asset \\( a \\) during time slice \\( t \\) (in units
 of activity, e.g. PJ/year or MW).
 
 ## Objective Function
@@ -33,17 +33,17 @@ of activity, e.g. PJ/year or MW).
 The objective is to minimise the total operating cost of the energy system:
 
 \\[
-  \text{Minimise } \sum_{a \in \mathbf{A}} \sum_{t \in \mathbf{T}} act_{a, t} \cdot
-  c_{\mathrm{act}}(a, t)
+  \text{Minimise } \sum_{a \in \mathbf{A}} \sum_{t \in \mathbf{T}} Activity_{a, t} \cdot
+  Cost_{\mathrm{Activity}}(a, t)
 \\]
 
-### Activity Cost Coefficient \\( c_{\mathrm{act}}(a, t) \\)
+### Activity Cost Coefficient \\( Cost_{\mathrm{Activity}}(a, t) \\)
 
 The cost per unit of activity for asset \\( a \\) in time slice \\( t \\) is composed of variable
 operating costs, flow costs, and levies:
 
 \\[
-  c\_{\mathrm{act}}(a, t) = \text{VariableOpex}\_a +
+  Cost\_{\mathrm{Activity}}(a, t) = \text{VariableOpex}\_a +
   \sum\_{f \in \text{Flows}\_a} |f\_{\mathrm{coeff}}| \cdot
   \left( f\_{\mathrm{cost}} + \mathrm{levy}\_f(t) \right)
 \\]
@@ -62,20 +62,20 @@ in time slice \\( t \\).
 For each asset \\( a \\) and every time slice selection \\( S \\):
 
 \\[
-  avail\_{\mathrm{LB}}(a, S) \cdot \Delta\_S \cdot cap\_a \cdot \text{cap2act}\_a \le
-  \sum\_{t \in S} act\_{a, t} \le
-  avail\_{\mathrm{UB}}(a, S) \cdot \Delta\_S \cdot cap\_a \cdot \text{cap2act}\_a
+  Avail\_{\mathrm{LB}}(a, S) \cdot \Delta\_S \cdot Capacity\_a \cdot \text{cap2act}\_a \le
+  \sum\_{t \in S} Activity\_{a, t} \le
+  Avail\_{\mathrm{UB}}(a, S) \cdot \Delta\_S \cdot Capacity\_a \cdot \text{cap2act}\_a
 \\]
 
 where:
 
-- \\( cap_a \\) is the fixed installed capacity of the asset.
+- \\( Capacity_a \\) is the fixed installed capacity of the asset.
 - \\( \text{cap2act}_a \\) is the conversion factor from capacity to activity units.
 - \\( \Delta_S = \sum_{t \in S} \Delta_t \\) is the total duration of selection \\( S \\) as a
 fraction of the year.
-- \\( avail_{\mathrm{LB}}(a, S) \\) and \\( avail_{\mathrm{UB}}(a, S) \\) are the lower and upper
-availability fractions from `process_activity_limits.csv`, defaulting to \\( 0 \\) and \\( 1 \\)
-respectively for any selection not explicitly defined.
+- \\( Avail_{\mathrm{LB}}(a, S) \\) and \\( Avail_{\mathrm{UB}}(a, S) \\) are the
+lower and upper availability fractions from `process_activity_limits.csv`, defaulting to
+\\( 0 \\) and \\( 1 \\) respectively for any selection not explicitly defined.
 
 ### Commodity Balance Constraints
 
@@ -86,7 +86,7 @@ demands:
 
 \\[
   \sum_{a \in \mathbf{A}(r)} f_{\mathrm{coeff}}(a, c) \cdot
-  \sum_{t \in S} act_{a, t} \ge \text{Bound}_{c, r, S}
+  \sum_{t \in S} Activity_{a, t} \ge \text{Bound}_{c, r, S}
 \\]
 
 where:
@@ -158,15 +158,15 @@ To help debug and pinpoint the exact source of failure, MUSE2 employs a diagnost
 spawns a second, diagnostic dispatch run. In this run, a set of slack variables representing unmet
 demand, \\( UnmetD_{c, r, t} \ge 0 \\), is added to the commodity balance constraints:
    \\[
-     \sum_{a \in \mathbf{A}(r)} f_{\mathrm{coeff}}(a, c) \cdot \sum_{t \in S} act_{a, t} +
+     \sum_{a \in \mathbf{A}(r)} f_{\mathrm{coeff}}(a, c) \cdot \sum_{t \in S} Activity_{a, t} +
       \sum_{t \in S} UnmetD_{c, r, t} \ge \text{Bound}_{c, r, S}
    \\]
 3. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is physically
 impossible to satisfy it, these variables are heavily penalised in the diagnostic objective function
 using the `value_of_lost_load` parameter (\\( \mathrm{VoLL} \\)):
    \\[
-     \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} act\_{a, t} \cdot
-      c\_{\mathrm{act}}(a, t) +
+     \text{Minimise } \sum\_{a \in \mathbf{A}} \sum\_{t \in \mathbf{T}} Activity\_{a, t} \cdot
+      Cost\_{\mathrm{Activity}}(a, t) +
     \mathrm{VoLL} \cdot \sum\_{c, r, t} UnmetD\_{c, r, t}
    \\]
 4. **Isolating Shortfalls:** The addition of \\( UnmetD_{c, r, t} \\) guarantees that the LP remains
