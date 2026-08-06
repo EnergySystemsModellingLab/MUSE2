@@ -1,6 +1,6 @@
 //! Code for calculating commodity prices used by the simulation.
 //!
-#![doc = concat!("See <", crate::docs_url!("/model/prices.html"), ">")]
+#![doc = concat!("See <", crate::docs_url!("dev", "model/prices.html"), ">")]
 use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, CommodityType, PricingStrategy};
 use crate::model::Model;
