@@ -134,7 +134,7 @@ pub fn perform_agent_investment(
 /// this for the solver to work.
 ///
 /// **TODO**: these assumptions may need to be revisited, e.g. when we come to storage technologies
-fn flatten_preset_demands_for_year(
+pub fn flatten_preset_demands_for_year(
     commodities: &CommodityMap,
     time_slice_info: &TimeSliceInfo,
     year: u32,
