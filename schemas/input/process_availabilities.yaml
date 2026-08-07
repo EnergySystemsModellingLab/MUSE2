@@ -29,7 +29,7 @@ fields:
       valid year, respectively.
   - name: time_slice
     type: string
-    description: The time slices(s) to which this entry applies
+    description: The time slice(s) to which this entry applies
     notes: |
       Can be a single time slice (e.g. `winter.day`), a season (e.g. `winter`) or `annual`. If a
       season or `annual`, this means that limit will apply to the season/year as a whole.
