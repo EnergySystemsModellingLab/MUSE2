@@ -112,6 +112,44 @@ satisfying an additional unit of demand for that commodity in region \\( r \\) d
 
 ---
 
+## Seasonal Utilisation Penalty
+
+The dispatch objective includes an optional seasonal utilisation penalty. This is a small
+penalty to discourage high utilisation peaks within a season.
+
+For each fixed-capacity asset \\( a \\) and season \\( s \\), MUSE2 introduces a seasonal peak
+variable \\( U_{a,s} \\). For each time slice \\( t \\) in that season, the capacity required to
+support the dispatched activity is:
+
+\\[
+  \\mathrm{CapacityRequired}\_{a,t} =
+  \\frac{\\mathrm{Activity}\_{a,t}}
+  {\\mathrm{cap2act}\_a \\cdot \\Delta\_t}
+\\]
+
+The seasonal peak constraint is then:
+
+\\[
+  U_{a,s} \\geq \\mathrm{CapacityRequired}_{a,t}
+\\]
+
+for every time slice \\( t \\) in season \\( s \\). Thus, \\( U_{a,s} \\) represents the largest
+capacity requirement of the asset across the season. The seasonal peak variables are included in the
+minimisation objective with the seasonal penalty \\(\lambda\\), weighted by the duration of the
+season:
+
+\\[
+  \mathrm{SeasonalPenalty} =
+  \lambda \sum_{a \in \mathbf{A}} \sum_{s \in \mathbf{S}}
+  \Delta_s U_{a,s}
+\\]
+
+The `seasonal_utilisation_penalty` model parameter controls \\( \\lambda \\). It should generally be
+small, so as not to affect the primary optimisation objective. Setting it to zero may result in
+arbitrary concentration of activity within a season.
+
+---
+
 ## Candidate Dispatch Run
 
 After the primary dispatch run, MUSE2 performs a second dispatch run that includes

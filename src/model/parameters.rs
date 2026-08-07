@@ -9,7 +9,7 @@ use crate::input::{
     deserialise_finite_non_negative, deserialise_proportion_nonzero, input_err_msg,
     is_sorted_and_unique, read_toml,
 };
-use crate::units::{Capacity, Dimensionless, Flow, MoneyPerFlow};
+use crate::units::{Capacity, Dimensionless, Flow, MoneyPerCapacityPerYear, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 use log::warn;
@@ -99,6 +99,9 @@ pub struct ModelParameters {
     ///
     /// Currently this only applies to the LCOX appraisal.
     pub value_of_lost_load: MoneyPerFlow,
+    /// Additive penalty per unit of capacity used per year within a season.
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
+    pub seasonal_utilisation_penalty: MoneyPerCapacityPerYear,
     /// The maximum number of iterations to run the "ironing out" step of agent investment for
     pub max_ironing_out_iterations: u32,
     /// The relative tolerance for price convergence in the ironing out loop
@@ -138,6 +141,7 @@ impl Default for ModelParameters {
             capacity_limit_factor: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
+            seasonal_utilisation_penalty: MoneyPerCapacityPerYear(1e-6),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
             capacity_margin: Dimensionless(0.2),
