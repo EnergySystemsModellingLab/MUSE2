@@ -17,7 +17,7 @@ fields:
     notes: A region ID
   - name: time_slice
     type: string
-    description: The time slices(s) to which this entry applies
+    description: The time slice(s) to which this entry applies
     notes: |
       Can be a single time slice (e.g. `winter.day`), a whole season (e.g. `winter`) or `annual`,
       representing the whole year
