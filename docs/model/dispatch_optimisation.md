@@ -83,6 +83,31 @@ fraction of the year.
 lower and upper availability fractions from `process_activity_limits.csv`, defaulting to
 \\( 0 \\) and \\( 1 \\) respectively for any selection not explicitly defined.
 
+### Equal Process Utilisation
+
+Assets representing the same process in the same region must have equal utilisation in each time
+slice. Utilisation is defined as activity divided by the asset's maximum activity:
+
+\\[
+  \\mathrm{Utilisation}\_{a,t} =
+  \\frac{\\mathrm{Activity}\_{a,t}}{\\mathrm{MaxActivity}\_a}
+\\]
+
+The maximum activity of an asset is its installed capacity multiplied by the process's
+capacity-to-activity conversion factor:
+
+\\[
+  \\mathrm{MaxActivity}_a = \\mathrm{Capacity}_a \\cdot \\mathrm{cap2act}_a
+\\]
+
+For every pair of assets \\( a \\) and \\( b \\) representing the same process in the same
+region, and for every time slice \\( t \\), the optimisation model imposes:
+
+\\[
+  \\frac{\\mathrm{Activity}\_{a,t}}{\\mathrm{MaxActivity}\_a} =
+  \\frac{\\mathrm{Activity}\_{b,t}}{\\mathrm{MaxActivity}\_b}
+\\]
+
 ### Commodity Balance Constraints
 
 For each balanced commodity \\( c \in \mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{SVD}} \\)
