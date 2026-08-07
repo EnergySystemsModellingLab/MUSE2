@@ -3,11 +3,13 @@ use super::VariableMap;
 use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, UnitType};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -97,6 +99,8 @@ where
 
     let activity_keys =
         add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
+
+    add_equal_utilisation_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
     // Return constraint keys
     ConstraintKeys {
@@ -328,6 +332,65 @@ where
     }
 
     ActivityKeys { offset, keys }
+}
+
+/// Add constraints requiring assets of the same process in the same region to have equal
+/// utilisation in each time slice.
+///
+/// Flexible-capacity assets are excluded because their maximum activity depends on a decision
+/// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
+/// are not currently used.
+fn add_equal_utilisation_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    time_slice_info: &TimeSliceInfo,
+    assets: I,
+) where
+    I: Iterator<Item = &'a AssetRef> + 'a,
+{
+    // Identify flexible-capacity assets so we can exclude them from the constraints
+    let flexible_assets: HashSet<_> = variables
+        .iter_capacity_vars()
+        .map(|(asset, _)| asset)
+        .collect();
+
+    // Group together assets with the same process and region
+    let mut assets_by_process: IndexMap<(RegionID, ProcessID), Vec<&AssetRef>> = IndexMap::new();
+    for asset in assets.filter(|asset| !flexible_assets.contains(asset)) {
+        assets_by_process
+            .entry((asset.region_id().clone(), asset.process_id().clone()))
+            .or_default()
+            .push(asset);
+    }
+
+    // For each group of assets, add constraints to force equal utilisation in each time slice
+    // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
+    // for a group of n assets)
+    for assets in assets_by_process.into_values() {
+        let Some((reference_asset, others)) = assets.split_first() else {
+            continue;
+        };
+
+        let reference_max = reference_asset.max_activity().value();
+
+        for asset in others {
+            let asset_max = asset.max_activity().value();
+
+            for time_slice in time_slice_info.iter_ids() {
+                // Constraint: (act_a * max_b) - (act_b * max_a) = 0
+                problem.add_row(
+                    0.0..=0.0,
+                    [
+                        (variables.get_activity_var(asset, time_slice), reference_max),
+                        (
+                            variables.get_activity_var(reference_asset, time_slice),
+                            -asset_max,
+                        ),
+                    ],
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
