@@ -407,10 +407,10 @@ milestone_year,run_description,commodity_id,region_id,time_slice,value
 2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,peak.day,5.866536900000001
 2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,peak.peak,5.866536900000001
 2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,peak.evening,5.866536900000001
-2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.night,0.30200000000000005
-2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.day,0.30200000000000005
-2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.peak,0.30200000000000005
-2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.evening,0.30200000000000005
+2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.night,0.302
+2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.day,0.302
+2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.peak,0.302
+2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,summer.evening,0.302
 2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,autumn.night,5.866536900000001
 2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,autumn.day,5.866536900000001
 2030,ironing out iteration 0; final with candidates,RSHEAT,GBR,autumn.peak,5.866536900000001
