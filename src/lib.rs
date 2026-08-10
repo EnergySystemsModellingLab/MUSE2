@@ -11,10 +11,10 @@ macro_rules! docs_url {
         docs_url!("")
     };
     ($suffix:literal) => {
-        docs_url!(env!("CARGO_PKG_VERSION"), $suffix)
+        docs_url!(concat!("v", env!("CARGO_PKG_VERSION")), $suffix)
     };
     ($version:expr, $suffix:literal) => {
-        concat!(env!("CARGO_PKG_HOMEPAGE"), "/v", $version, "/", $suffix)
+        concat!(env!("CARGO_PKG_HOMEPAGE"), "/", $version, "/", $suffix)
     };
 }
 
