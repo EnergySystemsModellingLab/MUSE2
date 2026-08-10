@@ -114,29 +114,31 @@ satisfying an additional unit of demand for that commodity in region \\( r \\) d
 
 ## Seasonal Utilisation Penalty
 
-The dispatch objective includes an optional seasonal utilisation penalty. This is a small
-penalty to discourage high utilisation peaks within a season.
+MUSE2 optionally applies a small penalty to the peak capacity required by each asset within each
+season. This encourages asset activity to be spread across the time slices in a season, rather than
+being concentrated in one or two time slices. This is particularly useful for commodities balanced
+at the seasonal level, where the model may otherwise have no reason to choose one intra-seasonal
+production profile over another. In real-world terms, this represents a preference to avoid
+concentrating an asset’s operation into short periods of high utilisation, which may reduce cycling,
+wear, start-up requirements, or the need to maintain capacity for seasonal peaks.
 
-For each fixed-capacity asset \\( a \\) and season \\( s \\), MUSE2 introduces a seasonal peak
-variable \\( U_{a,s} \\). For each time slice \\( t \\) in that season, the capacity required to
-support the dispatched activity is:
-
-\\[
-  \\mathrm{CapacityRequired}\_{a,t} =
-  \\frac{\\mathrm{Activity}\_{a,t}}
-  {\\mathrm{cap2act}\_a \\cdot \\Delta\_t}
-\\]
-
-The seasonal peak constraint is then:
+For asset \\(a\\) and time slice \\(t\\), the capacity required to support its activity is
 
 \\[
-  U_{a,s} \\geq \\mathrm{CapacityRequired}_{a,t}
+  \mathrm{RequiredCapacity}\_{a,t} =
+  \frac{\mathrm{Activity}\_{a,t}}
+  {\mathrm{cap2act}\_a \cdot \Delta\_t}
 \\]
 
-for every time slice \\( t \\) in season \\( s \\). Thus, \\( U_{a,s} \\) represents the largest
-capacity requirement of the asset across the season. The seasonal peak variables are included in the
-minimisation objective with the seasonal penalty \\(\lambda\\), weighted by the duration of the
-season:
+MUSE2 introduces an auxiliary variable \\(U_{a,s}\\) for each asset and season. This variable
+represents the peak capacity required by the asset during that season. It is constrained by
+
+\\[
+  U_{a,s} \geq \mathrm{RequiredCapacity}_{a,t}
+\\]
+
+for every time slice \\(t\\) in season \\(s\\). The optimisation objective then includes the additional
+term
 
 \\[
   \mathrm{SeasonalPenalty} =
@@ -144,9 +146,13 @@ season:
   \Delta_s U_{a,s}
 \\]
 
-The `seasonal_utilisation_penalty` model parameter controls \\( \\lambda \\). It should generally be
-small, so as not to affect the primary optimisation objective. Setting it to zero may result in
-arbitrary concentration of activity within a season.
+where \\(\lambda\\) is set by the `seasonal_utilisation_penalty` model parameter. A positive value
+encourages a lower peak capacity requirement within each season, while a value of zero disables the
+penalty.
+
+This is a weighted objective term rather than a separate optimisation stage, so \\(\lambda\\) should
+normally be small enough that reducing seasonal peaks does not outweigh meaningful differences in
+operating cost.
 
 ---
 
