@@ -881,17 +881,16 @@ pub fn check_region_year_valid_for_process(
 pub struct UserAsset(#[deref(forward)] AssetRef);
 
 impl UserAsset {
-    /// Create a new [`UserAsset`]
+    /// Create a new [`UserAsset`] with an explicit capacity representation.
     pub fn new(
         agent_id: AgentID,
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
         max_decommission_year: Option<u32>,
     ) -> Result<Self> {
-        check_capacity_valid_for_asset(capacity)?;
-        let unit_size = process.unit_size;
+        check_capacity_valid_for_asset(capacity.total_capacity())?;
         let asset = Asset::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -899,7 +898,7 @@ impl UserAsset {
             },
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            capacity,
             commission_year,
             max_decommission_year,
         )?;
@@ -1330,8 +1329,16 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        let asset =
-            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None).unwrap();
+        let asset_capacity = AssetCapacity::Discrete(1, capacity);
+        let asset = UserAsset::new(
+            agent_id,
+            process.into(),
+            region_id,
+            asset_capacity,
+            2015,
+            None,
+        )
+        .unwrap();
         assert!(asset.id().is_none());
     }
 
@@ -1348,8 +1355,16 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
+        let asset_capacity = AssetCapacity::Discrete(1, capacity);
         assert_error!(
-            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None),
+            UserAsset::new(
+                agent_id,
+                process.into(),
+                region_id,
+                asset_capacity,
+                2015,
+                None
+            ),
             "Capacity must be a finite, positive number"
         );
     }
@@ -1365,7 +1380,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                Capacity(1.0),
+                AssetCapacity::Discrete(1, Capacity(1.0)),
                 2007,
                 None
             ),
@@ -1381,7 +1396,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                Capacity(1.0),
+                AssetCapacity::Discrete(1, Capacity(1.0)),
                 2015,
                 None
             ),
