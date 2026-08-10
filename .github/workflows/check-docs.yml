@@ -13,20 +13,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-tags: true
-          fetch-depth: 0
-      - name: Set user name and email for git
-        run: |
-          # Needed so we can apply patches
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - uses: ./.github/actions/generate-docs
-        with:
-          build: all_with_old
 
       - name: Link Checker
         id: lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          args: "--verbose --no-progress --accept 200,203,503 --exclude-path ^target/ --exclude-path ^docs/ --exclude-path ^book/404.html$ './**/*.md' './**/*.html'"
+          args: "--verbose --no-progress --accept 200,203,503 --root-dir book --exclude-path ^target/ --exclude-path ^docs/ './**/*.md' './**/*.html'"
