@@ -112,15 +112,16 @@ satisfying an additional unit of demand for that commodity in region \\( r \\) d
 
 ---
 
-## Seasonal Utilisation Penalty
+## Seasonal/Annual Utilisation Penalties
 
-MUSE2 optionally applies a small penalty to the peak capacity required by each asset within each
-season. This encourages asset activity to be spread across the time slices in a season, rather than
-being concentrated in one or two time slices. This is particularly useful for commodities balanced
-at the seasonal level, where the model may otherwise have no reason to choose one intra-seasonal
-production profile over another. In real-world terms, this represents a preference to avoid
-concentrating an asset’s operation into short periods of high utilisation, which may reduce cycling,
-wear, start-up requirements, or the need to maintain capacity for seasonal peaks.
+MUSE2 optionally applies small penalties to the peak capacity required by each asset within a season
+and across the whole year. These penalties encourage activity to be distributed across time slices
+within a season and across seasons, respectively. They are particularly useful when commodities are
+balanced at the seasonal/annual levels and the balance constraint otherwise leaves the
+intra-seasonal or inter-seasonal production profile undetermined. In real-world terms, this
+represents a preference to avoid concentrating an asset's operation into short periods of high
+utilisation, which may reduce cycling, wear, start-up requirements, or the need to maintain capacity
+for seasonal peaks.
 
 For asset \\(a\\) and time slice \\(t\\), the capacity required to support its activity is
 
@@ -130,29 +131,40 @@ For asset \\(a\\) and time slice \\(t\\), the capacity required to support its a
   {\mathrm{cap2act}\_a \cdot \Delta\_t}
 \\]
 
-MUSE2 introduces an auxiliary variable \\(U_{a,s}\\) for each asset and season. This variable
-represents the peak capacity required by the asset during that season. It is constrained by
+For each asset and season, MUSE2 introduces an auxiliary variable \\(U_{a,s}\\), representing the
+peak capacity required by the asset during that season. It is constrained by
 
 \\[
   U_{a,s} \geq \mathrm{RequiredCapacity}_{a,t}
 \\]
 
-for every time slice \\(t\\) in season \\(s\\). The optimisation objective then includes the additional
-term
+for every time slice \\(t\\) in season \\(s\\). In addition, MUSE2 introduces an auxiliary variable
+\\(U_{a,\\mathrm{annual}}\\), representing the greatest seasonal peak capacity required by the asset
+during the year. It is constrained by
 
 \\[
-  \mathrm{SeasonalPenalty} =
-  \lambda \sum_{a \in \mathbf{A}} \sum_{s \in \mathbf{S}}
-  \Delta_s U_{a,s}
+  U_{a,\\mathrm{annual}} \\geq U_{a,s}
 \\]
 
-where \\(\lambda\\) is set by the `seasonal_utilisation_penalty` model parameter. A positive value
-encourages a lower peak capacity requirement within each season, while a value of zero disables the
-penalty.
+for every season \\(s\\).
 
-This is a weighted objective term rather than a separate optimisation stage, so \\(\lambda\\) should
-normally be small enough that reducing seasonal peaks does not outweigh meaningful differences in
-operating cost.
+When enabled, the penalties add the following term to the optimisation objective:
+
+\\[
+  \\lambda_{\\mathrm{seasonal}}
+  \\sum_{a \\in \\mathbf{A}} \\sum_{s \\in \\mathbf{S}}
+  \\Delta_s U_{a,s}
+  +
+  \\lambda_{\\mathrm{annual}}
+  \\sum_{a \\in \\mathbf{A}} U_{a,\\mathrm{annual}}
+\\]
+
+Here, \\(\\lambda_{\\mathrm{seasonal}}\\) and \\(\\lambda_{\\mathrm{annual}}\\) are set by the
+`seasonal_utilisation_penalty` and `annual_utilisation_penalty` model parameters, respectively.
+Setting either parameter to zero disables its corresponding penalty. The seasonal parameter controls
+how strongly activity is spread within seasons, while the annual parameter controls how strongly it
+is spread across seasons. Both are weighted objective terms, so their values should be small enough
+that smoothing dispatch does not outweigh meaningful differences in operating cost.
 
 ---
 
