@@ -164,7 +164,8 @@ Here, \\(\\lambda_{\\mathrm{seasonal}}\\) and \\(\\lambda_{\\mathrm{annual}}\\) 
 Setting either parameter to zero disables its corresponding penalty. The seasonal parameter controls
 how strongly activity is spread within seasons, while the annual parameter controls how strongly it
 is spread across seasons. Both are weighted objective terms, so their values should be small enough
-that smoothing dispatch does not outweigh meaningful differences in operating cost.
+that smoothing dispatch does not outweigh meaningful differences in operating cost (default for
+both = `1e-6`).
 
 ---
 

@@ -5,10 +5,9 @@ use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
-use crate::units::{Dimensionless, Flow, MoneyPerCapacityPerYear, UnitType};
+use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
-use std::collections::HashSet;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -128,13 +127,13 @@ fn add_utilisation_peak_constraints<'a, I>(
     let has_annual_penalty =
         model.parameters.annual_utilisation_penalty > MoneyPerCapacityPerYear(0.0);
 
-    // If neither penalties are applied, we can don't need to add any variables and constraints
+    // If neither penalties are applied, we don't need to add any variables and constraints
     if !has_seasonal_penalty && !has_annual_penalty {
         return;
     }
 
     // So long as either penalty is applied, we need to add seasonal peak variables and constraints
-    let seasonal_peak_vars = add_seasonal_peak_variables(problem, model, assets.clone(), variables);
+    let seasonal_peak_vars = add_seasonal_peak_variables(problem, model, assets.clone());
     add_seasonal_peak_constraints(
         problem,
         variables,
@@ -144,7 +143,7 @@ fn add_utilisation_peak_constraints<'a, I>(
 
     // If the annual penalty is applied, we also need to add annual peak variables and constraints
     if has_annual_penalty {
-        let annual_peak_vars = add_annual_peak_variables(problem, model, assets, variables);
+        let annual_peak_vars = add_annual_peak_variables(problem, model, assets);
         add_annual_peak_constraints(
             problem,
             &model.time_slice_info,
@@ -159,27 +158,19 @@ fn add_seasonal_peak_variables<'a, I>(
     problem: &mut Problem,
     model: &Model,
     assets: I,
-    variables: &VariableMap,
 ) -> SeasonalPeakVariableMap
 where
     I: Iterator<Item = &'a AssetRef>,
 {
-    // Identify flexible-capacity assets so we can exclude them from the seasonal peak variables
-    let flexible_assets: HashSet<_> = variables
-        .iter_capacity_vars()
-        .map(|(asset, _)| asset)
-        .collect();
-
-    // Create a variable for each (asset, season) pair, representing the seasonal peak activity
     let mut seasonal_peak_vars = SeasonalPeakVariableMap::new();
-    for asset in assets.filter(|asset| !flexible_assets.contains(asset)) {
+    for asset in assets {
         for (season, duration) in &model.time_slice_info.seasons {
+            // Scale penalty by season duration
             let col_factor = model.parameters.seasonal_utilisation_penalty * *duration;
             let variable = problem.add_column(col_factor.value(), 0.0..);
             seasonal_peak_vars.insert((asset.clone(), season.clone()), variable);
         }
     }
-
     seasonal_peak_vars
 }
 
@@ -188,25 +179,18 @@ fn add_annual_peak_variables<'a, I>(
     problem: &mut Problem,
     model: &Model,
     assets: I,
-    variables: &VariableMap,
 ) -> AnnualPeakVariableMap
 where
     I: Iterator<Item = &'a AssetRef>,
 {
-    // Identify flexible-capacity assets so we can exclude them from the annual peak variables
-    let flexible_assets: HashSet<_> = variables
-        .iter_capacity_vars()
-        .map(|(asset, _)| asset)
-        .collect();
-
-    let mut annual_peak_vars = AnnualPeakVariableMap::new();
-    for asset in assets.filter(|asset| !flexible_assets.contains(asset)) {
-        let variable =
-            problem.add_column(model.parameters.annual_utilisation_penalty.value(), 0.0..);
-        annual_peak_vars.insert(asset.clone(), variable);
-    }
-
-    annual_peak_vars
+    // Penalty is applied over the whole year, so scale by 1 year
+    let col_factor = model.parameters.annual_utilisation_penalty * Year(1.0);
+    assets
+        .map(|asset| {
+            let variable = problem.add_column(col_factor.value(), 0.0..);
+            (asset.clone(), variable)
+        })
+        .collect()
 }
 
 /// Add constraints linking seasonal peak variables to activity variables for each (asset, season) pair.
@@ -220,7 +204,7 @@ fn add_seasonal_peak_constraints(
         let activity_per_capacity = asset.process().capacity_to_activity;
         let season_selection = TimeSliceSelection::Season(season.clone());
         for (time_slice, ts_length) in season_selection.iter(time_slice_info) {
-            let time_slice_fraction = Dimensionless(ts_length.value());
+            let time_slice_fraction = ts_length / Year(1.0);
             let activity_per_capacity_in_time_slice = activity_per_capacity * time_slice_fraction;
             let capacity_required_per_activity = 1.0 / activity_per_capacity_in_time_slice.value();
 
