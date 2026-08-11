@@ -31,9 +31,10 @@ def write_root_404(bookdir: Path) -> None:
         'const path_to_root = "";', 'const path_to_root = "dev/";'
     )
     content = content.replace('var pathToRoot = "";', 'var pathToRoot = "dev/";')
-    content = content.replace(
-        'window.path_to_searchindex_js = "',
-        'window.path_to_searchindex_js = "dev/',
+    content = re.sub(
+        r'(window\.path_to_searchindex_js\s*=\s*")(?!dev/)',
+        r"\1dev/",
+        content,
     )
 
     (bookdir / "404.html").write_text(content, encoding="utf-8")
