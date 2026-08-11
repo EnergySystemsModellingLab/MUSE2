@@ -23,6 +23,17 @@ pub fn get_muse2_stdout(args: &[&str]) -> String {
         .into()
 }
 
+#[allow(dead_code)]
+#[must_use]
+pub fn get_muse2_stderr(args: &[&str]) -> String {
+    let output = muse2_cmd!(args).output().expect("Failed to run muse2");
+    assert!(!output.status.success());
+
+    str::from_utf8(&output.stderr)
+        .expect("Non-unicode chars in stdout")
+        .into()
+}
+
 /// Define a regression test with extra command-line arguments
 #[allow(unused_macros)]
 macro_rules! define_regression_test_with_extra_args {
