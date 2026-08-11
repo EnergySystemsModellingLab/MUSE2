@@ -1,8 +1,8 @@
 /* Allow tables to break out of the text column and use the full page content area */
-@media only screen and (min-width: 1200px) {
+@media only screen {
     .content main .table-wrapper {
-        /* 150px matches .nav-chapters max-width */
-        --_nav-clearance: 150px;
+        /* 100px matches .nav-chapters max-width */
+        --_nav-clearance: 100px;
         --_table-max: calc(100vw - 2 * (var(--page-padding) + 5px) - 2 * var(--_nav-clearance));
         width: max-content;
         max-width: var(--_table-max);
@@ -14,6 +14,20 @@
     /* mdBook adds sidebar-visible to <html> when the sidebar is open */
     .sidebar-visible .content main .table-wrapper {
         --_table-max: calc(100vw - var(--sidebar-width) - 2 * (var(--page-padding) + 5px) - 2 * var(--_nav-clearance));
+    }
+}
+
+/* mdBook hides nav-wide-wrapper when sidebar is open below 1380px */
+@media only screen and (max-width: 1380px) {
+    .sidebar-visible .content main .table-wrapper {
+        --_nav-clearance: 0px;
+    }
+}
+
+/* mdBook hides nav-wide-wrapper when sidebar is closed below 1080px */
+@media only screen and (max-width: 1080px) {
+    .content main .table-wrapper {
+        --_nav-clearance: 0px;
     }
 }
 
