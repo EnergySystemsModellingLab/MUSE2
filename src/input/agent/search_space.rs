@@ -11,11 +11,11 @@ use itertools::{Itertools, iproduct};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 const AGENT_SEARCH_SPACES_FILE_NAME: &str = "agent_search_spaces.csv";
 
-type ProducersMap = HashMap<(CommodityID, RegionID, u32), Rc<Vec<Rc<Process>>>>;
+type ProducersMap = HashMap<(CommodityID, RegionID, u32), Arc<Vec<Arc<Process>>>>;
 
 #[derive(PartialEq, Debug, Deserialize)]
 struct SearchSpaceEntry {
@@ -85,7 +85,7 @@ fn for_each_year_in_search_space<F>(
     mut f: F,
 ) -> Result<()>
 where
-    F: FnMut(CommodityID, RegionID, u32, Rc<Vec<Rc<Process>>>) -> Result<()>,
+    F: FnMut(CommodityID, RegionID, u32, Arc<Vec<Arc<Process>>>) -> Result<()>,
 {
     ensure!(!search_space.is_empty(), "No processes provided");
 
@@ -103,7 +103,7 @@ where
         }
     } else {
         // Check each process ID in turn
-        let search_space: Rc<Vec<_>> = Rc::new(
+        let search_space: Arc<Vec<_>> = Arc::new(
             search_space
                 .split(';')
                 .map(|process_id_str| {
@@ -249,7 +249,7 @@ fn get_producers_map(agents: &AgentMap, processes: &ProcessMap) -> ProducersMap 
                     && process.regions.contains(region_id)
             })
             .cloned();
-        Rc::get_mut(vec).unwrap().extend(producers);
+        Arc::get_mut(vec).unwrap().extend(producers);
     }
 
     map
@@ -272,13 +272,13 @@ mod tests {
     use std::iter;
 
     #[fixture]
-    fn process1(process: Process) -> Rc<Process> {
-        Rc::new(process)
+    fn process1(process: Process) -> Arc<Process> {
+        Arc::new(process)
     }
 
     #[fixture]
-    fn process2(process: Process) -> Rc<Process> {
-        Rc::new(Process {
+    fn process2(process: Process) -> Arc<Process> {
+        Arc::new(Process {
             id: "process2".into(),
             ..process
         })
@@ -316,14 +316,14 @@ mod tests {
         agent: Agent,
         commodity_id: CommodityID,
         region_id: RegionID,
-        process1: Rc<Process>,
-        process2: Rc<Process>,
+        process1: Arc<Process>,
+        process2: Arc<Process>,
     ) {
         let producers = hash_map! {
-            (commodity_id.clone(), region_id.clone(), 2020) => Rc::new(vec![process1.clone()]),
-            (commodity_id.clone(), region_id.clone(), 2030) => Rc::new(vec![process2.clone()])
+            (commodity_id.clone(), region_id.clone(), 2020) => Arc::new(vec![process1.clone()]),
+            (commodity_id.clone(), region_id.clone(), 2030) => Arc::new(vec![process2.clone()])
         };
-        let mut calls: Vec<(u32, Rc<Vec<Rc<Process>>>)> = Vec::new();
+        let mut calls: Vec<(u32, Arc<Vec<Arc<Process>>>)> = Vec::new();
         for_each_year_in_search_space(
             "all",
             &agent,
@@ -354,12 +354,12 @@ mod tests {
         processes: ProcessMap,
     ) {
         let process = processes.values().next().unwrap().clone();
-        let value = Rc::new(vec![process.clone()]);
+        let value = Arc::new(vec![process.clone()]);
         let producers = hash_map! {
             (commodity_id.clone(), region_id.clone(), 2020) => value.clone(),
             (commodity_id.clone(), region_id.clone(), 2030) => value
         };
-        let mut calls: Vec<(u32, Rc<Vec<Rc<Process>>>)> = Vec::new();
+        let mut calls: Vec<(u32, Arc<Vec<Arc<Process>>>)> = Vec::new();
         for_each_year_in_search_space(
             "process1",
             &agent,
@@ -379,7 +379,7 @@ mod tests {
         assert_eq!(calls[0].1.len(), 1);
         assert_eq!(calls[0].1[0].id, process.id);
         // Both years receive the same Rc-wrapped search space
-        assert!(Rc::ptr_eq(&calls[0].1, &calls[1].1));
+        assert!(Arc::ptr_eq(&calls[0].1, &calls[1].1));
     }
 
     #[rstest]
@@ -387,17 +387,17 @@ mod tests {
         agent: Agent,
         commodity_id: CommodityID,
         region_id: RegionID,
-        process1: Rc<Process>,
-        process2: Rc<Process>,
+        process1: Arc<Process>,
+        process2: Arc<Process>,
     ) {
         let producers = hash_map! {
-            (commodity_id.clone(), region_id.clone(), 2020) => Rc::new(vec![process1.clone(), process2.clone()])
+            (commodity_id.clone(), region_id.clone(), 2020) => Arc::new(vec![process1.clone(), process2.clone()])
         };
         let processes: ProcessMap = indexmap! {
             process1.id.clone() => process1.clone(),
             process2.id.clone() => process2.clone(),
         };
-        let mut calls: Vec<(u32, Rc<Vec<Rc<Process>>>)> = Vec::new();
+        let mut calls: Vec<(u32, Arc<Vec<Arc<Process>>>)> = Vec::new();
         for_each_year_in_search_space(
             "process1;process2",
             &agent,

@@ -197,7 +197,7 @@ mod tests {
     use itertools::{Itertools, assert_equal};
     use rstest::{fixture, rstest};
     use std::iter;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[fixture]
     fn user_assets(mut process: Process) -> Vec<UserAsset> {
@@ -212,12 +212,12 @@ mod tests {
         let process_parameter_map = process_parameter_map(process.regions.clone(), process_param);
         process.parameters = process_parameter_map;
 
-        let rc_process = Rc::new(process);
+        let rc_process = Arc::new(process);
         [2020, 2010]
             .map(|year| {
                 UserAsset::new(
                     "agent1".into(),
-                    Rc::clone(&rc_process),
+                    Arc::clone(&rc_process),
                     "GBR".into(),
                     Capacity(1.0),
                     year,
@@ -346,11 +346,11 @@ mod tests {
         let original_count = asset_pool.assets.len();
 
         // Create new non-commissioned assets
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let new_assets = vec![
             Asset::new_ready(
                 "agent2".into(),
-                Rc::clone(&process_rc),
+                Arc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.5),
                 2015,
@@ -359,7 +359,7 @@ mod tests {
             .into(),
             Asset::new_ready(
                 "agent3".into(),
-                Rc::clone(&process_rc),
+                Arc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(2.5),
                 2020,
@@ -425,11 +425,11 @@ mod tests {
         asset_pool.commission_new(2020, &mut user_assets);
 
         // Create new assets that would be out of order if added at the end
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let new_assets = vec![
             Asset::new_ready(
                 "agent_high_id".into(),
-                Rc::clone(&process_rc),
+                Arc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
                 2010,
@@ -438,7 +438,7 @@ mod tests {
             .into(),
             Asset::new_ready(
                 "agent_low_id".into(),
-                Rc::clone(&process_rc),
+                Arc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
                 2015,
@@ -481,11 +481,11 @@ mod tests {
         assert_eq!(asset_pool.next_id, 2); // Should be 2 after commissioning 2 assets
 
         // Create new non-commissioned assets
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
         let new_assets = vec![
             Asset::new_ready(
                 "agent1".into(),
-                Rc::clone(&process_rc),
+                Arc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
                 2015,
@@ -494,7 +494,7 @@ mod tests {
             .into(),
             Asset::new_ready(
                 "agent2".into(),
-                Rc::clone(&process_rc),
+                Arc::clone(&process_rc),
                 "GBR".into(),
                 Capacity(1.0),
                 2020,

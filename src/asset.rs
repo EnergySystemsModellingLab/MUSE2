@@ -21,7 +21,7 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 use std::ops::RangeInclusive;
-use std::rc::Rc;
+use std::sync::Arc;
 
 mod capacity;
 pub use capacity::AssetCapacity;
@@ -91,13 +91,13 @@ pub struct Asset {
     /// The status of the asset
     state: AssetState,
     /// The [`Process`] that this asset corresponds to
-    process: Rc<Process>,
+    process: Arc<Process>,
     /// Activity limits for this asset
-    activity_limits: Rc<ActivityLimits>,
+    activity_limits: Arc<ActivityLimits>,
     /// The commodity flows for this asset
-    flows: Rc<IndexMap<CommodityID, ProcessFlow>>,
+    flows: Arc<IndexMap<CommodityID, ProcessFlow>>,
     /// The [`ProcessParameter`] corresponding to the asset's region and commission year
-    process_parameter: Rc<ProcessParameter>,
+    process_parameter: Arc<ProcessParameter>,
     /// The region in which the asset is located
     region_id: RegionID,
     /// Capacity of asset (for candidates this is a hypothetical capacity which may be altered)
@@ -111,7 +111,7 @@ pub struct Asset {
 impl Asset {
     /// Create a new candidate asset
     pub fn new_candidate(
-        process: Rc<Process>,
+        process: Arc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
@@ -133,7 +133,7 @@ impl Asset {
     /// `candidate_asset_capacity`, regardless of whether the underlying process is divisible or
     /// not.
     pub fn new_candidate_for_dispatch(
-        process: Rc<Process>,
+        process: Arc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
@@ -165,7 +165,7 @@ impl Asset {
     #[cfg(test)]
     pub fn new_ready(
         agent_id: AgentID,
-        process: Rc<Process>,
+        process: Arc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
@@ -191,7 +191,7 @@ impl Asset {
     #[cfg(test)]
     pub fn new_commissioned(
         agent_id: AgentID,
-        process: Rc<Process>,
+        process: Arc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
@@ -214,7 +214,7 @@ impl Asset {
     /// Private helper to create an asset with the given state
     fn new_with_state(
         state: AssetState,
-        process: Rc<Process>,
+        process: Arc<Process>,
         region_id: RegionID,
         capacity: AssetCapacity,
         commission_year: u32,
@@ -884,7 +884,7 @@ impl UserAsset {
     /// Create a new [`UserAsset`]
     pub fn new(
         agent_id: AgentID,
-        process: Rc<Process>,
+        process: Arc<Process>,
         region_id: RegionID,
         capacity: Capacity,
         commission_year: u32,
@@ -951,12 +951,12 @@ fn log_decommissioning(asset: &Asset, num_units: u32, reason: &str) {
 /// otherwise using a combination of other fields which should be unique at all the relevant points
 /// in the simulation.
 #[derive(Clone, Debug, derive_more::Deref, derive_more::From, derive_more::Into)]
-pub struct AssetRef(#[deref(forward)] Rc<Asset>);
+pub struct AssetRef(#[deref(forward)] Arc<Asset>);
 
 impl AssetRef {
     /// Make a mutable reference to the underlying [`Asset`]
     pub fn make_mut(&mut self) -> &mut Asset {
-        Rc::make_mut(&mut self.0)
+        Arc::make_mut(&mut self.0)
     }
 
     /// Get a representation of this [`AssetRef`] that can be used for comparisons
@@ -1135,7 +1135,7 @@ impl AssetRef {
 
 impl From<Asset> for AssetRef {
     fn from(value: Asset) -> Self {
-        Self::from(Rc::new(value))
+        Self::from(Arc::new(value))
     }
 }
 
@@ -1235,7 +1235,7 @@ mod tests {
     use indexmap::indexmap;
     use itertools::assert_equal;
     use rstest::{fixture, rstest};
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     /// A commissioned divisible asset with three units.
     #[fixture]
@@ -1253,20 +1253,20 @@ mod tests {
         time_slice: TimeSliceID,
     ) {
         // Update the process flows using the existing commodity fixture
-        let commodity_rc = Rc::new(svd_commodity);
+        let commodity_rc = Arc::new(svd_commodity);
         let process_flow = ProcessFlow {
-            commodity: Rc::clone(&commodity_rc),
+            commodity: Arc::clone(&commodity_rc),
             coeff: FlowPerActivity(-2.0), // Input
             kind: FlowType::Fixed,
             cost: MoneyPerFlow(0.0),
         };
         let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        let process_flows_map = process_flows_map(process.regions.clone(), Rc::new(process_flows));
+        let process_flows_map = process_flows_map(process.regions.clone(), Arc::new(process_flows));
         process.flows = process_flows_map;
 
         // Create asset
-        let asset =
-            Asset::new_candidate(Rc::new(process), region_id.clone(), Capacity(1.0), 2020).unwrap();
+        let asset = Asset::new_candidate(Arc::new(process), region_id.clone(), Capacity(1.0), 2020)
+            .unwrap();
 
         // Set input prices
         let mut input_prices = PriceMap::default();
@@ -1299,7 +1299,7 @@ mod tests {
     fn asset_with_activity_limits(process_with_activity_limits: Process) -> Asset {
         Asset::new_ready(
             "agent1".into(),
-            Rc::new(process_with_activity_limits),
+            Arc::new(process_with_activity_limits),
             "GBR".into(),
             Capacity(2.0),
             2010,
@@ -1407,14 +1407,14 @@ mod tests {
         assert_eq!(asset_subset.capacity().n_units(), Some(num_units));
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
-        assert_eq!(Rc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
+        assert_eq!(Arc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
         assert_eq!(asset.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
     }
 
     #[rstest]
     fn with_subset_of_units_non_divisible_asset(asset: Asset) {
         let asset = AssetRef::from(asset);
-        assert!(Rc::ptr_eq(
+        assert!(Arc::ptr_eq(
             &asset.0,
             &asset.clone().with_subset_of_units(1).0
         ));
@@ -1516,11 +1516,11 @@ mod tests {
         // Set an addition limit of 3 for (region, year 2015)
         process.investment_constraints.insert(
             (region_id.clone(), 2015),
-            Rc::new(crate::process::ProcessInvestmentConstraint {
+            Arc::new(crate::process::ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(3.0)),
             }),
         );
-        let process_rc = Rc::new(process);
+        let process_rc = Arc::new(process);
 
         // Create a candidate asset with commission year 2015
         let asset =
@@ -1625,7 +1625,7 @@ mod tests {
         let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
         // Requesting the same number of mothballed units is a no-op (the year is ignored)
         let same = asset.clone().with_mothballed_units(2, Some(2099));
-        assert!(Rc::ptr_eq(&asset.0, &same.0));
+        assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
@@ -1681,7 +1681,7 @@ mod tests {
         // `asset_divisble` has no mothballed units, so the original Rc is returned unchanged
         let asset = commissioned_divisible;
         let same = asset.clone().with_no_mothballed_units();
-        assert!(Rc::ptr_eq(&asset.0, &same.0));
+        assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
@@ -1704,7 +1704,7 @@ mod tests {
             .clone()
             .with_decommission_mothballed(2025, 20)
             .unwrap();
-        assert!(Rc::ptr_eq(&asset.0, &result.0));
+        assert!(Arc::ptr_eq(&asset.0, &result.0));
     }
 
     #[rstest]

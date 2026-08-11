@@ -6,12 +6,12 @@ use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 define_id_type! {CommodityID, "commodity ID"}
 
 /// A map of [`Commodity`]s, keyed by commodity ID
-pub type CommodityMap = IndexMap<CommodityID, Rc<Commodity>>;
+pub type CommodityMap = IndexMap<CommodityID, Arc<Commodity>>;
 
 /// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
 pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;

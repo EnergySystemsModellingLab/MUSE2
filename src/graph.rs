@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub mod investment;
 pub mod validate;
@@ -61,7 +61,7 @@ pub enum GraphEdge {
 fn get_flow_for_year(
     process: &Process,
     target: (RegionID, u32),
-) -> Option<Rc<IndexMap<CommodityID, ProcessFlow>>> {
+) -> Option<Arc<IndexMap<CommodityID, ProcessFlow>>> {
     // If its already in the map, we return it
     if process.flows.contains_key(&target) {
         return process.flows.get(&target).cloned();
