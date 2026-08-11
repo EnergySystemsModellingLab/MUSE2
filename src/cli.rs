@@ -6,7 +6,7 @@ use crate::output::{copy_input_files, create_output_directory, get_graphs_dir, g
 use crate::settings::Settings;
 use crate::timeit::{DispatchContext, InvestmentContext, TimeContext};
 use ::log::{info, warn};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -159,6 +159,11 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
         pathbuf = get_output_dir(model_path, settings.results_root)?;
         &pathbuf
     };
+
+    ensure!(
+        !model_path.starts_with(output_path),
+        "Model input data cannot be inside output folder"
+    );
 
     let overwrite =
         create_output_directory(output_path, settings.overwrite).with_context(|| {
