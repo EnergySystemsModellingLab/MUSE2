@@ -978,6 +978,17 @@ impl AssetRef {
         asset
     }
 
+    /// Get an [`AssetRef`] representing a single unit of this asset.
+    pub fn as_single_unit(self) -> Self {
+        let new_num_units = 1;
+        let unit_size = self.capacity().unit_size();
+        let mut asset = self.with_no_mothballed_units();
+        asset
+            .make_mut()
+            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
+        asset
+    }
+
     /// Decommission this asset
     fn decommission(self, reason: &str) {
         log_decommissioning(&self, self.num_units(), reason);

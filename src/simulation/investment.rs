@@ -365,6 +365,7 @@ pub fn select_best_assets(
 
     // Remaining capacity limits for candidate assets
     let mut remaining_candidate_capacities = candidate_investment_limits;
+    remove_candidates_exceeding_limits(&mut opt_assets, &remaining_candidate_capacities);
 
     // Store unit counts for commissioned assets and replace them with single units
     let mut remaining_units = prepare_commissioned_assets_for_reappraisal(&mut opt_assets);
@@ -488,7 +489,7 @@ fn prepare_commissioned_assets_for_reappraisal(assets: &mut [AssetRef]) -> HashM
         let num_units = asset.num_units();
 
         // Replace with single unit as we appraise one unit at a time
-        *asset = asset.clone().with_subset_of_units(1);
+        *asset = asset.clone().as_single_unit();
 
         // Store remaining units
         remaining_units.insert(asset.clone(), num_units);
@@ -500,6 +501,19 @@ fn prepare_commissioned_assets_for_reappraisal(assets: &mut [AssetRef]) -> HashM
 /// Check whether there is any remaining demand that is unmet in any time slice
 fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool {
     demand.values().any(|flow| *flow > absolute_tolerance)
+}
+
+/// Remove candidate assets whose investment limit cannot fund one complete unit.
+fn remove_candidates_exceeding_limits(
+    opt_assets: &mut Vec<AssetRef>,
+    candidate_investment_limits: &HashMap<AssetRef, Capacity>,
+) {
+    opt_assets.retain(|asset| {
+        !asset.is_candidate()
+            || candidate_investment_limits
+                .get(asset)
+                .is_none_or(|limit| *limit >= asset.total_capacity())
+    });
 }
 
 /// Update limits of the chosen asset, if needed, and update both asset options and chosen assets
