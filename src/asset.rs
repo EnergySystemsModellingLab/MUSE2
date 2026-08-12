@@ -1656,7 +1656,7 @@ mod tests {
 
     #[rstest]
     fn with_no_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
-        // `asset_divisble` has no mothballed units, so the original Rc is returned unchanged
+        // `commissioned_multi_unit` has no mothballed units, so the original Rc is returned unchanged
         let asset = commissioned_multi_unit;
         let same = asset.clone().with_no_mothballed_units();
         assert!(Arc::ptr_eq(&asset.0, &same.0));
