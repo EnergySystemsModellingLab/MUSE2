@@ -520,7 +520,7 @@ fn update_assets(
     if best_asset.is_candidate() {
         // Candidate assets: remove capacity from the investment limit, if applicable.
         if let Some(remaining_capacity) = remaining_candidate_capacities.get_mut(&best_asset) {
-            *remaining_capacity -= - best_asset.total_capacity();
+            *remaining_capacity -= best_asset.total_capacity();
 
             // If there's not enough capacity remaining to install any more units, remove the
             // asset from the investment options.
