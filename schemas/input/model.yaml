@@ -56,6 +56,22 @@ properties:
     default: 1e9
     notes: |
       Currently this only applies to the LCOX appraisal.
+  seasonal_utilisation_penalty:
+    type: number
+    description: Penalty per unit of capacity used within a season
+    default: 1e-6
+    notes: |
+      A small additive penalty to discourage assets from using a high capacity-equivalent peak
+      within a season. This should be very small, as it is only intended to break ties between
+      otherwise equivalent solutions.
+  annual_utilisation_penalty:
+    type: number
+    description: Penalty per unit of capacity used across the whole year
+    default: 1e-6
+    notes: |
+      A small additive penalty to discourage assets from using a high capacity-equivalent peak
+      across the year. This should be very small, as it is only intended to break ties between
+      otherwise equivalent solutions.
   max_ironing_out_iterations:
     type: integer
     description: The maximum number of iterations to run the "ironing out" step of agent investment for
