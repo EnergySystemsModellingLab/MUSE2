@@ -165,7 +165,7 @@ struct AssetCapacityRow {
     milestone_year: u32,
     asset_id: AssetID,
     capacity: Capacity,
-    num_units: Option<u32>,
+    num_units: u32,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.

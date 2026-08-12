@@ -112,7 +112,7 @@ where
             ensure!(num_units > 0, "num_units must be positive");
 
             let unit_size = Capacity(asset.capacity.value() / num_units as f64);
-            AssetCapacity::Discrete(num_units, unit_size)
+            AssetCapacity::new(num_units, unit_size)
         } else if let Some(unit_size) = process.unit_size {
             // No unit count was provided, so use the process unit_size to determine
             // how many units are needed to cover the asset's capacity.
@@ -133,10 +133,10 @@ where
             }
 
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            AssetCapacity::Discrete(num_units as u32, unit_size)
+            AssetCapacity::new(num_units as u32, unit_size)
         } else {
             // Without a process unit_size, lack of num_units implies the asset is indivisible.
-            AssetCapacity::Discrete(1, asset.capacity)
+            AssetCapacity::new(1, asset.capacity)
         };
 
         UserAsset::new(

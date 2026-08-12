@@ -5,15 +5,24 @@ use std::ops::{Add, Sub};
 
 /// Capacity of an asset, which may be continuous or a discrete number of indivisible units
 #[derive(Clone, PartialEq, Copy, Debug)]
-pub enum AssetCapacity {
-    /// Continuous capacity
-    Continuous(Capacity),
-    /// Discrete capacity represented by a number of indivisible units
-    /// Stores: (number of units, unit size)
-    Discrete(u32, Capacity),
+pub struct AssetCapacity {
+    /// Number of units
+    num_units: u32,
+    /// Size of each unit
+    unit_size: Capacity,
 }
 
 impl AssetCapacity {
+    /// Create a new `AssetCapacity` with the given number of units and unit size
+    pub fn new(num_units: u32, unit_size: Capacity) -> Self {
+        assert!(unit_size.is_finite(), "Unit size must be a finite number");
+        assert!(num_units > 0, "Number of units must be a positive integer");
+        AssetCapacity {
+            num_units,
+            unit_size,
+        }
+    }
+
     /// Return the smaller of `self` or `other`.
     ///
     /// # Panics
@@ -28,6 +37,16 @@ impl AssetCapacity {
             _ => self,
         }
     }
+
+    /// Returns the number of units in this `AssetCapacity`.
+    pub fn num_units(&self) -> u32 {
+        self.num_units
+    }
+
+    /// Returns the unit size of this `AssetCapacity`.
+    pub fn unit_size(&self) -> Capacity {
+        self.unit_size
+    }
 }
 
 impl Add for AssetCapacity {
@@ -35,15 +54,12 @@ impl Add for AssetCapacity {
 
     // Add two AssetCapacity values together
     fn add(self, rhs: AssetCapacity) -> Self {
-        match (self, rhs) {
-            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous(cap1 + cap2)
-            }
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(units1 + units2, size1)
-            }
-            _ => panic!("Cannot add different types of AssetCapacity ({self:?} and {rhs:?})"),
+        let size1 = self.unit_size;
+        let size2 = rhs.unit_size;
+        Self::check_same_unit_size(size1, size2);
+        AssetCapacity {
+            num_units: self.num_units + rhs.num_units,
+            unit_size: size1,
         }
     }
 }
@@ -53,29 +69,26 @@ impl Sub for AssetCapacity {
 
     // Subtract rhs from self, ensuring that the result is non-negative
     fn sub(self, rhs: AssetCapacity) -> Self {
-        match (self, rhs) {
-            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous((cap1 - cap2).max(Capacity(0.0)))
-            }
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(units1 - units2.min(units1), size1)
-            }
-            _ => panic!("Cannot subtract different types of AssetCapacity ({self:?} and {rhs:?})"),
+        let size1 = self.unit_size;
+        let size2 = rhs.unit_size;
+        Self::check_same_unit_size(size1, size2);
+        assert!(
+            self.num_units >= rhs.num_units,
+            "Cannot subtract a larger AssetCapacity ({rhs:?}) from a smaller one ({self:?})"
+        );
+        AssetCapacity {
+            num_units: self.num_units - rhs.num_units,
+            unit_size: size1,
         }
     }
 }
 
 impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.partial_cmp(b),
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                // NB: Also returns `None` if either is NaN
-                (*size1 == *size2).then(|| units1.cmp(units2))
-            }
-            _ => None,
-        }
+        let size1 = self.unit_size;
+        let size2 = other.unit_size;
+        Self::check_same_unit_size(size1, size2);
+        Some(self.num_units.cmp(&other.num_units))
     }
 }
 
@@ -88,61 +101,9 @@ impl AssetCapacity {
         );
     }
 
-    /// Create an `AssetCapacity` from a total capacity and optional unit size
-    ///
-    /// If a unit size is provided, the capacity is represented as a discrete number of units,
-    /// calculated as the ceiling of (capacity / `unit_size`). If no unit size is provided, the
-    /// capacity is represented as continuous.
-    pub fn from_capacity(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        match unit_size {
-            Some(size) => {
-                let num_units = (capacity / size).value().ceil() as u32;
-                AssetCapacity::Discrete(num_units, size)
-            }
-            None => AssetCapacity::Continuous(capacity),
-        }
-    }
-
-    /// Create an `AssetCapacity` from a total capacity and optional unit size
-    ///
-    /// If a unit size is provided, the capacity is represented as a discrete number of units,
-    /// calculated as the floor of (capacity / `unit_size`). If no unit size is provided, the
-    /// capacity is represented as continuous.
-    pub fn from_capacity_floor(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        match unit_size {
-            Some(size) => {
-                let num_units = (capacity / size).value().floor() as u32;
-                AssetCapacity::Discrete(num_units, size)
-            }
-            None => AssetCapacity::Continuous(capacity),
-        }
-    }
-
     /// Returns the total capacity represented by this `AssetCapacity`.
     pub fn total_capacity(&self) -> Capacity {
-        match self {
-            AssetCapacity::Continuous(cap) => *cap,
-            AssetCapacity::Discrete(units, size) => *size * Dimensionless(*units as f64),
-        }
-    }
-
-    /// Returns the number of units if this is a discrete capacity, or `None` if continuous.
-    pub fn num_units(&self) -> Option<u32> {
-        match self {
-            AssetCapacity::Continuous(_) => None,
-            AssetCapacity::Discrete(units, _) => Some(*units),
-        }
-    }
-
-    /// Asserts that both capacities are the same type (both continuous or both discrete).
-    pub fn assert_same_type(&self, other: AssetCapacity) {
-        assert!(
-            matches!(self, AssetCapacity::Continuous(_))
-                == matches!(other, AssetCapacity::Continuous(_)),
-            "Cannot change capacity type"
-        );
+        self.unit_size * Dimensionless(self.num_units as f64)
     }
 }
 

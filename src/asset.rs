@@ -116,12 +116,11 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            AssetCapacity::new(1, capacity),
             commission_year,
             None,
         )
@@ -142,7 +141,7 @@ impl Asset {
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::Continuous(capacity),
+            AssetCapacity::new(1, capacity),
             commission_year,
             None,
         )
@@ -170,7 +169,6 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -178,7 +176,7 @@ impl Asset {
             },
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            AssetCapacity::new(1, capacity),
             commission_year,
             None,
         )
@@ -196,7 +194,6 @@ impl Asset {
         capacity: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Commissioned {
                 id: AssetID(0),
@@ -205,7 +202,7 @@ impl Asset {
             },
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            AssetCapacity::new(1, capacity),
             commission_year,
             None,
         )
@@ -658,11 +655,6 @@ impl Asset {
         }
     }
 
-    /// Whether this asset is divisible
-    pub fn is_divisible(&self) -> bool {
-        matches!(self.capacity, AssetCapacity::Discrete { .. })
-    }
-
     /// Get the agent ID for this asset, if any
     pub fn agent_id(&self) -> Option<&AgentID> {
         match &self.state {
@@ -691,12 +683,10 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
-        self.capacity().assert_same_type(capacity);
         assert!(
-            self.get_num_mothballed_units() <= capacity.num_units().unwrap_or(1),
+            self.get_num_mothballed_units() <= capacity.num_units(),
             "Cannot set capacity to a smaller number of units than are currently mothballed"
         );
-
         self.capacity = capacity;
     }
 
@@ -747,7 +737,6 @@ impl Asset {
             self.is_candidate(),
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.total_capacity()).unwrap();
         self.state = AssetState::Ready {
             agent_id,
             commission_reason: "selected",
@@ -799,18 +788,8 @@ impl Asset {
     }
 
     /// The number of units this asset represents
-    ///
-    /// If divisible, returns the total number of units, otherwise returns one.
     pub fn num_units(&self) -> u32 {
-        self.capacity().num_units().unwrap_or(1)
-    }
-
-    /// Get the unit size for this asset's capacity (if any)
-    pub fn unit_size(&self) -> Option<Capacity> {
-        match self.capacity() {
-            AssetCapacity::Discrete(_, size) => Some(size),
-            AssetCapacity::Continuous(_) => None,
-        }
+        self.capacity().num_units()
     }
 
     /// For non-commissioned assets, get the maximum capacity permitted to be installed based on the
@@ -821,10 +800,7 @@ impl Asset {
     ///
     /// For divisible assets, the returned capacity will be rounded down to the nearest multiple of
     /// the asset's unit size.
-    pub fn max_installable_capacity(
-        &self,
-        commodity_portion: Dimensionless,
-    ) -> Option<AssetCapacity> {
+    pub fn max_installable_capacity(&self, commodity_portion: Dimensionless) -> Option<Capacity> {
         assert!(
             !self.is_commissioned(),
             "max_installable_capacity can only be called on uncommissioned assets"
@@ -838,7 +814,6 @@ impl Asset {
             .investment_constraints
             .get(&(self.region_id.clone(), self.commission_year))
             .and_then(|c| c.get_addition_limit().map(|l| l * commodity_portion))
-            .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
     }
 }
 
@@ -989,12 +964,8 @@ impl AssetRef {
 
         assert!(new_num_units > 0, "Cannot make an asset with zero units");
 
-        let (max_num_units, unit_size) = match self.capacity() {
-            AssetCapacity::Discrete(max_num_units, unit_size) => (max_num_units, unit_size),
-            AssetCapacity::Continuous(_) => {
-                panic!("Non-divisible assets can only have one unit");
-            }
-        };
+        let max_num_units = self.capacity().num_units();
+        let unit_size = self.capacity().unit_size();
 
         assert!(
             new_num_units <= max_num_units,
@@ -1009,7 +980,7 @@ impl AssetRef {
         let mut asset = self.with_mothballed_units(new_num_mothballed, None);
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::Discrete(new_num_units, unit_size));
+            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
         asset
     }
 

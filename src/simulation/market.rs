@@ -451,13 +451,17 @@ fn get_candidate_assets<'a>(
             // Set capacity of the candidate
             // This will serve as the upper limit when appraising the asset (may later be
             // constrained by process addition limits and demand-limiting capacity)
-            let asset_capacity = if let Some(unit_size) = asset.unit_size() {
-                AssetCapacity::Discrete(1, unit_size)
+            let unit_size = if let Some(unit_size) = asset.process().unit_size {
+                // For processes with a fixed unit size, take this
+                unit_size
             } else {
+                // Otherwise, calculate unit size based on demand for the commodity, scaled by the
+                // capacity_limit_factor.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                AssetCapacity::Continuous(capacity_scale * capacity_limit_factor)
+                capacity_scale * capacity_limit_factor
             };
+            let asset_capacity = AssetCapacity::new(1, unit_size);
             asset.set_capacity(asset_capacity);
             asset.into()
         })
@@ -469,7 +473,7 @@ fn get_candidate_assets<'a>(
 pub fn collect_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
-) -> HashMap<AssetRef, AssetCapacity> {
+) -> HashMap<AssetRef, Capacity> {
     opt_assets
         .iter()
         .filter(|asset| asset.is_candidate())
