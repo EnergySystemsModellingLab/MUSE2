@@ -230,7 +230,7 @@ mod tests {
         mut processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
-        Rc::get_mut(processes.get_mut("process1").unwrap())
+        Arc::get_mut(processes.get_mut("process1").unwrap())
             .unwrap()
             .unit_size = Some(Capacity(4.0));
         let asset = AssetRaw {
