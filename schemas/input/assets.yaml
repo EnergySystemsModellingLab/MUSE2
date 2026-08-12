@@ -15,7 +15,7 @@ fields:
     type: number
     description: The capacity of the asset
     notes: Must be >0
-  - name: n_units
+  - name: num_units
     type: integer
     description: The number of units comprising the asset
     notes: |

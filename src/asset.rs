@@ -693,7 +693,7 @@ impl Asset {
         );
         self.capacity().assert_same_type(capacity);
         assert!(
-            self.get_num_mothballed_units() <= capacity.n_units().unwrap_or(1),
+            self.get_num_mothballed_units() <= capacity.num_units().unwrap_or(1),
             "Cannot set capacity to a smaller number of units than are currently mothballed"
         );
 
@@ -802,7 +802,7 @@ impl Asset {
     ///
     /// If divisible, returns the total number of units, otherwise returns one.
     pub fn num_units(&self) -> u32 {
-        self.capacity().n_units().unwrap_or(1)
+        self.capacity().num_units().unwrap_or(1)
     }
 
     /// Get the unit size for this asset's capacity (if any)
@@ -1419,7 +1419,7 @@ mod tests {
             asset_subset.capacity(),
             AssetCapacity::Discrete(num_units, Capacity(4.0))
         );
-        assert_eq!(asset_subset.capacity().n_units(), Some(num_units));
+        assert_eq!(asset_subset.capacity().num_units(), Some(num_units));
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
         assert_eq!(Arc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
