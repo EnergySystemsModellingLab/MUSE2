@@ -219,7 +219,7 @@ mod tests {
                     "agent1".into(),
                     Arc::clone(&rc_process),
                     "GBR".into(),
-                    AssetCapacity::Discrete(1, Capacity(1.0)),
+                    AssetCapacity::new(1, Capacity(1.0)),
                     year,
                     None,
                 )

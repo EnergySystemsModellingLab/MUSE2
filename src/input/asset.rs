@@ -187,7 +187,7 @@ mod tests {
             "agent1".into(),
             Arc::clone(processes.values().next().unwrap()),
             "GBR".into(),
-            AssetCapacity::Discrete(1, Capacity(1.0)),
+            AssetCapacity::new(1, Capacity(1.0)),
             2010,
             max_decommission_year,
         )
@@ -218,10 +218,7 @@ mod tests {
         let assets =
             read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
 
-        assert_eq!(
-            assets[0].capacity(),
-            AssetCapacity::Discrete(3, Capacity(2.0))
-        );
+        assert_eq!(assets[0].capacity(), AssetCapacity::new(3, Capacity(2.0)));
     }
 
     #[rstest]
@@ -246,10 +243,7 @@ mod tests {
         let assets =
             read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
 
-        assert_eq!(
-            assets[0].capacity(),
-            AssetCapacity::Discrete(3, Capacity(4.0))
-        );
+        assert_eq!(assets[0].capacity(), AssetCapacity::new(3, Capacity(4.0)));
     }
 
     #[rstest]

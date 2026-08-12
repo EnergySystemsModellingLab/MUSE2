@@ -760,7 +760,7 @@ mod tests {
             milestone_year,
             asset_id: asset.id().unwrap(),
             capacity: asset.total_capacity(),
-            num_units: None,
+            num_units: 1,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))

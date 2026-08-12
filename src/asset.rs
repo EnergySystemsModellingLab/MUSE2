@@ -1305,7 +1305,7 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        let asset_capacity = AssetCapacity::Discrete(1, capacity);
+        let asset_capacity = AssetCapacity::new(1, capacity);
         let asset = UserAsset::new(
             agent_id,
             process.into(),
@@ -1331,7 +1331,7 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        let asset_capacity = AssetCapacity::Discrete(1, capacity);
+        let asset_capacity = AssetCapacity::new(1, capacity);
         assert_error!(
             UserAsset::new(
                 agent_id,
@@ -1356,7 +1356,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                AssetCapacity::Discrete(1, Capacity(1.0)),
+                AssetCapacity::new(1, Capacity(1.0)),
                 2007,
                 None
             ),
@@ -1372,7 +1372,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                AssetCapacity::Discrete(1, Capacity(1.0)),
+                AssetCapacity::new(1, Capacity(1.0)),
                 2015,
                 None
             ),
@@ -1393,13 +1393,13 @@ mod tests {
 
         assert_eq!(
             asset_subset.capacity(),
-            AssetCapacity::Discrete(num_units, Capacity(4.0))
+            AssetCapacity::new(num_units, Capacity(4.0))
         );
-        assert_eq!(asset_subset.capacity().num_units(), Some(num_units));
+        assert_eq!(asset_subset.capacity().num_units(), num_units);
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
         assert_eq!(Arc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
-        assert_eq!(asset.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
+        assert_eq!(asset.capacity(), AssetCapacity::new(3, Capacity(4.0)));
     }
 
     #[rstest]
@@ -1409,12 +1409,6 @@ mod tests {
             &asset.0,
             &asset.clone().with_subset_of_units(1).0
         ));
-    }
-
-    #[rstest]
-    #[should_panic(expected = "Non-divisible assets can only have one unit")]
-    fn with_subset_of_units_panics_for_non_divisible_asset(asset: Asset) {
-        AssetRef::from(asset).with_subset_of_units(2);
     }
 
     #[rstest]
@@ -1520,7 +1514,7 @@ mod tests {
 
         // commodity_portion = 0.5 -> limit = 3 * 0.5 = 1.5
         let result = asset.max_installable_capacity(Dimensionless(0.5));
-        assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(1.5))));
+        assert_eq!(result, Some(Capacity(1.5)));
     }
 
     #[rstest]
