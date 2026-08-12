@@ -189,7 +189,7 @@ mod tests {
     use super::super::Asset;
     use super::*;
     use crate::asset::{AssetCapacity, MothballEvent};
-    use crate::fixture::{asset, asset_divisible, process, process_parameter_map};
+    use crate::fixture::{asset, multi_unit_asset, process, process_parameter_map};
     use crate::process::{Process, ProcessParameter};
     use crate::units::{
         Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity, MoneyPerCapacityPerYear,
@@ -259,10 +259,10 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_commission_new_divisible(asset_divisible: Asset) {
-        let commission_year = asset_divisible.commission_year;
+    fn asset_pool_commission_new_divisible(multi_unit_asset: Asset) {
+        let commission_year = multi_unit_asset.commission_year;
         let mut asset_pool = AssetPool::new();
-        let mut user_assets = vec![asset_divisible.into()];
+        let mut user_assets = vec![multi_unit_asset.into()];
         assert!(asset_pool.assets.is_empty());
         asset_pool.commission_new(commission_year, &mut user_assets);
         assert!(user_assets.is_empty());
@@ -352,7 +352,7 @@ mod tests {
                 "agent2".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                Capacity(1.5),
+                AssetCapacity::new(1, Capacity(1.5)),
                 2015,
             )
             .unwrap()
@@ -361,7 +361,7 @@ mod tests {
                 "agent3".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                Capacity(2.5),
+                AssetCapacity::new(1, Capacity(2.5)),
                 2020,
             )
             .unwrap()
@@ -395,7 +395,7 @@ mod tests {
             "agent_new".into(),
             process.into(),
             "GBR".into(),
-            Capacity(3.0),
+            AssetCapacity::new(1, Capacity(3.0)),
             2015,
         )
         .unwrap()
@@ -431,7 +431,7 @@ mod tests {
                 "agent_high_id".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                Capacity(1.0),
+                AssetCapacity::new(1, Capacity(1.0)),
                 2010,
             )
             .unwrap()
@@ -440,7 +440,7 @@ mod tests {
                 "agent_low_id".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                Capacity(1.0),
+                AssetCapacity::new(1, Capacity(1.0)),
                 2015,
             )
             .unwrap()
@@ -487,7 +487,7 @@ mod tests {
                 "agent1".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                Capacity(1.0),
+                AssetCapacity::new(1, Capacity(1.0)),
                 2015,
             )
             .unwrap()
@@ -496,7 +496,7 @@ mod tests {
                 "agent2".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                Capacity(1.0),
+                AssetCapacity::new(1, Capacity(1.0)),
                 2020,
             )
             .unwrap()
@@ -606,7 +606,7 @@ mod tests {
             "agent_new".into(),
             process.into(),
             "GBR".into(),
-            Capacity(1.0),
+            AssetCapacity::new(1, Capacity(1.0)),
             2015,
         )
         .unwrap()
@@ -619,10 +619,10 @@ mod tests {
 
     /// A commissioned divisible asset with three units.
     #[fixture]
-    fn commissioned_divisible(mut asset_divisible: Asset) -> AssetRef {
-        asset_divisible.commission(AssetID(0));
-        assert_eq!(asset_divisible.num_units(), 3);
-        AssetRef::from(asset_divisible)
+    fn commissioned_divisible(mut multi_unit_asset: Asset) -> AssetRef {
+        multi_unit_asset.commission(AssetID(0));
+        assert_eq!(multi_unit_asset.num_units(), 3);
+        AssetRef::from(multi_unit_asset)
     }
 
     #[rstest]

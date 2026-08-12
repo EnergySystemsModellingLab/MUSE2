@@ -164,7 +164,7 @@ impl Asset {
         agent_id: AgentID,
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
@@ -174,7 +174,7 @@ impl Asset {
             },
             process,
             region_id,
-            AssetCapacity::new(1, capacity),
+            capacity,
             commission_year,
             None,
         )
@@ -189,7 +189,7 @@ impl Asset {
         agent_id: AgentID,
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
@@ -200,7 +200,7 @@ impl Asset {
             },
             process,
             region_id,
-            AssetCapacity::new(1, capacity),
+            capacity,
             commission_year,
             None,
         )
@@ -1195,8 +1195,8 @@ mod tests {
     use crate::commodity::Commodity;
     use crate::fixture::{
         agent_id, assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple,
-        asset, asset_divisible, process, process_activity_limits_map, process_flows_map, region_id,
-        svd_commodity, time_slice, time_slice_info,
+        asset, multi_unit_asset, process, process_activity_limits_map, process_flows_map,
+        region_id, svd_commodity, time_slice, time_slice_info,
     };
     use crate::patch::FilePatch;
     use crate::process::{FlowType, Process, ProcessFlow};
@@ -1214,10 +1214,10 @@ mod tests {
 
     /// A commissioned divisible asset with three units.
     #[fixture]
-    fn commissioned_divisible(mut asset_divisible: Asset) -> AssetRef {
-        asset_divisible.commission(AssetID(0));
-        assert_eq!(asset_divisible.num_units(), 3);
-        AssetRef::from(asset_divisible)
+    fn commissioned_divisible(mut multi_unit_asset: Asset) -> AssetRef {
+        multi_unit_asset.commission(AssetID(0));
+        assert_eq!(multi_unit_asset.num_units(), 3);
+        AssetRef::from(multi_unit_asset)
     }
 
     #[rstest]
@@ -1276,7 +1276,7 @@ mod tests {
             "agent1".into(),
             Arc::new(process_with_activity_limits),
             "GBR".into(),
-            Capacity(2.0),
+            AssetCapacity::new(1, Capacity(2.0)),
             2010,
         )
         .unwrap()
@@ -1384,11 +1384,11 @@ mod tests {
     #[case::subset(2, false)]
     #[case::all_all_units(3, true)]
     fn with_subset_of_units(
-        asset_divisible: Asset,
+        multi_unit_asset: Asset,
         #[case] num_units: u32,
         #[case] expect_same_asset: bool,
     ) {
-        let asset = AssetRef::from(asset_divisible);
+        let asset = AssetRef::from(multi_unit_asset);
         let asset_subset = asset.clone().with_subset_of_units(num_units);
 
         assert_eq!(
@@ -1421,7 +1421,7 @@ mod tests {
             "agent1".into(),
             process.into(),
             "GBR".into(),
-            Capacity(1.0),
+            AssetCapacity::new(1, Capacity(1.0)),
             2020,
         )
         .unwrap();

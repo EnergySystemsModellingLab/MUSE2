@@ -348,6 +348,7 @@ pub fn count_equal_and_best_appraisal_outputs(outputs: &[AppraisalOutput]) -> us
 mod tests {
     use super::*;
     use crate::agent::AgentID;
+    use crate::asset::AssetCapacity;
     use crate::fixture::{agent_id, asset, process, region_id};
     use crate::process::Process;
     use crate::region::RegionID;
@@ -400,20 +401,26 @@ mod tests {
 
     #[rstest]
     fn compare_assets_fallback(process: Process, region_id: RegionID, agent_id: AgentID) {
-        let process = Arc::new(process);
         let capacity = Capacity(2.0);
+        let process = Arc::new(process);
         let asset1 = Asset::new_commissioned(
             agent_id.clone(),
             process.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             2015,
         )
         .unwrap();
         let asset2 =
             Asset::new_candidate(process.clone(), region_id.clone(), capacity, 2015).unwrap();
-        let asset3 =
-            Asset::new_commissioned(agent_id, process, region_id.clone(), capacity, 2010).unwrap();
+        let asset3 = Asset::new_commissioned(
+            agent_id,
+            process,
+            region_id.clone(),
+            AssetCapacity::new(1, capacity),
+            2010,
+        )
+        .unwrap();
 
         assert!(compare_asset_fallback(&asset1, &asset1).is_eq());
         assert!(compare_asset_fallback(&asset2, &asset2).is_eq());
@@ -541,7 +548,7 @@ mod tests {
                     agent_id.clone(),
                     process_rc.clone(),
                     region_id.clone(),
-                    capacity,
+                    AssetCapacity::new(1, capacity),
                     year,
                 )
                 .unwrap()
@@ -568,7 +575,7 @@ mod tests {
     #[rstest]
     fn appraisal_sort_maintains_order_when_all_equal(process: Process, region_id: RegionID) {
         let process_rc = Arc::new(process);
-        let capacity = Capacity(10.0);
+        let capacity = AssetCapacity::new(1, Capacity(10.0));
         let commission_year = 2015;
         let agent_ids = ["agent1", "agent2", "agent3"];
 
@@ -616,7 +623,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             2020,
         )
         .unwrap();
@@ -625,7 +632,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             2015,
         )
         .unwrap();
@@ -677,7 +684,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             2020,
         )
         .unwrap();
@@ -686,7 +693,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             2015,
         )
         .unwrap();
@@ -791,7 +798,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             2020,
         )
         .unwrap();
@@ -826,7 +833,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             year,
         )
         .unwrap();
@@ -834,7 +841,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            capacity,
+            AssetCapacity::new(1, capacity),
             year,
         )
         .unwrap();
