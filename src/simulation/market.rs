@@ -462,7 +462,7 @@ fn get_candidate_assets<'a>(
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
                 capacity_scale * capacity_limit_factor
             };
-            let asset_capacity = AssetCapacity::new(1, unit_size);
+            let asset_capacity = AssetCapacity::single(unit_size);
             asset.set_capacity(asset_capacity);
             asset.into()
         })

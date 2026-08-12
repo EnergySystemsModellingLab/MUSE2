@@ -137,7 +137,7 @@ where
         } else {
             // Without a process unit_size, lack of num_units implies the asset is indivisible
             // (consists of a single unit).
-            AssetCapacity::new(1, asset.capacity)
+            AssetCapacity::single(asset.capacity)
         };
 
         UserAsset::new(
@@ -188,7 +188,7 @@ mod tests {
             "agent1".into(),
             Arc::clone(processes.values().next().unwrap()),
             "GBR".into(),
-            AssetCapacity::new(1, Capacity(1.0)),
+            AssetCapacity::single(Capacity(1.0)),
             2010,
             max_decommission_year,
         )

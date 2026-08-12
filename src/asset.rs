@@ -110,17 +110,19 @@ pub struct Asset {
 
 impl Asset {
     /// Create a new candidate asset
+    ///
+    /// These candidates will have a single capacity unit with the given `unit_size`.
     pub fn new_candidate(
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        unit_size: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(unit_size),
             commission_year,
             None,
         )
@@ -132,14 +134,14 @@ impl Asset {
     pub fn new_candidate_for_dispatch(
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        unit_size: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(unit_size),
             commission_year,
             None,
         )
@@ -1276,7 +1278,7 @@ mod tests {
             "agent1".into(),
             Arc::new(process_with_activity_limits),
             "GBR".into(),
-            AssetCapacity::new(1, Capacity(2.0)),
+            AssetCapacity::single(Capacity(2.0)),
             2010,
         )
         .unwrap()
@@ -1305,7 +1307,7 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        let asset_capacity = AssetCapacity::new(1, capacity);
+        let asset_capacity = AssetCapacity::single(capacity);
         let asset = UserAsset::new(
             agent_id,
             process.into(),
@@ -1331,7 +1333,7 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        let asset_capacity = AssetCapacity::new(1, capacity);
+        let asset_capacity = AssetCapacity::single(capacity);
         assert_error!(
             UserAsset::new(
                 agent_id,
@@ -1356,7 +1358,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                AssetCapacity::new(1, Capacity(1.0)),
+                AssetCapacity::single(Capacity(1.0)),
                 2007,
                 None
             ),
@@ -1372,7 +1374,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                AssetCapacity::new(1, Capacity(1.0)),
+                AssetCapacity::single(Capacity(1.0)),
                 2015,
                 None
             ),
@@ -1421,7 +1423,7 @@ mod tests {
             "agent1".into(),
             process.into(),
             "GBR".into(),
-            AssetCapacity::new(1, Capacity(1.0)),
+            AssetCapacity::single(Capacity(1.0)),
             2020,
         )
         .unwrap();

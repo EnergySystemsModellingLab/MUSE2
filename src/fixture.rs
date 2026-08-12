@@ -204,7 +204,7 @@ pub fn asset(process: Process) -> Asset {
         agent_id,
         process.into(),
         region_id,
-        AssetCapacity::new(1, Capacity(2.0)),
+        AssetCapacity::single(Capacity(2.0)),
         commission_year,
     )
     .unwrap()

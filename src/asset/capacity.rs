@@ -23,6 +23,11 @@ impl AssetCapacity {
         }
     }
 
+    /// Create a new `AssetCapacity` with a single unit of the given size
+    pub fn single(unit_size: Capacity) -> Self {
+        Self::new(1, unit_size)
+    }
+
     /// Return the smaller of `self` or `other`.
     ///
     /// # Panics

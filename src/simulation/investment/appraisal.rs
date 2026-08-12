@@ -407,7 +407,7 @@ mod tests {
             agent_id.clone(),
             process.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2015,
         )
         .unwrap();
@@ -417,7 +417,7 @@ mod tests {
             agent_id,
             process,
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2010,
         )
         .unwrap();
@@ -548,7 +548,7 @@ mod tests {
                     agent_id.clone(),
                     process_rc.clone(),
                     region_id.clone(),
-                    AssetCapacity::new(1, capacity),
+                    AssetCapacity::single(capacity),
                     year,
                 )
                 .unwrap()
@@ -575,7 +575,7 @@ mod tests {
     #[rstest]
     fn appraisal_sort_maintains_order_when_all_equal(process: Process, region_id: RegionID) {
         let process_rc = Arc::new(process);
-        let capacity = AssetCapacity::new(1, Capacity(10.0));
+        let capacity = AssetCapacity::single(Capacity(10.0));
         let commission_year = 2015;
         let agent_ids = ["agent1", "agent2", "agent3"];
 
@@ -623,7 +623,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2020,
         )
         .unwrap();
@@ -632,7 +632,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2015,
         )
         .unwrap();
@@ -684,7 +684,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2020,
         )
         .unwrap();
@@ -693,7 +693,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2015,
         )
         .unwrap();
@@ -798,7 +798,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             2020,
         )
         .unwrap();
@@ -833,7 +833,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             year,
         )
         .unwrap();
@@ -841,7 +841,7 @@ mod tests {
             agent_id.clone(),
             process_rc.clone(),
             region_id.clone(),
-            AssetCapacity::new(1, capacity),
+            AssetCapacity::single(capacity),
             year,
         )
         .unwrap();

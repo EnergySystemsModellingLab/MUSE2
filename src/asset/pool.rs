@@ -219,7 +219,7 @@ mod tests {
                     "agent1".into(),
                     Arc::clone(&rc_process),
                     "GBR".into(),
-                    AssetCapacity::new(1, Capacity(1.0)),
+                    AssetCapacity::single(Capacity(1.0)),
                     year,
                     None,
                 )
@@ -352,7 +352,7 @@ mod tests {
                 "agent2".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                AssetCapacity::new(1, Capacity(1.5)),
+                AssetCapacity::single(Capacity(1.5)),
                 2015,
             )
             .unwrap()
@@ -361,7 +361,7 @@ mod tests {
                 "agent3".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                AssetCapacity::new(1, Capacity(2.5)),
+                AssetCapacity::single(Capacity(2.5)),
                 2020,
             )
             .unwrap()
@@ -395,7 +395,7 @@ mod tests {
             "agent_new".into(),
             process.into(),
             "GBR".into(),
-            AssetCapacity::new(1, Capacity(3.0)),
+            AssetCapacity::single(Capacity(3.0)),
             2015,
         )
         .unwrap()
@@ -431,7 +431,7 @@ mod tests {
                 "agent_high_id".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                AssetCapacity::new(1, Capacity(1.0)),
+                AssetCapacity::single(Capacity(1.0)),
                 2010,
             )
             .unwrap()
@@ -440,7 +440,7 @@ mod tests {
                 "agent_low_id".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                AssetCapacity::new(1, Capacity(1.0)),
+                AssetCapacity::single(Capacity(1.0)),
                 2015,
             )
             .unwrap()
@@ -487,7 +487,7 @@ mod tests {
                 "agent1".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                AssetCapacity::new(1, Capacity(1.0)),
+                AssetCapacity::single(Capacity(1.0)),
                 2015,
             )
             .unwrap()
@@ -496,7 +496,7 @@ mod tests {
                 "agent2".into(),
                 Arc::clone(&process_rc),
                 "GBR".into(),
-                AssetCapacity::new(1, Capacity(1.0)),
+                AssetCapacity::single(Capacity(1.0)),
                 2020,
             )
             .unwrap()
@@ -606,7 +606,7 @@ mod tests {
             "agent_new".into(),
             process.into(),
             "GBR".into(),
-            AssetCapacity::new(1, Capacity(1.0)),
+            AssetCapacity::single(Capacity(1.0)),
             2015,
         )
         .unwrap()
