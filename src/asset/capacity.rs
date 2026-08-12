@@ -15,7 +15,10 @@ pub struct AssetCapacity {
 impl AssetCapacity {
     /// Create a new `AssetCapacity` with the given number of units and unit size
     pub fn new(num_units: u32, unit_size: Capacity) -> Self {
-        assert!(unit_size.is_finite(), "Unit size must be a finite number");
+        assert!(
+            unit_size.is_finite() && unit_size.0 >= 0.0,
+            "Unit size must be a finite non-negative number"
+        );
         assert!(num_units > 0, "Number of units must be a positive integer");
         AssetCapacity {
             num_units,
@@ -49,6 +52,19 @@ impl AssetCapacity {
     /// Returns the unit size of this `AssetCapacity`.
     pub fn unit_size(&self) -> Capacity {
         self.unit_size
+    }
+
+    /// Validates that two discrete capacities have the same unit size.
+    fn check_same_unit_size(size1: Capacity, size2: Capacity) {
+        assert_eq!(
+            size1, size2,
+            "Can't perform operation on capacities with different unit sizes ({size1} and {size2})",
+        );
+    }
+
+    /// Returns the total capacity represented by this `AssetCapacity`.
+    pub fn total_capacity(&self) -> Capacity {
+        self.unit_size * Dimensionless(self.num_units as f64)
     }
 }
 
@@ -94,26 +110,45 @@ impl PartialOrd for AssetCapacity {
     }
 }
 
-impl AssetCapacity {
-    /// Validates that two discrete capacities have the same unit size.
-    fn check_same_unit_size(size1: Capacity, size2: Capacity) {
-        assert_eq!(
-            size1, size2,
-            "Can't perform operation on capacities with different unit sizes ({size1} and {size2})",
-        );
-    }
-
-    /// Returns the total capacity represented by this `AssetCapacity`.
-    pub fn total_capacity(&self) -> Capacity {
-        self.unit_size * Dimensionless(self.num_units as f64)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::units::Capacity;
     use rstest::rstest;
+
+    #[rstest]
+    #[case(1, Capacity(1.0), Capacity(1.0))]
+    #[case(2, Capacity(3.5), Capacity(7.0))]
+    #[case(u32::MAX, Capacity(0.0), Capacity(0.0))]
+    fn new_works(
+        #[case] num_units: u32,
+        #[case] unit_size: Capacity,
+        #[case] expected_total_capacity: Capacity,
+    ) {
+        let capacity = AssetCapacity::new(num_units, unit_size);
+
+        assert_eq!(capacity.num_units(), num_units);
+        assert_eq!(capacity.unit_size(), unit_size);
+        assert_eq!(capacity.total_capacity(), expected_total_capacity);
+    }
+
+    #[rstest]
+    #[case(0, Capacity(1.0))]
+    #[should_panic(expected = "Number of units must be a positive integer")]
+    fn new_rejects_zero_units(#[case] num_units: u32, #[case] unit_size: Capacity) {
+        let _ = AssetCapacity::new(num_units, unit_size);
+    }
+
+    #[rstest]
+    #[case(Capacity(-1.0))]
+    #[case(Capacity(f64::INFINITY))]
+    #[case(Capacity(f64::NEG_INFINITY))]
+    #[case(Capacity(f64::NAN))]
+    #[should_panic(expected = "Unit size must be a finite non-negative number")]
+    fn new_rejects_non_finite_unit_size(#[case] unit_size: Capacity) {
+        let num_units = 1;
+        let _ = AssetCapacity::new(num_units, unit_size);
+    }
 
     #[rstest]
     #[case::less(
