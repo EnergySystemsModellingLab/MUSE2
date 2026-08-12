@@ -1322,17 +1322,14 @@ mod tests {
 
     #[rstest]
     #[case(Capacity(0.0))]
-    #[case(Capacity(-0.01))]
-    #[case(Capacity(-1.0))]
-    #[case(Capacity(f64::NAN))]
-    #[case(Capacity(f64::INFINITY))]
-    #[case(Capacity(f64::NEG_INFINITY))]
-    fn user_asset_new_invalid_capacity(
+    fn user_asset_new_zero_capacity(
         agent_id: AgentID,
         process: Process,
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
+        // It's permitted to create an AssetCapacity with zero unit_size, but this should be
+        // rejected for UserAsset's
         let asset_capacity = AssetCapacity::single(capacity);
         assert_error!(
             UserAsset::new(
