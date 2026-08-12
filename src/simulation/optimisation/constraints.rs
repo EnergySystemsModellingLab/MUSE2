@@ -418,8 +418,8 @@ where
                 let mut upper_limit = limits.end().value();
                 let mut lower_limit = limits.start().value();
 
-                // Asset capacity is discrete. The capacity variable represents number of
-                // units, so we need to multiply the per-capacity limits by the unit size.
+                // The capacity variable represents number of units, so we need to multiply the
+                // per-capacity limits by the unit size.
                 let unit_size = asset.capacity().unit_size();
                 upper_limit *= unit_size.value();
                 lower_limit *= unit_size.value();

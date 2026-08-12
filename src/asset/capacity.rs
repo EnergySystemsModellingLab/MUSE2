@@ -3,7 +3,7 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
-/// Capacity of an asset, which may be continuous or a discrete number of indivisible units
+/// Capacity of an asset, expressed in terms of a number of discrete units of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct AssetCapacity {
     /// Number of units

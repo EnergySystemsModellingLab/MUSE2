@@ -366,7 +366,7 @@ pub fn select_best_assets(
     // Remaining capacity limits for candidate assets
     let mut remaining_candidate_capacities = candidate_investment_limits;
 
-    // Store unit counts for commissioned divisible assets and replace them with single units
+    // Store unit counts for commissioned assets and replace them with single units
     let mut remaining_units = prepare_commissioned_assets_for_reappraisal(&mut opt_assets);
 
     // Calculate coefficients for all asset options according to the agent's objective
@@ -477,10 +477,10 @@ pub fn select_best_assets(
     Ok(best_assets)
 }
 
-/// Prepare divisible assets for appraisal.
+/// Prepare existing assets for reappraisal.
 ///
-/// Divisible assets are replaced in `assets` with an asset representing a single unit, as they are
-/// appraised one unit at a time. Their remaining number of units is stored in `remaining_units`.
+/// Assets are replaced in `assets` with an asset representing a single unit, as they are
+/// appraised one unit at a time. Returns a map from the asset to its original number of units.
 fn prepare_commissioned_assets_for_reappraisal(assets: &mut [AssetRef]) -> HashMap<AssetRef, u32> {
     let mut remaining_units = HashMap::new();
 
@@ -534,7 +534,7 @@ fn update_assets(
             }
         }
     } else {
-        // Commissioned divisible assets: we've appraised a single unit, so remove one unit from the
+        // Commissioned assets: we've appraised a single unit, so remove one unit from the
         // remaining units count for this asset.
         let remaining = remaining_units.get_mut(&best_asset).unwrap();
         *remaining = remaining.saturating_sub(1);

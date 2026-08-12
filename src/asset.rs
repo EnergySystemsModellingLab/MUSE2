@@ -128,9 +128,7 @@ impl Asset {
 
     /// Create a new candidate for use in dispatch runs
     ///
-    /// These candidates will have a single continuous capacity specified by the model parameter
-    /// `candidate_asset_capacity`, regardless of whether the underlying process is divisible or
-    /// not.
+    /// These candidates will have a single capacity unit of size `candidate_asset_capacity`
     pub fn new_candidate_for_dispatch(
         process: Arc<Process>,
         region_id: RegionID,
@@ -797,9 +795,6 @@ impl Asset {
     ///
     /// The limit is taken from the process's investment constraints for the asset's region and
     /// commission year, and the portion of the commodity demand being considered.
-    ///
-    /// For divisible assets, the returned capacity will be rounded down to the nearest multiple of
-    /// the asset's unit size.
     pub fn max_installable_capacity(&self, commodity_portion: Dimensionless) -> Option<Capacity> {
         assert!(
             !self.is_commissioned(),
@@ -949,10 +944,9 @@ impl AssetRef {
 
     /// Get an [`AssetRef`] representing a subset of this asset's units.
     ///
-    /// For non-divisible assets, `new_num_units` must be one. If some of the asset's units are
-    /// mothballed, these are discarded before non-mothballed units. For example, if an asset has
-    /// seven units of which four are mothballed and we are reducing the number of units to four,
-    /// the new asset will have one mothballed unit.
+    /// If some of the asset's units are mothballed, these are discarded before non-mothballed
+    /// units. For example, if an asset has seven units of which four are mothballed and we are
+    /// reducing the number of units to four, the new asset will have one mothballed unit.
     ///
     /// # Panics
     ///
