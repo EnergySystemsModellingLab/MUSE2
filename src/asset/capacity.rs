@@ -27,9 +27,7 @@ impl AssetCapacity {
     ///
     /// # Panics
     ///
-    /// Panics if the comparison is not meaningful. This happens if either `AssetCapacity` contains
-    /// a NaN value, one is discrete and the other continuous or if both are discrete and the unit
-    /// size differs.
+    /// Panics if the unit size differs.
     pub fn min(self, other: AssetCapacity) -> AssetCapacity {
         match self.partial_cmp(&other) {
             None => panic!("Comparing invalid AssetCapacity values ({self:?} and {other:?})"),
@@ -87,8 +85,7 @@ impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let size1 = self.unit_size;
         let size2 = other.unit_size;
-        Self::check_same_unit_size(size1, size2);
-        Some(self.num_units.cmp(&other.num_units))
+        (size1 == size2).then(|| self.num_units.cmp(&other.num_units))
     }
 }
 

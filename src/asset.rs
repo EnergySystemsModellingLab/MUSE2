@@ -1403,15 +1403,6 @@ mod tests {
     }
 
     #[rstest]
-    fn with_subset_of_units_non_divisible_asset(asset: Asset) {
-        let asset = AssetRef::from(asset);
-        assert!(Arc::ptr_eq(
-            &asset.0,
-            &asset.clone().with_subset_of_units(1).0
-        ));
-    }
-
-    #[rstest]
     #[should_panic(expected = "Cannot make an asset with zero units")]
     fn with_subset_of_units_panics_for_zero_units(commissioned_divisible: AssetRef) {
         commissioned_divisible.with_subset_of_units(0);

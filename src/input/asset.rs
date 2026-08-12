@@ -135,7 +135,8 @@ where
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             AssetCapacity::new(num_units as u32, unit_size)
         } else {
-            // Without a process unit_size, lack of num_units implies the asset is indivisible.
+            // Without a process unit_size, lack of num_units implies the asset is indivisible
+            // (consists of a single unit).
             AssetCapacity::new(1, asset.capacity)
         };
 
