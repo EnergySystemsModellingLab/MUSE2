@@ -19,9 +19,12 @@ fields:
     type: integer
     description: The number of units comprising the asset
     notes: |
-      Optional. For processes with a `unit_size`, if omitted it is calculated by rounding the
-      capacity up to the nearest whole unit. For processes without a `unit_size`, if provided it
-      determines the unit size; otherwise the asset is represented as one unit. Must be >0.
+      Optional. If provided, this takes precedence over the process's
+      `unit_size`, and the unit size is calculated as `capacity / num_units`. If omitted and the
+      process has a `unit_size`, the asset is divided into `ceil(capacity / unit_size)` units. If
+      both values are omitted, the asset is represented as one unit with the full asset capacity.
+      Rounding up the number of units can result in a total capacity greater than the specified
+      capacity when it is not an exact multiple of the process's `unit_size`. Must be >0 if provided.
   - name: commission_year
     type: integer
     description: The year in which to commission this asset
