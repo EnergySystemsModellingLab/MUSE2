@@ -54,11 +54,12 @@ impl AssetCapacity {
         self.unit_size
     }
 
-    /// Validates that two discrete capacities have the same unit size.
-    fn check_same_unit_size(size1: Capacity, size2: Capacity) {
+    /// Validates that two capacities have the same unit size.
+    fn check_same_unit_size(&self, other: AssetCapacity) {
         assert_eq!(
-            size1, size2,
-            "Can't perform operation on capacities with different unit sizes ({size1} and {size2})",
+            self.unit_size, other.unit_size,
+            "Can't perform operation on capacities with different unit sizes ({} and {})",
+            self.unit_size, other.unit_size,
         );
     }
 
@@ -73,12 +74,10 @@ impl Add for AssetCapacity {
 
     // Add two AssetCapacity values together
     fn add(self, rhs: AssetCapacity) -> Self {
-        let size1 = self.unit_size;
-        let size2 = rhs.unit_size;
-        Self::check_same_unit_size(size1, size2);
+        self.check_same_unit_size(rhs);
         AssetCapacity {
             num_units: self.num_units + rhs.num_units,
-            unit_size: size1,
+            unit_size: self.unit_size,
         }
     }
 }
@@ -88,16 +87,14 @@ impl Sub for AssetCapacity {
 
     // Subtract rhs from self, ensuring that the result is non-negative
     fn sub(self, rhs: AssetCapacity) -> Self {
-        let size1 = self.unit_size;
-        let size2 = rhs.unit_size;
-        Self::check_same_unit_size(size1, size2);
+        self.check_same_unit_size(rhs);
         assert!(
             self.num_units >= rhs.num_units,
             "Cannot subtract a larger AssetCapacity ({rhs:?}) from a smaller one ({self:?})"
         );
         AssetCapacity {
             num_units: self.num_units - rhs.num_units,
-            unit_size: size1,
+            unit_size: self.unit_size,
         }
     }
 }
@@ -213,5 +210,18 @@ mod tests {
         #[case] right: AssetCapacity,
     ) {
         let _ = left.min(right);
+    }
+
+    #[test]
+    fn subtracting_equal_capacities_returns_zero_units() {
+        let capacity = AssetCapacity::new(2, Capacity(3.0));
+
+        assert_eq!(
+            capacity - capacity,
+            AssetCapacity {
+                num_units: 0,
+                unit_size: Capacity(3.0),
+            }
+        );
     }
 }

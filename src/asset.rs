@@ -1394,7 +1394,6 @@ mod tests {
             asset_subset.capacity(),
             AssetCapacity::new(num_units, Capacity(4.0))
         );
-        assert_eq!(asset_subset.capacity().num_units(), num_units);
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
         assert_eq!(Arc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);

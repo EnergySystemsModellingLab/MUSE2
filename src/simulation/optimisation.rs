@@ -267,8 +267,7 @@ impl Solution<'_> {
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
             .map(|(asset, capacity_var)| {
-                // If the asset has a defined unit size, the capacity variable represents number of
-                // units, otherwise it represents absolute capacity
+                // The capacity variable represents number of units
                 let unit_size = asset.capacity().unit_size();
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let asset_capacity = AssetCapacity::new(capacity_var.round() as u32, unit_size);
