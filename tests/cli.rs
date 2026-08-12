@@ -2,6 +2,7 @@
 use rstest::rstest;
 
 use itertools::Itertools;
+use std::path::{self};
 use tempfile::tempdir;
 
 mod common;
@@ -45,14 +46,16 @@ fn check_run_command_model_inside_output() {
     // Save results to non-existent directory to check that directory creation works
     let tempdir = tempdir().unwrap();
     let output_dir = tempdir.path().join("results");
-    let model_dir = output_dir.join("model");
-    get_muse2_stderr(&[
-        "run",
-        &model_dir.to_string_lossy(),
-        "--output-dir",
-        &output_dir.to_string_lossy(),
-    ])
-    .contains("Error: Model input data cannot be inside output folder");
+    let model_dir = path::absolute(output_dir.join("model")).unwrap();
+    assert!(
+        get_muse2_stderr(&[
+            "run",
+            &model_dir.to_string_lossy(),
+            "--output-dir",
+            &output_dir.to_string_lossy(),
+        ])
+        .contains("Error: Model input data cannot be inside output folder")
+    );
 }
 
 /// Test the `save-graphs` command

@@ -8,7 +8,7 @@ use crate::timeit::{DispatchContext, InvestmentContext, TimeContext};
 use ::log::{info, warn};
 use anyhow::{Context, Result, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand};
-use std::path::{Path, PathBuf};
+use std::path::{self, Path, PathBuf};
 use std::time::Instant;
 
 pub mod example;
@@ -161,7 +161,7 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
     };
 
     ensure!(
-        !model_path.starts_with(output_path),
+        !path::absolute(model_path)?.starts_with(path::absolute(output_path)?),
         "Model input data cannot be inside output folder"
     );
 
