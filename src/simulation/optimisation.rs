@@ -723,7 +723,7 @@ fn add_capacity_variables(
         // Since capacity variables are numbers of units, we need to convert the capacity bounds
         // into numbers of units by dividing by the unit size.
         let unit_size = asset.capacity().unit_size();
-        let current_total = asset.capacity().total_capacity();
+        let current_total = asset.total_capacity();
 
         let lower = ((current_total * (Dimensionless(1.0 - capacity_margin))) / unit_size)
             .max(Dimensionless(0.0));

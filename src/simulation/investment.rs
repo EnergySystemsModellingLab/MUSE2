@@ -397,7 +397,7 @@ pub fn select_best_assets(
             .par_iter()
             .map(|asset| -> Result<Option<AppraisalOutput>> {
                 // Skip assets with zero capacity
-                if asset.capacity().total_capacity() <= Capacity(0.0) {
+                if asset.total_capacity() <= Capacity(0.0) {
                     return Ok(None);
                 }
 
@@ -449,7 +449,7 @@ pub fn select_best_assets(
             "Selected {} asset '{}' (capacity: {})",
             best_output.asset.state(),
             best_output.asset.process_id(),
-            best_output.asset.capacity().total_capacity()
+            best_output.asset.total_capacity()
         );
 
         // Update the assets and remaining limits

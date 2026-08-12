@@ -222,7 +222,7 @@ fn calculate_lcox(
     let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
 
     let cost_index = lcox(
-        asset.capacity().total_capacity(),
+        asset.total_capacity(),
         annual_fixed_cost(asset),
         &results.activity,
         &coefficients.market_costs,
@@ -257,7 +257,7 @@ fn calculate_npv(
     );
 
     let snas = snas(
-        asset.capacity().total_capacity(),
+        asset.total_capacity(),
         annual_fixed_cost,
         &results.activity,
         &coefficients.market_costs,

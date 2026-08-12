@@ -449,9 +449,7 @@ fn get_candidate_assets<'a>(
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
 
-            // Set capacity of the candidate
-            // This will serve as the upper limit when appraising the asset (may later be
-            // constrained by process addition limits and demand-limiting capacity)
+            // Set capacity of the candidate for investment appraisal
             let unit_size = if let Some(unit_size) = asset.process().unit_size {
                 // For processes with a defined unit size, take this
                 unit_size

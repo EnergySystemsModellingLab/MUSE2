@@ -128,35 +128,6 @@ impl Asset {
         )
     }
 
-    /// Create a new candidate for use in dispatch runs
-    ///
-    /// These candidates will have a single capacity unit of size `candidate_asset_capacity`
-    pub fn new_candidate_for_dispatch(
-        process: Arc<Process>,
-        region_id: RegionID,
-        unit_size: Capacity,
-        commission_year: u32,
-    ) -> Result<Self> {
-        Self::new_with_state(
-            AssetState::Candidate,
-            process,
-            region_id,
-            AssetCapacity::single(unit_size),
-            commission_year,
-            None,
-        )
-    }
-
-    /// Create a new candidate asset from a commissioned asset
-    pub fn new_candidate_from_commissioned(asset: &Asset) -> Self {
-        assert!(asset.is_commissioned(), "Asset must be commissioned");
-
-        Self {
-            state: AssetState::Candidate,
-            ..asset.clone()
-        }
-    }
-
     /// Create a new ready asset
     ///
     /// This is only used for testing. In the real program, Ready assets can only be created from
