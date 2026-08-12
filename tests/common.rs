@@ -30,7 +30,7 @@ pub fn get_muse2_stderr(args: &[&str]) -> String {
     assert!(!output.status.success());
 
     str::from_utf8(&output.stderr)
-        .expect("Non-unicode chars in stdout")
+        .expect("Non-unicode chars in stderr")
         .into()
 }
 
