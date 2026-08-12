@@ -1214,9 +1214,9 @@ mod tests {
     use rstest::{fixture, rstest};
     use std::sync::Arc;
 
-    /// A commissioned divisible asset with three units.
+    /// A commissioned asset with three units.
     #[fixture]
-    fn commissioned_divisible(mut multi_unit_asset: Asset) -> AssetRef {
+    fn commissioned_multi_unit(mut multi_unit_asset: Asset) -> AssetRef {
         multi_unit_asset.commission(AssetID(0));
         assert_eq!(multi_unit_asset.num_units(), 3);
         AssetRef::from(multi_unit_asset)
@@ -1403,14 +1403,14 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot make an asset with zero units")]
-    fn with_subset_of_units_panics_for_zero_units(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_subset_of_units(0);
+    fn with_subset_of_units_panics_for_zero_units(commissioned_multi_unit: AssetRef) {
+        commissioned_multi_unit.with_subset_of_units(0);
     }
 
     #[rstest]
     #[should_panic(expected = "Cannot make an asset with more units than original")]
-    fn with_subset_of_units_panics_for_too_many_units(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_subset_of_units(4);
+    fn with_subset_of_units_panics_for_too_many_units(commissioned_multi_unit: AssetRef) {
+        commissioned_multi_unit.with_subset_of_units(4);
     }
 
     #[rstest]
@@ -1511,9 +1511,9 @@ mod tests {
     #[case::none(0)]
     #[case::some(2)]
     #[case::all(3)]
-    fn mothball_unit_counts(commissioned_divisible: AssetRef, #[case] num_mothballed: u32) {
-        assert_eq!(commissioned_divisible.num_units(), 3);
-        let asset = commissioned_divisible.with_mothballed_units(num_mothballed, Some(2020));
+    fn mothball_unit_counts(commissioned_multi_unit: AssetRef, #[case] num_mothballed: u32) {
+        assert_eq!(commissioned_multi_unit.num_units(), 3);
+        let asset = commissioned_multi_unit.with_mothballed_units(num_mothballed, Some(2020));
         assert_eq!(asset.get_num_mothballed_units(), num_mothballed);
         assert_eq!(asset.get_num_nonmothballed_units(), 3 - num_mothballed);
         assert_eq!(asset.has_any_mothballed_units(), num_mothballed > 0);
@@ -1534,9 +1534,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_mothballed_units_accumulates_events(commissioned_divisible: AssetRef) {
+    fn with_mothballed_units_accumulates_events(commissioned_multi_unit: AssetRef) {
         // Mothball one unit in 2020
-        let asset = commissioned_divisible.with_mothballed_units(1, Some(2020));
+        let asset = commissioned_multi_unit.with_mothballed_units(1, Some(2020));
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
@@ -1563,9 +1563,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_mothballed_units_decrease_removes_oldest_first(commissioned_divisible: AssetRef) {
+    fn with_mothballed_units_decrease_removes_oldest_first(commissioned_multi_unit: AssetRef) {
         // Mothball 1 unit in 2020, then 2 more (3 total) in 2022
-        let asset = commissioned_divisible
+        let asset = commissioned_multi_unit
             .with_mothballed_units(1, Some(2020))
             .with_mothballed_units(3, Some(2022));
         assert_equal(
@@ -1596,16 +1596,16 @@ mod tests {
     }
 
     #[rstest]
-    fn with_mothballed_units_noop_returns_same_rc(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+    fn with_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
         // Requesting the same number of mothballed units is a no-op (the year is ignored)
         let same = asset.clone().with_mothballed_units(2, Some(2099));
         assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
-    fn with_mothballed_units_zero_unmothballs(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+    fn with_mothballed_units_zero_unmothballs(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
         assert!(asset.has_any_mothballed_units());
 
         let asset = asset.with_mothballed_units(0, None);
@@ -1615,8 +1615,8 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot mothball more units than asset represents")]
-    fn with_mothballed_units_panics_for_too_many_units(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_mothballed_units(4, Some(2020));
+    fn with_mothballed_units_panics_for_too_many_units(commissioned_multi_unit: AssetRef) {
+        commissioned_multi_unit.with_mothballed_units(4, Some(2020));
     }
 
     #[rstest]
@@ -1629,40 +1629,44 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot increase number of mothballed units without supplying year")]
-    fn with_mothballed_units_panics_when_increasing_without_year(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_mothballed_units(1, None);
+    fn with_mothballed_units_panics_when_increasing_without_year(
+        commissioned_multi_unit: AssetRef,
+    ) {
+        commissioned_multi_unit.with_mothballed_units(1, None);
     }
 
     #[rstest]
     #[should_panic(expected = "Attempting to mothball units in a year in the past")]
-    fn with_mothballed_units_panics_when_mothballing_in_the_past(commissioned_divisible: AssetRef) {
+    fn with_mothballed_units_panics_when_mothballing_in_the_past(
+        commissioned_multi_unit: AssetRef,
+    ) {
         // Mothball a unit in 2020, then attempt to mothball another in an earlier year, which would
         // break the chronological ordering invariant of the mothball events
-        commissioned_divisible
+        commissioned_multi_unit
             .with_mothballed_units(1, Some(2020))
             .with_mothballed_units(2, Some(2019));
     }
 
     #[rstest]
-    fn with_no_mothballed_units_clears_events(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+    fn with_no_mothballed_units_clears_events(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
         let asset = asset.with_no_mothballed_units();
         assert!(!asset.has_any_mothballed_units());
         assert_eq!(asset.get_num_mothballed_units(), 0);
     }
 
     #[rstest]
-    fn with_no_mothballed_units_noop_returns_same_rc(commissioned_divisible: AssetRef) {
+    fn with_no_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
         // `asset_divisble` has no mothballed units, so the original Rc is returned unchanged
-        let asset = commissioned_divisible;
+        let asset = commissioned_multi_unit;
         let same = asset.clone().with_no_mothballed_units();
         assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
-    fn with_subset_of_units_caps_mothballed(commissioned_divisible: AssetRef) {
+    fn with_subset_of_units_caps_mothballed(commissioned_multi_unit: AssetRef) {
         // Mothball all 3 units
-        let asset = commissioned_divisible.with_mothballed_units(3, Some(2020));
+        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2020));
         assert_eq!(asset.get_num_mothballed_units(), 3);
 
         // Taking a subset of 2 units caps the mothballed count at the new number of units
@@ -1672,8 +1676,8 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_nothing_old_enough(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(1, Some(2020));
+    fn with_decommission_mothballed_nothing_old_enough(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(1, Some(2020));
         // Threshold is 2005, so the 2020 event is not old enough: the asset is returned unchanged
         let result = asset
             .clone()
@@ -1683,9 +1687,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_partial(commissioned_divisible: AssetRef) {
+    fn with_decommission_mothballed_partial(commissioned_multi_unit: AssetRef) {
         // Mothball 1 unit in 2010 and 1 unit in 2020 (leaving 1 unit active)
-        let asset = commissioned_divisible
+        let asset = commissioned_multi_unit
             .with_mothballed_units(1, Some(2010))
             .with_mothballed_units(2, Some(2020));
 
@@ -1703,9 +1707,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_all(commissioned_divisible: AssetRef) {
+    fn with_decommission_mothballed_all(commissioned_multi_unit: AssetRef) {
         // All units mothballed long enough ago: the whole asset is decommissioned
-        let asset = commissioned_divisible.with_mothballed_units(3, Some(2010));
+        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2010));
         assert!(asset.with_decommission_mothballed(2025, 10).is_none());
     }
 }
