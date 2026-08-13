@@ -1,0 +1,4 @@
+commodity_id,region_id,balance_type,years,time_slice,limits
+GASPRD,GBR,prod,2020,winter.day,12.34..56.78
+ELCTRI,GBR,cons,2020,summer,3.14..
+CO2EMT,GBR,prod,2030,annual,..1.618034
