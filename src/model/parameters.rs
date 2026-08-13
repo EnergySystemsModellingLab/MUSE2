@@ -333,6 +333,13 @@ impl ModelParameters {
 
         // fallback_pricing_strategy already validated by deserialisation
 
+        // candidate_asset_capacity
+        ensure!(
+            self.candidate_asset_capacity.is_finite()
+                && self.candidate_asset_capacity > Capacity(0.0),
+            "candidate_asset_capacity must be a finite, positive number"
+        );
+
         // commodity_balance_epsilon already validated with deserialise_finite_non_negative
 
         // value_of_lost_load
