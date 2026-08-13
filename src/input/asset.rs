@@ -107,6 +107,10 @@ where
         );
 
         // Split overall capacity into units
+        ensure!(
+            asset.capacity > Capacity(0.0),
+            "Asset capacity must be positive"
+        );
         let asset_capacity = if let Some(num_units) = asset.num_units {
             // A provided unit count takes precedence over the process unit_size.
             ensure!(num_units > 0, "num_units must be positive");
