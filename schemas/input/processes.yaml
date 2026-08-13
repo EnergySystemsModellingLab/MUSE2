@@ -37,5 +37,6 @@ fields:
     description: Default capacity of the individual units making up assets of this process
     notes:
       Optional (defaults to None). If present, must be >0. If no unit size is specified, the unit
-      size used for investment is calculated based on demand and `capacity_limit_factor`. For a
-      user-provided asset, `num_units` in `assets.csv` can instead determine the unit size.
+      size used for investments is calculated based on demand at the time of investment and
+      `capacity_limit_factor`. For a user-provided asset, `num_units` in `assets.csv` can instead
+      determine the unit size.

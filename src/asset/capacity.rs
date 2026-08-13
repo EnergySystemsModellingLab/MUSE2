@@ -16,10 +16,9 @@ impl AssetCapacity {
     /// Create a new `AssetCapacity` with the given number of units and unit size
     pub fn new(num_units: u32, unit_size: Capacity) -> Self {
         assert!(
-            unit_size.is_finite() && unit_size.0 >= 0.0,
+            unit_size.is_finite() && unit_size >= Capacity(0.0),
             "Unit size must be a finite non-negative number"
         );
-        assert!(num_units > 0, "Number of units must be a positive integer");
         AssetCapacity {
             num_units,
             unit_size,
@@ -127,13 +126,6 @@ mod tests {
         assert_eq!(capacity.num_units(), num_units);
         assert_eq!(capacity.unit_size(), unit_size);
         assert_eq!(capacity.total_capacity(), expected_total_capacity);
-    }
-
-    #[rstest]
-    #[case(0, Capacity(1.0))]
-    #[should_panic(expected = "Number of units must be a positive integer")]
-    fn new_rejects_zero_units(#[case] num_units: u32, #[case] unit_size: Capacity) {
-        let _ = AssetCapacity::new(num_units, unit_size);
     }
 
     #[rstest]

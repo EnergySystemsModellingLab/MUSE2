@@ -720,19 +720,16 @@ fn add_capacity_variables(
         // Add a capacity variable for each asset
         // Bounds are calculated based on current capacity with wiggle-room defined by
         // `capacity_margin`, and limited by `capacity_limit` if provided.
-        // Since capacity variables are numbers of units, we need to convert the capacity bounds
-        // into numbers of units by dividing by the unit size.
+        // Since capacity variables are numbers of units, we apply constraints to the unit count
         let unit_size = asset.capacity().unit_size();
-        let current_total = asset.total_capacity();
+        let current_units = asset.capacity().num_units();
 
-        let lower = ((current_total * (Dimensionless(1.0 - capacity_margin))) / unit_size)
-            .max(Dimensionless(0.0));
+        let lower = (current_units as f64 * (1.0 - capacity_margin)).max(0.0);
 
-        let capacity_upper = current_total * Dimensionless(1.0 + capacity_margin);
-        let capacity_upper = capacity_limits
-            .and_then(|limits| limits.get(asset))
-            .map_or(capacity_upper, |limit| capacity_upper.min(*limit));
-        let upper = capacity_upper / unit_size;
+        let mut upper = current_units as f64 * (1.0 + capacity_margin);
+        if let Some(limit) = capacity_limits.and_then(|limits| limits.get(asset)) {
+            upper = upper.min((*limit / unit_size).value());
+        }
 
         let var = problem.add_integer_column((coeff * unit_size).value(), lower..=upper);
 

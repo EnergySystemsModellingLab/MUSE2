@@ -538,7 +538,7 @@ fn update_assets(
 
             // If there's not enough capacity remaining to install any more units, remove the
             // asset from the investment options.
-            if *remaining_capacity <= best_asset.total_capacity() {
+            if *remaining_capacity < best_asset.total_capacity() {
                 let old_idx = opt_assets
                     .iter()
                     .position(|asset| *asset == best_asset)
