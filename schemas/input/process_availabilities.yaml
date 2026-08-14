@@ -8,7 +8,7 @@ notes:
     up to 90% during winter days, so long as activity does not exceed 50% across winter as a whole.
   - Incompatible limits will be flagged at the input validation stage. For example, a limit of
     "..0.01" for "winter" would likely be incompatible with a limit of "0.9.." for "winter.day".
-  - If a limit is provided for any time slice (or season) for a particular process/region/year, it
+  - If a limit is provided for any time slice (or season) for a particular process/region, it
     must be provided for all time slices (or seasons).
 
 fields:

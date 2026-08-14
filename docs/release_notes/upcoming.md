@@ -39,6 +39,10 @@ ready to be released, carry out the following steps:
 
 ## Breaking changes
 
+- Process parameters, flows and availabilities can no longer vary by commission year. To represent
+  this in MUSE, users should instead create distinct processes for different "vintages" of a
+  technology (e.g. `WNDFRM_2030`, `WNDFRM_2040`), using the `start_year` and `end_year` fields to
+  define the range of years over which each vintage can be commissioned.
 - Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average" ([#1281])
 - The individual units of divisible assets are no longer treated as separate assets and are instead
   grouped under a single larger asset, affecting a number of output files. The `group_id` column has
