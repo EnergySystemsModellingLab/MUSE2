@@ -81,11 +81,7 @@ fn can_be_active(
     time_slice_selection: &TimeSliceSelection,
 ) -> bool {
     let (target_region, target_year) = target;
-    let Some(parameter) = process.parameters.get(target_region) else {
-        return false;
-    };
-    let latest_operating_year = process.years.end().saturating_add(parameter.lifetime);
-    if *target_year < *process.years.start() || *target_year > latest_operating_year {
+    if !process.can_operate_in_region_year(target_region, *target_year) {
         return false;
     }
 

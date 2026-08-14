@@ -76,6 +76,15 @@ impl Process {
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
     }
+
+    /// Whether an asset for this process could be operating in a given region and year
+    pub fn can_operate_in_region_year(&self, region_id: &RegionID, year: u32) -> bool {
+        let Some(parameter) = self.parameters.get(region_id) else {
+            return false;
+        };
+
+        year >= *self.years.start() && year <= self.years.end().saturating_add(parameter.lifetime)
+    }
 }
 
 /// Defines the activity limits for a process in a given region and year
