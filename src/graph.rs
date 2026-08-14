@@ -62,7 +62,7 @@ fn get_flow_for_year(
     target: (RegionID, u32),
 ) -> Option<Arc<IndexMap<CommodityID, ProcessFlow>>> {
     let (target_region, target_year) = target;
-    if !process.can_operate_in_region_year(&target_region, target_year) {
+    if !process.can_operate(&target_region, target_year) {
         return None;
     }
     process.flows.get(&target_region).cloned()

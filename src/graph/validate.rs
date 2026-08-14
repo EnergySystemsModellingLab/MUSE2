@@ -31,7 +31,6 @@ fn prepare_commodities_graph_for_validation(
 
     // Filter by process availability
     // We keep edges if the process has availability > 0 in any time slice in the selection
-    let key = (region_id.clone(), year);
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
         let process_id = match graph.edge_weight(edge_idx).unwrap() {
@@ -41,7 +40,7 @@ fn prepare_commodities_graph_for_validation(
         let process = &processes[process_id];
 
         // Check if the process has availability > 0 in any time slice in the selection
-        can_be_active(process, &key, time_slice_selection)
+        can_be_active(process, region_id, year, time_slice_selection)
     });
 
     // Add demand edges
@@ -76,17 +75,17 @@ fn prepare_commodities_graph_for_validation(
 /// no guarantee of that happening since it depends on the investment.
 fn can_be_active(
     process: &Process,
-    target: &(RegionID, u32),
+    region_id: &RegionID,
+    year: u32,
     time_slice_selection: &TimeSliceSelection,
 ) -> bool {
-    let (target_region, target_year) = target;
-    if !process.can_operate_in_region_year(target_region, *target_year) {
+    if !process.can_operate(region_id, year) {
         return false;
     }
 
     process
         .activity_limits
-        .get(target_region)
+        .get(region_id)
         .is_some_and(|limits| limits.get_limit(time_slice_selection).end() > &Dimensionless(0.0))
 }
 

@@ -71,6 +71,16 @@ macro_rules! patch_and_validate_simple {
 }
 pub(crate) use patch_and_validate_simple;
 
+/// Check whether validation succeeds for simple example with patches
+#[allow(unused_macros)]
+macro_rules! assert_validate_ok_simple {
+    ($file_patches:expr) => {
+        crate::fixture::patch_and_validate_simple!($file_patches).unwrap();
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use assert_validate_ok_simple;
+
 /// Check whether validation fails with specific message
 macro_rules! assert_validate_fails_with_simple {
     ($file_patches:expr, $expected_msg:expr) => {
