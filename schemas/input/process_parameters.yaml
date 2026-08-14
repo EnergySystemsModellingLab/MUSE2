@@ -1,10 +1,10 @@
 $schema: https://specs.frictionlessdata.io/schemas/table-schema.json
 description: |
-  Parameters for processes which vary by region and year.
+  Parameters for processes which vary by region.
 
 notes:
-  - For each process, entries must be provided which cover every combination of milestone year and
-    region in which the process can be commissioned.
+  - For each process, entries must be provided which cover every region in which the process can
+    operate.
 
 fields:
   - name: process_id
@@ -16,14 +16,6 @@ fields:
     notes: |
       One or more region IDs, separated by semicolons or the string `all`. Must be regions in which
       the process operates.
-  - name: commission_years
-    type: string
-    description: The milestone year(s) to which this entry applies
-    notes:
-      One or more milestone years separated by semicolons, `all` to select all years or a year
-      range in the form 'start..end' to select all valid years within range, inclusive. Either 'start'
-      'end' or both can be omitted, which will set the corresponding limit to the minimum or maximum
-      valid year, respectively.
   - name: capital_cost
     type: number
     description: Overnight capital cost per unit capacity

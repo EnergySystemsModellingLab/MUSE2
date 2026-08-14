@@ -3,9 +3,8 @@ description: |
   The commodity flows for each process
 
 notes:
-  - Commodity flows can vary by region and year.
-  - For each process, there must be entries covering all the years and regions in which the process
-    can be commissioned.
+  - Commodity flows can vary by region.
+  - For each process, there must be entries covering all regions in which the process can operate.
 
 fields:
   - name: process_id
@@ -20,14 +19,6 @@ fields:
     notes: |
       One or more region IDs, separated by semicolons or the string `all`. Must be regions in which
       the process operates.
-  - name: commission_years
-    type: string
-    description: The year(s) to which this entry applies
-    notes:
-      One or more milestone years separated by semicolons, `all` to select all years or a year
-      range in the form 'start..end' to select all valid years within range, inclusive. Either 'start'
-      'end' or both can be omitted, which will set the corresponding limit to the minimum or maximum
-      valid year, respectively.
   - name: coeff
     type: number
     description: The flow for this commodity
