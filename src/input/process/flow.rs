@@ -321,7 +321,6 @@ mod tests {
     fn build_maps<I>(
         process: Process,
         flows: I,
-        _years: Option<Vec<u32>>,
     ) -> (ProcessMap, HashMap<ProcessID, ProcessFlowsMap>)
     where
         I: Clone + Iterator<Item = (CommodityID, ProcessFlow)>,
@@ -386,7 +385,6 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), 2.0)),
             ]
             .into_iter(),
-            None,
         );
 
         // Validation should pass since the units are the same
@@ -411,7 +409,6 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), 2.0)),
             ]
             .into_iter(),
-            None,
         );
 
         // Different units should cause validation to fail
@@ -445,7 +442,6 @@ mod tests {
                 (oth_commodity.id.clone(), flow(oth_commodity.clone(), 2.0)),
             ]
             .into_iter(),
-            None,
         );
 
         // OTH commodity should be ignored, validation should pass
@@ -458,7 +454,6 @@ mod tests {
         let (_, flows_map) = build_maps(
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
-            None,
         );
 
         // Single output should always pass validation
@@ -476,7 +471,6 @@ mod tests {
                 (CommodityID("oth2".into()), flow(oth_commodity_2, 2.0)),
             ]
             .into_iter(),
-            None,
         );
 
         // Processes with only OTH outputs should pass validation
@@ -510,7 +504,6 @@ mod tests {
                 (output.id.clone(), flow(output.clone(), 3.0)),
             ]
             .into_iter(),
-            None,
         );
 
         // Validation should pass because only outputs are checked
@@ -523,7 +516,6 @@ mod tests {
         let (mut processes, flows_map) = build_maps(
             process,
             std::iter::once((commodity.id.clone(), flow(commodity.clone(), 1.0))),
-            None,
         );
         validate_flows_and_update_primary_output(&mut processes, &flows_map).unwrap();
         assert_eq!(
@@ -547,7 +539,6 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), 2.0)),
             ]
             .into_iter(),
-            None,
         );
         let res = validate_flows_and_update_primary_output(&mut processes, &flows_map);
         assert_error!(res, "Could not infer primary_output for process process1");
@@ -570,7 +561,6 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), 2.0)),
             ]
             .into_iter(),
-            None,
         );
         validate_flows_and_update_primary_output(&mut processes, &flows_map).unwrap();
         assert_eq!(
@@ -594,7 +584,6 @@ mod tests {
                 (commodity2.id.clone(), flow(commodity2.clone(), -2.0)),
             ]
             .into_iter(),
-            None,
         );
         validate_flows_and_update_primary_output(&mut processes, &flows_map).unwrap();
         assert_eq!(

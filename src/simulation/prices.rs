@@ -1370,7 +1370,6 @@ mod tests {
     fn build_process(
         flows: IndexMap<CommodityID, ProcessFlow>,
         region_id: &RegionID,
-        _year: u32,
         time_slice_info: &TimeSliceInfo,
         variable_operating_cost: MoneyPerActivity,
         fixed_operating_cost: MoneyPerCapacityPerYear,
@@ -1507,7 +1506,6 @@ mod tests {
         let process = build_process(
             flows,
             &region_id,
-            2015u32,
             &time_slice_info,
             MoneyPerActivity(5.0),        // variable operating cost
             MoneyPerCapacityPerYear(0.0), // fixed operating cost
@@ -1589,7 +1587,6 @@ mod tests {
         let process = build_process(
             flows,
             &region_id,
-            2015u32,
             &time_slice_info,
             MoneyPerActivity(5.0),        // variable operating cost
             MoneyPerCapacityPerYear(1.0), //  fixed operating cost
