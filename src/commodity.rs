@@ -2,7 +2,7 @@
 use crate::id::{define_id_getter, define_id_type};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
-use crate::units::{Flow, Money, MoneyPerFlow};
+use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -18,8 +18,8 @@ pub type CommodityMap = IndexMap<CommodityID, Arc<Commodity>>;
 /// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
 pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
 
-/// A map of [`CommodityConstraint`]s, keyed by region ID and year
-pub type CommodityConstraintsMap = HashMap<(RegionID, u32), Rc<CommodityConstraint>>;
+/// A map of vectors of [`CommodityConstraint`]s, keyed by region ID and year
+pub type CommodityConstraintsMap = HashMap<(RegionID, u32), Vec<CommodityConstraint>>;
 
 /// A map of demand values, keyed by region ID, year and time slice selection
 pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
@@ -123,8 +123,12 @@ pub enum PricingStrategy {
 /// A constraint imposed on commodity values
 #[derive(PartialEq, Debug, Clone)]
 pub struct CommodityConstraint {
+    /// The balance type for the commodity constraint
+    pub balance_type: BalanceType,
+    /// The time slice selection for the commodity constraint
+    pub ts_selection: TimeSliceSelection,
     /// The range of values the commodity is constrained to lie between
-    pub limits: RangeInclusive<Money>,
+    pub limits: RangeInclusive<Flow>,
 }
 
 impl CommodityConstraint {}

@@ -2,10 +2,10 @@
 use super::super::{input_err_msg, read_csv_optional};
 use crate::commodity::{BalanceType, CommodityConstraint, CommodityConstraintsMap, CommodityID};
 use crate::id::IDCollection;
-use crate::input::{parse_range, parse_year_str, try_insert};
-use crate::region::{RegionID, parse_region_str};
+use crate::input::{parse_range, parse_year_str};
+use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
-use crate::units::Money;
+use crate::units::Flow;
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexSet;
 use serde::Deserialize;
@@ -34,12 +34,6 @@ struct CommodityConstraintRaw {
 
 impl CommodityConstraintRaw {
     fn validate(&self) -> Result<()> {
-        // Only permit single regions for initial implementation
-        ensure!(
-            self.region_id != "all" && !self.region_id.contains(";"),
-            "Only single regions are permitted"
-        );
-
         // Net production already constrained by commodity balance constraints
         ensure!(
             self.balance_type != BalanceType::Net,
@@ -114,24 +108,24 @@ where
 
         // Extract fields from record
         let commodity_id = commodity_ids.get_id(&record.commodity_id)?;
-        // Validation ensures single region_id, so take that at index 0
-        let region_id = parse_region_str(&record.region_id, region_ids)?[0].clone();
+        let region_id = region_ids.get_id(&record.region_id)?;
         let years = parse_year_str(&record.years, milestone_years)?;
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
-        let limits = parse_range(&record.limits, Money(0.0)..=Money(f64::INFINITY))
+        let limits = parse_range(&record.limits, Flow(0.0)..=Flow(f64::INFINITY))
             .with_context(|| format!("Could not parse constraint range: {}", record.limits))?;
 
         // For each record, store that constraint per year
         let commodity_map = map.entry(commodity_id.clone()).or_default();
         for year in &years {
-            let constraint = Rc::new(CommodityConstraint {
+            let constraint = CommodityConstraint {
+                balance_type: record.balance_type.clone(),
+                ts_selection: ts_selection.clone(),
                 limits: limits.clone(),
-            });
-            try_insert(
-                commodity_map,
-                &(region_id.clone(), *year),
-                constraint.clone(),
-            )?;
+            };
+            commodity_map
+                .entry((region_id.clone(), *year))
+                .and_modify(|constraints| constraints.push(constraint.clone()))
+                .or_insert(vec![constraint]);
         }
     }
     Ok(map)
