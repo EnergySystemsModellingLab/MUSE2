@@ -192,7 +192,6 @@ where
     }
 
     validate_flows_and_update_primary_output(processes, &flows_map)?;
-    validate_secondary_flows(processes, &flows_map)?;
     validate_output_flows_units(&flows_map)?;
 
     Ok(flows_map)
@@ -289,38 +288,6 @@ fn check_flows_primary_output(
             "First year is only inputs, but subsequent years have outputs, although no primary \
             output is specified"
         );
-    }
-
-    Ok(())
-}
-
-/// Checks that non-primary flows are consistently inputs or outputs within each region.
-fn validate_secondary_flows(
-    processes: &mut ProcessMap,
-    flows_map: &HashMap<ProcessID, ProcessFlowsMap>,
-) -> Result<()> {
-    for (process_id, process) in processes.iter() {
-        // Get the flows for this process - there should be no error, as was checked already
-        let map = flows_map
-            .get(process_id)
-            .with_context(|| format!("Missing flows map for process {process_id}"))?;
-
-        for (region_id, commodity_map) in map {
-            for (commodity_id, flow) in commodity_map.iter() {
-                if Some(commodity_id) == process.primary_output.as_ref() {
-                    continue;
-                }
-                let input_or_zero =
-                    [FlowDirection::Input, FlowDirection::Zero].contains(&flow.direction());
-                let output_or_zero =
-                    [FlowDirection::Output, FlowDirection::Zero].contains(&flow.direction());
-                ensure!(
-                    input_or_zero || output_or_zero,
-                    "Flow of commodity {commodity_id} in region {region_id} for process {process_id} \
-                has an invalid direction."
-                );
-            }
-        }
     }
 
     Ok(())
