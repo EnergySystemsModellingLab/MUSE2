@@ -226,42 +226,38 @@ impl Asset {
             "Capacity must be non-negative"
         );
 
-        // There should be activity limits, commodity flows and process parameters for all
-        // **milestone** years, but it is possible to have assets that are commissioned before the
-        // simulation start from assets.csv. We check for the presence of the params lazily to
-        // prevent users having to supply them for all the possible valid years before the time
-        // horizon.
-        let key = (region_id.clone(), commission_year);
+        // There should be activity limits, commodity flows and process parameters for every
+        // region in which the process operates.
         let activity_limits = process
             .activity_limits
-            .get(&key)
+            .get(&region_id)
             .with_context(|| {
                 format!(
-                    "No process availabilities supplied for process {} in region {} in year {}. \
+                    "No process availabilities supplied for process {} in region {}. \
                     You should update process_availabilities.csv.",
-                    process.id, region_id, commission_year
+                    process.id, region_id
                 )
             })?
             .clone();
         let flows = process
             .flows
-            .get(&key)
+            .get(&region_id)
             .with_context(|| {
                 format!(
-                    "No commodity flows supplied for process {} in region {} in year {}. \
+                    "No commodity flows supplied for process {} in region {}. \
                     You should update process_flows.csv.",
-                    process.id, region_id, commission_year
+                    process.id, region_id
                 )
             })?
             .clone();
         let process_parameter = process
             .parameters
-            .get(&key)
+            .get(&region_id)
             .with_context(|| {
                 format!(
-                    "No process parameters supplied for process {} in region {} in year {}. \
+                    "No process parameters supplied for process {} in region {}. \
                     You should update process_parameters.csv.",
-                    process.id, region_id, commission_year
+                    process.id, region_id
                 )
             })?
             .clone();

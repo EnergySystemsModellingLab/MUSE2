@@ -63,22 +63,11 @@ fn get_flow_for_year(
     target: (RegionID, u32),
 ) -> Option<Arc<IndexMap<CommodityID, ProcessFlow>>> {
     // If its already in the map, we return it
-    if process.flows.contains_key(&target) {
-        return process.flows.get(&target).cloned();
-    }
-
-    // Otherwise we try to find one that operates in the target year. It is assumed that
-    // parameters are defined for at least the same (region, year) combinations as flows.
     let (target_region, target_year) = target;
-    for ((region, year), value) in &process.flows {
-        if *region != target_region {
-            continue;
-        }
-        if year + process.parameters[&(region.clone(), *year)].lifetime >= target_year {
-            return Some(value.clone());
-        }
-    }
-    None
+    let flows = process.flows.get(&target_region)?.clone();
+    let lifetime = process.parameters[&target_region].lifetime;
+    let latest_operating_year = process.years.end().saturating_add(lifetime);
+    (target_year >= *process.years.start() && target_year <= latest_operating_year).then_some(flows)
 }
 
 /// Creates a directed graph of commodity flows for a given region and year.

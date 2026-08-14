@@ -26,7 +26,6 @@ use crate::units::{
 use anyhow::Result;
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
-use itertools::Itertools;
 use rstest::fixture;
 use std::collections::HashMap;
 use std::iter;
@@ -71,14 +70,6 @@ macro_rules! patch_and_validate_simple {
     }};
 }
 pub(crate) use patch_and_validate_simple;
-
-/// Check whether validation succeeds for simple example with patches
-macro_rules! assert_validate_ok_simple {
-    ($file_patches:expr) => {
-        crate::fixture::patch_and_validate_simple!($file_patches).unwrap();
-    };
-}
-pub(crate) use assert_validate_ok_simple;
 
 /// Check whether validation fails with specific message
 macro_rules! assert_validate_fails_with_simple {
@@ -243,7 +234,7 @@ pub fn process_parameter() -> ProcessParameter {
 }
 
 #[fixture]
-/// Create a `ProcessParameterMap` with the specified parameters for each region and year
+/// Create a `ProcessParameterMap` with the specified parameters for each region
 pub fn process_parameter_map(
     region_ids: IndexSet<RegionID>,
     process_parameter: ProcessParameter,
@@ -251,8 +242,7 @@ pub fn process_parameter_map(
     let parameter = Arc::new(process_parameter);
     region_ids
         .into_iter()
-        .cartesian_product(2010..=2020)
-        .map(|(region_id, year)| ((region_id, year), parameter.clone()))
+        .map(|region_id| (region_id, parameter.clone()))
         .collect()
 }
 
@@ -263,15 +253,14 @@ pub fn process_activity_limits(time_slice_info: TimeSliceInfo) -> ActivityLimits
 }
 
 #[fixture]
-/// Create a `ProcessActivityLimitsMap` with full availability for each region and year
+/// Create a `ProcessActivityLimitsMap` with full availability for each region
 pub fn process_activity_limits_map(
     region_ids: IndexSet<RegionID>,
     process_activity_limits: ActivityLimits,
 ) -> ProcessActivityLimitsMap {
     region_ids
         .into_iter()
-        .cartesian_product(2010..=2020)
-        .map(|(region_id, year)| ((region_id, year), Arc::new(process_activity_limits.clone())))
+        .map(|region_id| (region_id, Arc::new(process_activity_limits.clone())))
         .collect()
 }
 
@@ -283,21 +272,20 @@ pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
 }
 
 #[fixture]
-/// Create an empty set of `ProcessFlows` for a given region/year
+/// Create an empty set of `ProcessFlows`
 pub fn process_flows() -> Arc<IndexMap<CommodityID, ProcessFlow>> {
     Arc::new(IndexMap::new())
 }
 
 #[fixture]
-/// Create a `ProcessFlowsMap` with the provided flows for each region/year
+/// Create a `ProcessFlowsMap` with the provided flows for each region
 pub fn process_flows_map(
     region_ids: IndexSet<RegionID>,
     process_flows: Arc<IndexMap<CommodityID, ProcessFlow>>,
 ) -> ProcessFlowsMap {
     region_ids
         .into_iter()
-        .cartesian_product(2010..=2020)
-        .map(|(region_id, year)| ((region_id, year), process_flows.clone()))
+        .map(|region_id| (region_id, process_flows.clone()))
         .collect()
 }
 

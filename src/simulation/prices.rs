@@ -1370,7 +1370,7 @@ mod tests {
     fn build_process(
         flows: IndexMap<CommodityID, ProcessFlow>,
         region_id: &RegionID,
-        year: u32,
+        _year: u32,
         time_slice_info: &TimeSliceInfo,
         variable_operating_cost: MoneyPerActivity,
         fixed_operating_cost: MoneyPerCapacityPerYear,
@@ -1379,7 +1379,7 @@ mod tests {
         discount_rate: Dimensionless,
     ) -> Process {
         let mut process_flows_map = HashMap::new();
-        process_flows_map.insert((region_id.clone(), year), Arc::new(flows));
+        process_flows_map.insert(region_id.clone(), Arc::new(flows));
 
         let mut process_parameter_map = HashMap::new();
         let proc_param = ProcessParameter {
@@ -1389,11 +1389,11 @@ mod tests {
             lifetime,
             discount_rate,
         };
-        process_parameter_map.insert((region_id.clone(), year), Arc::new(proc_param));
+        process_parameter_map.insert(region_id.clone(), Arc::new(proc_param));
 
         let mut activity_limits_map = HashMap::new();
         activity_limits_map.insert(
-            (region_id.clone(), year),
+            region_id.clone(),
             Arc::new(ActivityLimits::new_with_full_availability(time_slice_info)),
         );
 

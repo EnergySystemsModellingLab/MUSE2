@@ -21,16 +21,16 @@ define_id_type! {ProcessID, "process ID"}
 /// A map of [`Process`]es, keyed by process ID
 pub type ProcessMap = IndexMap<ProcessID, Arc<Process>>;
 
-/// A map indicating activity limits for a [`Process`] throughout the year.
-pub type ProcessActivityLimitsMap = HashMap<(RegionID, u32), Arc<ActivityLimits>>;
+/// A map indicating activity limits for a [`Process`] by region.
+pub type ProcessActivityLimitsMap = HashMap<RegionID, Arc<ActivityLimits>>;
 
-/// A map of [`ProcessParameter`]s, keyed by region and year
-pub type ProcessParameterMap = HashMap<(RegionID, u32), Arc<ProcessParameter>>;
+/// A map of [`ProcessParameter`]s, keyed by region
+pub type ProcessParameterMap = HashMap<RegionID, Arc<ProcessParameter>>;
 
-/// A map of process flows, keyed by region and year.
+/// A map of process flows, keyed by region.
 ///
 /// The value is actually a map itself, keyed by commodity ID.
-pub type ProcessFlowsMap = HashMap<(RegionID, u32), Arc<IndexMap<CommodityID, ProcessFlow>>>;
+pub type ProcessFlowsMap = HashMap<RegionID, Arc<IndexMap<CommodityID, ProcessFlow>>>;
 
 /// Map of process investment constraints, keyed by region and year
 pub type ProcessInvestmentConstraintsMap =

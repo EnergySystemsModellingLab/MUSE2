@@ -1,13 +1,11 @@
 //! Code for reading process availabilities from a CSV file.
 use super::super::{input_err_msg, parse_range, read_csv_optional, try_insert};
 use crate::id::GetIDValue;
-use crate::input::parse_year_str;
 use crate::process::{ActivityLimits, ProcessActivityLimitsMap, ProcessID, ProcessMap};
 use crate::region::parse_region_str;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Dimensionless, Year};
 use anyhow::{Context, Result};
-use itertools::iproduct;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -21,7 +19,6 @@ const PROCESS_AVAILABILITIES_FILE_NAME: &str = "process_availabilities.csv";
 struct ProcessAvailabilityRaw {
     process_id: String,
     regions: String,
-    commission_years: String,
     time_slice: String,
     limits: String,
 }
@@ -108,25 +105,17 @@ where
                 format!("Invalid region for process {id}. Valid regions are {process_regions:?}")
             })?;
 
-        // Get years
-        let process_years: Vec<u32> = process.years.clone().collect();
-        let record_years =
-            parse_year_str(&record.commission_years, &process_years).with_context(|| {
-                format!("Invalid year for process {id}. Valid years are {process_years:?}")
-            })?;
-
         // Get time slices
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
 
-        // Store the activity limit for each region/year
+        // Store the activity limit for each region
         let entries_for_process = entries.get_mut(id).unwrap();
-        for (region_id, year) in iproduct!(&record_regions, &record_years) {
-            let entries_for_process_region_year = entries_for_process
-                .entry((region_id.clone(), *year))
-                .or_default();
+        for region_id in record_regions {
+            let entries_for_process_region =
+                entries_for_process.entry(region_id.clone()).or_default();
             let length = time_slice_info.length_for_selection(&ts_selection)?;
             try_insert(
-                entries_for_process_region_year,
+                entries_for_process_region,
                 &ts_selection,
                 record.to_bounds(length)?,
             )?;
@@ -134,23 +123,23 @@ where
     }
 
     // Create `ProcessActivityLimitsMap`s for each process.
-    // Maps are created for all regions and years defined for each process, gathering the limits
+    // Maps are created for all regions defined for each process, gathering the limits
     // defined in the entries above, or using default limits (full availability) if none were
     // defined.
     let mut map = HashMap::new();
     for (process_id, process) in processes {
         let mut inner_map = HashMap::new();
         let entries_for_process = &entries[process_id];
-        for (region_id, year) in iproduct!(&process.regions, process.years.clone()) {
+        for region_id in &process.regions {
             let limits = entries_for_process
-                .get(&(region_id.clone(), year))
+                .get(region_id)
                 .cloned()
                 .unwrap_or_default();
             let availabilities = ActivityLimits::new_from_limits(&limits, time_slice_info)
                 .with_context(|| {
                     format!("Error creating activity limits for process {process_id}")
                 })?;
-            inner_map.insert((region_id.clone(), year), Arc::new(availabilities));
+            inner_map.insert(region_id.clone(), Arc::new(availabilities));
         }
         map.insert(process_id.clone(), inner_map);
     }
@@ -168,7 +157,6 @@ mod tests {
         ProcessAvailabilityRaw {
             process_id: "process".into(),
             regions: "region".into(),
-            commission_years: "2010".into(),
             time_slice: "day".into(),
             limits,
         }

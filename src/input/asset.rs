@@ -90,17 +90,17 @@ where
         );
         // ... and also have associated process parameters and flows
         ensure!(
-            process.parameters.contains_key(&(region_id.clone(), asset.commission_year)),
-            "Parameters for process {} do not contain entry for year {}, required for asset in agent {}",
+            process.parameters.contains_key(region_id),
+            "Parameters for process {} do not contain entry for region {}, required for asset in agent {}",
             process_id,
-            asset.commission_year,
+            region_id,
             asset.agent_id,
         );
         ensure!(
-            process.flows.contains_key(&(region_id.clone(), asset.commission_year)),
-            "Flows for process {} do not contain entry for year {}, required for asset in agent {}",
+            process.flows.contains_key(region_id),
+            "Flows for process {} do not contain entry for region {}, required for asset in agent {}",
             process_id,
-            asset.commission_year,
+            region_id,
             asset.agent_id,
         );
 

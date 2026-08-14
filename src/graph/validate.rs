@@ -81,21 +81,18 @@ fn can_be_active(
     time_slice_selection: &TimeSliceSelection,
 ) -> bool {
     let (target_region, target_year) = target;
-
-    for ((region, year), value) in &process.parameters {
-        if region != target_region {
-            continue;
-        }
-        if year + value.lifetime >= *target_year {
-            let Some(limits_map) = process.activity_limits.get(target) else {
-                continue;
-            };
-            if limits_map.get_limit(time_slice_selection).end() > &Dimensionless(0.0) {
-                return true;
-            }
-        }
+    let Some(parameter) = process.parameters.get(target_region) else {
+        return false;
+    };
+    let latest_operating_year = process.years.end().saturating_add(parameter.lifetime);
+    if *target_year < *process.years.start() || *target_year > latest_operating_year {
+        return false;
     }
-    false
+
+    process
+        .activity_limits
+        .get(target_region)
+        .is_some_and(|limits| limits.get_limit(time_slice_selection).end() > &Dimensionless(0.0))
 }
 
 /// Validates that the commodity graph follows the rules for different commodity types.
