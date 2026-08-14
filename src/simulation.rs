@@ -252,7 +252,7 @@ fn candidate_assets_for_next_year(
 
     for process in processes
         .values()
-        .filter(move |process| process.active_for_year(next_year))
+        .filter(move |process| process.can_be_commissioned_in_year(next_year))
     {
         for region_id in &process.regions {
             candidates.push(

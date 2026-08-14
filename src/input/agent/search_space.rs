@@ -244,7 +244,7 @@ fn get_producers_map(agents: &AgentMap, processes: &ProcessMap) -> ProducersMap 
         let producers = processes
             .values()
             .filter(move |process| {
-                process.active_for_year(*year)
+                process.can_be_commissioned_in_year(*year)
                     && process.primary_output.as_ref() == Some(commodity_id)
                     && process.regions.contains(region_id)
             })

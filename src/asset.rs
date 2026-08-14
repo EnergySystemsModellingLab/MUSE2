@@ -864,7 +864,7 @@ pub fn check_region_year_valid_for_process(
         region_id
     );
     ensure!(
-        process.active_for_year(year),
+        process.can_be_commissioned_in_year(year),
         "Process {} does not operate in the year {}",
         process.id,
         year

@@ -79,7 +79,7 @@ where
             .get_id_value(&asset.process_id)?;
         let region_id = region_ids.get_id(&asset.region_id)?;
 
-        // Validate commission year. It should be within the process valid range...
+        // Validate the commission year against the process's commissioning range...
         ensure!(
             process.years.contains(&asset.commission_year),
             "Agent {} has asset with commission year {}, not within process {} commission years: {:?}",

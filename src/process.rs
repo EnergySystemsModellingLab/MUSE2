@@ -73,7 +73,7 @@ pub struct Process {
 
 impl Process {
     /// Whether the process can be commissioned in a given year
-    pub fn active_for_year(&self, year: u32) -> bool {
+    pub fn can_be_commissioned_in_year(&self, year: u32) -> bool {
         self.years.contains(&year)
     }
 
@@ -87,7 +87,7 @@ impl Process {
     }
 }
 
-/// Defines the activity limits for a process in a given region and year
+/// Defines the activity limits for a process in a given region
 ///
 /// Activity limits represent the minimum and maximum fraction of the potential annual activity that
 /// can be undertaken in each time slice, season, or the year as a whole. The limits stored and
