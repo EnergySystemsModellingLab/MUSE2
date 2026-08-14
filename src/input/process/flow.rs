@@ -62,7 +62,6 @@ impl ProcessFlowRaw {
 /// * `model_dir` - Folder containing model configuration files
 /// * `processes` - Mutable map of known processes (may be updated)
 /// * `commodities` - Map of known commodities
-/// * `milestone_years` - Milestone years used by the model
 ///
 /// # Returns
 ///
@@ -136,7 +135,6 @@ fn validate_output_flows_units(flows_map: &HashMap<ProcessID, ProcessFlowsMap>) 
 /// * `iter` - Iterator over `ProcessFlowRaw` records
 /// * `processes` - Mutable map of known processes used for validation and updates
 /// * `commodities` - Map of known commodities
-/// * `milestone_years` - Milestone years used by the model
 ///
 /// # Returns
 ///
@@ -285,8 +283,7 @@ fn check_flows_primary_output(
                 .values()
                 .all(|x| x.direction() == FlowDirection::Input
                     || x.direction() == FlowDirection::Zero),
-            "First year is only inputs, but subsequent years have outputs, although no primary \
-            output is specified"
+            "Process has output flows, but no primary output is specified"
         );
     }
 

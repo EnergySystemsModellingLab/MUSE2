@@ -53,20 +53,19 @@ pub enum GraphEdge {
 
 /// Helper function to return a possible flow operating in the requested year
 ///
-/// We are only interested in the flow directions, which are constant across years. This
-/// function checks whether the process can be operating in the target region and year and, if so,
-/// returns its flows. It considers both the commissioning window and process lifetime, since a
-/// process may operate for years after its commissioning window. If the process cannot be
-/// operating in the target region/year, `None` is returned.
+/// We are only interested in the flow directions, which are constant across years. This function
+/// checks whether the process can be operating in the target region and year and, if so, returns
+/// its region-specific flows. A process may operate for years after its commissioning window due
+/// to its lifetime; if it cannot operate in the target region/year, `None` is returned.
 fn get_flow_for_year(
     process: &Process,
     target: (RegionID, u32),
 ) -> Option<Arc<IndexMap<CommodityID, ProcessFlow>>> {
     let (target_region, target_year) = target;
-    process
-        .can_operate_in_region_year(&target_region, target_year)
-        .then(|| process.flows.get(&target_region).cloned())
-        .flatten()
+    if !process.can_operate_in_region_year(&target_region, target_year) {
+        return None;
+    }
+    process.flows.get(&target_region).cloned()
 }
 
 /// Creates a directed graph of commodity flows for a given region and year.

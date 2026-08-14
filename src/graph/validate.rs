@@ -70,11 +70,10 @@ fn prepare_commodities_graph_for_validation(
 
 /// Checks if a process can be active for a particular time slice in a given year and region
 ///
-/// It considers all commission years that can lead to a running process in the target region and
-/// year, accounting for the process lifetime, and then checks if, for any of those, the process
-/// is active in the required time slice. In other words, this checks if there is the _possibility_
-/// of having an active process, although there is no guarantee of that happening since it depends
-/// on the investment.
+/// It checks whether the process could be operating in the target region and year, accounting for
+/// the process lifetime, and then checks whether it is active in the required time slice. In other
+/// words, this checks if there is the _possibility_ of having an active process, although there is
+/// no guarantee of that happening since it depends on the investment.
 fn can_be_active(
     process: &Process,
     target: &(RegionID, u32),

@@ -96,7 +96,7 @@ pub struct Asset {
     activity_limits: Arc<ActivityLimits>,
     /// The commodity flows for this asset
     flows: Arc<IndexMap<CommodityID, ProcessFlow>>,
-    /// The [`ProcessParameter`] corresponding to the asset's region and commission year
+    /// The [`ProcessParameter`] corresponding to the asset's region
     process_parameter: Arc<ProcessParameter>,
     /// The region in which the asset is located
     region_id: RegionID,
