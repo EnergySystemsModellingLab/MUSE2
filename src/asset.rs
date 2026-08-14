@@ -650,15 +650,6 @@ impl Asset {
         &self.process.id
     }
 
-    /// Whether two assets have equivalent properties for the purposes of dispatch optimisation.
-    pub fn is_dispatch_equivalent(&self, other: &Self) -> bool {
-        self.region_id == other.region_id
-            && self.activity_limits == other.activity_limits
-            && self.flows == other.flows
-            && self.process_parameter.variable_operating_cost
-                == other.process_parameter.variable_operating_cost
-    }
-
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
@@ -1285,43 +1276,6 @@ mod tests {
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
         // Should be -coeff * price = -(-2.0) * 3.0 = 6.0
         assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
-    }
-
-    #[rstest]
-    fn dispatch_equivalence_ignores_capacity(asset: Asset) {
-        let mut other = asset.clone();
-        other.set_capacity(AssetCapacity::Continuous(Capacity(3.0)));
-
-        assert!(asset.is_dispatch_equivalent(&other));
-    }
-
-    #[rstest]
-    fn dispatch_equivalence_fails_for_different_region(asset: Asset) {
-        let mut other = asset.clone();
-        other.region_id = "FRA".into();
-
-        assert!(!asset.is_dispatch_equivalent(&other));
-    }
-
-    #[rstest]
-    fn dispatch_equivalence_fails_for_different_variable_operating_cost(asset: Asset) {
-        let mut other = asset.clone();
-        Arc::make_mut(&mut other.process_parameter).variable_operating_cost = MoneyPerActivity(1.0);
-
-        assert!(!asset.is_dispatch_equivalent(&other));
-    }
-
-    #[rstest]
-    fn dispatch_equivalence_ignores_state(asset: Asset) {
-        let mut other = asset.clone();
-        other.commission(AssetID(1));
-
-        assert!(asset.is_dispatch_equivalent(&other));
-    }
-
-    #[rstest]
-    fn dispatch_equivalence_is_reflexive(asset: Asset) {
-        assert!(asset.is_dispatch_equivalent(&asset));
     }
 
     #[fixture]

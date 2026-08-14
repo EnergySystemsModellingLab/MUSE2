@@ -3,6 +3,7 @@ use super::VariableMap;
 use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
@@ -473,8 +474,8 @@ where
     ActivityKeys { offset, keys }
 }
 
-/// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
-/// slice.
+/// Add constraints requiring assets of the same process in the same region to have equal
+/// utilisation in each time slice.
 ///
 /// Flexible-capacity assets are excluded because their maximum activity depends on a decision
 /// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
@@ -493,23 +494,19 @@ fn add_equal_utilisation_constraints<'a, I>(
         .map(|(asset, _)| asset)
         .collect();
 
-    // Group assets by comparing each one with the first asset in each group.
-    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
+    // Group together assets with the same process and region
+    let mut assets_by_process: IndexMap<(RegionID, ProcessID), Vec<&AssetRef>> = IndexMap::new();
     for asset in assets.filter(|asset| !flexible_assets.contains(asset)) {
-        if let Some(group) = asset_groups
-            .iter_mut()
-            .find(|group| group[0].is_dispatch_equivalent(asset))
-        {
-            group.push(asset);
-        } else {
-            asset_groups.push(vec![asset]);
-        }
+        assets_by_process
+            .entry((asset.region_id().clone(), asset.process_id().clone()))
+            .or_default()
+            .push(asset);
     }
 
     // For each group of assets, add constraints to force equal utilisation in each time slice
     // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
     // for a group of n assets)
-    for assets in asset_groups {
+    for assets in assets_by_process.into_values() {
         let Some((reference_asset, others)) = assets.split_first() else {
             continue;
         };
