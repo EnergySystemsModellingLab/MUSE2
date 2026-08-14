@@ -1,4 +1,4 @@
-process_id,regions,commission_years,time_slice,limits
-gassupply1,R1;R2,all,annual,..0.9
-gasCCGT,R1;R2,all,annual,..0.9
-windturbine,R1;R2,all,annual,..0.4
+process_id,regions,time_slice,limits
+gassupply1,R1;R2,annual,..0.9
+gasCCGT,R1;R2,annual,..0.9
+windturbine,R1;R2,annual,..0.4
