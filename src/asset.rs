@@ -115,52 +115,6 @@ fn hash_unit<U: UnitType>(value: U) -> u64 {
     if value == 0.0 { 0 } else { value.to_bits() }
 }
 
-fn compute_dispatch_equivalence_hash(
-    region_id: &RegionID,
-    activity_limits: &ActivityLimits,
-    flows: &IndexMap<CommodityID, ProcessFlow>,
-    process_parameter: &ProcessParameter,
-) -> u64 {
-    let mut hasher = DefaultHasher::new();
-
-    // Hash the region ID
-    region_id.hash(&mut hasher);
-
-    // Hash activity limits based on ts selection, lower and upper limits
-    let mut activity_limit_hashes = activity_limits
-        .iter_limits()
-        .map(|(selection, limits)| {
-            let mut hasher = DefaultHasher::new();
-            selection.hash(&mut hasher);
-            hash_unit(*limits.start()).hash(&mut hasher);
-            hash_unit(*limits.end()).hash(&mut hasher);
-            hasher.finish()
-        })
-        .collect::<Vec<_>>();
-    activity_limit_hashes.sort_unstable();
-    activity_limit_hashes.hash(&mut hasher);
-
-    // Hash flows based on commodity ID, coefficient, FlowType and cost
-    let mut flow_hashes = flows
-        .values()
-        .map(|flow| {
-            let mut hasher = DefaultHasher::new();
-            flow.commodity.id.hash(&mut hasher);
-            hash_unit(flow.coeff).hash(&mut hasher);
-            std::mem::discriminant(&flow.kind).hash(&mut hasher);
-            hash_unit(flow.cost).hash(&mut hasher);
-            hasher.finish()
-        })
-        .collect::<Vec<_>>();
-    flow_hashes.sort_unstable();
-    flow_hashes.hash(&mut hasher);
-
-    // Hash the variable operating cost
-    hash_unit(process_parameter.variable_operating_cost).hash(&mut hasher);
-
-    hasher.finish()
-}
-
 impl Asset {
     /// Create a new candidate asset
     pub fn new_candidate(
@@ -708,28 +662,70 @@ impl Asset {
     /// compared by value, so separately allocated but identical `Arc`s are still equivalent.
     /// This method is the authoritative equality check; the cached dispatch hash is only used to
     /// narrow grouping candidates and may contain collisions.
+    ///
+    /// This is deliberately conservative: any difference in variable operating cost, flows, or
+    /// activity limits, however small, means the assets are considered not equivalent.
     pub fn is_dispatch_equivalent(&self, other: &Self) -> bool {
         self.region_id == other.region_id
             && self.process_parameter.variable_operating_cost
                 == other.process_parameter.variable_operating_cost
+            // `IndexMap` equality is insensitive to entry order.
+            // If the assets share the same allocation, `Arc::ptr_eq` avoids having to compare the
+            // full contents of the `IndexMap`.
             && (Arc::ptr_eq(&self.activity_limits, &other.activity_limits)
                 || self.activity_limits == other.activity_limits)
             && (Arc::ptr_eq(&self.flows, &other.flows) || self.flows == other.flows)
     }
 
-    /// Calculate a hash of the properties used by [`Self::is_dispatch_equivalent`].
+    /// Calculate a hash of the properties used to determine dispatch equivalence.
     ///
-    /// This hash is calculated lazily because only assets used in dispatch and eligible for
-    /// equal-utilisation grouping need it. It is used as a prefilter;
-    /// [`Self::is_dispatch_equivalent`] remains the authoritative comparison when hash buckets are
-    /// checked.
+    /// It is used as a prefilter to avoid unnecessary, and potentially expensive, comparisons with
+    /// [`Self::is_dispatch_equivalent`]. Equal hashes does not confirm equivalence, but unequal
+    /// hashes can rule out equivalence.
+    ///
+    /// Hashes are calculated lazily, rather than caching at initialisation, because only assets
+    /// used in dispatch and eligible for equal-utilisation grouping need it.
     pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
-        compute_dispatch_equivalence_hash(
-            &self.region_id,
-            &self.activity_limits,
-            &self.flows,
-            &self.process_parameter,
-        )
+        let mut hasher = DefaultHasher::new();
+
+        // Hash the region ID
+        self.region_id.hash(&mut hasher);
+
+        // Hash the variable operating cost
+        hash_unit(self.process_parameter.variable_operating_cost).hash(&mut hasher);
+
+        // Hash activity limits based on ts selection, lower and upper limits
+        let mut activity_limit_hashes = self
+            .activity_limits
+            .iter_limits()
+            .map(|(selection, limits)| {
+                let mut hasher = DefaultHasher::new();
+                selection.hash(&mut hasher);
+                hash_unit(*limits.start()).hash(&mut hasher);
+                hash_unit(*limits.end()).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        activity_limit_hashes.sort_unstable();
+        activity_limit_hashes.hash(&mut hasher);
+
+        // Hash flows based on commodity ID, coefficient, FlowType and cost
+        let mut flow_hashes = self
+            .flows
+            .values()
+            .map(|flow| {
+                let mut hasher = DefaultHasher::new();
+                flow.commodity.id.hash(&mut hasher);
+                hash_unit(flow.coeff).hash(&mut hasher);
+                std::mem::discriminant(&flow.kind).hash(&mut hasher);
+                hash_unit(flow.cost).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        flow_hashes.sort_unstable();
+        flow_hashes.hash(&mut hasher);
+
+        hasher.finish()
     }
 
     /// Get the ID for this asset
