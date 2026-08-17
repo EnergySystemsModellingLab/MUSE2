@@ -1398,9 +1398,17 @@ mod tests {
     }
 
     #[rstest]
-    fn dispatch_equivalence_fails_for_different_flows(asset: Asset) {
+    fn dispatch_equivalence_fails_for_different_flows(asset: Asset, svd_commodity: Commodity) {
+        let commodity = Arc::new(svd_commodity);
+        let flow = ProcessFlow {
+            commodity: Arc::clone(&commodity),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+
         let mut other = asset.clone();
-        other.flows = Arc::new(IndexMap::new());
+        other.flows = Arc::new(indexmap! { commodity.id.clone() => flow });
 
         assert!(!asset.is_dispatch_equivalent(&other));
     }
