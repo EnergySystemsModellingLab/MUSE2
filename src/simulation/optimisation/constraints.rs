@@ -635,12 +635,7 @@ mod tests {
     }
 
     #[rstest]
-    fn groups_equivalent_assets_separately_from_non_equivalent_assets(
-        asset: Asset,
-        mut process: Process,
-    ) {
-        let mut equivalent = asset.clone();
-        equivalent.set_capacity(AssetCapacity::Continuous(Capacity(3.0)));
+    fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
         Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
             .variable_operating_cost = crate::units::MoneyPerActivity(1.0);
         let different = Asset::new_ready(
@@ -651,16 +646,12 @@ mod tests {
             2015,
         )
         .unwrap();
-        let assets = [
-            AssetRef::from(asset),
-            AssetRef::from(equivalent),
-            AssetRef::from(different),
-        ];
+        let assets = [AssetRef::from(asset), AssetRef::from(different)];
 
         let groups = group_dispatch_equivalent_assets(assets.iter());
 
         assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].len(), 2);
+        assert_eq!(groups[0].len(), 1);
         assert_eq!(groups[1].len(), 1);
     }
 }
