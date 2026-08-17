@@ -1390,6 +1390,35 @@ mod tests {
     }
 
     #[rstest]
+    fn dispatch_equivalence_fails_for_different_activity_limits(
+        asset: Asset,
+        asset_with_activity_limits: Asset,
+    ) {
+        assert!(!asset.is_dispatch_equivalent(&asset_with_activity_limits));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_flows(asset: Asset) {
+        let mut other = asset.clone();
+        other.flows = Arc::new(IndexMap::new());
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_handles_separately_allocated_values(asset: Asset) {
+        let mut other = asset.clone();
+        other.activity_limits = Arc::new((*asset.activity_limits).clone());
+        other.flows = Arc::new((*asset.flows).clone());
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
     fn dispatch_equivalence_ignores_state(asset: Asset) {
         let mut other = asset.clone();
         other.commission(AssetID(1));

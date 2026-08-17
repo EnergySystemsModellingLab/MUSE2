@@ -570,12 +570,13 @@ fn add_equal_utilisation_constraints<'a, I>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asset::Asset;
     use crate::commodity::Commodity;
     use crate::fixture::{asset, process, process_flows_map, svd_commodity};
     use crate::process::Process;
     use crate::process::{FlowType, ProcessFlow};
     use crate::time_slice::TimeSliceSelection;
-    use crate::units::{FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
@@ -614,5 +615,52 @@ mod tests {
             Flow(epsilon),
         );
         assert_eq!(result, Flow(expected));
+    }
+
+    #[test]
+    fn groups_no_assets() {
+        assert!(group_dispatch_equivalent_assets(std::iter::empty()).is_empty());
+    }
+
+    #[rstest]
+    fn groups_equivalent_assets(asset: Asset) {
+        let mut equivalent = asset.clone();
+        equivalent.set_capacity(AssetCapacity::Continuous(Capacity(3.0)));
+        let assets = [AssetRef::from(asset), AssetRef::from(equivalent)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].len(), 2);
+    }
+
+    #[rstest]
+    fn groups_equivalent_assets_separately_from_non_equivalent_assets(
+        asset: Asset,
+        mut process: Process,
+    ) {
+        let mut equivalent = asset.clone();
+        equivalent.set_capacity(AssetCapacity::Continuous(Capacity(3.0)));
+        Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
+            .variable_operating_cost = crate::units::MoneyPerActivity(1.0);
+        let different = Asset::new_ready(
+            "agent1".into(),
+            Arc::new(process),
+            "GBR".into(),
+            Capacity(2.0),
+            2015,
+        )
+        .unwrap();
+        let assets = [
+            AssetRef::from(asset),
+            AssetRef::from(equivalent),
+            AssetRef::from(different),
+        ];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].len(), 2);
+        assert_eq!(groups[1].len(), 1);
     }
 }
