@@ -656,12 +656,12 @@ impl Asset {
         &self.process.id
     }
 
-    /// Whether two assets have equivalent properties for the purposes of dispatch optimisation.
+    /// Whether two assets have identical properties for the purposes of dispatch optimisation.
     ///
-    /// Capacity and asset state are deliberately ignored. The activity limits and flows are
-    /// compared by value, so separately allocated but identical `Arc`s are still equivalent.
-    /// This method is the authoritative equality check; the cached dispatch hash is only used to
-    /// narrow grouping candidates and may contain collisions.
+    /// Capacity, process identity and asset state are deliberately ignored. The activity limits
+    /// and flows are compared by value, so separately allocated but identical `Arc`s are still
+    /// equivalent. This method is the authoritative equality check; the dispatch hash is only used
+    /// to narrow grouping candidates and may contain collisions.
     ///
     /// This is deliberately conservative: any difference in variable operating cost, flows, or
     /// activity limits, however small, means the assets are considered not equivalent.
@@ -683,8 +683,13 @@ impl Asset {
     /// [`Self::is_dispatch_equivalent`]. Equal hashes does not confirm equivalence, but unequal
     /// hashes can rule out equivalence.
     ///
+    /// This is deliberately conservative: any difference in variable operating cost, flows, or
+    /// activity limits, however small, may result in a different hash.
+    ///
     /// Hashes are calculated lazily, rather than caching at initialisation, because only assets
-    /// used in dispatch and eligible for equal-utilisation grouping need it.
+    /// used in dispatch and eligible for equal-utilisation grouping need it. The trade-off is that
+    /// some assets may end up being hashed multiple times if they take part in multiple dispatch
+    /// runs, although the performance cost of this is likely not massive.
     pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
 

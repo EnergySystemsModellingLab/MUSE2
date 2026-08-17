@@ -473,12 +473,14 @@ where
     ActivityKeys { offset, keys }
 }
 
-/// Group assets with equivalent dispatch properties.
+/// Groups assets that have equivalent dispatch properties.
 ///
-/// The dispatch hash is used only as a prefilter, so hash collisions cannot merge non-equivalent
-/// assets: each candidate group is checked with `is_dispatch_equivalent`. The input is expected to
-/// contain only assets eligible for equal-utilisation constraints; filtering flexible-capacity
-/// assets is the caller's responsibility.
+/// Assets are first bucketed by `dispatch_equivalence_hash()` to avoid unnecessary pairwise
+/// comparisons. Within each hash bucket, assets are compared using `is_dispatch_equivalent()`,
+/// which is the authoritative check for equivalence. This also handles hash collisions correctly.
+///
+/// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
+/// constraints (i.e. flexible-capacity assets have already been filtered out).
 fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
 where
     I: Iterator<Item = &'a AssetRef>,
@@ -490,15 +492,18 @@ where
     let mut group_indices: HashMap<u64, Vec<usize>> = HashMap::new();
     for asset in assets {
         let hash = asset.dispatch_equivalence_hash();
-        let matching_group = group_indices.get(&hash).and_then(|group_indices| {
-            group_indices
-                .iter()
-                .copied()
-                .find(|&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset))
-        });
+
+        // Only groups with the same hash can possibly match.
+        let candidate_groups = group_indices.get(&hash);
+
+        // Find a group whose representative is actually equivalent.
+        let matching_group = candidate_groups
+            .into_iter()
+            .flatten()
+            .find(|&&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset));
 
         if let Some(group_index) = matching_group {
-            asset_groups[group_index].push(asset);
+            asset_groups[*group_index].push(asset);
         } else {
             let group_index = asset_groups.len();
             asset_groups.push(vec![asset]);
