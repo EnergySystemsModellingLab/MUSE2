@@ -19,6 +19,7 @@ use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -27,6 +28,10 @@ mod capacity;
 pub use capacity::AssetCapacity;
 mod pool;
 pub use pool::AssetPool;
+
+fn hash_f64(value: f64) -> u64 {
+    if value == 0.0 { 0 } else { value.to_bits() }
+}
 
 /// A unique identifier for an asset
 #[derive(
@@ -657,6 +662,44 @@ impl Asset {
             && self.flows == other.flows
             && self.process_parameter.variable_operating_cost
                 == other.process_parameter.variable_operating_cost
+    }
+
+    /// Calculate a hash of the properties used by [`Self::is_dispatch_equivalent`].
+    pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.region_id.hash(&mut hasher);
+
+        let mut activity_limit_hashes = self
+            .activity_limits
+            .iter_limits()
+            .map(|(selection, limits)| {
+                let mut hasher = DefaultHasher::new();
+                selection.hash(&mut hasher);
+                hash_f64(limits.start().value()).hash(&mut hasher);
+                hash_f64(limits.end().value()).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        activity_limit_hashes.sort_unstable();
+        activity_limit_hashes.hash(&mut hasher);
+
+        let mut flow_hashes = self
+            .flows
+            .values()
+            .map(|flow| {
+                let mut hasher = DefaultHasher::new();
+                flow.commodity.id.hash(&mut hasher);
+                hash_f64(flow.coeff.value()).hash(&mut hasher);
+                std::mem::discriminant(&flow.kind).hash(&mut hasher);
+                hash_f64(flow.cost.value()).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        flow_hashes.sort_unstable();
+        flow_hashes.hash(&mut hasher);
+
+        hash_f64(self.process_parameter.variable_operating_cost.value()).hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Get the ID for this asset

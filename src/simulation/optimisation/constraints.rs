@@ -8,7 +8,7 @@ use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -473,6 +473,36 @@ where
     ActivityKeys { offset, keys }
 }
 
+fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
+where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    // Group assets by comparing each one with the first asset in each group. The hash index
+    // avoids comparing an asset with groups that cannot contain an equivalent asset, while the
+    // exact comparison preserves correctness in the event of hash collisions.
+    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
+    let mut group_indices: HashMap<u64, Vec<usize>> = HashMap::new();
+    for asset in assets {
+        let hash = asset.dispatch_equivalence_hash();
+        let matching_group = group_indices.get(&hash).and_then(|group_indices| {
+            group_indices
+                .iter()
+                .copied()
+                .find(|&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset))
+        });
+
+        if let Some(group_index) = matching_group {
+            asset_groups[group_index].push(asset);
+        } else {
+            let group_index = asset_groups.len();
+            asset_groups.push(vec![asset]);
+            group_indices.entry(hash).or_default().push(group_index);
+        }
+    }
+
+    asset_groups
+}
+
 /// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
 /// slice.
 ///
@@ -493,18 +523,8 @@ fn add_equal_utilisation_constraints<'a, I>(
         .map(|(asset, _)| asset)
         .collect();
 
-    // Group assets by comparing each one with the first asset in each group.
-    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
-    for asset in assets.filter(|asset| !flexible_assets.contains(asset)) {
-        if let Some(group) = asset_groups
-            .iter_mut()
-            .find(|group| group[0].is_dispatch_equivalent(asset))
-        {
-            group.push(asset);
-        } else {
-            asset_groups.push(vec![asset]);
-        }
-    }
+    let asset_groups =
+        group_dispatch_equivalent_assets(assets.filter(|asset| !flexible_assets.contains(asset)));
 
     // For each group of assets, add constraints to force equal utilisation in each time slice
     // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
