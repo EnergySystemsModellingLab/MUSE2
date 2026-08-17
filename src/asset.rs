@@ -29,11 +29,6 @@ pub use capacity::AssetCapacity;
 mod pool;
 pub use pool::AssetPool;
 
-fn hash_unit<U: UnitType>(value: U) -> u64 {
-    let value = value.value();
-    if value == 0.0 { 0 } else { value.to_bits() }
-}
-
 /// A unique identifier for an asset
 #[derive(
     Clone,
@@ -112,8 +107,12 @@ pub struct Asset {
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
-    /// Hash of the properties used to determine dispatch equivalence
-    dispatch_equivalence_hash: u64,
+}
+
+/// Hash a unit value while treating positive and negative zero as equal.
+fn hash_unit<U: UnitType>(value: U) -> u64 {
+    let value = value.value();
+    if value == 0.0 { 0 } else { value.to_bits() }
 }
 
 fn compute_dispatch_equivalence_hash(
@@ -326,13 +325,6 @@ impl Asset {
             max_decommission_year > commission_year,
             "Max decommission year must be greater than commission year"
         );
-        let dispatch_equivalence_hash = compute_dispatch_equivalence_hash(
-            &region_id,
-            &activity_limits,
-            &flows,
-            &process_parameter,
-        );
-
         Ok(Self {
             state,
             process,
@@ -343,7 +335,6 @@ impl Asset {
             capacity,
             commission_year,
             max_decommission_year,
-            dispatch_equivalence_hash,
         })
     }
 
@@ -726,9 +717,19 @@ impl Asset {
             && (Arc::ptr_eq(&self.flows, &other.flows) || self.flows == other.flows)
     }
 
-    /// Get the hash of the properties used by [`Self::is_dispatch_equivalent`].
+    /// Calculate a hash of the properties used by [`Self::is_dispatch_equivalent`].
+    ///
+    /// This hash is calculated lazily because only assets used in dispatch and eligible for
+    /// equal-utilisation grouping need it. It is used as a prefilter;
+    /// [`Self::is_dispatch_equivalent`] remains the authoritative comparison when hash buckets are
+    /// checked.
     pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
-        self.dispatch_equivalence_hash
+        compute_dispatch_equivalence_hash(
+            &self.region_id,
+            &self.activity_limits,
+            &self.flows,
+            &self.process_parameter,
+        )
     }
 
     /// Get the ID for this asset
