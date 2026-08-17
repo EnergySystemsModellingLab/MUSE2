@@ -123,8 +123,11 @@ fn compute_dispatch_equivalence_hash(
     process_parameter: &ProcessParameter,
 ) -> u64 {
     let mut hasher = DefaultHasher::new();
+
+    // Hash the region ID
     region_id.hash(&mut hasher);
 
+    // Hash activity limits based on ts selection, lower and upper limits
     let mut activity_limit_hashes = activity_limits
         .iter_limits()
         .map(|(selection, limits)| {
@@ -138,13 +141,13 @@ fn compute_dispatch_equivalence_hash(
     activity_limit_hashes.sort_unstable();
     activity_limit_hashes.hash(&mut hasher);
 
+    // Hash flows based on commodity ID, coefficient and cost
     let mut flow_hashes = flows
         .values()
         .map(|flow| {
             let mut hasher = DefaultHasher::new();
             flow.commodity.id.hash(&mut hasher);
             hash_unit(flow.coeff).hash(&mut hasher);
-            std::mem::discriminant(&flow.kind).hash(&mut hasher);
             hash_unit(flow.cost).hash(&mut hasher);
             hasher.finish()
         })
@@ -152,7 +155,9 @@ fn compute_dispatch_equivalence_hash(
     flow_hashes.sort_unstable();
     flow_hashes.hash(&mut hasher);
 
+    // Hash the variable operating cost
     hash_unit(process_parameter.variable_operating_cost).hash(&mut hasher);
+
     hasher.finish()
 }
 
