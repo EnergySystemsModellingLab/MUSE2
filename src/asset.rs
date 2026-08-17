@@ -10,7 +10,7 @@ use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerFlow, Year,
+    MoneyPerCapacity, MoneyPerFlow, UnitType, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -29,7 +29,8 @@ pub use capacity::AssetCapacity;
 mod pool;
 pub use pool::AssetPool;
 
-fn hash_f64(value: f64) -> u64 {
+fn hash_unit<U: UnitType>(value: U) -> u64 {
+    let value = value.value();
     if value == 0.0 { 0 } else { value.to_bits() }
 }
 
@@ -111,6 +112,48 @@ pub struct Asset {
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
+    /// Hash of the properties used to determine dispatch equivalence
+    dispatch_equivalence_hash: u64,
+}
+
+fn compute_dispatch_equivalence_hash(
+    region_id: &RegionID,
+    activity_limits: &ActivityLimits,
+    flows: &IndexMap<CommodityID, ProcessFlow>,
+    process_parameter: &ProcessParameter,
+) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    region_id.hash(&mut hasher);
+
+    let mut activity_limit_hashes = activity_limits
+        .iter_limits()
+        .map(|(selection, limits)| {
+            let mut hasher = DefaultHasher::new();
+            selection.hash(&mut hasher);
+            hash_unit(*limits.start()).hash(&mut hasher);
+            hash_unit(*limits.end()).hash(&mut hasher);
+            hasher.finish()
+        })
+        .collect::<Vec<_>>();
+    activity_limit_hashes.sort_unstable();
+    activity_limit_hashes.hash(&mut hasher);
+
+    let mut flow_hashes = flows
+        .values()
+        .map(|flow| {
+            let mut hasher = DefaultHasher::new();
+            flow.commodity.id.hash(&mut hasher);
+            hash_unit(flow.coeff).hash(&mut hasher);
+            std::mem::discriminant(&flow.kind).hash(&mut hasher);
+            hash_unit(flow.cost).hash(&mut hasher);
+            hasher.finish()
+        })
+        .collect::<Vec<_>>();
+    flow_hashes.sort_unstable();
+    flow_hashes.hash(&mut hasher);
+
+    hash_unit(process_parameter.variable_operating_cost).hash(&mut hasher);
+    hasher.finish()
 }
 
 impl Asset {
@@ -277,6 +320,12 @@ impl Asset {
             max_decommission_year > commission_year,
             "Max decommission year must be greater than commission year"
         );
+        let dispatch_equivalence_hash = compute_dispatch_equivalence_hash(
+            &region_id,
+            &activity_limits,
+            &flows,
+            &process_parameter,
+        );
 
         Ok(Self {
             state,
@@ -288,6 +337,7 @@ impl Asset {
             capacity,
             commission_year,
             max_decommission_year,
+            dispatch_equivalence_hash,
         })
     }
 
@@ -664,42 +714,9 @@ impl Asset {
                 == other.process_parameter.variable_operating_cost
     }
 
-    /// Calculate a hash of the properties used by [`Self::is_dispatch_equivalent`].
+    /// Get the hash of the properties used by [`Self::is_dispatch_equivalent`].
     pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.region_id.hash(&mut hasher);
-
-        let mut activity_limit_hashes = self
-            .activity_limits
-            .iter_limits()
-            .map(|(selection, limits)| {
-                let mut hasher = DefaultHasher::new();
-                selection.hash(&mut hasher);
-                hash_f64(limits.start().value()).hash(&mut hasher);
-                hash_f64(limits.end().value()).hash(&mut hasher);
-                hasher.finish()
-            })
-            .collect::<Vec<_>>();
-        activity_limit_hashes.sort_unstable();
-        activity_limit_hashes.hash(&mut hasher);
-
-        let mut flow_hashes = self
-            .flows
-            .values()
-            .map(|flow| {
-                let mut hasher = DefaultHasher::new();
-                flow.commodity.id.hash(&mut hasher);
-                hash_f64(flow.coeff.value()).hash(&mut hasher);
-                std::mem::discriminant(&flow.kind).hash(&mut hasher);
-                hash_f64(flow.cost.value()).hash(&mut hasher);
-                hasher.finish()
-            })
-            .collect::<Vec<_>>();
-        flow_hashes.sort_unstable();
-        flow_hashes.hash(&mut hasher);
-
-        hash_f64(self.process_parameter.variable_operating_cost.value()).hash(&mut hasher);
-        hasher.finish()
+        self.dispatch_equivalence_hash
     }
 
     /// Get the ID for this asset
@@ -1336,6 +1353,10 @@ mod tests {
         other.set_capacity(AssetCapacity::Continuous(Capacity(3.0)));
 
         assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
     }
 
     #[rstest]
@@ -1360,11 +1381,19 @@ mod tests {
         other.commission(AssetID(1));
 
         assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
     }
 
     #[rstest]
     fn dispatch_equivalence_is_reflexive(asset: Asset) {
         assert!(asset.is_dispatch_equivalent(&asset));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            asset.dispatch_equivalence_hash()
+        );
     }
 
     #[fixture]
