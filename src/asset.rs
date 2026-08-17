@@ -141,13 +141,14 @@ fn compute_dispatch_equivalence_hash(
     activity_limit_hashes.sort_unstable();
     activity_limit_hashes.hash(&mut hasher);
 
-    // Hash flows based on commodity ID, coefficient and cost
+    // Hash flows based on commodity ID, coefficient, FlowType and cost
     let mut flow_hashes = flows
         .values()
         .map(|flow| {
             let mut hasher = DefaultHasher::new();
             flow.commodity.id.hash(&mut hasher);
             hash_unit(flow.coeff).hash(&mut hasher);
+            std::mem::discriminant(&flow.kind).hash(&mut hasher);
             hash_unit(flow.cost).hash(&mut hasher);
             hasher.finish()
         })
@@ -711,13 +712,18 @@ impl Asset {
     }
 
     /// Whether two assets have equivalent properties for the purposes of dispatch optimisation.
+    ///
+    /// Capacity and asset state are deliberately ignored. The activity limits and flows are
+    /// compared by value, so separately allocated but identical `Arc`s are still equivalent.
+    /// This method is the authoritative equality check; the cached dispatch hash is only used to
+    /// narrow grouping candidates and may contain collisions.
     pub fn is_dispatch_equivalent(&self, other: &Self) -> bool {
         self.region_id == other.region_id
+            && self.process_parameter.variable_operating_cost
+                == other.process_parameter.variable_operating_cost
             && (Arc::ptr_eq(&self.activity_limits, &other.activity_limits)
                 || self.activity_limits == other.activity_limits)
             && (Arc::ptr_eq(&self.flows, &other.flows) || self.flows == other.flows)
-            && self.process_parameter.variable_operating_cost
-                == other.process_parameter.variable_operating_cost
     }
 
     /// Get the hash of the properties used by [`Self::is_dispatch_equivalent`].

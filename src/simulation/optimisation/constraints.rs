@@ -473,6 +473,12 @@ where
     ActivityKeys { offset, keys }
 }
 
+/// Group assets with equivalent dispatch properties.
+///
+/// The dispatch hash is used only as a prefilter, so hash collisions cannot merge non-equivalent
+/// assets: each candidate group is checked with `is_dispatch_equivalent`. The input is expected to
+/// contain only assets eligible for equal-utilisation constraints; filtering flexible-capacity
+/// assets is the caller's responsibility.
 fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
 where
     I: Iterator<Item = &'a AssetRef>,
