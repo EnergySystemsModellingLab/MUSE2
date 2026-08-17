@@ -680,7 +680,7 @@ impl Asset {
     /// Calculate a hash of the properties used to determine dispatch equivalence.
     ///
     /// It is used as a prefilter to avoid unnecessary, and potentially expensive, comparisons with
-    /// [`Self::is_dispatch_equivalent`]. Equal hashes does not confirm equivalence, but unequal
+    /// [`Self::is_dispatch_equivalent`]. Equal hashes do not confirm equivalence, but unequal
     /// hashes can rule out equivalence.
     ///
     /// This is deliberately conservative: any difference in variable operating cost, flows, or
