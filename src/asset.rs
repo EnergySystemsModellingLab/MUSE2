@@ -713,8 +713,9 @@ impl Asset {
     /// Whether two assets have equivalent properties for the purposes of dispatch optimisation.
     pub fn is_dispatch_equivalent(&self, other: &Self) -> bool {
         self.region_id == other.region_id
-            && self.activity_limits == other.activity_limits
-            && self.flows == other.flows
+            && (Arc::ptr_eq(&self.activity_limits, &other.activity_limits)
+                || self.activity_limits == other.activity_limits)
+            && (Arc::ptr_eq(&self.flows, &other.flows) || self.flows == other.flows)
             && self.process_parameter.variable_operating_cost
                 == other.process_parameter.variable_operating_cost
     }
