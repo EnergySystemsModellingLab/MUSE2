@@ -524,8 +524,8 @@ fn remove_candidates_exceeding_agent_addition_limits(
 /// Record a selected asset and update the remaining investment options and selection state.
 ///
 /// If the asset is a candidate, its capacity is subtracted from
-/// `remaining_agent_addition_limits` (if applicable). This is to ensure that annual addition
-/// limits are not exceeded. If the asset is commissioned, one unit is subtracted from
+/// `remaining_agent_addition_limits` (if applicable) to ensure that process addition limits are not
+/// exceeded. If the asset is commissioned, one unit is subtracted from
 /// `available_retention_units` to ensure that retention does not invent new capacity.
 ///
 /// # Arguments
