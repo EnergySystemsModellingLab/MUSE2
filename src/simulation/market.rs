@@ -469,7 +469,7 @@ fn get_candidate_assets<'a>(
 }
 
 /// Agent addition limits are based on process addition limits that have already been
-/// scaled from annual input limits to the interval since the previous milestone year.
+/// scaled from annual addition limits to the interval since the previous milestone year.
 /// The resulting limit is then scaled according to the agent's portion of commodity demand.
 pub fn collect_agent_addition_limits(
     agent: &Agent,
