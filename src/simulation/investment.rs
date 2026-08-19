@@ -516,7 +516,21 @@ fn remove_candidates_exceeding_limits(
     });
 }
 
-/// Update limits of the chosen asset, if needed, and update both asset options and chosen assets
+/// Add the best asset to the list of selected assets, and update the remaining limits and options
+/// accordingly.
+///
+/// If the asset is a candidate, its capacity is subtracted from `remaining_candidate_capacities`
+/// (if applicable). This is to ensure that any annual addition limits are not exceeded. If the
+/// asset is a commissioned asset, one unit is subtracted from `remaining_units`. This is to ensure
+/// that we do not select more units than are available for retention.
+///
+/// # Arguments
+///
+/// * `best_asset` - The asset that has been selected as the best option in this round
+/// * `opt_assets` - The list of remaining asset options to be considered in future rounds
+/// * `remaining_candidate_capacities` - The remaining investment limits for candidate assets
+/// * `remaining_units` - The remaining unit counts for commissioned assets
+/// * `best_assets` - The list of assets that have been selected so far
 fn update_assets(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
