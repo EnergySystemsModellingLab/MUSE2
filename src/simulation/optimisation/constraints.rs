@@ -8,6 +8,7 @@ use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
+use std::collections::{HashMap, HashSet};
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -105,6 +106,8 @@ where
         add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
     add_utilisation_peak_constraints(problem, model, assets.clone(), variables);
+
+    add_equal_utilisation_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
     // Return constraint keys
     ConstraintKeys {
@@ -469,15 +472,110 @@ where
     ActivityKeys { offset, keys }
 }
 
+/// Groups assets that have equivalent dispatch properties.
+///
+/// Assets are first bucketed by `dispatch_equivalence_hash()` to avoid unnecessary pairwise
+/// comparisons. Within each hash bucket, assets are compared using `is_dispatch_equivalent()`,
+/// which is the authoritative check for equivalence. This also handles hash collisions correctly.
+///
+/// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
+/// constraints (i.e. flexible-capacity assets have already been filtered out).
+fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
+where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    // Group assets by comparing each one with the first asset in each group. The hash index
+    // avoids comparing an asset with groups that cannot contain an equivalent asset, while the
+    // exact comparison preserves correctness in the event of hash collisions.
+    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
+    let mut group_indices: HashMap<u64, Vec<usize>> = HashMap::new();
+    for asset in assets {
+        let hash = asset.dispatch_equivalence_hash();
+
+        // Only groups with the same hash can possibly match.
+        let candidate_groups = group_indices.get(&hash);
+
+        // Find a group whose representative is actually equivalent.
+        let matching_group = candidate_groups
+            .into_iter()
+            .flatten()
+            .find(|&&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset));
+
+        if let Some(group_index) = matching_group {
+            asset_groups[*group_index].push(asset);
+        } else {
+            let group_index = asset_groups.len();
+            asset_groups.push(vec![asset]);
+            group_indices.entry(hash).or_default().push(group_index);
+        }
+    }
+
+    asset_groups
+}
+
+/// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
+/// slice.
+///
+/// Flexible-capacity assets are excluded because their maximum activity depends on a decision
+/// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
+/// are not currently used.
+fn add_equal_utilisation_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    time_slice_info: &TimeSliceInfo,
+    assets: I,
+) where
+    I: Iterator<Item = &'a AssetRef> + 'a,
+{
+    // Identify flexible-capacity assets so we can exclude them from the constraints
+    let flexible_assets: HashSet<_> = variables
+        .iter_capacity_vars()
+        .map(|(asset, _)| asset)
+        .collect();
+
+    let asset_groups =
+        group_dispatch_equivalent_assets(assets.filter(|asset| !flexible_assets.contains(asset)));
+
+    // For each group of assets, add constraints to force equal utilisation in each time slice
+    // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
+    // for a group of n assets)
+    for assets in asset_groups {
+        let Some((reference_asset, others)) = assets.split_first() else {
+            continue;
+        };
+
+        let reference_max = reference_asset.max_activity().value();
+
+        for asset in others {
+            let asset_max = asset.max_activity().value();
+
+            for time_slice in time_slice_info.iter_ids() {
+                // Constraint: (act_a * max_b) - (act_b * max_a) = 0
+                problem.add_row(
+                    0.0..=0.0,
+                    [
+                        (variables.get_activity_var(asset, time_slice), reference_max),
+                        (
+                            variables.get_activity_var(reference_asset, time_slice),
+                            -asset_max,
+                        ),
+                    ],
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asset::{Asset, AssetCapacity};
     use crate::commodity::Commodity;
     use crate::fixture::{asset, process, process_flows_map, svd_commodity};
     use crate::process::Process;
     use crate::process::{FlowType, ProcessFlow};
     use crate::time_slice::TimeSliceSelection;
-    use crate::units::{FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
@@ -516,5 +614,43 @@ mod tests {
             Flow(epsilon),
         );
         assert_eq!(result, Flow(expected));
+    }
+
+    #[test]
+    fn groups_no_assets() {
+        assert!(group_dispatch_equivalent_assets(std::iter::empty()).is_empty());
+    }
+
+    #[rstest]
+    fn groups_equivalent_assets(asset: Asset) {
+        let mut equivalent = asset.clone();
+        equivalent.set_capacity(AssetCapacity::single(Capacity(3.0)));
+        let assets = [AssetRef::from(asset), AssetRef::from(equivalent)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].len(), 2);
+    }
+
+    #[rstest]
+    fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
+        Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
+            .variable_operating_cost = crate::units::MoneyPerActivity(1.0);
+        let different = Asset::new_ready(
+            "agent1".into(),
+            Arc::new(process),
+            "GBR".into(),
+            AssetCapacity::single(Capacity(2.0)),
+            2015,
+        )
+        .unwrap();
+        let assets = [AssetRef::from(asset), AssetRef::from(different)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].len(), 1);
+        assert_eq!(groups[1].len(), 1);
     }
 }

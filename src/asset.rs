@@ -10,7 +10,7 @@ use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerFlow, Year,
+    MoneyPerCapacity, MoneyPerFlow, UnitType, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -19,6 +19,7 @@ use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -106,6 +107,12 @@ pub struct Asset {
     commission_year: u32,
     /// The maximum year that the asset could be decommissioned
     max_decommission_year: u32,
+}
+
+/// Hash a unit value while treating positive and negative zero as equal.
+fn hash_unit<U: UnitType>(value: U) -> u64 {
+    let value = value.value();
+    if value == 0.0 { 0 } else { value.to_bits() }
 }
 
 impl Asset {
@@ -240,7 +247,6 @@ impl Asset {
             max_decommission_year > commission_year,
             "Max decommission year must be greater than commission year"
         );
-
         Ok(Self {
             state,
             process,
@@ -616,6 +622,83 @@ impl Asset {
     /// Get the process ID for this asset
     pub fn process_id(&self) -> &ProcessID {
         &self.process.id
+    }
+
+    /// Whether two assets have identical properties for the purposes of dispatch optimisation.
+    ///
+    /// Capacity, process identity and asset state are deliberately ignored. The activity limits
+    /// and flows are compared by value, so separately allocated but identical `Arc`s are still
+    /// equivalent. This method is the authoritative equality check; the dispatch hash is only used
+    /// to narrow grouping candidates and may contain collisions.
+    ///
+    /// This is deliberately conservative: any difference in variable operating cost, flows, or
+    /// activity limits, however small, means the assets are considered not equivalent.
+    pub fn is_dispatch_equivalent(&self, other: &Self) -> bool {
+        self.region_id == other.region_id
+            && self.process_parameter.variable_operating_cost
+                == other.process_parameter.variable_operating_cost
+            // `IndexMap` equality is insensitive to entry order.
+            // If the assets share the same allocation, `Arc::ptr_eq` avoids having to compare the
+            // full contents of the `IndexMap`.
+            && (Arc::ptr_eq(&self.activity_limits, &other.activity_limits)
+                || self.activity_limits == other.activity_limits)
+            && (Arc::ptr_eq(&self.flows, &other.flows) || self.flows == other.flows)
+    }
+
+    /// Calculate a hash of the properties used to determine dispatch equivalence.
+    ///
+    /// It is used as a prefilter to avoid unnecessary, and potentially expensive, comparisons with
+    /// [`Self::is_dispatch_equivalent`]. Equal hashes do not confirm equivalence, but unequal
+    /// hashes can rule out equivalence.
+    ///
+    /// This is deliberately conservative: any difference in variable operating cost, flows, or
+    /// activity limits, however small, may result in a different hash.
+    ///
+    /// Hashes are calculated lazily, rather than caching at initialisation, because only assets
+    /// used in dispatch and eligible for equal-utilisation grouping need it. The trade-off is that
+    /// some assets may end up being hashed multiple times if they take part in multiple dispatch
+    /// runs, although the performance cost of this is likely not massive.
+    pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        // Hash the region ID
+        self.region_id.hash(&mut hasher);
+
+        // Hash the variable operating cost
+        hash_unit(self.process_parameter.variable_operating_cost).hash(&mut hasher);
+
+        // Hash activity limits based on ts selection, lower and upper limits
+        let mut activity_limit_hashes = self
+            .activity_limits
+            .iter_limits()
+            .map(|(selection, limits)| {
+                let mut hasher = DefaultHasher::new();
+                selection.hash(&mut hasher);
+                hash_unit(*limits.start()).hash(&mut hasher);
+                hash_unit(*limits.end()).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        activity_limit_hashes.sort_unstable();
+        activity_limit_hashes.hash(&mut hasher);
+
+        // Hash flows based on commodity ID, coefficient, FlowType and cost
+        let mut flow_hashes = self
+            .flows
+            .values()
+            .map(|flow| {
+                let mut hasher = DefaultHasher::new();
+                flow.commodity.id.hash(&mut hasher);
+                hash_unit(flow.coeff).hash(&mut hasher);
+                std::mem::discriminant(&flow.kind).hash(&mut hasher);
+                hash_unit(flow.cost).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        flow_hashes.sort_unstable();
+        flow_hashes.hash(&mut hasher);
+
+        hasher.finish()
     }
 
     /// Get the ID for this asset
@@ -1224,6 +1307,92 @@ mod tests {
         let cost = asset.get_input_cost_from_prices(&input_prices, &time_slice);
         // Should be -coeff * price = -(-2.0) * 3.0 = 6.0
         assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_ignores_capacity(asset: Asset) {
+        let mut other = asset.clone();
+        other.set_capacity(AssetCapacity::single(Capacity(3.0)));
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_region(asset: Asset) {
+        let mut other = asset.clone();
+        other.region_id = "FRA".into();
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_variable_operating_cost(asset: Asset) {
+        let mut other = asset.clone();
+        Arc::make_mut(&mut other.process_parameter).variable_operating_cost = MoneyPerActivity(1.0);
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_activity_limits(
+        asset: Asset,
+        asset_with_activity_limits: Asset,
+    ) {
+        assert!(!asset.is_dispatch_equivalent(&asset_with_activity_limits));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_flows(asset: Asset, svd_commodity: Commodity) {
+        let commodity = Arc::new(svd_commodity);
+        let flow = ProcessFlow {
+            commodity: Arc::clone(&commodity),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+
+        let mut other = asset.clone();
+        other.flows = Arc::new(indexmap! { commodity.id.clone() => flow });
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_handles_separately_allocated_values(asset: Asset) {
+        let mut other = asset.clone();
+        other.activity_limits = Arc::new((*asset.activity_limits).clone());
+        other.flows = Arc::new((*asset.flows).clone());
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_ignores_state(asset: Asset) {
+        let mut other = asset.clone();
+        other.commission(AssetID(1));
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_is_reflexive(asset: Asset) {
+        assert!(asset.is_dispatch_equivalent(&asset));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            asset.dispatch_equivalence_hash()
+        );
     }
 
     #[fixture]

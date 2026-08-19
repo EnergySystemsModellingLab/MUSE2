@@ -83,6 +83,28 @@ fraction of the year.
 lower and upper availability fractions from `process_activity_limits.csv`, defaulting to
 \\( 0 \\) and \\( 1 \\) respectively for any selection not explicitly defined.
 
+### Equal Utilisation of Equivalent Assets
+
+To avoid arbitrarily utilising one asset over another, the dispatch model adds additional
+constraints to equalise the utilisation of assets with equivalent dispatch properties. Assets are
+considered equivalent when they are in the same region and have the same variable operating cost,
+activity limits, and commodity flows. Their capacity, state, and process identity are not considered
+when determining equivalence.
+
+For an asset \\(a\\) in time slice \\(t\\), utilisation is defined as
+
+\\[
+  \\mathrm{Utilisation}\_{a,t} =
+  \\frac{\\mathrm{Activity}\_{a,t}}{\\mathrm{Capacity}_a \\cdot \\mathrm{cap2act}_a}
+\\]
+
+For every pair of equivalent assets \\( x \\) and \\( y \\), and for every time slice \\( t \\),
+the optimisation model imposes:
+
+\\[
+  \\mathrm{Utilisation}\_{x,t} = \\mathrm{Utilisation}\_{y,t}
+\\]
+
 ### Commodity Balance Constraints
 
 For each balanced commodity \\( c \in \mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{SVD}} \\)
