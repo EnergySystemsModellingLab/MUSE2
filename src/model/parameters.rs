@@ -3,7 +3,6 @@
 //! This module defines the `ModelParameters` struct and helpers for loading and validating the
 //! `model.toml` configuration used by the model. Validation functions ensure sensible numeric
 //! ranges and invariants for runtime use.
-use crate::asset::check_capacity_valid_for_asset;
 use crate::commodity::PricingStrategy;
 use crate::input::{
     deserialise_finite_non_negative, deserialise_proportion_nonzero, input_err_msg,
@@ -335,8 +334,11 @@ impl ModelParameters {
         // fallback_pricing_strategy already validated by deserialisation
 
         // candidate_asset_capacity
-        check_capacity_valid_for_asset(self.candidate_asset_capacity)
-            .context("Invalid value for candidate_asset_capacity")?;
+        ensure!(
+            self.candidate_asset_capacity.is_finite()
+                && self.candidate_asset_capacity > Capacity(0.0),
+            "candidate_asset_capacity must be a finite, positive number"
+        );
 
         // commodity_balance_epsilon already validated with deserialise_finite_non_negative
 

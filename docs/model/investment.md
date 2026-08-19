@@ -103,59 +103,42 @@ The annualised fixed cost (AFC) per unit of capacity differs between the two cat
 
   If \\( d = 0 \\), then \\( \mathrm{CRF} = 1/L \\).
 
-## Asset Capacity
+## Asset Capacities
 
-A process is either **divisible** or **non-divisible**:
+Every asset consists of one or more equal-capacity units. A single-unit asset is retained or
+mothballed as a whole, while the units of a multi-unit asset can be retained or mothballed
+independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
-- A **divisible** process has a fixed `unit_size` (defined in [`processes.csv`][processes-csv]).
-  Assets of this type consist of one or more discrete units, each of size `unit_size`. When
-  commissioned, a divisible asset is split into individual units, each of which is appraised and
-  retained or mothballed independently.
-- A **non-divisible** process has no `unit_size`. Assets of this type are treated as a single
-  entity: capacities may take any value within their allowable range, but cannot be split into
-  independently appraised or mothballed units.
+- For assets defined in `assets.csv`, an explicitly supplied `num_units` determines the unit size.
+  Otherwise, a process `unit_size` determines the unit size. If neither is supplied, the asset
+  consists of one unit with its full capacity.
+- Assets invested in _by MUSE_ will use the process `unit_size`, if defined, or will use a capacity
+  based on demand at the time of investment (see "trial capacity" below).
 
 ### Existing assets
 
-- **Non-divisible**: the asset is appraised as a whole at its full installed capacity.
-- **Divisible**: each individual unit is appraised separately, one at a time. This allows partial
-  retention — for example, some units of a multi-unit plant may be retained while others are
-  mothballed.
+Existing assets (i.e assets that have already been commissioned, whether via `assets.csv` or by
+MUSE) are appraised one unit at a time to decide how many units to retain. This allows partial
+retention — for example, some units of a multi-unit plant may be retained while others are
+mothballed.
 
 ### Candidate assets
 
-Before a candidate asset can be appraised, it is assigned a trial capacity which defines how much
-capacity can be installed in a single investment round (subject to further
-[demand-limiting capacity](#demand-limiting-capacity-dlc) and
-[investment constraints](#investment-constraints), described below)
+Before a candidate asset for new investment can be appraised, it is assigned a trial capacity which
+defines how much capacity can be installed in a single investment round.
 
-- **Divisible**: the trial capacity is set to one unit (one `unit_size`), representing a single
-  unit being considered for investment.
-- **Non-divisible**: the trial capacity is based on the capacity that would satisfy the
-  total remaining demand if the asset operated at its maximum annual rate:
-
-  \\[
-    \mathrm{TrialCapacity} = \frac{\sum_t \mathrm{Demand}_t}{\mathrm{MaxAnnualSupplyPerCapacity}}
-    \times \mathrm{CapacityLimitFactor}
-  \\]
-
-  `capacity_limit_factor` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
-  size of investment increments relative to total demand. Lower values produce smaller investment
-  increments (requiring more investment rounds), while higher values produce larger increments.
-
-### Demand-limiting capacity (DLC)
-
-In each investment round, a candidate's trial capacity is further capped by the
-*demand-limiting capacity*, which is the minimum capacity required to satisfy the remaining demand
-across all time-slice selections:
+If a process has a defined `unit_size`, the trial capacity is set to one unit. Otherwise, it
+calculated based on the capacity that would satisfy the total remaining demand if the asset operated
+at its maximum annual rate:
 
 \\[
-  \mathrm{DLC} = \max_{\mathrm{selection}} \frac{\sum_{t \in \mathrm{selection}} \mathrm{Demand}\_t}
-    {\mathrm{MaxSupplyPerCapacity}_{\mathrm{selection}}}
+  \mathrm{TrialCapacity} = \frac{\sum_t \mathrm{Demand}_t}{\mathrm{MaxAnnualSupplyPerCapacity}}
+    \\times \mathrm{CapacityLimitFactor}
 \\]
 
-Selections where the asset has zero maximum supply are excluded. The cap prevents over-investment
-(i.e. building more capacity than needed to meet remaining demand).
+`capacity_limit_factor` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
+size of investment increments relative to total demand. Lower values produce smaller investment
+increments (requiring more investment rounds), while higher values produce larger increments.
 
 ### Investment constraints
 
@@ -325,9 +308,10 @@ terminates with an error.
 
 ## Mothballing and Decommissioning
 
-After investment is complete for a given MSY, any previously commissioned assets that were not
-selected for retention are *mothballed*: their mothball year is recorded and they are removed from
-the active asset pool. They remain available for potential re-selection in future MSYs.
+After investment is complete for a given MSY, any previously commissioned assets (or individual
+units making up the asset) that were not selected for retention are *mothballed*: their mothball
+year is recorded and they are removed from the active asset pool. They remain available for
+potential re-selection in future MSYs.
 
 A mothballed asset that remains unused for `mothball_years` consecutive years (as defined in
 [`model.toml`][model-toml]) is *decommissioned* — permanently removed from the asset pool and
@@ -495,6 +479,5 @@ assets shaping the demand seen by those upstream.
 [framework-overview]: index.html#framework-overview
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
-[processes-csv]: ../file_formats/input_files.md#processescsv
 [process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
 [dispatch-optimisation]: ./dispatch_optimisation.md

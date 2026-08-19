@@ -165,7 +165,7 @@ struct AssetCapacityRow {
     milestone_year: u32,
     asset_id: AssetID,
     capacity: Capacity,
-    num_units: Option<u32>,
+    num_units: u32,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.
@@ -485,7 +485,7 @@ impl DebugDataWriter {
                 asset_id: result.asset.id(),
                 process_id: result.asset.process_id().clone(),
                 region_id: result.asset.region_id().clone(),
-                capacity: result.asset.capacity().total_capacity(),
+                capacity: result.asset.total_capacity(),
                 metric: result.metric.as_ref().map(|m| m.value()),
             };
             self.appraisal_results_writer.serialize(row)?;
@@ -637,7 +637,7 @@ impl DataWriter {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
                 capacity: asset.total_capacity(),
-                num_units: asset.capacity().n_units(),
+                num_units: asset.capacity().num_units(),
             };
             self.asset_capacities.serialize(row)?;
         }
@@ -760,7 +760,7 @@ mod tests {
             milestone_year,
             asset_id: asset.id().unwrap(),
             capacity: asset.total_capacity(),
-            num_units: None,
+            num_units: 1,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))

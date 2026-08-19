@@ -3,30 +3,68 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
-/// Capacity of an asset, which may be continuous or a discrete number of indivisible units
+/// Capacity of an asset, expressed in terms of a number of discrete units of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
-pub enum AssetCapacity {
-    /// Continuous capacity
-    Continuous(Capacity),
-    /// Discrete capacity represented by a number of indivisible units
-    /// Stores: (number of units, unit size)
-    Discrete(u32, Capacity),
+pub struct AssetCapacity {
+    /// Number of units
+    num_units: u32,
+    /// Size of each unit
+    unit_size: Capacity,
 }
 
 impl AssetCapacity {
+    /// Create a new `AssetCapacity` with the given number of units and unit size
+    pub fn new(num_units: u32, unit_size: Capacity) -> Self {
+        assert!(
+            unit_size.is_finite() && unit_size >= Capacity(0.0),
+            "Unit size must be a finite non-negative number"
+        );
+        AssetCapacity {
+            num_units,
+            unit_size,
+        }
+    }
+
+    /// Create a new `AssetCapacity` with a single unit of the given size
+    pub fn single(unit_size: Capacity) -> Self {
+        Self::new(1, unit_size)
+    }
+
     /// Return the smaller of `self` or `other`.
     ///
     /// # Panics
     ///
-    /// Panics if the comparison is not meaningful. This happens if either `AssetCapacity` contains
-    /// a NaN value, one is discrete and the other continuous or if both are discrete and the unit
-    /// size differs.
+    /// Panics if the unit size differs.
     pub fn min(self, other: AssetCapacity) -> AssetCapacity {
         match self.partial_cmp(&other) {
             None => panic!("Comparing invalid AssetCapacity values ({self:?} and {other:?})"),
             Some(Ordering::Greater) => other,
             _ => self,
         }
+    }
+
+    /// Returns the number of units in this `AssetCapacity`.
+    pub fn num_units(&self) -> u32 {
+        self.num_units
+    }
+
+    /// Returns the unit size of this `AssetCapacity`.
+    pub fn unit_size(&self) -> Capacity {
+        self.unit_size
+    }
+
+    /// Validates that two capacities have the same unit size.
+    fn check_same_unit_size(&self, other: AssetCapacity) {
+        assert_eq!(
+            self.unit_size, other.unit_size,
+            "Can't perform operation on capacities with different unit sizes ({} and {})",
+            self.unit_size, other.unit_size,
+        );
+    }
+
+    /// Returns the total capacity represented by this `AssetCapacity`.
+    pub fn total_capacity(&self) -> Capacity {
+        self.unit_size * Dimensionless(self.num_units as f64)
     }
 }
 
@@ -35,15 +73,10 @@ impl Add for AssetCapacity {
 
     // Add two AssetCapacity values together
     fn add(self, rhs: AssetCapacity) -> Self {
-        match (self, rhs) {
-            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous(cap1 + cap2)
-            }
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(units1 + units2, size1)
-            }
-            _ => panic!("Cannot add different types of AssetCapacity ({self:?} and {rhs:?})"),
+        self.check_same_unit_size(rhs);
+        AssetCapacity {
+            num_units: self.num_units + rhs.num_units,
+            unit_size: self.unit_size,
         }
     }
 }
@@ -53,96 +86,23 @@ impl Sub for AssetCapacity {
 
     // Subtract rhs from self, ensuring that the result is non-negative
     fn sub(self, rhs: AssetCapacity) -> Self {
-        match (self, rhs) {
-            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
-                AssetCapacity::Continuous((cap1 - cap2).max(Capacity(0.0)))
-            }
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                Self::check_same_unit_size(size1, size2);
-                AssetCapacity::Discrete(units1 - units2.min(units1), size1)
-            }
-            _ => panic!("Cannot subtract different types of AssetCapacity ({self:?} and {rhs:?})"),
+        self.check_same_unit_size(rhs);
+        assert!(
+            self.num_units >= rhs.num_units,
+            "Cannot subtract a larger AssetCapacity ({rhs:?}) from a smaller one ({self:?})"
+        );
+        AssetCapacity {
+            num_units: self.num_units - rhs.num_units,
+            unit_size: self.unit_size,
         }
     }
 }
 
 impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.partial_cmp(b),
-            (AssetCapacity::Discrete(units1, size1), AssetCapacity::Discrete(units2, size2)) => {
-                // NB: Also returns `None` if either is NaN
-                (*size1 == *size2).then(|| units1.cmp(units2))
-            }
-            _ => None,
-        }
-    }
-}
-
-impl AssetCapacity {
-    /// Validates that two discrete capacities have the same unit size.
-    fn check_same_unit_size(size1: Capacity, size2: Capacity) {
-        assert_eq!(
-            size1, size2,
-            "Can't perform operation on capacities with different unit sizes ({size1} and {size2})",
-        );
-    }
-
-    /// Create an `AssetCapacity` from a total capacity and optional unit size
-    ///
-    /// If a unit size is provided, the capacity is represented as a discrete number of units,
-    /// calculated as the ceiling of (capacity / `unit_size`). If no unit size is provided, the
-    /// capacity is represented as continuous.
-    pub fn from_capacity(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        match unit_size {
-            Some(size) => {
-                let num_units = (capacity / size).value().ceil() as u32;
-                AssetCapacity::Discrete(num_units, size)
-            }
-            None => AssetCapacity::Continuous(capacity),
-        }
-    }
-
-    /// Create an `AssetCapacity` from a total capacity and optional unit size
-    ///
-    /// If a unit size is provided, the capacity is represented as a discrete number of units,
-    /// calculated as the floor of (capacity / `unit_size`). If no unit size is provided, the
-    /// capacity is represented as continuous.
-    pub fn from_capacity_floor(capacity: Capacity, unit_size: Option<Capacity>) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        match unit_size {
-            Some(size) => {
-                let num_units = (capacity / size).value().floor() as u32;
-                AssetCapacity::Discrete(num_units, size)
-            }
-            None => AssetCapacity::Continuous(capacity),
-        }
-    }
-
-    /// Returns the total capacity represented by this `AssetCapacity`.
-    pub fn total_capacity(&self) -> Capacity {
-        match self {
-            AssetCapacity::Continuous(cap) => *cap,
-            AssetCapacity::Discrete(units, size) => *size * Dimensionless(*units as f64),
-        }
-    }
-
-    /// Returns the number of units if this is a discrete capacity, or `None` if continuous.
-    pub fn n_units(&self) -> Option<u32> {
-        match self {
-            AssetCapacity::Continuous(_) => None,
-            AssetCapacity::Discrete(units, _) => Some(*units),
-        }
-    }
-
-    /// Asserts that both capacities are the same type (both continuous or both discrete).
-    pub fn assert_same_type(&self, other: AssetCapacity) {
-        assert!(
-            matches!(self, AssetCapacity::Continuous(_))
-                == matches!(other, AssetCapacity::Continuous(_)),
-            "Cannot change capacity type"
-        );
+        let size1 = self.unit_size;
+        let size2 = other.unit_size;
+        (size1 == size2).then(|| self.num_units.cmp(&other.num_units))
     }
 }
 
@@ -153,64 +113,49 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case::exact_multiple(Capacity(12.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
-    #[case::rounded_up(Capacity(11.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
-    #[case::unit_size_greater_than_capacity(
-        Capacity(3.0),
-        Some(Capacity(4.0)),
-        Some(1),
-        Capacity(4.0)
-    )]
-    #[case::continuous(Capacity(5.5), None, None, Capacity(5.5))]
-    fn from_capacity(
-        #[case] capacity: Capacity,
-        #[case] unit_size: Option<Capacity>,
-        #[case] expected_n: Option<u32>,
-        #[case] expected_total: Capacity,
+    #[case(1, Capacity(1.0), Capacity(1.0))]
+    #[case(2, Capacity(3.5), Capacity(7.0))]
+    #[case(u32::MAX, Capacity(0.0), Capacity(0.0))]
+    fn new_works(
+        #[case] num_units: u32,
+        #[case] unit_size: Capacity,
+        #[case] expected_total_capacity: Capacity,
     ) {
-        let got = AssetCapacity::from_capacity(capacity, unit_size);
-        assert_eq!(got.n_units(), expected_n);
-        assert_eq!(got.total_capacity(), expected_total);
+        let capacity = AssetCapacity::new(num_units, unit_size);
+
+        assert_eq!(capacity.num_units(), num_units);
+        assert_eq!(capacity.unit_size(), unit_size);
+        assert_eq!(capacity.total_capacity(), expected_total_capacity);
     }
 
     #[rstest]
-    #[case::exact_multiple(Capacity(12.0), Some(Capacity(4.0)), Some(3), Capacity(12.0))]
-    #[case::rounded_down(Capacity(11.0), Some(Capacity(4.0)), Some(2), Capacity(8.0))]
-    #[case::unit_size_greater_than_capacity(
-        Capacity(3.0),
-        Some(Capacity(4.0)),
-        Some(0),
-        Capacity(0.0)
-    )]
-    #[case::continuous(Capacity(5.5), None, None, Capacity(5.5))]
-    fn from_capacity_floor(
-        #[case] capacity: Capacity,
-        #[case] unit_size: Option<Capacity>,
-        #[case] expected_n: Option<u32>,
-        #[case] expected_total: Capacity,
-    ) {
-        let got = AssetCapacity::from_capacity_floor(capacity, unit_size);
-        assert_eq!(got.n_units(), expected_n);
-        assert_eq!(got.total_capacity(), expected_total);
+    #[case(Capacity(-1.0))]
+    #[case(Capacity(f64::INFINITY))]
+    #[case(Capacity(f64::NEG_INFINITY))]
+    #[case(Capacity(f64::NAN))]
+    #[should_panic(expected = "Unit size must be a finite non-negative number")]
+    fn new_rejects_non_finite_unit_size(#[case] unit_size: Capacity) {
+        let num_units = 1;
+        let _ = AssetCapacity::new(num_units, unit_size);
     }
 
     #[rstest]
     #[case::less(
-        AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::new(2, Capacity(3.0)),
+        AssetCapacity::new(4, Capacity(3.0)),
         Some(Ordering::Less)
     )]
     #[case::equal(
-        AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::new(4, Capacity(3.0)),
+        AssetCapacity::new(4, Capacity(3.0)),
         Some(Ordering::Equal)
     )]
     #[case::greater(
-        AssetCapacity::Continuous(Capacity(6.0)),
-        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::new(5, Capacity(3.0)),
+        AssetCapacity::new(4, Capacity(3.0)),
         Some(Ordering::Greater)
     )]
-    fn partial_cmp_continuous(
+    fn partial_cmp_with_matching_unit_size(
         #[case] left: AssetCapacity,
         #[case] right: AssetCapacity,
         #[case] expected: Option<Ordering>,
@@ -220,42 +165,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case::less(
-        AssetCapacity::Discrete(2, Capacity(3.0)),
-        AssetCapacity::Discrete(4, Capacity(3.0)),
-        Some(Ordering::Less)
-    )]
-    #[case::equal(
-        AssetCapacity::Discrete(4, Capacity(3.0)),
-        AssetCapacity::Discrete(4, Capacity(3.0)),
-        Some(Ordering::Equal)
-    )]
-    #[case::greater(
-        AssetCapacity::Discrete(5, Capacity(3.0)),
-        AssetCapacity::Discrete(4, Capacity(3.0)),
-        Some(Ordering::Greater)
-    )]
-    fn partial_cmp_discrete_with_matching_unit_size(
-        #[case] left: AssetCapacity,
-        #[case] right: AssetCapacity,
-        #[case] expected: Option<Ordering>,
-    ) {
-        assert_eq!(left.partial_cmp(&right), expected);
-        assert_eq!(left == right, expected == Some(Ordering::Equal));
-    }
-
-    #[rstest]
-    #[case::mixed_types(
-        AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::Discrete(4, Capacity(1.0))
-    )]
     #[case::different_unit_sizes(
-        AssetCapacity::Discrete(4, Capacity(1.0)),
-        AssetCapacity::Discrete(4, Capacity(2.0))
-    )]
-    #[case::nan_continuous(
-        AssetCapacity::Continuous(Capacity(f64::NAN)),
-        AssetCapacity::Continuous(Capacity(4.0))
+        AssetCapacity::new(4, Capacity(1.0)),
+        AssetCapacity::new(4, Capacity(2.0))
     )]
     fn partial_cmp_returns_none_for_invalid_comparisons(
         #[case] left: AssetCapacity,
@@ -266,15 +178,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case::continuous(
-        AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::Continuous(Capacity(6.0)),
-        AssetCapacity::Continuous(Capacity(4.0))
-    )]
     #[case::discrete(
-        AssetCapacity::Discrete(2, Capacity(3.0)),
-        AssetCapacity::Discrete(4, Capacity(3.0)),
-        AssetCapacity::Discrete(2, Capacity(3.0))
+        AssetCapacity::new(2, Capacity(3.0)),
+        AssetCapacity::new(4, Capacity(3.0)),
+        AssetCapacity::new(2, Capacity(3.0))
     )]
     fn min_returns_smaller_capacity(
         #[case] left: AssetCapacity,
@@ -285,13 +192,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case::mixed_types(
-        AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::Discrete(4, Capacity(1.0))
-    )]
     #[case::different_unit_sizes(
-        AssetCapacity::Discrete(4, Capacity(1.0)),
-        AssetCapacity::Discrete(4, Capacity(2.0))
+        AssetCapacity::new(4, Capacity(1.0)),
+        AssetCapacity::new(4, Capacity(2.0))
     )]
     #[should_panic(expected = "Comparing invalid AssetCapacity values")]
     fn min_panics_for_invalid_comparisons(
@@ -299,5 +202,18 @@ mod tests {
         #[case] right: AssetCapacity,
     ) {
         let _ = left.min(right);
+    }
+
+    #[test]
+    fn subtracting_equal_capacities_returns_zero_units() {
+        let capacity = AssetCapacity::new(2, Capacity(3.0));
+
+        assert_eq!(
+            capacity - capacity,
+            AssetCapacity {
+                num_units: 0,
+                unit_size: Capacity(3.0),
+            }
+        );
     }
 }
