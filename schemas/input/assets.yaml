@@ -15,6 +15,13 @@ fields:
     type: number
     description: The capacity of the asset
     notes: Must be >0
+  - name: num_units
+    type: integer
+    description: The number of units comprising the asset
+    notes: |
+      Optional. For processes with a `unit_size`, if omitted it is calculated by rounding the
+      capacity up to the nearest whole unit. For processes without a `unit_size`, if provided it
+      determines the unit size; otherwise the asset is represented as one unit. Must be >0.
   - name: commission_year
     type: integer
     description: The year in which to commission this asset
