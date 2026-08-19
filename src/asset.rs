@@ -9,8 +9,8 @@ use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerFlow, UnitType, Year,
+    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerFlow, UnitType, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -845,27 +845,6 @@ impl Asset {
     pub fn num_units(&self) -> u32 {
         self.capacity().num_units()
     }
-
-    /// For non-commissioned assets, get the maximum capacity permitted to be installed based on the
-    /// investment constraints for the asset's process.
-    ///
-    /// The limit is taken from the process's investment constraints for the asset's region and
-    /// commission year, and the portion of the commodity demand being considered.
-    pub fn max_installable_capacity(&self, commodity_portion: Dimensionless) -> Option<Capacity> {
-        assert!(
-            !self.is_commissioned(),
-            "max_installable_capacity can only be called on uncommissioned assets"
-        );
-        assert!(
-            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
-            "commodity_portion must be between 0 and 1 inclusive"
-        );
-
-        self.process
-            .investment_constraints
-            .get(&(self.region_id.clone(), self.commission_year))
-            .and_then(|c| c.get_addition_limit().map(|l| l * commodity_portion))
-    }
 }
 
 #[allow(clippy::missing_fields_in_debug)]
@@ -1623,27 +1602,6 @@ mod tests {
             patches,
             "Agent A0_GEX has asset with commission year 2060, not within process GASDRV commission years: 2020..=2050"
         );
-    }
-
-    #[rstest]
-    fn max_installable_capacity(mut process: Process, region_id: RegionID) {
-        // Set an addition limit of 3 for (region, year 2015)
-        process.investment_constraints.insert(
-            (region_id.clone(), 2015),
-            Arc::new(crate::process::ProcessInvestmentConstraint {
-                addition_limit: Some(Capacity(3.0)),
-            }),
-        );
-        let process_rc = Arc::new(process);
-
-        // Create a candidate asset with commission year 2015
-        let asset =
-            Asset::new_candidate(process_rc.clone(), region_id.clone(), Capacity(1.0), 2015)
-                .unwrap();
-
-        // commodity_portion = 0.5 -> limit = 3 * 0.5 = 1.5
-        let result = asset.max_installable_capacity(Dimensionless(0.5));
-        assert_eq!(result, Some(Capacity(1.5)));
     }
 
     #[rstest]
