@@ -107,7 +107,7 @@ The annualised fixed cost (AFC) per unit of capacity differs between the two cat
 
 Every asset consists of one or more equal-capacity units. A single-unit asset is retained or
 mothballed as a whole, while the units of a multi-unit asset can be retained or mothballed
-independently.
+independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
 - For assets defined in `assets.csv`, an explicitly supplied `num_units` determines the unit size.
   Otherwise, a process `unit_size` determines the unit size. If neither is supplied, the asset
