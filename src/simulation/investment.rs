@@ -364,7 +364,8 @@ pub fn select_best_assets(
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
 
-    // Remaining capacity limits for candidate processes
+    // Remaining addition limits for candidate processes
+    // Initialised as the full agent addition limits, and reduced as candidate assets are selected
     let mut remaining_agent_addition_limits = agent_addition_limits;
     remove_candidates_exceeding_agent_addition_limits(
         &mut opt_assets,

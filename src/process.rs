@@ -77,7 +77,8 @@ impl Process {
         self.years.contains(&year)
     }
 
-    /// Calculate the agent's share of the addition limit for this process in a region and year.
+    /// Calculate an agent's share of the addition limit for this process in a region and year
+    /// based on commodity portion.
     pub fn agent_addition_limit(
         &self,
         region_id: &RegionID,
