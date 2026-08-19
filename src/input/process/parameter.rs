@@ -1,5 +1,7 @@
 //! Code for reading process parameters from a CSV file
-use super::super::{format_items_with_cap, input_err_msg, read_csv, try_insert};
+use super::super::{
+    deserialise_finite_non_negative, format_items_with_cap, input_err_msg, read_csv, try_insert,
+};
 use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::process::{ProcessID, ProcessMap, ProcessParameter, ProcessParameterMap};
@@ -19,8 +21,11 @@ struct ProcessParameterRaw {
     process_id: String,
     regions: String,
     commission_years: String,
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     capital_cost: MoneyPerCapacity,
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     fixed_operating_cost: MoneyPerCapacityPerYear,
+    #[serde(deserialize_with = "deserialise_finite_non_negative")]
     variable_operating_cost: MoneyPerActivity,
     lifetime: u32,
     discount_rate: Option<Dimensionless>,
