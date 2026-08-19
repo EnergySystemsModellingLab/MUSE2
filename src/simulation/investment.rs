@@ -535,6 +535,7 @@ fn remove_candidates_exceeding_limits(
 /// * `best_asset` - The asset that has been selected as the best option in this round
 /// * `opt_assets` - The list of remaining asset options to be considered in future rounds
 /// * `remaining_addition_limit` - The remaining investment limits for candidate assets
+/// * `remaining_total_limit` - The remaining capacity for processes
 /// * `remaining_units` - The remaining unit counts for commissioned assets
 /// * `best_assets` - The list of assets that have been selected so far
 fn update_assets(
