@@ -188,7 +188,7 @@ impl AssetPool {
 mod tests {
     use super::super::Asset;
     use super::*;
-    use crate::asset::MothballEvent;
+    use crate::asset::{AssetCapacity, MothballEvent};
     use crate::fixture::{asset, asset_divisible, process, process_parameter_map};
     use crate::process::{Process, ProcessParameter};
     use crate::units::{
@@ -219,7 +219,7 @@ mod tests {
                     "agent1".into(),
                     Arc::clone(&rc_process),
                     "GBR".into(),
-                    Capacity(1.0),
+                    AssetCapacity::Discrete(1, Capacity(1.0)),
                     year,
                     None,
                 )

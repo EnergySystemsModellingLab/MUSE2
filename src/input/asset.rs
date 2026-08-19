@@ -1,7 +1,7 @@
 //! Code for reading user assets from a CSV file.
 use super::{input_err_msg, read_csv_optional};
 use crate::agent::AgentID;
-use crate::asset::UserAsset;
+use crate::asset::{AssetCapacity, UserAsset};
 use crate::id::{GetIDValue, IDCollection};
 use crate::process::ProcessMap;
 use crate::region::RegionID;
@@ -23,6 +23,8 @@ struct AssetRaw {
     region_id: String,
     agent_id: String,
     capacity: Capacity,
+    #[serde(default)]
+    num_units: Option<u32>,
     commission_year: u32,
     #[serde(default)]
     max_decommission_year: Option<u32>,
@@ -104,29 +106,44 @@ where
             asset.agent_id,
         );
 
-        // Check that capacity is approximately a multiple of the process unit size
-        // If not, raise a warning
-        if let Some(unit_size) = process.unit_size {
+        // Split overall capacity into units
+        let asset_capacity = if let Some(num_units) = asset.num_units {
+            // A provided unit count takes precedence over the process unit_size.
+            ensure!(num_units > 0, "num_units must be positive");
+
+            let unit_size = Capacity(asset.capacity.value() / num_units as f64);
+            AssetCapacity::Discrete(num_units, unit_size)
+        } else if let Some(unit_size) = process.unit_size {
+            // No unit count was provided, so use the process unit_size to determine
+            // how many units are needed to cover the asset's capacity.
             let ratio = (asset.capacity / unit_size).value();
+            let num_units = ratio.ceil();
+
+            // Rounding up can increase the combined capacity of the resulting units.
             if !approx_eq!(f64, ratio, ratio.ceil()) {
-                let n_units = ratio.ceil();
                 warn!(
                     "Asset capacity {} for process {} is not a multiple of unit size {}. \
-                     Asset will be divided into {} units with combined capacity of {}.",
+                    Asset will be divided into {} units with combined capacity of {}.",
                     asset.capacity,
                     process_id,
                     unit_size,
-                    n_units,
-                    unit_size.value() * n_units
+                    num_units,
+                    unit_size.value() * num_units
                 );
             }
-        }
+
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            AssetCapacity::Discrete(num_units as u32, unit_size)
+        } else {
+            // Without a process unit_size, lack of num_units implies the asset is indivisible.
+            AssetCapacity::Discrete(1, asset.capacity)
+        };
 
         UserAsset::new(
             agent_id.clone(),
             Arc::clone(process),
             region_id.clone(),
-            asset.capacity,
+            asset_capacity,
             asset.commission_year,
             asset.max_decommission_year,
         )
@@ -162,6 +179,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
+            num_units: Some(1),
             commission_year: 2010,
             max_decommission_year,
         };
@@ -169,7 +187,7 @@ mod tests {
             "agent1".into(),
             Arc::clone(processes.values().next().unwrap()),
             "GBR".into(),
-            Capacity(1.0),
+            AssetCapacity::Discrete(1, Capacity(1.0)),
             2010,
             max_decommission_year,
         )
@@ -182,11 +200,65 @@ mod tests {
     }
 
     #[rstest]
+    fn explicit_unit_count_sets_unit_size(
+        agent_ids: IndexSet<AgentID>,
+        processes: ProcessMap,
+        region_ids: IndexSet<RegionID>,
+    ) {
+        let asset = AssetRaw {
+            process_id: "process1".into(),
+            region_id: "GBR".into(),
+            agent_id: "agent1".into(),
+            capacity: Capacity(6.0),
+            num_units: Some(3),
+            commission_year: 2010,
+            max_decommission_year: None,
+        };
+
+        let assets =
+            read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
+
+        assert_eq!(
+            assets[0].capacity(),
+            AssetCapacity::Discrete(3, Capacity(2.0))
+        );
+    }
+
+    #[rstest]
+    fn missing_unit_count_uses_process_unit_size(
+        agent_ids: IndexSet<AgentID>,
+        mut processes: ProcessMap,
+        region_ids: IndexSet<RegionID>,
+    ) {
+        Arc::get_mut(processes.get_mut("process1").unwrap())
+            .unwrap()
+            .unit_size = Some(Capacity(4.0));
+        let asset = AssetRaw {
+            process_id: "process1".into(),
+            region_id: "GBR".into(),
+            agent_id: "agent1".into(),
+            capacity: Capacity(9.0),
+            num_units: None,
+            commission_year: 2010,
+            max_decommission_year: None,
+        };
+
+        let assets =
+            read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
+
+        assert_eq!(
+            assets[0].capacity(),
+            AssetCapacity::Discrete(3, Capacity(4.0))
+        );
+    }
+
+    #[rstest]
     #[case(AssetRaw { // Bad process ID
             agent_id: "agent1".into(),
             process_id: "process2".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
+            num_units: None,
             commission_year: 2010,
             max_decommission_year: None,
         })]
@@ -195,6 +267,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
+            num_units: None,
             commission_year: 2010,
             max_decommission_year: None,
         })]
@@ -203,6 +276,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "FRA".into(),
             capacity: Capacity(1.0),
+            num_units: None,
             commission_year: 2010,
             max_decommission_year: None,
         })]
@@ -211,6 +285,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
+            num_units: None,
             commission_year: 2010,
             max_decommission_year: Some(2005),
         })]
@@ -219,6 +294,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
+            num_units: None,
             commission_year: 2010,
             max_decommission_year: Some(2010),
         })]
