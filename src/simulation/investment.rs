@@ -5,6 +5,7 @@ use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -353,6 +354,7 @@ pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
     candidate_investment_limits: HashMap<AssetRef, Capacity>,
+    process_capacity_limits: HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -364,8 +366,11 @@ pub fn select_best_assets(
     let objective_type = &agent.objectives[&year];
 
     // Remaining capacity limits for candidate assets
-    let mut remaining_candidate_capacities = candidate_investment_limits;
-    remove_candidates_exceeding_limits(&mut opt_assets, &remaining_candidate_capacities);
+    let mut remaining_addition_limit = candidate_investment_limits;
+    remove_candidates_exceeding_limits(&mut opt_assets, &remaining_addition_limit);
+
+    // Remaining total capacity for all assets
+    let mut remaining_total_limit = process_capacity_limits;
 
     // Store unit counts for commissioned assets and replace them with single units
     let mut remaining_units = prepare_commissioned_assets_for_reappraisal(&mut opt_assets);
@@ -456,7 +461,8 @@ pub fn select_best_assets(
         update_assets(
             best_output.asset,
             &mut opt_assets,
-            &mut remaining_candidate_capacities,
+            &mut remaining_addition_limit,
+            &mut remaining_total_limit,
             &mut remaining_units,
             &mut best_assets,
         );
@@ -519,7 +525,7 @@ fn remove_candidates_exceeding_limits(
 /// Add the best asset to the list of selected assets, and update the remaining limits and options
 /// accordingly.
 ///
-/// If the asset is a candidate, its capacity is subtracted from `remaining_candidate_capacities`
+/// If the asset is a candidate, its capacity is subtracted from `remaining_addition_limit`
 /// (if applicable). This is to ensure that any annual addition limits are not exceeded. If the
 /// asset is a commissioned asset, one unit is subtracted from `remaining_units`. This is to ensure
 /// that we do not select more units than are available for retention.
@@ -528,7 +534,7 @@ fn remove_candidates_exceeding_limits(
 ///
 /// * `best_asset` - The asset that has been selected as the best option in this round
 /// * `opt_assets` - The list of remaining asset options to be considered in future rounds
-/// * `remaining_candidate_capacities` - The remaining investment limits for candidate assets
+/// * `remaining_addition_limit` - The remaining investment limits for candidate assets
 /// * `remaining_units` - The remaining unit counts for commissioned assets
 /// * `best_assets` - The list of assets that have been selected so far
 fn update_assets(
@@ -545,7 +551,7 @@ fn update_assets(
     );
 
     // Remove capacity from the total capacity limit, if applicable.
-    if let Some(remaining_capacity) = remaining_total_limit.get_mut(&best_asset.process_id()) {
+    if let Some(remaining_capacity) = remaining_total_limit.get_mut(best_asset.process_id()) {
         *remaining_capacity -= best_asset.total_capacity();
 
         // If there's not enough capacity remaining to install any more units, remove the
@@ -556,7 +562,7 @@ fn update_assets(
                 .position(|asset| *asset == best_asset)
                 .unwrap();
             opt_assets.swap_remove(old_idx);
-            remaining_total_limit.remove(&best_asset.process_id());
+            remaining_total_limit.remove(best_asset.process_id());
         }
     }
 

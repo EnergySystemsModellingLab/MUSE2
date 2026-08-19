@@ -506,7 +506,7 @@ pub struct ProcessInvestmentConstraint {
     /// agent's proportion of the process's primary commodity demand
     pub addition_limit: Option<Capacity>,
     /// Total capacity limit for the process
-    pub total_limit: Option<Capacity>,
+    pub total_capacity_limit: Option<Capacity>,
 }
 
 impl ProcessInvestmentConstraint {
@@ -515,8 +515,9 @@ impl ProcessInvestmentConstraint {
         self.addition_limit
     }
 
+    /// Get the total capacity limit allowed
     pub fn get_total_limit(&self) -> Option<Capacity> {
-        self.total_limit
+        self.total_capacity_limit
     }
 }
 

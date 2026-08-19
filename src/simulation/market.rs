@@ -5,6 +5,7 @@ use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::investment::{
     AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
@@ -196,11 +197,15 @@ pub fn select_assets_for_single_market(
         let candidate_investment_limits =
             collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
 
+        // Calculate total capacity limits for this agent
+        let process_capacity_limits = collect_total_limits(&opt_assets, commodity_portion);
+
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
             opt_assets,
             candidate_investment_limits,
+            process_capacity_limits,
             commodity,
             agent,
             region_id,
@@ -484,6 +489,22 @@ pub fn collect_investment_limits_for_candidates(
         .collect()
 }
 
+/// Calculates the total capacity limits for all processes in this list of assets, scaled according
+/// to the agent's portion of the commodity demand.
+pub fn collect_total_limits(
+    opt_assets: &[AssetRef],
+    commodity_portion: Dimensionless,
+) -> HashMap<ProcessID, Capacity> {
+    opt_assets
+        .iter()
+        .filter_map(|asset| {
+            asset
+                .max_possible_capacity(commodity_portion)
+                .map(|limit_capacity| (asset.process_id().clone(), limit_capacity))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -536,6 +557,7 @@ mod tests {
             (region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(10.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             }),
         );
 
