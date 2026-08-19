@@ -534,7 +534,8 @@ fn remove_candidates_exceeding_limits(
 fn update_assets(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
-    remaining_candidate_capacities: &mut HashMap<AssetRef, Capacity>,
+    remaining_addition_limit: &mut HashMap<AssetRef, Capacity>,
+    remaining_total_limit: &mut HashMap<ProcessID, Capacity>,
     remaining_units: &mut HashMap<AssetRef, u32>,
     best_assets: &mut Vec<AssetRef>,
 ) {
@@ -543,11 +544,27 @@ fn update_assets(
         "Invalid asset type"
     );
 
+    // Remove capacity from the total capacity limit, if applicable.
+    if let Some(remaining_capacity) = remaining_total_limit.get_mut(&best_asset.process_id()) {
+        *remaining_capacity -= best_asset.total_capacity();
+
+        // If there's not enough capacity remaining to install any more units, remove the
+        // asset from the investment options.
+        if *remaining_capacity < best_asset.total_capacity() {
+            let old_idx = opt_assets
+                .iter()
+                .position(|asset| *asset == best_asset)
+                .unwrap();
+            opt_assets.swap_remove(old_idx);
+            remaining_total_limit.remove(&best_asset.process_id());
+        }
+    }
+
     // Update the remaining limits for the selected asset, if applicable, and remove it from the
     // options if the limit is exhausted.
     if best_asset.is_candidate() {
         // Candidate assets: remove capacity from the investment limit, if applicable.
-        if let Some(remaining_capacity) = remaining_candidate_capacities.get_mut(&best_asset) {
+        if let Some(remaining_capacity) = remaining_addition_limit.get_mut(&best_asset) {
             *remaining_capacity -= best_asset.total_capacity();
 
             // If there's not enough capacity remaining to install any more units, remove the
@@ -558,7 +575,7 @@ fn update_assets(
                     .position(|asset| *asset == best_asset)
                     .unwrap();
                 opt_assets.swap_remove(old_idx);
-                remaining_candidate_capacities.remove(&best_asset);
+                remaining_addition_limit.remove(&best_asset);
             }
         }
     } else {
