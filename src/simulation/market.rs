@@ -428,10 +428,11 @@ fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate is assigned a capacity. For divisible assets, the capacity is set to 1 unit.
-/// For indivisible assets, a capacity is calculated based on the total demand for the commodity and
-/// the asset's maximum annual production per unit capacity
-/// (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
+/// Each candidate is a single unit with a defined capacity.
+/// - For processes with a defined `unit_size`, the capacity is set to `unit_size`.
+/// - For processes without a defined `unit_size`, the capacity is calculated based on the total
+///   demand for the commodity and the asset's maximum annual production per unit capacity
+///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
@@ -448,16 +449,18 @@ fn get_candidate_assets<'a>(
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
 
-            // Set capacity of the candidate
-            // This will serve as the upper limit when appraising the asset (may later be
-            // constrained by process addition limits and demand-limiting capacity)
-            let asset_capacity = if let Some(unit_size) = asset.unit_size() {
-                AssetCapacity::Discrete(1, unit_size)
+            // Set capacity of the candidate for investment appraisal
+            let unit_size = if let Some(unit_size) = asset.process().unit_size {
+                // For processes with a defined unit size, take this
+                unit_size
             } else {
+                // Otherwise, calculate unit size based on demand for the commodity, scaled by the
+                // capacity_limit_factor.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                AssetCapacity::Continuous(capacity_scale * capacity_limit_factor)
+                capacity_scale * capacity_limit_factor
             };
+            let asset_capacity = AssetCapacity::single(unit_size);
             asset.set_capacity(asset_capacity);
             asset.into()
         })
@@ -469,7 +472,7 @@ fn get_candidate_assets<'a>(
 pub fn collect_investment_limits_for_candidates(
     opt_assets: &[AssetRef],
     commodity_portion: Dimensionless,
-) -> HashMap<AssetRef, AssetCapacity> {
+) -> HashMap<AssetRef, Capacity> {
     opt_assets
         .iter()
         .filter(|asset| asset.is_candidate())

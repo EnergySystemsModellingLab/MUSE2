@@ -11,10 +11,6 @@ fields:
   - name: capacity
     type: number
     description: The total capacity of the asset in this year
-    notes: |
-      For divisible assets, this is the total capacity across all units.
   - name: num_units
     type: integer
-    description: The number of active units making up the asset in this year
-    notes: |
-      For non-divisible assets, this is always blank.
+    description: The number of units making up the asset in this year

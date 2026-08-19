@@ -10,7 +10,7 @@ use common::{assert_muse2_runs, get_muse2_stderr, get_muse2_stdout};
 
 const EXAMPLE_NAME: &str = "simple";
 const MODEL_DIR: &str = "examples/simple";
-const PATCH_EXAMPLE_NAME: &str = "simple_divisible";
+const PATCH_EXAMPLE_NAME: &str = "simple_unit_size";
 
 /// Test the `help` command
 #[test]

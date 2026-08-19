@@ -1,6 +1,6 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
-use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
+use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
@@ -421,12 +421,11 @@ where
                 let mut upper_limit = limits.end().value();
                 let mut lower_limit = limits.start().value();
 
-                // If the asset capacity is discrete, the capacity variable represents number of
-                // units, so we need to multiply the per-capacity limits by the unit size.
-                if let AssetCapacity::Discrete(_, unit_size) = asset.capacity() {
-                    upper_limit *= unit_size.value();
-                    lower_limit *= unit_size.value();
-                }
+                // The capacity variable represents number of units, so we need to multiply the
+                // per-capacity limits by the unit size.
+                let unit_size = asset.capacity().unit_size();
+                upper_limit *= unit_size.value();
+                lower_limit *= unit_size.value();
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection
@@ -570,7 +569,7 @@ fn add_equal_utilisation_constraints<'a, I>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::Asset;
+    use crate::asset::{Asset, AssetCapacity};
     use crate::commodity::Commodity;
     use crate::fixture::{asset, process, process_flows_map, svd_commodity};
     use crate::process::Process;
@@ -625,7 +624,7 @@ mod tests {
     #[rstest]
     fn groups_equivalent_assets(asset: Asset) {
         let mut equivalent = asset.clone();
-        equivalent.set_capacity(AssetCapacity::Continuous(Capacity(3.0)));
+        equivalent.set_capacity(AssetCapacity::single(Capacity(3.0)));
         let assets = [AssetRef::from(asset), AssetRef::from(equivalent)];
 
         let groups = group_dispatch_equivalent_assets(assets.iter());
@@ -642,7 +641,7 @@ mod tests {
             "agent1".into(),
             Arc::new(process),
             "GBR".into(),
-            Capacity(2.0),
+            AssetCapacity::single(Capacity(2.0)),
             2015,
         )
         .unwrap();

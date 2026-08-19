@@ -21,7 +21,7 @@ pub fn add_activity_constraints(
     activity_vars: &IndexMap<TimeSliceID, Variable>,
     time_slice_info: &TimeSliceInfo,
 ) {
-    let capacity = asset.capacity().total_capacity();
+    let capacity = asset.total_capacity();
     for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
         let limits = (capacity * *limits.start()).value()..=(capacity * *limits.end()).value();
 

@@ -107,12 +107,16 @@ where
         );
 
         // Split overall capacity into units
+        ensure!(
+            asset.capacity > Capacity(0.0),
+            "Asset capacity must be positive"
+        );
         let asset_capacity = if let Some(num_units) = asset.num_units {
             // A provided unit count takes precedence over the process unit_size.
             ensure!(num_units > 0, "num_units must be positive");
 
             let unit_size = Capacity(asset.capacity.value() / num_units as f64);
-            AssetCapacity::Discrete(num_units, unit_size)
+            AssetCapacity::new(num_units, unit_size)
         } else if let Some(unit_size) = process.unit_size {
             // No unit count was provided, so use the process unit_size to determine
             // how many units are needed to cover the asset's capacity.
@@ -133,10 +137,11 @@ where
             }
 
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            AssetCapacity::Discrete(num_units as u32, unit_size)
+            AssetCapacity::new(num_units as u32, unit_size)
         } else {
-            // Without a process unit_size, lack of num_units implies the asset is indivisible.
-            AssetCapacity::Discrete(1, asset.capacity)
+            // Without a process unit_size, lack of num_units implies the asset is indivisible
+            // (consists of a single unit).
+            AssetCapacity::single(asset.capacity)
         };
 
         UserAsset::new(
@@ -187,7 +192,7 @@ mod tests {
             "agent1".into(),
             Arc::clone(processes.values().next().unwrap()),
             "GBR".into(),
-            AssetCapacity::Discrete(1, Capacity(1.0)),
+            AssetCapacity::single(Capacity(1.0)),
             2010,
             max_decommission_year,
         )
@@ -218,10 +223,7 @@ mod tests {
         let assets =
             read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
 
-        assert_eq!(
-            assets[0].capacity(),
-            AssetCapacity::Discrete(3, Capacity(2.0))
-        );
+        assert_eq!(assets[0].capacity(), AssetCapacity::new(3, Capacity(2.0)));
     }
 
     #[rstest]
@@ -246,10 +248,7 @@ mod tests {
         let assets =
             read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
 
-        assert_eq!(
-            assets[0].capacity(),
-            AssetCapacity::Discrete(3, Capacity(4.0))
-        );
+        assert_eq!(assets[0].capacity(), AssetCapacity::new(3, Capacity(4.0)));
     }
 
     #[rstest]

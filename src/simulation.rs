@@ -256,7 +256,7 @@ fn candidate_assets_for_next_year(
     {
         for region_id in &process.regions {
             candidates.push(
-                Asset::new_candidate_for_dispatch(
+                Asset::new_candidate(
                     Arc::clone(process),
                     region_id.clone(),
                     candidate_asset_capacity,

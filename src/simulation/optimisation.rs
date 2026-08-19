@@ -261,23 +261,17 @@ impl Solution<'_> {
     }
 
     /// Iterate over capacity values
-    ///
-    /// Will return `AssetCapacity::Continuous` or `AssetCapacity::Discrete` depending on whether
-    /// the asset has a defined unit size.
     pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, AssetCapacity)> {
         self.variables
             .capacity_vars
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
             .map(|(asset, capacity_var)| {
-                // If the asset has a defined unit size, the capacity variable represents number of
-                // units, otherwise it represents absolute capacity
+                // The capacity variable represents number of units
+                let unit_size = asset.capacity().unit_size();
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let asset_capacity = if let Some(unit_size) = asset.unit_size() {
-                    AssetCapacity::Discrete(capacity_var.round() as u32, unit_size)
-                } else {
-                    AssetCapacity::Continuous(Capacity(*capacity_var))
-                };
+                let asset_capacity = AssetCapacity::new(capacity_var.round() as u32, unit_size);
+
                 (asset, asset_capacity)
             })
     }
@@ -442,7 +436,7 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     flexible_capacity_assets: &'run [AssetRef],
-    capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
+    capacity_limits: Option<&'run HashMap<AssetRef, Capacity>>,
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run PriceMap>,
@@ -470,7 +464,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn with_flexible_capacity_assets(
         self,
         flexible_capacity_assets: &'run [AssetRef],
-        capacity_limits: Option<&'run HashMap<AssetRef, AssetCapacity>>,
+        capacity_limits: Option<&'run HashMap<AssetRef, Capacity>>,
         capacity_margin: Dimensionless,
     ) -> Self {
         Self {
@@ -705,7 +699,7 @@ fn add_capacity_variables(
     problem: &mut Problem,
     variables: &mut CapacityVariableMap,
     assets: &[AssetRef],
-    capacity_limits: Option<&HashMap<AssetRef, AssetCapacity>>,
+    capacity_limits: Option<&HashMap<AssetRef, Capacity>>,
     capacity_margin: Dimensionless,
 ) -> Range<usize> {
     let capacity_margin = capacity_margin.value();
@@ -720,47 +714,24 @@ fn add_capacity_variables(
             "Flexible capacity can only be assigned to `Ready` type assets. Offending asset: {asset:?}"
         );
 
-        let current_capacity = asset.capacity();
+        // Coefficient: cost per capacity
         let coeff = calculate_capacity_coefficient(asset);
-
-        // Retrieve capacity limit if provided
-        let capacity_limit = capacity_limits.and_then(|limits| limits.get(asset));
-
-        // Sanity check: make sure capacity_limit is compatible with current_capacity
-        if let Some(limit) = capacity_limit {
-            assert!(
-                matches!(
-                    (current_capacity, limit),
-                    (AssetCapacity::Continuous(_), AssetCapacity::Continuous(_))
-                        | (AssetCapacity::Discrete(_, _), AssetCapacity::Discrete(_, _))
-                ),
-                "Incompatible capacity types for asset capacity limit"
-            );
-        }
 
         // Add a capacity variable for each asset
         // Bounds are calculated based on current capacity with wiggle-room defined by
         // `capacity_margin`, and limited by `capacity_limit` if provided.
-        let var = match current_capacity {
-            AssetCapacity::Continuous(cap) => {
-                // Continuous capacity: capacity variable represents total capacity
-                let lower = ((1.0 - capacity_margin) * cap.value()).max(0.0);
-                let mut upper = (1.0 + capacity_margin) * cap.value();
-                if let Some(limit) = capacity_limit {
-                    upper = upper.min(limit.total_capacity().value());
-                }
-                problem.add_column(coeff.value(), lower..=upper)
-            }
-            AssetCapacity::Discrete(units, unit_size) => {
-                // Discrete capacity: capacity variable represents number of units
-                let lower = ((1.0 - capacity_margin) * units as f64).max(0.0);
-                let mut upper = (1.0 + capacity_margin) * units as f64;
-                if let Some(limit) = capacity_limit {
-                    upper = upper.min(limit.num_units().unwrap() as f64);
-                }
-                problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
-            }
-        };
+        // Since capacity variables are numbers of units, we apply constraints to the unit count
+        let unit_size = asset.capacity().unit_size();
+        let current_units = asset.capacity().num_units();
+
+        let lower = (current_units as f64 * (1.0 - capacity_margin)).max(0.0);
+
+        let mut upper = current_units as f64 * (1.0 + capacity_margin);
+        if let Some(limit) = capacity_limits.and_then(|limits| limits.get(asset)) {
+            upper = upper.min((*limit / unit_size).value());
+        }
+
+        let var = problem.add_integer_column((coeff * unit_size).value(), lower..=upper);
 
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");
