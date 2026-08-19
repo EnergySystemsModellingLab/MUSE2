@@ -756,7 +756,7 @@ fn add_capacity_variables(
                 let lower = ((1.0 - capacity_margin) * units as f64).max(0.0);
                 let mut upper = (1.0 + capacity_margin) * units as f64;
                 if let Some(limit) = capacity_limit {
-                    upper = upper.min(limit.n_units().unwrap() as f64);
+                    upper = upper.min(limit.num_units().unwrap() as f64);
                 }
                 problem.add_integer_column((coeff * unit_size).value(), lower..=upper)
             }

@@ -129,7 +129,7 @@ impl AssetCapacity {
     }
 
     /// Returns the number of units if this is a discrete capacity, or `None` if continuous.
-    pub fn n_units(&self) -> Option<u32> {
+    pub fn num_units(&self) -> Option<u32> {
         match self {
             AssetCapacity::Continuous(_) => None,
             AssetCapacity::Discrete(units, _) => Some(*units),
@@ -169,7 +169,7 @@ mod tests {
         #[case] expected_total: Capacity,
     ) {
         let got = AssetCapacity::from_capacity(capacity, unit_size);
-        assert_eq!(got.n_units(), expected_n);
+        assert_eq!(got.num_units(), expected_n);
         assert_eq!(got.total_capacity(), expected_total);
     }
 
@@ -190,7 +190,7 @@ mod tests {
         #[case] expected_total: Capacity,
     ) {
         let got = AssetCapacity::from_capacity_floor(capacity, unit_size);
-        assert_eq!(got.n_units(), expected_n);
+        assert_eq!(got.num_units(), expected_n);
         assert_eq!(got.total_capacity(), expected_total);
     }
 

@@ -637,7 +637,7 @@ impl DataWriter {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
                 capacity: asset.total_capacity(),
-                num_units: asset.capacity().n_units(),
+                num_units: asset.capacity().num_units(),
             };
             self.asset_capacities.serialize(row)?;
         }
