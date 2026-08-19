@@ -456,8 +456,8 @@ pub fn select_best_assets(
             best_output.asset.total_capacity()
         );
 
-        // Update the assets and remaining limits
-        update_assets(
+        // Record the selected asset and update the remaining selection state.
+        record_asset_selection(
             best_output.asset,
             &mut opt_assets,
             &mut remaining_agent_addition_limits,
@@ -520,8 +520,7 @@ fn remove_candidates_exceeding_agent_addition_limits(
     });
 }
 
-/// Add the best asset to the list of selected assets, and update the remaining limits and options
-/// accordingly.
+/// Record a selected asset and update the remaining investment options and selection state.
 ///
 /// If the asset is a candidate, its capacity is subtracted from
 /// `remaining_agent_addition_limits` (if applicable). This is to ensure that annual addition
@@ -535,7 +534,7 @@ fn remove_candidates_exceeding_agent_addition_limits(
 /// * `remaining_agent_addition_limits` - The remaining agent addition limits for processes
 /// * `available_retention_units` - The commissioned units available for retention
 /// * `best_assets` - The list of assets that have been selected so far
-fn update_assets(
+fn record_asset_selection(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_agent_addition_limits: &mut HashMap<ProcessID, Capacity>,
