@@ -1,5 +1,6 @@
 //! Common functionality for MUSE2.
 #![warn(missing_docs)]
+#![cfg_attr(feature = "bench", feature(test))]
 
 /// The main GitHub issues page for MUSE2
 pub const ISSUES_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues");

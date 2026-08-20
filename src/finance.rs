@@ -67,6 +67,10 @@ pub fn lcox(
         .then(|| (annualised_fixed_cost + total_activity_costs) / total_activity)
 }
 
+fn add_two(a: i32) -> i32 {
+    a + 2
+}
+
 #[cfg(test)]
 #[allow(clippy::unreadable_literal)]
 mod tests {
@@ -170,5 +174,17 @@ mod tests {
 
         let expected = expected.map(MoneyPerActivity);
         assert_approx_eq!(Option<MoneyPerActivity>, result, expected);
+    }
+}
+
+#[cfg(feature = "bench")]
+mod bench {
+    use super::*;
+    extern crate test;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_add_two(b: &mut Bencher) {
+        b.iter(|| add_two(2));
     }
 }
