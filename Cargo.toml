@@ -85,5 +85,9 @@ from_iter_instead_of_collect = "allow"
 name = "examples"
 harness = false
 
+[[bench]]
+name = "assets"
+harness = false
+
 [features]
 bench = []
