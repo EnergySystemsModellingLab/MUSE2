@@ -83,6 +83,28 @@ fraction of the year.
 lower and upper availability fractions from `process_activity_limits.csv`, defaulting to
 \\( 0 \\) and \\( 1 \\) respectively for any selection not explicitly defined.
 
+### Equal Utilisation of Equivalent Assets
+
+To avoid arbitrarily utilising one asset over another, the dispatch model adds additional
+constraints to equalise the utilisation of assets with equivalent dispatch properties. Assets are
+considered equivalent when they are in the same region and have the same variable operating cost,
+activity limits, and commodity flows. Their capacity, state, and process identity are not considered
+when determining equivalence.
+
+For an asset \\(a\\) in time slice \\(t\\), utilisation is defined as
+
+\\[
+  \\mathrm{Utilisation}\_{a,t} =
+  \\frac{\\mathrm{Activity}\_{a,t}}{\\mathrm{Capacity}_a \\cdot \\mathrm{cap2act}_a}
+\\]
+
+For every pair of equivalent assets \\( x \\) and \\( y \\), and for every time slice \\( t \\),
+the optimisation model imposes:
+
+\\[
+  \\mathrm{Utilisation}\_{x,t} = \\mathrm{Utilisation}\_{y,t}
+\\]
+
 ### Commodity Balance Constraints
 
 For each balanced commodity \\( c \in \mathbf{C}^{\mathrm{SED}} \cup \mathbf{C}^{\mathrm{SVD}} \\)
@@ -109,6 +131,63 @@ The dual values (shadow prices) of the commodity balance constraints represent t
 satisfying an additional unit of demand for that commodity in region \\( r \\) during selection
  \\( s \\). These shadow prices are critical outputs of the dispatch model and are used to seed and
  guide investment appraisal in subsequent steps.
+
+---
+
+## Seasonal/Annual Utilisation Penalties
+
+MUSE2 optionally applies small penalties to the peak capacity required by each asset within a season
+and across the whole year. These penalties encourage activity to be distributed across time slices
+within a season and across seasons, respectively. They are particularly useful when commodities are
+balanced at the seasonal/annual levels and the balance constraint otherwise leaves the
+intra-seasonal or inter-seasonal production profile undetermined. In real-world terms, this
+represents a preference to avoid concentrating an asset's operation into short periods of high
+utilisation, which may reduce cycling, wear, start-up requirements, or the need to maintain capacity
+for seasonal peaks.
+
+For asset \\(a\\) and time slice \\(t\\), the capacity required to support its activity is
+
+\\[
+  \mathrm{RequiredCapacity}\_{a,t} =
+  \frac{\mathrm{Activity}\_{a,t}}
+  {\mathrm{cap2act}\_a \cdot \Delta\_t}
+\\]
+
+For each asset and season, MUSE2 introduces an auxiliary variable \\(U_{a,s}\\), representing the
+peak capacity required by the asset during that season. It is constrained by
+
+\\[
+  U_{a,s} \geq \mathrm{RequiredCapacity}_{a,t}
+\\]
+
+for every time slice \\(t\\) in season \\(s\\). In addition, MUSE2 introduces an auxiliary variable
+\\(U_{a,\\mathrm{annual}}\\), representing the greatest seasonal peak capacity required by the asset
+during the year. It is constrained by
+
+\\[
+  U_{a,\\mathrm{annual}} \\geq U_{a,s}
+\\]
+
+for every season \\(s\\).
+
+When enabled, the penalties add the following term to the optimisation objective:
+
+\\[
+  \\lambda_{\\mathrm{seasonal}}
+  \\sum_{a \\in \\mathbf{A}} \\sum_{s \\in \\mathbf{S}}
+  \\Delta_s U_{a,s}
+  +
+  \\lambda_{\\mathrm{annual}}
+  \\sum_{a \\in \\mathbf{A}} U_{a,\\mathrm{annual}}
+\\]
+
+Here, \\(\\lambda_{\\mathrm{seasonal}}\\) and \\(\\lambda_{\\mathrm{annual}}\\) are set by the
+`seasonal_utilisation_penalty` and `annual_utilisation_penalty` model parameters, respectively.
+Setting either parameter to zero disables its corresponding penalty. The seasonal parameter controls
+how strongly activity is spread within seasons, while the annual parameter controls how strongly it
+is spread across seasons. Both are weighted objective terms, so their values should be small enough
+that smoothing dispatch does not outweigh meaningful differences in operating cost (default for
+both = `1e-6`).
 
 ---
 

@@ -4,7 +4,7 @@ use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
     DecisionRule,
 };
-use crate::asset::{Asset, AssetPool, AssetRef};
+use crate::asset::{Asset, AssetCapacity, AssetPool, AssetRef};
 use crate::commodity::{
     Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
 };
@@ -204,20 +204,19 @@ pub fn asset(process: Process) -> Asset {
         agent_id,
         process.into(),
         region_id,
-        Capacity(2.0),
+        AssetCapacity::single(Capacity(2.0)),
         commission_year,
     )
     .unwrap()
 }
 
 #[fixture]
-pub fn asset_divisible(mut process: Process) -> Asset {
-    process.unit_size = Some(Capacity(4.0));
+pub fn multi_unit_asset(process: Process) -> Asset {
     Asset::new_ready(
         "agent1".into(),
         Arc::new(process),
         "GBR".into(),
-        Capacity(11.0),
+        AssetCapacity::new(3, Capacity(4.0)),
         2010,
     )
     .unwrap()

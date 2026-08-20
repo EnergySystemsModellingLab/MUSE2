@@ -6,3 +6,4 @@ title = "MUSE2"
 
 [output.html]
 mathjax-support = true
+additional-css = ["theme/custom.css"]

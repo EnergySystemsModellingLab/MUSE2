@@ -1,13 +1,14 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
-use crate::asset::{AssetCapacity, AssetIterator, AssetRef};
+use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{CommodityID, CommodityType};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::time_slice::{TimeSliceInfo, TimeSliceSelection};
-use crate::units::{Flow, UnitType};
+use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
+use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
+use std::collections::{HashMap, HashSet};
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -47,6 +48,12 @@ pub type CommodityBalanceKeys = KeysWithOffset<(CommodityID, RegionID, TimeSlice
 
 /// Indicates the asset ID and time slice covered by each activity constraint
 pub type ActivityKeys = KeysWithOffset<(AssetRef, TimeSliceSelection)>;
+
+/// Map containing the seasonal peak variables for each (asset, season) pair
+type SeasonalPeakVariableMap = IndexMap<(AssetRef, Season), highs::Col>;
+
+/// Map containing the annual peak variables for each asset
+type AnnualPeakVariableMap = IndexMap<AssetRef, highs::Col>;
 
 /// The keys for different constraints
 pub struct ConstraintKeys {
@@ -98,10 +105,146 @@ where
     let activity_keys =
         add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
+    add_utilisation_peak_constraints(problem, model, assets.clone(), variables);
+
+    add_equal_utilisation_constraints(problem, variables, &model.time_slice_info, assets.clone());
+
     // Return constraint keys
     ConstraintKeys {
         commodity_balance_keys,
         activity_keys,
+    }
+}
+
+/// Add seasonal and annual utilisation peak constraints to the problem.
+fn add_utilisation_peak_constraints<'a, I>(
+    problem: &mut Problem,
+    model: &Model,
+    assets: I,
+    variables: &VariableMap,
+) where
+    I: Iterator<Item = &'a AssetRef> + Clone,
+{
+    let has_seasonal_penalty =
+        model.parameters.seasonal_utilisation_penalty > MoneyPerCapacityPerYear(0.0);
+    let has_annual_penalty =
+        model.parameters.annual_utilisation_penalty > MoneyPerCapacityPerYear(0.0);
+
+    // If neither penalties are applied, we don't need to add any variables and constraints
+    if !has_seasonal_penalty && !has_annual_penalty {
+        return;
+    }
+
+    // So long as either penalty is applied, we need to add seasonal peak variables and constraints
+    let seasonal_peak_vars = add_seasonal_peak_variables(problem, model, assets.clone());
+    add_seasonal_peak_constraints(
+        problem,
+        variables,
+        &model.time_slice_info,
+        &seasonal_peak_vars,
+    );
+
+    // If the annual penalty is applied, we also need to add annual peak variables and constraints
+    if has_annual_penalty {
+        let annual_peak_vars = add_annual_peak_variables(problem, model, assets);
+        add_annual_peak_constraints(
+            problem,
+            &model.time_slice_info,
+            &annual_peak_vars,
+            &seasonal_peak_vars,
+        );
+    }
+}
+
+/// Add seasonal peak variables to the problem for each (asset, season) pair.
+fn add_seasonal_peak_variables<'a, I>(
+    problem: &mut Problem,
+    model: &Model,
+    assets: I,
+) -> SeasonalPeakVariableMap
+where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    let mut seasonal_peak_vars = SeasonalPeakVariableMap::new();
+    for asset in assets {
+        for (season, duration) in &model.time_slice_info.seasons {
+            // Scale penalty by season duration
+            let col_factor = model.parameters.seasonal_utilisation_penalty * *duration;
+            let variable = problem.add_column(col_factor.value(), 0.0..);
+            seasonal_peak_vars.insert((asset.clone(), season.clone()), variable);
+        }
+    }
+    seasonal_peak_vars
+}
+
+/// Add annual peak variables to the problem for each asset.
+fn add_annual_peak_variables<'a, I>(
+    problem: &mut Problem,
+    model: &Model,
+    assets: I,
+) -> AnnualPeakVariableMap
+where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    // Penalty is applied over the whole year, so scale by 1 year
+    let col_factor = model.parameters.annual_utilisation_penalty * Year(1.0);
+    assets
+        .map(|asset| {
+            let variable = problem.add_column(col_factor.value(), 0.0..);
+            (asset.clone(), variable)
+        })
+        .collect()
+}
+
+/// Add constraints linking seasonal peak variables to activity variables for each (asset, season) pair.
+fn add_seasonal_peak_constraints(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    time_slice_info: &TimeSliceInfo,
+    seasonal_peak_vars: &SeasonalPeakVariableMap,
+) {
+    for ((asset, season), &peak_variable) in seasonal_peak_vars {
+        let activity_per_capacity = asset.process().capacity_to_activity;
+        let season_selection = TimeSliceSelection::Season(season.clone());
+        for (time_slice, ts_length) in season_selection.iter(time_slice_info) {
+            let time_slice_fraction = ts_length / Year(1.0);
+            let activity_per_capacity_in_time_slice = activity_per_capacity * time_slice_fraction;
+            let capacity_required_per_activity = 1.0 / activity_per_capacity_in_time_slice.value();
+
+            // One unit of capacity supports `activity_per_capacity_in_time_slice` activity in
+            // this time slice. The peak variable therefore measures the capacity required by
+            // the activity in the time slice.
+            problem.add_row(
+                0.0..,
+                [
+                    (peak_variable, 1.0),
+                    (
+                        variables.get_activity_var(asset, time_slice),
+                        -capacity_required_per_activity,
+                    ),
+                ],
+            );
+        }
+    }
+}
+
+/// Add constraints linking seasonal peak variables to annual peak variables for each asset.
+fn add_annual_peak_constraints(
+    problem: &mut Problem,
+    time_slice_info: &TimeSliceInfo,
+    annual_peak_vars: &AnnualPeakVariableMap,
+    seasonal_peak_vars: &SeasonalPeakVariableMap,
+) {
+    for (asset, &annual_peak_variable) in annual_peak_vars {
+        for season in time_slice_info.seasons.keys() {
+            let seasonal_peak_variable = seasonal_peak_vars
+                .get(&(asset.clone(), season.clone()))
+                .expect("Missing seasonal peak variable for annual peak constraint");
+            problem.add_row(
+                0.0..,
+                [(annual_peak_variable, 1.0), (*seasonal_peak_variable, -1.0)],
+            );
+        }
     }
 }
 
@@ -278,12 +421,11 @@ where
                 let mut upper_limit = limits.end().value();
                 let mut lower_limit = limits.start().value();
 
-                // If the asset capacity is discrete, the capacity variable represents number of
-                // units, so we need to multiply the per-capacity limits by the unit size.
-                if let AssetCapacity::Discrete(_, unit_size) = asset.capacity() {
-                    upper_limit *= unit_size.value();
-                    lower_limit *= unit_size.value();
-                }
+                // The capacity variable represents number of units, so we need to multiply the
+                // per-capacity limits by the unit size.
+                let unit_size = asset.capacity().unit_size();
+                upper_limit *= unit_size.value();
+                lower_limit *= unit_size.value();
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection
@@ -330,15 +472,110 @@ where
     ActivityKeys { offset, keys }
 }
 
+/// Groups assets that have equivalent dispatch properties.
+///
+/// Assets are first bucketed by `dispatch_equivalence_hash()` to avoid unnecessary pairwise
+/// comparisons. Within each hash bucket, assets are compared using `is_dispatch_equivalent()`,
+/// which is the authoritative check for equivalence. This also handles hash collisions correctly.
+///
+/// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
+/// constraints (i.e. flexible-capacity assets have already been filtered out).
+fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
+where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    // Group assets by comparing each one with the first asset in each group. The hash index
+    // avoids comparing an asset with groups that cannot contain an equivalent asset, while the
+    // exact comparison preserves correctness in the event of hash collisions.
+    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
+    let mut group_indices: HashMap<u64, Vec<usize>> = HashMap::new();
+    for asset in assets {
+        let hash = asset.dispatch_equivalence_hash();
+
+        // Only groups with the same hash can possibly match.
+        let candidate_groups = group_indices.get(&hash);
+
+        // Find a group whose representative is actually equivalent.
+        let matching_group = candidate_groups
+            .into_iter()
+            .flatten()
+            .find(|&&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset));
+
+        if let Some(group_index) = matching_group {
+            asset_groups[*group_index].push(asset);
+        } else {
+            let group_index = asset_groups.len();
+            asset_groups.push(vec![asset]);
+            group_indices.entry(hash).or_default().push(group_index);
+        }
+    }
+
+    asset_groups
+}
+
+/// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
+/// slice.
+///
+/// Flexible-capacity assets are excluded because their maximum activity depends on a decision
+/// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
+/// are not currently used.
+fn add_equal_utilisation_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    time_slice_info: &TimeSliceInfo,
+    assets: I,
+) where
+    I: Iterator<Item = &'a AssetRef> + 'a,
+{
+    // Identify flexible-capacity assets so we can exclude them from the constraints
+    let flexible_assets: HashSet<_> = variables
+        .iter_capacity_vars()
+        .map(|(asset, _)| asset)
+        .collect();
+
+    let asset_groups =
+        group_dispatch_equivalent_assets(assets.filter(|asset| !flexible_assets.contains(asset)));
+
+    // For each group of assets, add constraints to force equal utilisation in each time slice
+    // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
+    // for a group of n assets)
+    for assets in asset_groups {
+        let Some((reference_asset, others)) = assets.split_first() else {
+            continue;
+        };
+
+        let reference_max = reference_asset.max_activity().value();
+
+        for asset in others {
+            let asset_max = asset.max_activity().value();
+
+            for time_slice in time_slice_info.iter_ids() {
+                // Constraint: (act_a * max_b) - (act_b * max_a) = 0
+                problem.add_row(
+                    0.0..=0.0,
+                    [
+                        (variables.get_activity_var(asset, time_slice), reference_max),
+                        (
+                            variables.get_activity_var(reference_asset, time_slice),
+                            -asset_max,
+                        ),
+                    ],
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asset::{Asset, AssetCapacity};
     use crate::commodity::Commodity;
     use crate::fixture::{asset, process, process_flows_map, svd_commodity};
     use crate::process::Process;
     use crate::process::{FlowType, ProcessFlow};
     use crate::time_slice::TimeSliceSelection;
-    use crate::units::{FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
@@ -377,5 +614,43 @@ mod tests {
             Flow(epsilon),
         );
         assert_eq!(result, Flow(expected));
+    }
+
+    #[test]
+    fn groups_no_assets() {
+        assert!(group_dispatch_equivalent_assets(std::iter::empty()).is_empty());
+    }
+
+    #[rstest]
+    fn groups_equivalent_assets(asset: Asset) {
+        let mut equivalent = asset.clone();
+        equivalent.set_capacity(AssetCapacity::single(Capacity(3.0)));
+        let assets = [AssetRef::from(asset), AssetRef::from(equivalent)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].len(), 2);
+    }
+
+    #[rstest]
+    fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
+        Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
+            .variable_operating_cost = crate::units::MoneyPerActivity(1.0);
+        let different = Asset::new_ready(
+            "agent1".into(),
+            Arc::new(process),
+            "GBR".into(),
+            AssetCapacity::single(Capacity(2.0)),
+            2015,
+        )
+        .unwrap();
+        let assets = [AssetRef::from(asset), AssetRef::from(different)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].len(), 1);
+        assert_eq!(groups[1].len(), 1);
     }
 }

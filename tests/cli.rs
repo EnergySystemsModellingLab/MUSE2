@@ -2,14 +2,15 @@
 use rstest::rstest;
 
 use itertools::Itertools;
+use std::path::{self};
 use tempfile::tempdir;
 
 mod common;
-use common::{assert_muse2_runs, get_muse2_stdout};
+use common::{assert_muse2_runs, get_muse2_stderr, get_muse2_stdout};
 
 const EXAMPLE_NAME: &str = "simple";
 const MODEL_DIR: &str = "examples/simple";
-const PATCH_EXAMPLE_NAME: &str = "simple_divisible";
+const PATCH_EXAMPLE_NAME: &str = "simple_unit_size";
 
 /// Test the `help` command
 #[test]
@@ -37,6 +38,24 @@ fn check_run_command() {
         "--output-dir",
         &output_dir.to_string_lossy(),
     ]);
+}
+
+/// Test the `run` command fails if model inside output folder
+#[test]
+fn check_run_command_model_inside_output() {
+    // Save results to non-existent directory to check that directory creation works
+    let tempdir = tempdir().unwrap();
+    let output_dir = tempdir.path().join("results");
+    let model_dir = path::absolute(output_dir.join("model")).unwrap();
+    assert!(
+        get_muse2_stderr(&[
+            "run",
+            &model_dir.to_string_lossy(),
+            "--output-dir",
+            &output_dir.to_string_lossy(),
+        ])
+        .contains("Error: Model input data cannot be inside output folder")
+    );
 }
 
 /// Test the `save-graphs` command

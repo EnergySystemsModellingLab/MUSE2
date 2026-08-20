@@ -5,6 +5,7 @@ use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::investment::{
     AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
@@ -192,15 +193,15 @@ pub fn select_assets_for_single_market(
         )
         .collect::<Vec<_>>();
 
-        // Calculate investment limits for candidate assets
-        let candidate_investment_limits =
-            collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
+        // Calculate the agent's share of addition limits for candidate processes
+        let agent_addition_limits =
+            collect_agent_addition_limits(agent, region_id, &commodity.id, year, commodity_portion);
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
             opt_assets,
-            candidate_investment_limits,
+            agent_addition_limits,
             commodity,
             agent,
             region_id,
@@ -294,7 +295,8 @@ pub fn select_assets_for_cycle(
                         model.agents[agent_id].commodity_portions[&(commodity_id.clone(), year)]
                     });
                 asset
-                    .max_installable_capacity(agent_share)
+                    .process()
+                    .agent_addition_limit(asset.region_id(), asset.commission_year(), agent_share)
                     .map(|max_capacity| (asset.clone(), max_capacity))
             })
             .collect::<HashMap<_, _>>();
@@ -428,10 +430,11 @@ pub fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate is assigned a capacity. For divisible assets, the capacity is set to 1 unit.
-/// For indivisible assets, a capacity is calculated based on the total demand for the commodity and
-/// the asset's maximum annual production per unit capacity
-/// (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
+/// Each candidate is a single unit with a defined capacity.
+/// - For processes with a defined `unit_size`, the capacity is set to `unit_size`.
+/// - For processes without a defined `unit_size`, the capacity is calculated based on the total
+///   demand for the commodity and the asset's maximum annual production per unit capacity
+///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
@@ -448,35 +451,39 @@ fn get_candidate_assets<'a>(
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
 
-            // Set capacity of the candidate
-            // This will serve as the upper limit when appraising the asset (may later be
-            // constrained by process addition limits and demand-limiting capacity)
-            let asset_capacity = if let Some(unit_size) = asset.unit_size() {
-                AssetCapacity::Discrete(1, unit_size)
+            // Set capacity of the candidate for investment appraisal
+            let unit_size = if let Some(unit_size) = asset.process().unit_size {
+                // For processes with a defined unit size, take this
+                unit_size
             } else {
+                // Otherwise, calculate unit size based on demand for the commodity, scaled by the
+                // capacity_limit_factor.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                AssetCapacity::Continuous(capacity_scale * capacity_limit_factor)
+                capacity_scale * capacity_limit_factor
             };
+            let asset_capacity = AssetCapacity::single(unit_size);
             asset.set_capacity(asset_capacity);
             asset.into()
         })
 }
 
-/// Investment limits are based on any annual addition limits specified by the process, scaled
-/// according to the agent's portion of the commodity demand and the number of years elapsed since
-/// the previous milestone year.
-pub fn collect_investment_limits_for_candidates(
-    opt_assets: &[AssetRef],
+/// Agent addition limits are based on process addition limits that have already been
+/// scaled from annual addition limits to the interval since the previous milestone year.
+/// The resulting limit is then scaled according to the agent's portion of commodity demand.
+pub fn collect_agent_addition_limits(
+    agent: &Agent,
+    region_id: &RegionID,
+    commodity_id: &CommodityID,
+    year: u32,
     commodity_portion: Dimensionless,
-) -> HashMap<AssetRef, AssetCapacity> {
-    opt_assets
-        .iter()
-        .filter(|asset| asset.is_candidate())
-        .filter_map(|asset| {
-            asset
-                .max_installable_capacity(commodity_portion)
-                .map(|limit_capacity| (asset.clone(), limit_capacity))
+) -> HashMap<ProcessID, Capacity> {
+    agent
+        .iter_search_space(region_id, commodity_id, year)
+        .filter_map(|process| {
+            process
+                .agent_addition_limit(region_id, year, commodity_portion)
+                .map(|agent_limit| (process.id.clone(), agent_limit))
         })
         .collect()
 }
@@ -484,104 +491,76 @@ pub fn collect_investment_limits_for_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{
-        asset, process, process_activity_limits_map, process_flows_map, process_parameter_map,
-        region_id,
-    };
-    use crate::process::{
-        Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessInvestmentConstraint,
-        ProcessInvestmentConstraintsMap, ProcessParameterMap,
-    };
+    use crate::agent::{Agent, AgentCommodityPortionsMap, AgentObjectiveMap, DecisionRule};
+    use crate::fixture::{process, region_id};
+    use crate::process::{Process, ProcessInvestmentConstraint};
     use crate::region::RegionID;
     use crate::units::Dimensionless;
-    use crate::units::{ActivityPerCapacity, Capacity};
-    use indexmap::IndexSet;
-    use rstest::{fixture, rstest};
-    use std::slice::from_ref;
+    use rstest::rstest;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
+    fn agent_with_process(
+        process: Process,
+        region_id: &RegionID,
+        commodity_id: &CommodityID,
+    ) -> Agent {
+        let mut search_space = HashMap::new();
+        search_space.insert(
+            (commodity_id.clone(), region_id.clone(), 2015),
+            Arc::new(vec![Arc::new(process)]),
+        );
+        Agent {
+            id: "agent1".into(),
+            description: String::new(),
+            commodity_portions: AgentCommodityPortionsMap::new(),
+            search_space,
+            decision_rule: DecisionRule::Single,
+            regions: [region_id.clone()].into(),
+            objectives: AgentObjectiveMap::new(),
+        }
+    }
+
     #[rstest]
-    fn collect_investment_limits_for_candidates_empty_list() {
-        let result = collect_investment_limits_for_candidates(&[], Dimensionless(1.0));
-        assert!(result.is_empty());
-    }
-
-    #[fixture]
-    fn commissioned_asset(asset: Asset) -> AssetRef {
-        asset.into()
-    }
-
-    #[fixture]
-    fn uncommissioned_asset_without_limit(process: Process, region_id: RegionID) -> AssetRef {
-        Asset::new_candidate(Arc::new(process), region_id, Capacity(10.0), 2015)
-            .unwrap()
-            .into()
-    }
-
-    #[fixture]
-    fn uncommissioned_asset_with_limit(
-        region_id: RegionID,
-        process_activity_limits_map: ProcessActivityLimitsMap,
-        process_flows_map: ProcessFlowsMap,
-        process_parameter_map: ProcessParameterMap,
-    ) -> AssetRef {
-        let region_ids: IndexSet<RegionID> = [region_id.clone()].into();
-
-        let mut constraints = ProcessInvestmentConstraintsMap::new();
-
-        constraints.insert(
+    fn collect_agent_addition_limits_uses_search_space(mut process: Process, region_id: RegionID) {
+        process.investment_constraints.insert(
             (region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
-                addition_limit: Some(Capacity(10.0)),
+                addition_limit: Some(crate::units::Capacity(10.0)),
             }),
         );
+        let commodity_id = "commodity".into();
+        let process_id = process.id.clone();
+        let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let process = Process {
-            id: "constrained_process".into(),
-            description: String::new(),
-            years: 2010..=2020,
-            activity_limits: process_activity_limits_map,
-            flows: process_flows_map,
-            parameters: process_parameter_map,
-            regions: region_ids,
-            primary_output: None,
-            capacity_to_activity: ActivityPerCapacity(1.0),
-            investment_constraints: constraints,
-            unit_size: None,
-        };
+        let result = collect_agent_addition_limits(
+            &agent,
+            &region_id,
+            &commodity_id,
+            2015,
+            Dimensionless(0.5),
+        );
 
-        Asset::new_candidate(Arc::new(process), region_id, Capacity(15.0), 2015)
-            .unwrap()
-            .into()
+        assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(5.0)));
     }
 
     #[rstest]
-    fn commissioned_assets_are_excluded(commissioned_asset: AssetRef) {
-        let result = collect_investment_limits_for_candidates(
-            from_ref(&commissioned_asset),
+    fn collect_agent_addition_limits_excludes_processes_without_limits(
+        process: Process,
+        region_id: RegionID,
+    ) {
+        let commodity_id = "commodity".into();
+        let process_id = process.id.clone();
+        let agent = agent_with_process(process, &region_id, &commodity_id);
+
+        let result = collect_agent_addition_limits(
+            &agent,
+            &region_id,
+            &commodity_id,
+            2015,
             Dimensionless(1.0),
         );
 
-        assert!(!result.contains_key(&commissioned_asset));
-    }
-
-    #[rstest]
-    fn candidate_assets_without_limits_are_excluded(uncommissioned_asset_without_limit: AssetRef) {
-        let result = collect_investment_limits_for_candidates(
-            from_ref(&uncommissioned_asset_without_limit),
-            Dimensionless(1.0),
-        );
-
-        assert!(!result.contains_key(&uncommissioned_asset_without_limit));
-    }
-
-    #[rstest]
-    fn candidate_assets_with_limits_are_included(uncommissioned_asset_with_limit: AssetRef) {
-        let result = collect_investment_limits_for_candidates(
-            from_ref(&uncommissioned_asset_with_limit),
-            Dimensionless(1.0),
-        );
-
-        assert!(result.contains_key(&uncommissioned_asset_with_limit));
+        assert!(!result.contains_key(&process_id));
     }
 }

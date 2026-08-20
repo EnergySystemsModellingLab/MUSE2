@@ -9,8 +9,8 @@ use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerFlow, Year,
+    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerFlow, UnitType, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -19,6 +19,7 @@ use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -108,54 +109,30 @@ pub struct Asset {
     max_decommission_year: u32,
 }
 
+/// Hash a unit value while treating positive and negative zero as equal.
+fn hash_unit<U: UnitType>(value: U) -> u64 {
+    let value = value.value();
+    if value == 0.0 { 0 } else { value.to_bits() }
+}
+
 impl Asset {
     /// Create a new candidate asset
+    ///
+    /// These candidates will have a single capacity unit with the given `unit_size`.
     pub fn new_candidate(
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
-        commission_year: u32,
-    ) -> Result<Self> {
-        let unit_size = process.unit_size;
-        Self::new_with_state(
-            AssetState::Candidate,
-            process,
-            region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
-            commission_year,
-            None,
-        )
-    }
-
-    /// Create a new candidate for use in dispatch runs
-    ///
-    /// These candidates will have a single continuous capacity specified by the model parameter
-    /// `candidate_asset_capacity`, regardless of whether the underlying process is divisible or
-    /// not.
-    pub fn new_candidate_for_dispatch(
-        process: Arc<Process>,
-        region_id: RegionID,
-        capacity: Capacity,
+        unit_size: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::Continuous(capacity),
+            AssetCapacity::single(unit_size),
             commission_year,
             None,
         )
-    }
-
-    /// Create a new candidate asset from a commissioned asset
-    pub fn new_candidate_from_commissioned(asset: &Asset) -> Self {
-        assert!(asset.is_commissioned(), "Asset must be commissioned");
-
-        Self {
-            state: AssetState::Candidate,
-            ..asset.clone()
-        }
     }
 
     /// Create a new ready asset
@@ -167,10 +144,9 @@ impl Asset {
         agent_id: AgentID,
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -178,7 +154,7 @@ impl Asset {
             },
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            capacity,
             commission_year,
             None,
         )
@@ -193,10 +169,9 @@ impl Asset {
         agent_id: AgentID,
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
     ) -> Result<Self> {
-        let unit_size = process.unit_size;
         Self::new_with_state(
             AssetState::Commissioned {
                 id: AssetID(0),
@@ -205,7 +180,7 @@ impl Asset {
             },
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            capacity,
             commission_year,
             None,
         )
@@ -272,7 +247,6 @@ impl Asset {
             max_decommission_year > commission_year,
             "Max decommission year must be greater than commission year"
         );
-
         Ok(Self {
             state,
             process,
@@ -650,17 +624,89 @@ impl Asset {
         &self.process.id
     }
 
+    /// Whether two assets have identical properties for the purposes of dispatch optimisation.
+    ///
+    /// Capacity, process identity and asset state are deliberately ignored. The activity limits
+    /// and flows are compared by value, so separately allocated but identical `Arc`s are still
+    /// equivalent. This method is the authoritative equality check; the dispatch hash is only used
+    /// to narrow grouping candidates and may contain collisions.
+    ///
+    /// This is deliberately conservative: any difference in variable operating cost, flows, or
+    /// activity limits, however small, means the assets are considered not equivalent.
+    pub fn is_dispatch_equivalent(&self, other: &Self) -> bool {
+        self.region_id == other.region_id
+            && self.process_parameter.variable_operating_cost
+                == other.process_parameter.variable_operating_cost
+            // `IndexMap` equality is insensitive to entry order.
+            // If the assets share the same allocation, `Arc::ptr_eq` avoids having to compare the
+            // full contents of the `IndexMap`.
+            && (Arc::ptr_eq(&self.activity_limits, &other.activity_limits)
+                || self.activity_limits == other.activity_limits)
+            && (Arc::ptr_eq(&self.flows, &other.flows) || self.flows == other.flows)
+    }
+
+    /// Calculate a hash of the properties used to determine dispatch equivalence.
+    ///
+    /// It is used as a prefilter to avoid unnecessary, and potentially expensive, comparisons with
+    /// [`Self::is_dispatch_equivalent`]. Equal hashes do not confirm equivalence, but unequal
+    /// hashes can rule out equivalence.
+    ///
+    /// This is deliberately conservative: any difference in variable operating cost, flows, or
+    /// activity limits, however small, may result in a different hash.
+    ///
+    /// Hashes are calculated lazily, rather than caching at initialisation, because only assets
+    /// used in dispatch and eligible for equal-utilisation grouping need it. The trade-off is that
+    /// some assets may end up being hashed multiple times if they take part in multiple dispatch
+    /// runs, although the performance cost of this is likely not massive.
+    pub(crate) fn dispatch_equivalence_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        // Hash the region ID
+        self.region_id.hash(&mut hasher);
+
+        // Hash the variable operating cost
+        hash_unit(self.process_parameter.variable_operating_cost).hash(&mut hasher);
+
+        // Hash activity limits based on ts selection, lower and upper limits
+        let mut activity_limit_hashes = self
+            .activity_limits
+            .iter_limits()
+            .map(|(selection, limits)| {
+                let mut hasher = DefaultHasher::new();
+                selection.hash(&mut hasher);
+                hash_unit(*limits.start()).hash(&mut hasher);
+                hash_unit(*limits.end()).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        activity_limit_hashes.sort_unstable();
+        activity_limit_hashes.hash(&mut hasher);
+
+        // Hash flows based on commodity ID, coefficient, FlowType and cost
+        let mut flow_hashes = self
+            .flows
+            .values()
+            .map(|flow| {
+                let mut hasher = DefaultHasher::new();
+                flow.commodity.id.hash(&mut hasher);
+                hash_unit(flow.coeff).hash(&mut hasher);
+                std::mem::discriminant(&flow.kind).hash(&mut hasher);
+                hash_unit(flow.cost).hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        flow_hashes.sort_unstable();
+        flow_hashes.hash(&mut hasher);
+
+        hasher.finish()
+    }
+
     /// Get the ID for this asset
     pub fn id(&self) -> Option<AssetID> {
         match &self.state {
             AssetState::Commissioned { id, .. } => Some(*id),
             _ => None,
         }
-    }
-
-    /// Whether this asset is divisible
-    pub fn is_divisible(&self) -> bool {
-        matches!(self.capacity, AssetCapacity::Discrete { .. })
     }
 
     /// Get the agent ID for this asset, if any
@@ -691,12 +737,10 @@ impl Asset {
             capacity.total_capacity() >= Capacity(0.0),
             "Capacity must be >= 0"
         );
-        self.capacity().assert_same_type(capacity);
         assert!(
-            self.get_num_mothballed_units() <= capacity.n_units().unwrap_or(1),
+            self.get_num_mothballed_units() <= capacity.num_units(),
             "Cannot set capacity to a smaller number of units than are currently mothballed"
         );
-
         self.capacity = capacity;
     }
 
@@ -747,7 +791,6 @@ impl Asset {
             self.is_candidate(),
             "select_candidate_for_investment can only be called on Candidate assets"
         );
-        check_capacity_valid_for_asset(self.total_capacity()).unwrap();
         self.state = AssetState::Ready {
             agent_id,
             commission_reason: "selected",
@@ -799,46 +842,8 @@ impl Asset {
     }
 
     /// The number of units this asset represents
-    ///
-    /// If divisible, returns the total number of units, otherwise returns one.
     pub fn num_units(&self) -> u32 {
-        self.capacity().n_units().unwrap_or(1)
-    }
-
-    /// Get the unit size for this asset's capacity (if any)
-    pub fn unit_size(&self) -> Option<Capacity> {
-        match self.capacity() {
-            AssetCapacity::Discrete(_, size) => Some(size),
-            AssetCapacity::Continuous(_) => None,
-        }
-    }
-
-    /// For non-commissioned assets, get the maximum capacity permitted to be installed based on the
-    /// investment constraints for the asset's process.
-    ///
-    /// The limit is taken from the process's investment constraints for the asset's region and
-    /// commission year, and the portion of the commodity demand being considered.
-    ///
-    /// For divisible assets, the returned capacity will be rounded down to the nearest multiple of
-    /// the asset's unit size.
-    pub fn max_installable_capacity(
-        &self,
-        commodity_portion: Dimensionless,
-    ) -> Option<AssetCapacity> {
-        assert!(
-            !self.is_commissioned(),
-            "max_installable_capacity can only be called on uncommissioned assets"
-        );
-        assert!(
-            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
-            "commodity_portion must be between 0 and 1 inclusive"
-        );
-
-        self.process
-            .investment_constraints
-            .get(&(self.region_id.clone(), self.commission_year))
-            .and_then(|c| c.get_addition_limit().map(|l| l * commodity_portion))
-            .map(|limit| AssetCapacity::from_capacity_floor(limit, self.unit_size()))
+        self.capacity().num_units()
     }
 }
 
@@ -881,17 +886,16 @@ pub fn check_region_year_valid_for_process(
 pub struct UserAsset(#[deref(forward)] AssetRef);
 
 impl UserAsset {
-    /// Create a new [`UserAsset`]
+    /// Create a new [`UserAsset`] with an explicit capacity representation.
     pub fn new(
         agent_id: AgentID,
         process: Arc<Process>,
         region_id: RegionID,
-        capacity: Capacity,
+        capacity: AssetCapacity,
         commission_year: u32,
         max_decommission_year: Option<u32>,
     ) -> Result<Self> {
-        check_capacity_valid_for_asset(capacity)?;
-        let unit_size = process.unit_size;
+        check_capacity_valid_for_asset(capacity.total_capacity())?;
         let asset = Asset::new_with_state(
             AssetState::Ready {
                 agent_id,
@@ -899,7 +903,7 @@ impl UserAsset {
             },
             process,
             region_id,
-            AssetCapacity::from_capacity(capacity, unit_size),
+            capacity,
             commission_year,
             max_decommission_year,
         )?;
@@ -975,10 +979,9 @@ impl AssetRef {
 
     /// Get an [`AssetRef`] representing a subset of this asset's units.
     ///
-    /// For non-divisible assets, `new_num_units` must be one. If some of the asset's units are
-    /// mothballed, these are discarded before non-mothballed units. For example, if an asset has
-    /// seven units of which four are mothballed and we are reducing the number of units to four,
-    /// the new asset will have one mothballed unit.
+    /// If some of the asset's units are mothballed, these are discarded before non-mothballed
+    /// units. For example, if an asset has seven units of which four are mothballed and we are
+    /// reducing the number of units to four, the new asset will have one mothballed unit.
     ///
     /// # Panics
     ///
@@ -990,12 +993,8 @@ impl AssetRef {
 
         assert!(new_num_units > 0, "Cannot make an asset with zero units");
 
-        let (max_num_units, unit_size) = match self.capacity() {
-            AssetCapacity::Discrete(max_num_units, unit_size) => (max_num_units, unit_size),
-            AssetCapacity::Continuous(_) => {
-                panic!("Non-divisible assets can only have one unit");
-            }
-        };
+        let max_num_units = self.capacity().num_units();
+        let unit_size = self.capacity().unit_size();
 
         assert!(
             new_num_units <= max_num_units,
@@ -1010,7 +1009,18 @@ impl AssetRef {
         let mut asset = self.with_mothballed_units(new_num_mothballed, None);
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::Discrete(new_num_units, unit_size));
+            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
+        asset
+    }
+
+    /// Get an [`AssetRef`] representing a single unit of this asset.
+    pub fn as_single_unit(self) -> Self {
+        let new_num_units = 1;
+        let unit_size = self.capacity().unit_size();
+        let mut asset = self.with_no_mothballed_units();
+        asset
+            .make_mut()
+            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
         asset
     }
 
@@ -1220,8 +1230,8 @@ mod tests {
     use crate::commodity::Commodity;
     use crate::fixture::{
         agent_id, assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple,
-        asset, asset_divisible, process, process_activity_limits_map, process_flows_map, region_id,
-        svd_commodity, time_slice, time_slice_info,
+        asset, multi_unit_asset, process, process_activity_limits_map, process_flows_map,
+        region_id, svd_commodity, time_slice, time_slice_info,
     };
     use crate::patch::FilePatch;
     use crate::process::{FlowType, Process, ProcessFlow};
@@ -1237,12 +1247,12 @@ mod tests {
     use rstest::{fixture, rstest};
     use std::sync::Arc;
 
-    /// A commissioned divisible asset with three units.
+    /// A commissioned asset with three units.
     #[fixture]
-    fn commissioned_divisible(mut asset_divisible: Asset) -> AssetRef {
-        asset_divisible.commission(AssetID(0));
-        assert_eq!(asset_divisible.num_units(), 3);
-        AssetRef::from(asset_divisible)
+    fn commissioned_multi_unit(mut multi_unit_asset: Asset) -> AssetRef {
+        multi_unit_asset.commission(AssetID(0));
+        assert_eq!(multi_unit_asset.num_units(), 3);
+        AssetRef::from(multi_unit_asset)
     }
 
     #[rstest]
@@ -1278,6 +1288,92 @@ mod tests {
         assert_approx_eq!(MoneyPerActivity, cost, MoneyPerActivity(6.0));
     }
 
+    #[rstest]
+    fn dispatch_equivalence_ignores_capacity(asset: Asset) {
+        let mut other = asset.clone();
+        other.set_capacity(AssetCapacity::single(Capacity(3.0)));
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_region(asset: Asset) {
+        let mut other = asset.clone();
+        other.region_id = "FRA".into();
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_variable_operating_cost(asset: Asset) {
+        let mut other = asset.clone();
+        Arc::make_mut(&mut other.process_parameter).variable_operating_cost = MoneyPerActivity(1.0);
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_activity_limits(
+        asset: Asset,
+        asset_with_activity_limits: Asset,
+    ) {
+        assert!(!asset.is_dispatch_equivalent(&asset_with_activity_limits));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_fails_for_different_flows(asset: Asset, svd_commodity: Commodity) {
+        let commodity = Arc::new(svd_commodity);
+        let flow = ProcessFlow {
+            commodity: Arc::clone(&commodity),
+            coeff: FlowPerActivity(1.0),
+            kind: FlowType::Fixed,
+            cost: MoneyPerFlow(0.0),
+        };
+
+        let mut other = asset.clone();
+        other.flows = Arc::new(indexmap! { commodity.id.clone() => flow });
+
+        assert!(!asset.is_dispatch_equivalent(&other));
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_handles_separately_allocated_values(asset: Asset) {
+        let mut other = asset.clone();
+        other.activity_limits = Arc::new((*asset.activity_limits).clone());
+        other.flows = Arc::new((*asset.flows).clone());
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_ignores_state(asset: Asset) {
+        let mut other = asset.clone();
+        other.commission(AssetID(1));
+
+        assert!(asset.is_dispatch_equivalent(&other));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            other.dispatch_equivalence_hash()
+        );
+    }
+
+    #[rstest]
+    fn dispatch_equivalence_is_reflexive(asset: Asset) {
+        assert!(asset.is_dispatch_equivalent(&asset));
+        assert_eq!(
+            asset.dispatch_equivalence_hash(),
+            asset.dispatch_equivalence_hash()
+        );
+    }
+
     #[fixture]
     fn process_with_activity_limits(
         mut process: Process,
@@ -1301,7 +1397,7 @@ mod tests {
             "agent1".into(),
             Arc::new(process_with_activity_limits),
             "GBR".into(),
-            Capacity(2.0),
+            AssetCapacity::single(Capacity(2.0)),
             2010,
         )
         .unwrap()
@@ -1330,26 +1426,39 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        let asset =
-            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None).unwrap();
+        let asset_capacity = AssetCapacity::single(capacity);
+        let asset = UserAsset::new(
+            agent_id,
+            process.into(),
+            region_id,
+            asset_capacity,
+            2015,
+            None,
+        )
+        .unwrap();
         assert!(asset.id().is_none());
     }
 
     #[rstest]
     #[case(Capacity(0.0))]
-    #[case(Capacity(-0.01))]
-    #[case(Capacity(-1.0))]
-    #[case(Capacity(f64::NAN))]
-    #[case(Capacity(f64::INFINITY))]
-    #[case(Capacity(f64::NEG_INFINITY))]
-    fn user_asset_new_invalid_capacity(
+    fn user_asset_new_zero_capacity(
         agent_id: AgentID,
         process: Process,
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
+        // It's permitted to create an AssetCapacity with zero unit_size, but this should be
+        // rejected for UserAsset's
+        let asset_capacity = AssetCapacity::single(capacity);
         assert_error!(
-            UserAsset::new(agent_id, process.into(), region_id, capacity, 2015, None),
+            UserAsset::new(
+                agent_id,
+                process.into(),
+                region_id,
+                asset_capacity,
+                2015,
+                None
+            ),
             "Capacity must be a finite, positive number"
         );
     }
@@ -1365,7 +1474,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                Capacity(1.0),
+                AssetCapacity::single(Capacity(1.0)),
                 2007,
                 None
             ),
@@ -1381,7 +1490,7 @@ mod tests {
                 agent_id,
                 process.into(),
                 region_id,
-                Capacity(1.0),
+                AssetCapacity::single(Capacity(1.0)),
                 2015,
                 None
             ),
@@ -1393,49 +1502,33 @@ mod tests {
     #[case::subset(2, false)]
     #[case::all_all_units(3, true)]
     fn with_subset_of_units(
-        asset_divisible: Asset,
+        multi_unit_asset: Asset,
         #[case] num_units: u32,
         #[case] expect_same_asset: bool,
     ) {
-        let asset = AssetRef::from(asset_divisible);
+        let asset = AssetRef::from(multi_unit_asset);
         let asset_subset = asset.clone().with_subset_of_units(num_units);
 
         assert_eq!(
             asset_subset.capacity(),
-            AssetCapacity::Discrete(num_units, Capacity(4.0))
+            AssetCapacity::new(num_units, Capacity(4.0))
         );
-        assert_eq!(asset_subset.capacity().n_units(), Some(num_units));
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
         assert_eq!(Arc::ptr_eq(&asset_subset.0, &asset.0), expect_same_asset);
-        assert_eq!(asset.capacity(), AssetCapacity::Discrete(3, Capacity(4.0)));
-    }
-
-    #[rstest]
-    fn with_subset_of_units_non_divisible_asset(asset: Asset) {
-        let asset = AssetRef::from(asset);
-        assert!(Arc::ptr_eq(
-            &asset.0,
-            &asset.clone().with_subset_of_units(1).0
-        ));
-    }
-
-    #[rstest]
-    #[should_panic(expected = "Non-divisible assets can only have one unit")]
-    fn with_subset_of_units_panics_for_non_divisible_asset(asset: Asset) {
-        AssetRef::from(asset).with_subset_of_units(2);
+        assert_eq!(asset.capacity(), AssetCapacity::new(3, Capacity(4.0)));
     }
 
     #[rstest]
     #[should_panic(expected = "Cannot make an asset with zero units")]
-    fn with_subset_of_units_panics_for_zero_units(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_subset_of_units(0);
+    fn with_subset_of_units_panics_for_zero_units(commissioned_multi_unit: AssetRef) {
+        commissioned_multi_unit.with_subset_of_units(0);
     }
 
     #[rstest]
     #[should_panic(expected = "Cannot make an asset with more units than original")]
-    fn with_subset_of_units_panics_for_too_many_units(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_subset_of_units(4);
+    fn with_subset_of_units_panics_for_too_many_units(commissioned_multi_unit: AssetRef) {
+        commissioned_multi_unit.with_subset_of_units(4);
     }
 
     #[rstest]
@@ -1445,7 +1538,7 @@ mod tests {
             "agent1".into(),
             process.into(),
             "GBR".into(),
-            Capacity(1.0),
+            AssetCapacity::single(Capacity(1.0)),
             2020,
         )
         .unwrap();
@@ -1512,33 +1605,12 @@ mod tests {
     }
 
     #[rstest]
-    fn max_installable_capacity(mut process: Process, region_id: RegionID) {
-        // Set an addition limit of 3 for (region, year 2015)
-        process.investment_constraints.insert(
-            (region_id.clone(), 2015),
-            Arc::new(crate::process::ProcessInvestmentConstraint {
-                addition_limit: Some(Capacity(3.0)),
-            }),
-        );
-        let process_rc = Arc::new(process);
-
-        // Create a candidate asset with commission year 2015
-        let asset =
-            Asset::new_candidate(process_rc.clone(), region_id.clone(), Capacity(1.0), 2015)
-                .unwrap();
-
-        // commodity_portion = 0.5 -> limit = 3 * 0.5 = 1.5
-        let result = asset.max_installable_capacity(Dimensionless(0.5));
-        assert_eq!(result, Some(AssetCapacity::Continuous(Capacity(1.5))));
-    }
-
-    #[rstest]
     #[case::none(0)]
     #[case::some(2)]
     #[case::all(3)]
-    fn mothball_unit_counts(commissioned_divisible: AssetRef, #[case] num_mothballed: u32) {
-        assert_eq!(commissioned_divisible.num_units(), 3);
-        let asset = commissioned_divisible.with_mothballed_units(num_mothballed, Some(2020));
+    fn mothball_unit_counts(commissioned_multi_unit: AssetRef, #[case] num_mothballed: u32) {
+        assert_eq!(commissioned_multi_unit.num_units(), 3);
+        let asset = commissioned_multi_unit.with_mothballed_units(num_mothballed, Some(2020));
         assert_eq!(asset.get_num_mothballed_units(), num_mothballed);
         assert_eq!(asset.get_num_nonmothballed_units(), 3 - num_mothballed);
         assert_eq!(asset.has_any_mothballed_units(), num_mothballed > 0);
@@ -1559,9 +1631,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_mothballed_units_accumulates_events(commissioned_divisible: AssetRef) {
+    fn with_mothballed_units_accumulates_events(commissioned_multi_unit: AssetRef) {
         // Mothball one unit in 2020
-        let asset = commissioned_divisible.with_mothballed_units(1, Some(2020));
+        let asset = commissioned_multi_unit.with_mothballed_units(1, Some(2020));
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
@@ -1588,9 +1660,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_mothballed_units_decrease_removes_oldest_first(commissioned_divisible: AssetRef) {
+    fn with_mothballed_units_decrease_removes_oldest_first(commissioned_multi_unit: AssetRef) {
         // Mothball 1 unit in 2020, then 2 more (3 total) in 2022
-        let asset = commissioned_divisible
+        let asset = commissioned_multi_unit
             .with_mothballed_units(1, Some(2020))
             .with_mothballed_units(3, Some(2022));
         assert_equal(
@@ -1621,16 +1693,16 @@ mod tests {
     }
 
     #[rstest]
-    fn with_mothballed_units_noop_returns_same_rc(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+    fn with_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
         // Requesting the same number of mothballed units is a no-op (the year is ignored)
         let same = asset.clone().with_mothballed_units(2, Some(2099));
         assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
-    fn with_mothballed_units_zero_unmothballs(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+    fn with_mothballed_units_zero_unmothballs(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
         assert!(asset.has_any_mothballed_units());
 
         let asset = asset.with_mothballed_units(0, None);
@@ -1640,8 +1712,8 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot mothball more units than asset represents")]
-    fn with_mothballed_units_panics_for_too_many_units(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_mothballed_units(4, Some(2020));
+    fn with_mothballed_units_panics_for_too_many_units(commissioned_multi_unit: AssetRef) {
+        commissioned_multi_unit.with_mothballed_units(4, Some(2020));
     }
 
     #[rstest]
@@ -1654,40 +1726,44 @@ mod tests {
 
     #[rstest]
     #[should_panic(expected = "Cannot increase number of mothballed units without supplying year")]
-    fn with_mothballed_units_panics_when_increasing_without_year(commissioned_divisible: AssetRef) {
-        commissioned_divisible.with_mothballed_units(1, None);
+    fn with_mothballed_units_panics_when_increasing_without_year(
+        commissioned_multi_unit: AssetRef,
+    ) {
+        commissioned_multi_unit.with_mothballed_units(1, None);
     }
 
     #[rstest]
     #[should_panic(expected = "Attempting to mothball units in a year in the past")]
-    fn with_mothballed_units_panics_when_mothballing_in_the_past(commissioned_divisible: AssetRef) {
+    fn with_mothballed_units_panics_when_mothballing_in_the_past(
+        commissioned_multi_unit: AssetRef,
+    ) {
         // Mothball a unit in 2020, then attempt to mothball another in an earlier year, which would
         // break the chronological ordering invariant of the mothball events
-        commissioned_divisible
+        commissioned_multi_unit
             .with_mothballed_units(1, Some(2020))
             .with_mothballed_units(2, Some(2019));
     }
 
     #[rstest]
-    fn with_no_mothballed_units_clears_events(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(2, Some(2020));
+    fn with_no_mothballed_units_clears_events(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
         let asset = asset.with_no_mothballed_units();
         assert!(!asset.has_any_mothballed_units());
         assert_eq!(asset.get_num_mothballed_units(), 0);
     }
 
     #[rstest]
-    fn with_no_mothballed_units_noop_returns_same_rc(commissioned_divisible: AssetRef) {
-        // `asset_divisble` has no mothballed units, so the original Rc is returned unchanged
-        let asset = commissioned_divisible;
+    fn with_no_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
+        // `commissioned_multi_unit` has no mothballed units, so the original Rc is returned unchanged
+        let asset = commissioned_multi_unit;
         let same = asset.clone().with_no_mothballed_units();
         assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
-    fn with_subset_of_units_caps_mothballed(commissioned_divisible: AssetRef) {
+    fn with_subset_of_units_caps_mothballed(commissioned_multi_unit: AssetRef) {
         // Mothball all 3 units
-        let asset = commissioned_divisible.with_mothballed_units(3, Some(2020));
+        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2020));
         assert_eq!(asset.get_num_mothballed_units(), 3);
 
         // Taking a subset of 2 units caps the mothballed count at the new number of units
@@ -1697,8 +1773,8 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_nothing_old_enough(commissioned_divisible: AssetRef) {
-        let asset = commissioned_divisible.with_mothballed_units(1, Some(2020));
+    fn with_decommission_mothballed_nothing_old_enough(commissioned_multi_unit: AssetRef) {
+        let asset = commissioned_multi_unit.with_mothballed_units(1, Some(2020));
         // Threshold is 2005, so the 2020 event is not old enough: the asset is returned unchanged
         let result = asset
             .clone()
@@ -1708,9 +1784,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_partial(commissioned_divisible: AssetRef) {
+    fn with_decommission_mothballed_partial(commissioned_multi_unit: AssetRef) {
         // Mothball 1 unit in 2010 and 1 unit in 2020 (leaving 1 unit active)
-        let asset = commissioned_divisible
+        let asset = commissioned_multi_unit
             .with_mothballed_units(1, Some(2010))
             .with_mothballed_units(2, Some(2020));
 
@@ -1728,9 +1804,9 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_all(commissioned_divisible: AssetRef) {
+    fn with_decommission_mothballed_all(commissioned_multi_unit: AssetRef) {
         // All units mothballed long enough ago: the whole asset is decommissioned
-        let asset = commissioned_divisible.with_mothballed_units(3, Some(2010));
+        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2010));
         assert!(asset.with_decommission_mothballed(2025, 10).is_none());
     }
 }

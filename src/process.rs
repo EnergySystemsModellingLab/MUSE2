@@ -76,6 +76,28 @@ impl Process {
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
     }
+
+    /// Calculate an agent's share of the addition limit for this process in a region and year
+    /// based on commodity portion.
+    pub fn agent_addition_limit(
+        &self,
+        region_id: &RegionID,
+        commission_year: u32,
+        commodity_portion: Dimensionless,
+    ) -> Option<Capacity> {
+        assert!(
+            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
+            "commodity_portion must be between 0 and 1 inclusive"
+        );
+
+        self.investment_constraints
+            .get(&(region_id.clone(), commission_year))
+            .and_then(|constraint| {
+                constraint
+                    .get_addition_limit()
+                    .map(|limit| limit * commodity_portion)
+            })
+    }
 }
 
 /// Defines the activity limits for a process in a given region and year

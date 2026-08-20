@@ -1,10 +1,11 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::{Agent, AgentID};
-use crate::asset::{Asset, AssetCapacity, AssetRef};
+use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -352,7 +353,7 @@ fn log_on_equal_appraisal_outputs(
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
-    candidate_investment_limits: HashMap<AssetRef, AssetCapacity>,
+    agent_addition_limits: HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -363,11 +364,16 @@ pub fn select_best_assets(
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
 
-    // Remaining capacity for candidates and divisible assets
-    let mut remaining_capacities = candidate_investment_limits;
+    // Remaining addition limits for candidate processes
+    // Initialised as the full agent addition limits, and reduced as candidate assets are selected
+    let mut remaining_agent_addition_limits = agent_addition_limits;
+    remove_candidates_exceeding_agent_addition_limits(
+        &mut opt_assets,
+        &remaining_agent_addition_limits,
+    );
 
-    // Store capacities for divisible assets and replace with single units
-    prepare_commissioned_divisible_assets(&mut opt_assets, &mut remaining_capacities);
+    // Store commissioned units available for retention and replace assets with single units
+    let mut available_retention_units = prepare_commissioned_assets_for_retention(&mut opt_assets);
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
@@ -395,40 +401,17 @@ pub fn select_best_assets(
         let mut outputs: Vec<AppraisalOutput> = opt_assets
             .par_iter()
             .map(|asset| -> Result<Option<AppraisalOutput>> {
-                // For candidates, cap the asset's capacity by the current demand-limiting
-                // capacity and, where an addition constraint exists, the remaining installable
-                // capacity. `make_mut` creates a new Arc allocation for the modified clone so
-                // there is no shared mutable state between iterations.
-                let mut asset = asset.clone();
-                if asset.is_candidate() {
-                    let dlc = AssetCapacity::from_capacity(
-                        get_demand_limiting_capacity(
-                            &model.time_slice_info,
-                            &asset,
-                            commodity,
-                            &demand,
-                        ),
-                        asset.unit_size(),
-                    );
-                    let cap = asset.capacity().min(dlc);
-                    let max_capacity = remaining_capacities
-                        .get(&asset)
-                        .copied()
-                        .map_or(cap, |remaining| cap.min(remaining));
-                    asset.make_mut().set_capacity(max_capacity);
-                }
-
                 // Skip assets with zero capacity
-                if asset.capacity().total_capacity() <= Capacity(0.0) {
+                if asset.total_capacity() <= Capacity(0.0) {
                     return Ok(None);
                 }
 
                 Ok(Some(appraise_investment(
                     model,
-                    &asset,
+                    asset,
                     commodity,
                     objective_type,
-                    &coefficients[&asset],
+                    &coefficients[asset],
                     &demand,
                 )?))
             })
@@ -471,14 +454,15 @@ pub fn select_best_assets(
             "Selected {} asset '{}' (capacity: {})",
             best_output.asset.state(),
             best_output.asset.process_id(),
-            best_output.asset.capacity().total_capacity()
+            best_output.asset.total_capacity()
         );
 
-        // Update the assets and remaining candidate capacity
-        update_assets(
+        // Record the selected asset and update the remaining selection state.
+        record_asset_selection(
             best_output.asset,
             &mut opt_assets,
-            &mut remaining_capacities,
+            &mut remaining_agent_addition_limits,
+            &mut available_retention_units,
             &mut best_assets,
         );
 
@@ -499,26 +483,24 @@ pub fn select_best_assets(
     Ok(best_assets)
 }
 
-/// Prepare divisible assets for appraisal.
+/// Prepare existing assets for reappraisal.
 ///
-/// Divisible assets are replaced in `assets` with an asset representing a single unit, as they are
-/// appraised one unit at a time. Their total capacity is stored in `remaining_capacities`.
-fn prepare_commissioned_divisible_assets(
-    assets: &mut [AssetRef],
-    remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
-) {
-    for asset in assets
-        .iter_mut()
-        .filter(|asset| asset.is_commissioned() && asset.is_divisible())
-    {
-        let full_capacity = asset.capacity();
+/// Assets are replaced in `assets` with an asset representing a single unit, as they are
+/// appraised one unit at a time. Returns a map from the asset to its original number of units.
+fn prepare_commissioned_assets_for_retention(assets: &mut [AssetRef]) -> HashMap<AssetRef, u32> {
+    let mut available_retention_units = HashMap::new();
+
+    for asset in assets.iter_mut().filter(|asset| asset.is_commissioned()) {
+        let num_units = asset.num_units();
 
         // Replace with single unit as we appraise one unit at a time
-        *asset = asset.clone().with_subset_of_units(1);
+        *asset = asset.clone().as_single_unit();
 
-        // Store remaining capacity
-        remaining_capacities.insert(asset.clone(), full_capacity);
+        // Store remaining units
+        available_retention_units.insert(asset.clone(), num_units);
     }
+
+    available_retention_units
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
@@ -526,50 +508,90 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
     demand.values().any(|flow| *flow > absolute_tolerance)
 }
 
-/// Update capacity of chosen asset, if needed, and update both asset options and chosen assets
-fn update_assets(
+/// Remove candidate assets whose process addition limit cannot fund one complete unit.
+fn remove_candidates_exceeding_agent_addition_limits(
+    opt_assets: &mut Vec<AssetRef>,
+    remaining_agent_addition_limits: &HashMap<ProcessID, Capacity>,
+) {
+    opt_assets.retain(|asset| {
+        !asset.is_candidate()
+            || remaining_agent_addition_limits
+                .get(asset.process_id())
+                .is_none_or(|limit| *limit >= asset.total_capacity())
+    });
+}
+
+/// Record a selected asset and update the remaining investment options and selection state.
+///
+/// If the asset is a candidate, its capacity is subtracted from
+/// `remaining_agent_addition_limits` (if applicable) to ensure that process addition limits are not
+/// exceeded. If the asset is commissioned, one unit is subtracted from
+/// `available_retention_units` to ensure that retention does not invent new capacity.
+///
+/// # Arguments
+///
+/// * `best_asset` - The asset that has been selected as the best option in this round
+/// * `opt_assets` - The list of remaining asset options to be considered in future rounds
+/// * `remaining_agent_addition_limits` - The remaining agent addition limits for processes
+/// * `available_retention_units` - The commissioned units available for retention
+/// * `best_assets` - The list of assets that have been selected so far
+fn record_asset_selection(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
-    remaining_capacities: &mut HashMap<AssetRef, AssetCapacity>,
+    remaining_agent_addition_limits: &mut HashMap<ProcessID, Capacity>,
+    available_retention_units: &mut HashMap<AssetRef, u32>,
     best_assets: &mut Vec<AssetRef>,
 ) {
-    let capacity_accumulates = if best_asset.is_commissioned() {
-        best_asset.is_divisible()
-    } else if best_asset.is_candidate() {
-        true
-    } else {
-        panic!("Invalid asset type");
-    };
+    assert!(
+        best_asset.is_commissioned() || best_asset.is_candidate(),
+        "Invalid asset type"
+    );
 
-    if capacity_accumulates {
-        // Track remaining capacity for assets that have limits
-        if let Some(remaining_capacity) = remaining_capacities.get_mut(&best_asset) {
-            *remaining_capacity = *remaining_capacity - best_asset.capacity();
+    // Update the remaining agent addition limit for the selected asset, if applicable, and remove it
+    // from the options if the limit is exhausted.
+    if best_asset.is_candidate() {
+        // Candidate assets: remove capacity from the investment limit, if applicable.
+        if let Some(remaining_capacity) =
+            remaining_agent_addition_limits.get_mut(best_asset.process_id())
+        {
+            *remaining_capacity -= best_asset.total_capacity();
 
-            // If there's no capacity remaining, remove the asset from the options
-            if remaining_capacity.total_capacity() <= Capacity(0.0) {
+            // If there's not enough capacity remaining to install any more units, remove the
+            // asset from the investment options.
+            if *remaining_capacity < best_asset.total_capacity() {
                 let old_idx = opt_assets
                     .iter()
                     .position(|asset| *asset == best_asset)
                     .unwrap();
-
                 opt_assets.swap_remove(old_idx);
-                remaining_capacities.remove(&best_asset);
+                remaining_agent_addition_limits.remove(best_asset.process_id());
             }
         }
-
-        if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset) {
-            // If the asset is already in the list of best assets, add the additional required capacity
-            existing_asset
-                .make_mut()
-                .increase_capacity(best_asset.capacity());
-        } else {
-            // Otherwise add it to the list of best assets. Selected assets are unmothballed.
-            best_assets.push(best_asset.with_no_mothballed_units());
-        }
     } else {
-        // Remove this asset from the options. Selected assets are unmothballed.
-        opt_assets.retain(|asset| *asset != best_asset);
+        // Commissioned assets: we've appraised a single unit, so remove one unit from the
+        // available retention count for this asset.
+        let remaining = available_retention_units.get_mut(&best_asset).unwrap();
+        *remaining = remaining.saturating_sub(1);
+
+        // If all units have been selected, remove the asset from the investment options.
+        if *remaining == 0 {
+            let old_idx = opt_assets
+                .iter()
+                .position(|asset| *asset == best_asset)
+                .unwrap();
+            opt_assets.swap_remove(old_idx);
+            available_retention_units.remove(&best_asset);
+        }
+    }
+
+    // Add the selected asset to the list of best assets, or increase its capacity if it's already there.
+    if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset) {
+        // If the asset is already in the list of best assets, add the additional required capacity
+        existing_asset
+            .make_mut()
+            .increase_capacity(best_asset.capacity());
+    } else {
+        // Otherwise add it to the list of best assets. Selected assets are unmothballed.
         best_assets.push(best_asset.with_no_mothballed_units());
     }
 }
