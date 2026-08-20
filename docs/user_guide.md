@@ -15,6 +15,7 @@ muse2 example list
 It should print something like the following:
 
 ```sh
+circularity
 missing_commodity
 muse1_default
 simple
