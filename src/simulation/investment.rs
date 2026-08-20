@@ -5,6 +5,7 @@ use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -352,7 +353,7 @@ fn log_on_equal_appraisal_outputs(
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
-    candidate_investment_limits: HashMap<AssetRef, Capacity>,
+    agent_addition_limits: HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -363,12 +364,16 @@ pub fn select_best_assets(
 ) -> Result<Vec<AssetRef>> {
     let objective_type = &agent.objectives[&year];
 
-    // Remaining capacity limits for candidate assets
-    let mut remaining_candidate_capacities = candidate_investment_limits;
-    remove_candidates_exceeding_limits(&mut opt_assets, &remaining_candidate_capacities);
+    // Remaining addition limits for candidate processes
+    // Initialised as the full agent addition limits, and reduced as candidate assets are selected
+    let mut remaining_agent_addition_limits = agent_addition_limits;
+    remove_candidates_exceeding_agent_addition_limits(
+        &mut opt_assets,
+        &remaining_agent_addition_limits,
+    );
 
-    // Store unit counts for commissioned assets and replace them with single units
-    let mut remaining_units = prepare_commissioned_assets_for_reappraisal(&mut opt_assets);
+    // Store commissioned units available for retention and replace assets with single units
+    let mut available_retention_units = prepare_commissioned_assets_for_retention(&mut opt_assets);
 
     // Calculate coefficients for all asset options according to the agent's objective
     let coefficients =
@@ -452,12 +457,12 @@ pub fn select_best_assets(
             best_output.asset.total_capacity()
         );
 
-        // Update the assets and remaining limits
-        update_assets(
+        // Record the selected asset and update the remaining selection state.
+        record_asset_selection(
             best_output.asset,
             &mut opt_assets,
-            &mut remaining_candidate_capacities,
-            &mut remaining_units,
+            &mut remaining_agent_addition_limits,
+            &mut available_retention_units,
             &mut best_assets,
         );
 
@@ -482,8 +487,8 @@ pub fn select_best_assets(
 ///
 /// Assets are replaced in `assets` with an asset representing a single unit, as they are
 /// appraised one unit at a time. Returns a map from the asset to its original number of units.
-fn prepare_commissioned_assets_for_reappraisal(assets: &mut [AssetRef]) -> HashMap<AssetRef, u32> {
-    let mut remaining_units = HashMap::new();
+fn prepare_commissioned_assets_for_retention(assets: &mut [AssetRef]) -> HashMap<AssetRef, u32> {
+    let mut available_retention_units = HashMap::new();
 
     for asset in assets.iter_mut().filter(|asset| asset.is_commissioned()) {
         let num_units = asset.num_units();
@@ -492,10 +497,10 @@ fn prepare_commissioned_assets_for_reappraisal(assets: &mut [AssetRef]) -> HashM
         *asset = asset.clone().as_single_unit();
 
         // Store remaining units
-        remaining_units.insert(asset.clone(), num_units);
+        available_retention_units.insert(asset.clone(), num_units);
     }
 
-    remaining_units
+    available_retention_units
 }
 
 /// Check whether there is any remaining demand that is unmet in any time slice
@@ -503,39 +508,38 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
     demand.values().any(|flow| *flow > absolute_tolerance)
 }
 
-/// Remove candidate assets whose investment limit cannot fund one complete unit.
-fn remove_candidates_exceeding_limits(
+/// Remove candidate assets whose process addition limit cannot fund one complete unit.
+fn remove_candidates_exceeding_agent_addition_limits(
     opt_assets: &mut Vec<AssetRef>,
-    candidate_investment_limits: &HashMap<AssetRef, Capacity>,
+    remaining_agent_addition_limits: &HashMap<ProcessID, Capacity>,
 ) {
     opt_assets.retain(|asset| {
         !asset.is_candidate()
-            || candidate_investment_limits
-                .get(asset)
+            || remaining_agent_addition_limits
+                .get(asset.process_id())
                 .is_none_or(|limit| *limit >= asset.total_capacity())
     });
 }
 
-/// Add the best asset to the list of selected assets, and update the remaining limits and options
-/// accordingly.
+/// Record a selected asset and update the remaining investment options and selection state.
 ///
-/// If the asset is a candidate, its capacity is subtracted from `remaining_candidate_capacities`
-/// (if applicable). This is to ensure that any annual addition limits are not exceeded. If the
-/// asset is a commissioned asset, one unit is subtracted from `remaining_units`. This is to ensure
-/// that we do not select more units than are available for retention.
+/// If the asset is a candidate, its capacity is subtracted from
+/// `remaining_agent_addition_limits` (if applicable) to ensure that process addition limits are not
+/// exceeded. If the asset is commissioned, one unit is subtracted from
+/// `available_retention_units` to ensure that retention does not invent new capacity.
 ///
 /// # Arguments
 ///
 /// * `best_asset` - The asset that has been selected as the best option in this round
 /// * `opt_assets` - The list of remaining asset options to be considered in future rounds
-/// * `remaining_candidate_capacities` - The remaining investment limits for candidate assets
-/// * `remaining_units` - The remaining unit counts for commissioned assets
+/// * `remaining_agent_addition_limits` - The remaining agent addition limits for processes
+/// * `available_retention_units` - The commissioned units available for retention
 /// * `best_assets` - The list of assets that have been selected so far
-fn update_assets(
+fn record_asset_selection(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
-    remaining_candidate_capacities: &mut HashMap<AssetRef, Capacity>,
-    remaining_units: &mut HashMap<AssetRef, u32>,
+    remaining_agent_addition_limits: &mut HashMap<ProcessID, Capacity>,
+    available_retention_units: &mut HashMap<AssetRef, u32>,
     best_assets: &mut Vec<AssetRef>,
 ) {
     assert!(
@@ -543,11 +547,13 @@ fn update_assets(
         "Invalid asset type"
     );
 
-    // Update the remaining limits for the selected asset, if applicable, and remove it from the
-    // options if the limit is exhausted.
+    // Update the remaining agent addition limit for the selected asset, if applicable, and remove it
+    // from the options if the limit is exhausted.
     if best_asset.is_candidate() {
         // Candidate assets: remove capacity from the investment limit, if applicable.
-        if let Some(remaining_capacity) = remaining_candidate_capacities.get_mut(&best_asset) {
+        if let Some(remaining_capacity) =
+            remaining_agent_addition_limits.get_mut(best_asset.process_id())
+        {
             *remaining_capacity -= best_asset.total_capacity();
 
             // If there's not enough capacity remaining to install any more units, remove the
@@ -558,13 +564,13 @@ fn update_assets(
                     .position(|asset| *asset == best_asset)
                     .unwrap();
                 opt_assets.swap_remove(old_idx);
-                remaining_candidate_capacities.remove(&best_asset);
+                remaining_agent_addition_limits.remove(best_asset.process_id());
             }
         }
     } else {
         // Commissioned assets: we've appraised a single unit, so remove one unit from the
-        // remaining units count for this asset.
-        let remaining = remaining_units.get_mut(&best_asset).unwrap();
+        // available retention count for this asset.
+        let remaining = available_retention_units.get_mut(&best_asset).unwrap();
         *remaining = remaining.saturating_sub(1);
 
         // If all units have been selected, remove the asset from the investment options.
@@ -574,7 +580,7 @@ fn update_assets(
                 .position(|asset| *asset == best_asset)
                 .unwrap();
             opt_assets.swap_remove(old_idx);
-            remaining_units.remove(&best_asset);
+            available_retention_units.remove(&best_asset);
         }
     }
 
