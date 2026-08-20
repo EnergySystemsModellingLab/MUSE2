@@ -5,7 +5,7 @@ use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::process::ProcessID;
+use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
     AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
@@ -194,14 +194,31 @@ pub fn select_assets_for_single_market(
         .collect::<Vec<_>>();
 
         // Calculate the agent's share of addition limits for candidate processes
-        let agent_addition_limits =
-            collect_agent_addition_limits(agent, region_id, &commodity.id, year, commodity_portion);
+        let agent_addition_limits = collect_agent_limits(
+            agent,
+            region_id,
+            commodity_id,
+            year,
+            commodity_portion,
+            Process::agent_addition_limit,
+        );
+
+        // Calculate the agent's share of total capacity limits for all processes
+        let agent_total_limits = collect_agent_limits(
+            agent,
+            region_id,
+            commodity_id,
+            year,
+            commodity_portion,
+            Process::agent_total_limit,
+        );
 
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
             opt_assets,
             agent_addition_limits,
+            agent_total_limits,
             commodity,
             agent,
             region_id,
@@ -468,22 +485,34 @@ fn get_candidate_assets<'a>(
         })
 }
 
-/// Agent addition limits are based on process addition limits that have already been
-/// scaled from annual addition limits to the interval since the previous milestone year.
-/// The resulting limit is then scaled according to the agent's portion of commodity demand.
-pub fn collect_agent_addition_limits(
+/// Collects capacity limits for all processes in the agent's search space for a given market.
+///
+/// Processes without a defined limit are excluded from the returned map. The limit type is
+/// determined by `get_agent_limit`, which should be one of [`Process::agent_addition_limit`] (the
+/// agent's share of the annual addition limit) or [`Process::agent_total_limit`] (the agent's share
+/// of the maximum total installed capacity).
+///
+/// # Arguments
+///
+/// * `agent` – Agent whose search space is queried.
+/// * `region_id` – Region for which limits are calculated.
+/// * `commodity_id` – Commodity for which limits are calculated.
+/// * `year` – Milestone year being solved.
+/// * `commodity_portion` – Agent's fractional share of commodity demand, used to scale limits.
+/// * `get_agent_limit` – Method on [`Process`] that returns the limit value.
+fn collect_agent_limits(
     agent: &Agent,
     region_id: &RegionID,
     commodity_id: &CommodityID,
     year: u32,
     commodity_portion: Dimensionless,
+    get_agent_limit: fn(&Process, &RegionID, u32, Dimensionless) -> Option<Capacity>,
 ) -> HashMap<ProcessID, Capacity> {
     agent
         .iter_search_space(region_id, commodity_id, year)
         .filter_map(|process| {
-            process
-                .agent_addition_limit(region_id, year, commodity_portion)
-                .map(|agent_limit| (process.id.clone(), agent_limit))
+            get_agent_limit(process, region_id, year, commodity_portion)
+                .map(|limit| (process.id.clone(), limit))
         })
         .collect()
 }
@@ -522,30 +551,43 @@ mod tests {
     }
 
     #[rstest]
-    fn collect_agent_addition_limits_uses_search_space(mut process: Process, region_id: RegionID) {
+    fn collect_agent_limits_uses_search_space(mut process: Process, region_id: RegionID) {
         process.investment_constraints.insert(
             (region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(crate::units::Capacity(10.0)),
+                total_capacity_limit: Some(crate::units::Capacity(100.0)),
             }),
         );
         let commodity_id = "commodity".into();
         let process_id = process.id.clone();
         let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let result = collect_agent_addition_limits(
+        let result = collect_agent_limits(
             &agent,
             &region_id,
             &commodity_id,
             2015,
             Dimensionless(0.5),
+            Process::agent_addition_limit,
         );
 
         assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(5.0)));
+
+        let result = collect_agent_limits(
+            &agent,
+            &region_id,
+            &commodity_id,
+            2015,
+            Dimensionless(0.5),
+            Process::agent_total_limit,
+        );
+
+        assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(50.0)));
     }
 
     #[rstest]
-    fn collect_agent_addition_limits_excludes_processes_without_limits(
+    fn collect_agent_limits_excludes_processes_without_limits(
         process: Process,
         region_id: RegionID,
     ) {
@@ -553,12 +595,13 @@ mod tests {
         let process_id = process.id.clone();
         let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let result = collect_agent_addition_limits(
+        let result = collect_agent_limits(
             &agent,
             &region_id,
             &commodity_id,
             2015,
             Dimensionless(1.0),
+            Process::agent_addition_limit,
         );
 
         assert!(!result.contains_key(&process_id));
