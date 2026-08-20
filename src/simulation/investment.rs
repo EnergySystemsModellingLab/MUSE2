@@ -354,7 +354,7 @@ pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
     agent_addition_limits: HashMap<ProcessID, Capacity>,
-    process_capacity_limits: HashMap<ProcessID, Capacity>,
+    agent_total_limits: HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -374,7 +374,7 @@ pub fn select_best_assets(
     );
 
     // Remaining total capacity for all assets
-    let mut remaining_total_limit = process_capacity_limits;
+    let mut remaining_agent_total_limit = agent_total_limits;
 
     // Store commissioned units available for retention and replace assets with single units
     let mut available_retention_units = prepare_commissioned_assets_for_retention(&mut opt_assets);
@@ -466,7 +466,7 @@ pub fn select_best_assets(
             best_output.asset,
             &mut opt_assets,
             &mut remaining_agent_addition_limits,
-            &mut remaining_total_limit,
+            &mut remaining_agent_total_limit,
             &mut available_retention_units,
             &mut best_assets,
         );
@@ -538,14 +538,14 @@ fn remove_candidates_exceeding_agent_addition_limits(
 /// * `best_asset` - The asset that has been selected as the best option in this round
 /// * `opt_assets` - The list of remaining asset options to be considered in future rounds
 /// * `remaining_agent_addition_limits` - The remaining agent addition limits for processes
-/// * `remaining_total_limit` - The remaining capacity for processes
+/// * `remaining_agent_total_limit` - The remaining capacity for processes
 /// * `available_retention_units` - The commissioned units available for retention
 /// * `best_assets` - The list of assets that have been selected so far
 fn record_asset_selection(
     best_asset: AssetRef,
     opt_assets: &mut Vec<AssetRef>,
     remaining_agent_addition_limits: &mut HashMap<ProcessID, Capacity>,
-    remaining_total_limit: &mut HashMap<ProcessID, Capacity>,
+    remaining_agent_total_limit: &mut HashMap<ProcessID, Capacity>,
     available_retention_units: &mut HashMap<AssetRef, u32>,
     best_assets: &mut Vec<AssetRef>,
 ) {
@@ -555,7 +555,7 @@ fn record_asset_selection(
     );
 
     // Remove capacity from the total capacity limit, if applicable.
-    if let Some(remaining_capacity) = remaining_total_limit.get_mut(best_asset.process_id()) {
+    if let Some(remaining_capacity) = remaining_agent_total_limit.get_mut(best_asset.process_id()) {
         *remaining_capacity -= best_asset.total_capacity();
 
         // If there's not enough capacity remaining to install any more units, remove the
@@ -566,7 +566,7 @@ fn record_asset_selection(
                 .position(|asset| *asset == best_asset)
                 .unwrap();
             opt_assets.swap_remove(old_idx);
-            remaining_total_limit.remove(best_asset.process_id());
+            remaining_agent_total_limit.remove(best_asset.process_id());
         }
     }
 

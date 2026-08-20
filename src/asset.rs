@@ -9,8 +9,8 @@ use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerFlow, UnitType, Year,
+    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerFlow, UnitType, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -844,23 +844,6 @@ impl Asset {
     /// The number of units this asset represents
     pub fn num_units(&self) -> u32 {
         self.capacity().num_units()
-    }
-
-    /// For all assets, get the maximum capacity permitted to be installed based on the investment
-    /// constraints for the asset's process.
-    ///
-    /// The limit is taken from the process's investment constraints for the asset's region and
-    /// commission year, and the portion of the commodity demand being considered.
-    pub fn max_possible_capacity(&self, commodity_portion: Dimensionless) -> Option<Capacity> {
-        assert!(
-            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
-            "commodity_portion must be between 0 and 1 inclusive"
-        );
-
-        self.process
-            .investment_constraints
-            .get(&(self.region_id.clone(), self.commission_year))
-            .and_then(|c| c.get_total_limit().map(|l| l * commodity_portion))
     }
 }
 
