@@ -63,9 +63,18 @@ muse2 example extract simple new_model
 
 This will create a new subdirectory called `new_model` in the current folder.
 
+### Validating this model
+
+Before running a model, you can check that its input files can be read and that the model is
+internally consistent with:
+
+```sh
+muse2 validate new_model
+```
+
 ### Running this model
 
-First, let's run this model so you can see the output for a working model. You can do this by
+Next, let's run this model so you can see the output for a working model. You can do this by
 running:
 
 ```sh
@@ -78,7 +87,7 @@ the simulation (which should finish very quickly).
 The first few lines should look something like:
 
 ```txt
-[12:24:20 INFO muse2::cli] Starting MUSE2 v2.1.0
+[12:24:20 INFO muse2::cli] Starting MUSE2 vX.Y.Z
 [12:24:20 INFO muse2::cli] Loaded model from new_model/
 [12:24:20 INFO muse2::cli] Output folder: muse2_results/new_model
 ...
@@ -107,7 +116,7 @@ have a question, feel free to [open an issue].
 
 ## Visualising commodity graphs
 
-To visualise the structure of your model, you can use the [the `muse2 save-graphs` command] to
+To visualise the structure of your model, you can use the [`muse2 save-graphs` command] to
 create graphs of commodity/process relationships.
 This command will output a graph for each region/year in the simulation, where nodes are commodities
 and edges are processes.
@@ -116,7 +125,7 @@ with [Graphviz online].
 Dashed lines are used to indicate flows for non-primary outputs of a process (as defined in the
 `processes.csv` input file).
 
-[the `muse2 save-graphs` command]: command_line_help.md#muse2-save-graphs
+[`muse2 save-graphs` command]: command_line_help.md#muse2-save-graphs
 [DOT format]: https://graphviz.org/doc/info/lang.html
 [Graphviz]: https://graphviz.org/
 [Graphviz online]: https://dreampuf.github.io/GraphvizOnline
@@ -129,17 +138,18 @@ You can configure the behaviour of MUSE2 with a `settings.toml` file. To edit th
 muse2 settings edit
 ```
 
-There are also some more commands for working with the settings file; for details, run: `muse2
-settings help`.
+There are also some more commands for working with the settings file. For details, run
+`muse2 settings help` or see the [`muse2 settings` command documentation].
 
 For information about the available settings, see [the documentation for the `settings.toml`
 file][settings.toml-docs].
 
 [settings.toml-docs]: file_formats/program_settings.md
+[`muse2 settings` command documentation]: command_line_help.md#muse2-settings
 
 ## Setting the log level
 
-MUSE uses the [`fern`] crate for logging. The default log level is `info`, though this can be
+MUSE2 uses the [`fern`] crate for logging. The default log level is `info`, though this can be
 configured either via the `log_level` option in `settings.toml` or by setting the
 `MUSE2_LOG_LEVEL` environment variable. (If both are used, the environment variable takes
 precedence.)
@@ -153,7 +163,7 @@ The possible options are:
 - `trace`
 - `off`
 
-By default, MUSE will colourise the log output if this is available (i.e. it is outputting to a
+By default, MUSE2 will colourise the log output if this is available (i.e. it is outputting to a
 terminal rather than a file).
 
 For more information, please consult [the `fern` documentation].
