@@ -9,6 +9,10 @@ properties:
       type: integer
     description: The milestone years for the simulation
     notes: Must be positive integers that are sorted and unique
+  currency:
+    type: string
+    description: Optional currency label for monetary model inputs
+    notes: This is metadata only and does not affect model calculations or perform currency conversion
   candidate_asset_capacity:
     type: number
     description: Capacity to give to candidate assets in dispatch optimisation
