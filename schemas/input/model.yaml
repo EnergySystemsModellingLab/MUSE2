@@ -9,6 +9,15 @@ properties:
       type: integer
     description: The milestone years for the simulation
     notes: Must be positive integers that are sorted and unique
+  currency:
+    type: string
+    description: Optional currency label for monetary model inputs
+    notes: |
+      This is a free-text label used to document the monetary convention for model inputs and
+      outputs. It may include a currency and reference year, such as `MUSD2020` (i.e. millions of
+      US dollars in 2020 terms), or take any other form chosen by the modeller. The label is metadata
+      only: MUSE2 does not interpret it, perform currency conversion, or adjust monetary values for
+      inflation. Monetary inputs should use a consistent currency and reference year.
   candidate_asset_capacity:
     type: number
     description: Capacity to give to candidate assets in dispatch optimisation
