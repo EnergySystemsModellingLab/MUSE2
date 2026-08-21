@@ -78,8 +78,9 @@ This is divided again by the sum of SED/SVD output coefficients to get a cost pe
 \frac{\mathrm{AnnualFixedCostPerActivity}}{\sum_{c \in \mathrm{SED,\,SVD}} \mathrm{OutputCoefficient}_c}
 \\]
 
-> Note: this only works if all output commodities are measured in the same energy units (e.g. PJ).
-> For this reason, MUSE2 disallows processes that have output commodities with differing units.
+> Note: this only works if all SED/SVD output commodities use the same unit label (e.g. `PJ`).
+> For this reason, MUSE2 disallows processes that have SED/SVD outputs with differing
+> unit labels. MUSE2 compares the labels but does not interpret or convert them.
 
 The final full cost of output commodity \\( c \\) is:
 \\[
