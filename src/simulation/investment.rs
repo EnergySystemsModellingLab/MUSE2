@@ -21,7 +21,9 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 pub mod appraisal;
-use appraisal::coefficients::calculate_coefficients_for_assets;
+use appraisal::coefficients::{
+    calculate_activity_coefficients_for_assets, calculate_market_costs_for_assets,
+};
 use appraisal::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
     make_investment_decision, remove_nonfeasible_appraisal_outputs,
@@ -375,9 +377,12 @@ pub fn select_best_assets(
     // Store commissioned units available for retention and replace assets with single units
     let mut available_retention_units = prepare_commissioned_assets_for_retention(&mut opt_assets);
 
-    // Calculate coefficients for all asset options according to the agent's objective
-    let coefficients =
-        calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
+    // Activity coefficients are shared by all appraisal metrics; market costs depend on the
+    // selected objective and are calculated separately.
+    let activity_coefficients =
+        calculate_activity_coefficients_for_assets(model, &opt_assets, prices, year);
+    let market_costs =
+        calculate_market_costs_for_assets(model, objective_type, &opt_assets, prices, year);
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
@@ -411,7 +416,8 @@ pub fn select_best_assets(
                     asset,
                     commodity,
                     objective_type,
-                    &coefficients[asset],
+                    &activity_coefficients[asset],
+                    &market_costs[asset],
                     &demand,
                 )?))
             })

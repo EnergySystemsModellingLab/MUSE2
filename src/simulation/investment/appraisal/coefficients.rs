@@ -10,70 +10,69 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Per-time-slice cost coefficients for an asset.
-///
-/// These coefficients are calculated according to the agent's `ObjectiveType` and are used by the
-/// investment appraisal routines. They comprise the activity coefficients (revenue minus operating
-/// cost, derived from shadow prices) used in the appraisal optimisation, together with the market
-/// costs (derived from market prices).
-#[derive(Clone)]
-pub struct ObjectiveCoefficients {
-    /// Cost per unit of activity in each time slice
-    pub activity_coefficients: IndexMap<TimeSliceID, MoneyPerActivity>,
-    /// Market costs associated with asset for each time slice
-    pub market_costs: IndexMap<TimeSliceID, MoneyPerActivity>,
+/// Cost per unit of activity in each time slice.
+pub type ActivityCoefficients = IndexMap<TimeSliceID, MoneyPerActivity>;
+
+/// Market costs associated with an asset for each time slice.
+pub type MarketCosts = IndexMap<TimeSliceID, MoneyPerActivity>;
+
+/// Calculates activity coefficients for a set of assets.
+pub fn calculate_activity_coefficients_for_assets(
+    model: &Model,
+    assets: &[AssetRef],
+    prices: &Prices,
+    year: u32,
+) -> HashMap<AssetRef, Arc<ActivityCoefficients>> {
+    assets
+        .iter()
+        .map(|asset| {
+            let coefficients = calculate_activity_coefficients_for_asset(
+                asset,
+                &model.time_slice_info,
+                prices,
+                year,
+            );
+            (asset.clone(), Arc::new(coefficients))
+        })
+        .collect()
 }
 
-/// Calculates cost coefficients for a set of assets for a given objective type.
-///
-/// Returns a map from each asset to its [`ObjectiveCoefficients`], which holds a per-time-slice
-/// activity coefficient and market cost.
-///
-/// Activity coefficients are revenue from flows (including the primary output) minus operating
-/// cost, calculated using shadow prices. A small positive epsilon is added to each activity
-/// coefficient so that assets with near-zero net value still appear in dispatch.
-///
-/// Market costs are calculated using market prices rather than shadow prices. For NPV they use the
-/// same revenue-minus-operating-cost calculation as the activity coefficients. For LCOX the sign is
-/// inverted (as the value represents a cost) and the primary output (commodity of interest) is
-/// excluded.
-pub fn calculate_coefficients_for_assets(
+/// Calculates objective-specific market costs for a set of assets.
+pub fn calculate_market_costs_for_assets(
     model: &Model,
     objective_type: &ObjectiveType,
     assets: &[AssetRef],
     prices: &Prices,
     year: u32,
-) -> HashMap<AssetRef, Arc<ObjectiveCoefficients>> {
+) -> HashMap<AssetRef, Arc<MarketCosts>> {
     assets
         .iter()
         .map(|asset| {
-            let coefficient = calculate_coefficients_for_asset(
+            let costs = calculate_market_costs_for_asset(
                 asset,
                 objective_type,
                 &model.time_slice_info,
                 prices,
                 year,
             );
-            (asset.clone(), Arc::new(coefficient))
+            (asset.clone(), Arc::new(costs))
         })
         .collect()
 }
 
-/// Calculates cost coefficients for a single asset
-pub fn calculate_coefficients_for_asset(
+/// Calculates activity coefficients for a single asset.
+pub fn calculate_activity_coefficients_for_asset(
     asset: &AssetRef,
-    objective_type: &ObjectiveType,
     time_slice_info: &TimeSliceInfo,
     prices: &Prices,
     year: u32,
-) -> ObjectiveCoefficients {
+) -> ActivityCoefficients {
     // Small constant added to each activity coefficient to ensure break-even/slightly negative
     // assets are still dispatched
     const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(f64::EPSILON * 100.0);
 
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
-    let mut market_costs = IndexMap::new();
     let primary_output_flow = asset.primary_output().unwrap();
     let asset_region = asset.region_id();
     for time_slice in time_slice_info.iter_ids() {
@@ -93,7 +92,22 @@ pub fn calculate_coefficients_for_asset(
             time_slice.clone(),
             fallback_cost - net_operating_cost + EPSILON_ACTIVITY_COEFFICIENT,
         );
+    }
 
+    activity_coefficients
+}
+
+/// Calculates objective-specific market costs for a single asset.
+pub fn calculate_market_costs_for_asset(
+    asset: &AssetRef,
+    objective_type: &ObjectiveType,
+    time_slice_info: &TimeSliceInfo,
+    prices: &Prices,
+    year: u32,
+) -> MarketCosts {
+    let mut market_costs = IndexMap::new();
+    for time_slice in time_slice_info.iter_ids() {
+        let operating_cost = asset.get_operating_cost(year, time_slice);
         let market_cost = match objective_type {
             ObjectiveType::LevelisedCostOfX => {
                 calculate_asset_costs_for_lcox(asset, operating_cost, time_slice, &prices.market)
@@ -105,10 +119,7 @@ pub fn calculate_coefficients_for_asset(
         market_costs.insert(time_slice.clone(), market_cost);
     }
 
-    ObjectiveCoefficients {
-        activity_coefficients,
-        market_costs,
-    }
+    market_costs
 }
 
 /// Calculate the revenue from all flows minus operating cost

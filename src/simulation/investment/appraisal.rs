@@ -20,7 +20,7 @@ pub mod coefficients;
 mod constraints;
 mod costs;
 mod optimisation;
-use coefficients::ObjectiveCoefficients;
+use coefficients::{ActivityCoefficients, MarketCosts};
 use float_cmp::{ApproxEq, F64Margin};
 use optimisation::{ResultsMap, perform_optimisation};
 
@@ -57,8 +57,8 @@ pub struct AppraisalOutput {
     pub unmet_demand: DemandMap,
     /// The comparison metric to compare investment decisions
     pub metric: Option<Box<dyn MetricTrait>>,
-    /// Activity coefficients and market costs used in the appraisal
-    pub coefficients: Arc<ObjectiveCoefficients>,
+    /// Activity coefficients used in the appraisal optimisation
+    pub activity_coefficients: Arc<ActivityCoefficients>,
 }
 
 impl AppraisalOutput {
@@ -67,14 +67,14 @@ impl AppraisalOutput {
         asset: AssetRef,
         optimisation: ResultsMap,
         metric: Option<T>,
-        coefficients: Arc<ObjectiveCoefficients>,
+        activity_coefficients: Arc<ActivityCoefficients>,
     ) -> Self {
         Self {
             asset,
             activity: optimisation.activity,
             unmet_demand: optimisation.unmet_demand,
             metric: metric.map(|m| Box::new(m) as Box<dyn MetricTrait>),
-            coefficients,
+            activity_coefficients,
         }
     }
     /// Compare this appraisal to another on the basis of the comparison metric.
@@ -214,20 +214,21 @@ impl MetricTrait for NPVMetric {}
 fn calculate_lcox(
     optimisation: ResultsMap,
     asset: &AssetRef,
-    coefficients: Arc<ObjectiveCoefficients>,
+    activity_coefficients: Arc<ActivityCoefficients>,
+    market_costs: Arc<MarketCosts>,
 ) -> AppraisalOutput {
     let cost_index = lcox(
         asset.total_capacity(),
         annual_fixed_cost(asset),
         &optimisation.activity,
-        &coefficients.market_costs,
+        &market_costs,
     );
 
     AppraisalOutput::new(
         asset.clone(),
         optimisation,
         cost_index.map(LCOXMetric::new),
-        coefficients,
+        activity_coefficients,
     )
 }
 
@@ -239,7 +240,8 @@ fn calculate_lcox(
 fn calculate_npv(
     optimisation: ResultsMap,
     asset: &AssetRef,
-    coefficients: Arc<ObjectiveCoefficients>,
+    activity_coefficients: Arc<ActivityCoefficients>,
+    market_costs: Arc<MarketCosts>,
 ) -> AppraisalOutput {
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
@@ -251,14 +253,14 @@ fn calculate_npv(
         asset.total_capacity(),
         annual_fixed_cost,
         &optimisation.activity,
-        &coefficients.market_costs,
+        &market_costs,
     );
 
     AppraisalOutput::new(
         asset.clone(),
         optimisation,
         snas.map(NPVMetric::new),
-        coefficients,
+        activity_coefficients,
     )
 }
 
@@ -273,15 +275,22 @@ pub fn appraise_investment(
     asset: &AssetRef,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    activity_coefficients: &Arc<ActivityCoefficients>,
+    market_costs: &Arc<MarketCosts>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let optimisation = perform_optimisation(model, asset, commodity, coefficients, demand)?;
-    let coefficients = coefficients.clone();
+    let optimisation =
+        perform_optimisation(model, asset, commodity, activity_coefficients, demand)?;
+    let activity_coefficients = activity_coefficients.clone();
+    let market_costs = market_costs.clone();
 
     Ok(match objective_type {
-        ObjectiveType::LevelisedCostOfX => calculate_lcox(optimisation, asset, coefficients),
-        ObjectiveType::NetPresentValue => calculate_npv(optimisation, asset, coefficients),
+        ObjectiveType::LevelisedCostOfX => {
+            calculate_lcox(optimisation, asset, activity_coefficients, market_costs)
+        }
+        ObjectiveType::NetPresentValue => {
+            calculate_npv(optimisation, asset, activity_coefficients, market_costs)
+        }
     })
 }
 
@@ -462,11 +471,8 @@ mod tests {
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 
-    fn objective_coeffs() -> Arc<ObjectiveCoefficients> {
-        Arc::new(ObjectiveCoefficients {
-            activity_coefficients: IndexMap::new(),
-            market_costs: IndexMap::new(),
-        })
+    fn objective_coeffs() -> Arc<ActivityCoefficients> {
+        Arc::new(IndexMap::new())
     }
 
     /// Creates appraisal from corresponding assets and metrics
@@ -489,7 +495,7 @@ mod tests {
             .zip(metrics)
             .map(|(asset, metric)| AppraisalOutput {
                 asset: AssetRef::from(asset),
-                coefficients: objective_coeffs(),
+                activity_coefficients: objective_coeffs(),
                 activity: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
                 metric: Some(metric),
@@ -763,7 +769,7 @@ mod tests {
     fn appraisal_sort_filters_invalid_metric(asset: Asset) {
         let output = AppraisalOutput {
             asset: AssetRef::from(asset),
-            coefficients: objective_coeffs(),
+            activity_coefficients: objective_coeffs(),
             activity: IndexMap::new(),
             unmet_demand: IndexMap::new(),
             metric: None,

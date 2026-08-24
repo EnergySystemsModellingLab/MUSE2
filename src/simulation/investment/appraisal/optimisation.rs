@@ -1,6 +1,5 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
-use super::ObjectiveCoefficients;
 use super::constraints::{add_activity_constraints, add_demand_constraints};
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
@@ -9,7 +8,7 @@ use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Dimensionless, Flow};
+use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity};
 use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
@@ -33,10 +32,9 @@ pub struct ResultsMap {
 /// Returns a map from time slice to the corresponding decision variable.
 fn add_activity_vars(
     problem: &mut Problem,
-    cost_coefficients: &ObjectiveCoefficients,
+    activity_coefficients: &IndexMap<TimeSliceID, MoneyPerActivity>,
 ) -> IndexMap<TimeSliceID, Variable> {
-    cost_coefficients
-        .activity_coefficients
+    activity_coefficients
         .iter()
         .map(|(time_slice, cost)| {
             let var = problem.add_column(cost.value(), 0.0..);
@@ -106,12 +104,12 @@ pub fn perform_optimisation(
     model: &Model,
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &ObjectiveCoefficients,
+    activity_coefficients: &IndexMap<TimeSliceID, MoneyPerActivity>,
     demand: &DemandMap,
 ) -> Result<ResultsMap> {
     // Create problem and add variables
     let mut problem = Problem::default();
-    let activity_vars = add_activity_vars(&mut problem, coefficients);
+    let activity_vars = add_activity_vars(&mut problem, activity_coefficients);
 
     // Add constraints
     add_constraints(

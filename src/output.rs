@@ -504,7 +504,7 @@ impl DebugDataWriter {
     ) -> Result<()> {
         for result in appraisal_results {
             for (time_slice, activity) in &result.activity {
-                let activity_coefficient = result.coefficients.activity_coefficients[time_slice];
+                let activity_coefficient = result.activity_coefficients[time_slice];
                 let demand = demand[time_slice];
                 let unmet_demand = result.unmet_demand[time_slice];
                 let row = AppraisalResultsTimeSliceRow {
