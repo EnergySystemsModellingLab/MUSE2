@@ -350,7 +350,7 @@ fn log_on_equal_appraisal_outputs(
 }
 
 /// Get the best assets for meeting demand for the given commodity
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
@@ -455,7 +455,7 @@ pub fn select_best_assets(
                     &market_costs[&asset],
                     &optimisations[&asset],
                 );
-                (asset, vec![metric])
+                (asset, metric)
             })
             .collect();
 

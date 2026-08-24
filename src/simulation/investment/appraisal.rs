@@ -150,7 +150,7 @@ impl ComparableMetric for NPVMetric {
 impl MetricTrait for NPVMetric {}
 
 /// Metric results keyed by candidate asset.
-pub type AppraisalMetrics = IndexMap<AssetRef, Vec<Box<dyn MetricTrait>>>;
+pub type AppraisalMetrics = IndexMap<AssetRef, Box<dyn MetricTrait>>;
 
 #[cfg(test)]
 #[derive(Clone, Copy)]
@@ -170,16 +170,11 @@ impl AppraisalMetric {
 }
 
 fn compare_asset_metrics(
-    (asset1, metrics1): (&AssetRef, &Vec<Box<dyn MetricTrait>>),
-    (asset2, metrics2): (&AssetRef, &Vec<Box<dyn MetricTrait>>),
+    (asset1, metric1): (&AssetRef, &dyn MetricTrait),
+    (asset2, metric2): (&AssetRef, &dyn MetricTrait),
 ) -> Ordering {
-    match metrics1
-        .first()
-        .zip(metrics2.first())
-        .map_or(Ordering::Greater, |(metric1, metric2)| {
-            metric1.compare(metric2.as_ref())
-        }) {
-        Ordering::Equal => compare_asset_fallback(&**asset1, &**asset2),
+    match metric1.compare(metric2) {
+        Ordering::Equal => compare_asset_fallback(asset1, asset2),
         ordering => ordering,
     }
 }
@@ -260,16 +255,6 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
         .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
-/// Remove appraisal outputs with invalid metrics and return the number removed.
-///
-/// An output with no metric is considered non-feasible. Options skipped before appraisal, such as
-/// assets with zero capacity, are not included in this count.
-pub fn remove_nonfeasible_appraisal_outputs(outputs: &mut AppraisalMetrics) -> usize {
-    let old_len = outputs.len();
-    outputs.retain(|_, metrics| metrics.first().is_some());
-    old_len - outputs.len()
-}
-
 /// Sort appraisal outputs by their investment priority.
 ///
 /// Investment priority is primarily decided by appraisal metric. When appraisal metrics are equal,
@@ -279,8 +264,8 @@ pub fn remove_nonfeasible_appraisal_outputs(outputs: &mut AppraisalMetrics) -> u
 ///
 fn sort_appraisal_outputs(outputs: &mut AppraisalMetrics) {
     let mut sorted: Vec<_> = outputs.drain(..).collect();
-    sorted.sort_by(|(asset1, metrics1), (asset2, metrics2)| {
-        compare_asset_metrics((asset1, metrics1), (asset2, metrics2))
+    sorted.sort_by(|(asset1, metric1), (asset2, metric2)| {
+        compare_asset_metrics((asset1, metric1.as_ref()), (asset2, metric2.as_ref()))
     });
     outputs.extend(sorted);
 }
@@ -316,17 +301,6 @@ pub fn make_investment_decision(
     }
 }
 
-/// Sort appraisal outputs by their investment priority and exclude non-feasible options.
-///
-/// This low-level helper is retained for callers which need the complete sorted list. New
-/// decision-making code should use [`remove_nonfeasible_appraisal_outputs`] followed by
-/// [`make_investment_decision`].
-pub fn sort_and_filter_appraisal_outputs(outputs: &mut AppraisalMetrics) -> usize {
-    let num_nonfeasible = remove_nonfeasible_appraisal_outputs(outputs);
-    sort_appraisal_outputs(outputs);
-    num_nonfeasible
-}
-
 /// Counts the number of top appraisal outputs in a sorted slice that are indistinguishable
 /// by both metric and fallback ordering. Excludes the first element from the count.
 pub fn count_equal_and_best_appraisal_outputs(outputs: &AppraisalMetrics) -> usize {
@@ -334,10 +308,11 @@ pub fn count_equal_and_best_appraisal_outputs(outputs: &AppraisalMetrics) -> usi
         return 0;
     }
     let mut outputs = outputs.iter();
-    let (best_asset, best_metrics) = outputs.next().unwrap();
+    let (best_asset, best_metric) = outputs.next().unwrap();
     outputs
-        .take_while(|output| {
-            compare_asset_metrics((output.0, output.1), (best_asset, best_metrics)).is_eq()
+        .take_while(|(asset, metric)| {
+            compare_asset_metrics((asset, metric.as_ref()), (best_asset, best_metric.as_ref()))
+                .is_eq()
         })
         .count()
 }
@@ -352,7 +327,6 @@ mod tests {
     use crate::region::RegionID;
     use crate::units::{Capacity, MoneyPerActivity};
     use float_cmp::assert_approx_eq;
-    use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
 
@@ -447,7 +421,12 @@ mod tests {
         assets
             .into_iter()
             .zip(metrics)
-            .map(|(asset, metric)| (AssetRef::from(asset), metric.boxed().into_iter().collect()))
+            .map(|(asset, metric)| {
+                (
+                    AssetRef::from(asset),
+                    metric.boxed().expect("test metrics should be valid"),
+                )
+            })
             .collect()
     }
 
@@ -483,11 +462,11 @@ mod tests {
 
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
 
-        assert_approx_eq!(f64, outputs.get_index(0).unwrap().1[0].value(), 3.0); // Best (lowest)
-        assert_approx_eq!(f64, outputs.get_index(1).unwrap().1[0].value(), 5.0);
-        assert_approx_eq!(f64, outputs.get_index(2).unwrap().1[0].value(), 7.0); // Worst (highest)
+        assert_approx_eq!(f64, outputs.get_index(0).unwrap().1.value(), 3.0); // Best (lowest)
+        assert_approx_eq!(f64, outputs.get_index(1).unwrap().1.value(), 5.0);
+        assert_approx_eq!(f64, outputs.get_index(2).unwrap().1.value(), 7.0); // Worst (highest)
     }
 
     /// Test sorting by NPV metric when invariant to asset properties
@@ -501,11 +480,11 @@ mod tests {
 
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
 
-        assert_approx_eq!(f64, outputs.get_index(0).unwrap().1[0].value(), 7.0); // Best (highest)
-        assert_approx_eq!(f64, outputs.get_index(1).unwrap().1[0].value(), 5.0);
-        assert_approx_eq!(f64, outputs.get_index(2).unwrap().1[0].value(), 3.0); // Worst (lowest)
+        assert_approx_eq!(f64, outputs.get_index(0).unwrap().1.value(), 7.0); // Best (highest)
+        assert_approx_eq!(f64, outputs.get_index(1).unwrap().1.value(), 5.0);
+        assert_approx_eq!(f64, outputs.get_index(2).unwrap().1.value(), 3.0); // Worst (lowest)
     }
 
     /// Test that mixing LCOX and NPV metrics causes a runtime panic during comparison
@@ -521,7 +500,7 @@ mod tests {
         let mut outputs =
             appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
         // This should panic when trying to compare different metric types
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
     }
 
     /// Test that when metrics are equal, assets are sorted by commission year (newer first)
@@ -553,7 +532,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
 
         // Should be sorted by commission year, newest first: 2020, 2015, 2010
         assert_eq!(outputs.get_index(0).unwrap().0.commission_year(), 2020);
@@ -590,7 +569,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets.clone(), metrics);
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
 
         // Verify order is preserved - should match the original agent_ids array
         for (&expected_id, output) in agent_ids.iter().zip(outputs) {
@@ -654,7 +633,7 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
 
         // Commissioned assets should be prioritised first
         assert!(outputs.get_index(0).unwrap().0.is_commissioned());
@@ -728,25 +707,14 @@ mod tests {
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
-        sort_and_filter_appraisal_outputs(&mut outputs);
+        sort_appraisal_outputs(&mut outputs);
 
         // non-commissioned asset prioritised because it has a slightly better metric
         assert_approx_eq!(
             f64,
-            outputs.get_index(0).unwrap().1[0].value(),
+            outputs.get_index(0).unwrap().1.value(),
             best_metric_value
         );
-    }
-
-    /// Test that appraisal outputs with an invalid metric are filtered out
-    #[rstest]
-    fn appraisal_sort_filters_invalid_metric(asset: Asset) {
-        let mut outputs = indexmap! { AssetRef::from(asset) => Vec::new() };
-
-        sort_and_filter_appraisal_outputs(&mut outputs);
-
-        // The invalid output should have been filtered out
-        assert_eq!(outputs.len(), 0);
     }
 
     /// Tests for counting number of equal metrics using identical assets so only metric values

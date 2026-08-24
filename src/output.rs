@@ -481,19 +481,17 @@ impl DebugDataWriter {
         run_description: &str,
         appraisal_results: &AppraisalMetrics,
     ) -> Result<()> {
-        for (asset, metrics) in appraisal_results {
-            for metric in metrics {
-                let row = AppraisalResultsRow {
-                    milestone_year,
-                    run_description: self.with_context(run_description),
-                    asset_id: asset.id(),
-                    process_id: asset.process_id().clone(),
-                    region_id: asset.region_id().clone(),
-                    capacity: asset.total_capacity(),
-                    metric: Some(metric.value()),
-                };
-                self.appraisal_results_writer.serialize(row)?;
-            }
+        for (asset, metric) in appraisal_results {
+            let row = AppraisalResultsRow {
+                milestone_year,
+                run_description: self.with_context(run_description),
+                asset_id: asset.id(),
+                process_id: asset.process_id().clone(),
+                region_id: asset.region_id().clone(),
+                capacity: asset.total_capacity(),
+                metric: Some(metric.value()),
+            };
+            self.appraisal_results_writer.serialize(row)?;
         }
 
         Ok(())
@@ -1065,7 +1063,7 @@ mod tests {
         {
             let mut writer = DebugDataWriter::create(dir.path()).unwrap();
             let (asset_ref, _, metric, _) = appraisal_output;
-            let metrics = indexmap! { asset_ref => vec![metric] };
+            let metrics = indexmap! { asset_ref => metric };
             writer
                 .write_appraisal_results(milestone_year, &run_description, &metrics)
                 .unwrap();
