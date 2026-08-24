@@ -20,7 +20,7 @@ use indexmap::IndexMap;
 /// in which columns are added to the problem when extracting solution values.
 pub type Variable = highs::Col;
 
-/// Map containing optimisation results and coefficients
+/// The result of optimising the dispatch of a candidate investment.
 pub struct ResultsMap {
     /// Activity variables in each time slice
     pub activity: IndexMap<TimeSliceID, Activity>,

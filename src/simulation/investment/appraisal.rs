@@ -22,7 +22,7 @@ mod costs;
 mod optimisation;
 use coefficients::ObjectiveCoefficients;
 use float_cmp::{ApproxEq, F64Margin};
-use optimisation::perform_optimisation;
+use optimisation::{ResultsMap, perform_optimisation};
 
 /// Compares two values with approximate equality checking.
 ///
@@ -61,26 +61,11 @@ pub struct AppraisalOutput {
     pub coefficients: Arc<ObjectiveCoefficients>,
 }
 
-/// The result of optimising the dispatch of a candidate investment.
-struct AppraisalOptimisation {
-    activity: IndexMap<TimeSliceID, Activity>,
-    unmet_demand: DemandMap,
-}
-
-impl AppraisalOptimisation {
-    fn from_results(results: optimisation::ResultsMap) -> Self {
-        Self {
-            activity: results.activity,
-            unmet_demand: results.unmet_demand,
-        }
-    }
-}
-
 impl AppraisalOutput {
     /// Create a new `AppraisalOutput`
     fn new<T: MetricTrait>(
         asset: AssetRef,
-        optimisation: AppraisalOptimisation,
+        optimisation: ResultsMap,
         metric: Option<T>,
         coefficients: Arc<ObjectiveCoefficients>,
     ) -> Self {
@@ -217,18 +202,6 @@ impl ComparableMetric for NPVMetric {
 /// `NPVMetric` implements the `MetricTrait` supertrait.
 impl MetricTrait for NPVMetric {}
 
-/// Run the shared optimisation used by all appraisal metrics.
-fn run_appraisal_optimisation(
-    model: &Model,
-    asset: &AssetRef,
-    commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
-    demand: &DemandMap,
-) -> Result<AppraisalOptimisation> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
-    Ok(AppraisalOptimisation::from_results(results))
-}
-
 /// Calculate LCOX from a completed appraisal optimisation.
 ///
 /// This is more commonly referred to as Levelised Cost of *Electricity*, but as the model can
@@ -239,7 +212,7 @@ fn run_appraisal_optimisation(
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 /// The returned `metric` is the LCOX value (lower is better).
 fn calculate_lcox(
-    optimisation: AppraisalOptimisation,
+    optimisation: ResultsMap,
     asset: &AssetRef,
     coefficients: Arc<ObjectiveCoefficients>,
 ) -> AppraisalOutput {
@@ -264,7 +237,7 @@ fn calculate_lcox(
 ///
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 fn calculate_npv(
-    optimisation: AppraisalOptimisation,
+    optimisation: ResultsMap,
     asset: &AssetRef,
     coefficients: Arc<ObjectiveCoefficients>,
 ) -> AppraisalOutput {
@@ -303,7 +276,7 @@ pub fn appraise_investment(
     coefficients: &Arc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let optimisation = run_appraisal_optimisation(model, asset, commodity, coefficients, demand)?;
+    let optimisation = perform_optimisation(model, asset, commodity, coefficients, demand)?;
     let coefficients = coefficients.clone();
 
     Ok(match objective_type {
