@@ -71,6 +71,9 @@ fn set_dangerous_model_options_flag(enabled: bool) {
 pub struct ModelParameters {
     /// Milestone years
     pub milestone_years: Vec<u32>,
+    /// Optional currency label for monetary model inputs. This is metadata only and does not affect
+    /// model calculations.
+    pub currency: Option<String>,
     /// Allow potentially dangerous options to be enabled.
     #[serde(rename = "please_give_me_broken_results")] // Can't use constant here :-(
     pub allow_dangerous_options: bool,
@@ -137,6 +140,7 @@ impl Default for ModelParameters {
             milestone_years: Vec::default(),
 
             // Default values for optional parameters
+            currency: None,
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
             commodity_balance_epsilon: Flow(1e-6),
@@ -423,6 +427,22 @@ mod tests {
 
         let model_params = ModelParameters::from_path(dir.path()).unwrap();
         assert_eq!(model_params.milestone_years, [2020, 2100]);
+    }
+
+    #[test]
+    fn model_params_currency_is_optional_metadata() {
+        let with_currency: ModelParameters = toml::from_str(
+            "
+            milestone_years = [2020, 2100]
+            currency = \"MUSD2010\"
+            ",
+        )
+        .unwrap();
+        assert_eq!(with_currency.currency.as_deref(), Some("MUSD2010"));
+
+        let without_currency: ModelParameters =
+            toml::from_str("milestone_years = [2020, 2100]").unwrap();
+        assert_eq!(without_currency.currency, None);
     }
 
     #[test]

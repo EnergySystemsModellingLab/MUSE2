@@ -22,6 +22,10 @@ user-defined data is at the heart of how the model behaves. It is also "bottom-u
 means that it requires users to characterise each individual process that produces or consumes each
 commodity, along with a range of other physical, economic and agent parameters.
 
+MUSE2 does not require a single set of physical units, but the units used within each model must be
+consistent. See [Units and Dimensions](units_and_dimensions.md) for how capacity, activity,
+commodity flows, and monetary values are related.
+
 At a high level, the user defines:
 
 1) The overall temporal arrangements, including the base time period, milestone time periods and
