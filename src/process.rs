@@ -37,7 +37,7 @@ pub type ProcessInvestmentConstraintsMap =
     HashMap<(RegionID, u32), Arc<ProcessInvestmentConstraint>>;
 
 /// Represents a process within the simulation
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Process {
     /// A unique identifier for the process (e.g. GASDRV)
     pub id: ProcessID,

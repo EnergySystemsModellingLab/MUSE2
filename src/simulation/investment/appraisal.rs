@@ -152,23 +152,6 @@ impl MetricTrait for NPVMetric {}
 /// Metric results keyed by candidate asset.
 pub type AppraisalMetrics = IndexMap<AssetRef, Box<dyn MetricTrait>>;
 
-#[cfg(test)]
-#[derive(Clone, Copy)]
-enum AppraisalMetric {
-    Lcox(Option<MoneyPerActivity>),
-    Npv(Option<MoneyPerActivity>),
-}
-
-#[cfg(test)]
-impl AppraisalMetric {
-    fn boxed(self) -> Option<Box<dyn MetricTrait>> {
-        match self {
-            Self::Lcox(value) => value.map(|value| Box::new(LCOXMetric::new(value)) as _),
-            Self::Npv(value) => value.map(|value| Box::new(NPVMetric::new(value)) as _),
-        }
-    }
-}
-
 fn compare_asset_metrics(
     (asset1, metric1): (&AssetRef, &dyn MetricTrait),
     (asset2, metric2): (&AssetRef, &dyn MetricTrait),
@@ -230,7 +213,7 @@ fn calculate_npv(
 ///
 /// # Returns
 ///
-/// Returns the optimisation result and its calculated metric.
+/// Returns the calculated metric.
 pub fn calculate_metric(
     asset: &AssetRef,
     objective_type: &ObjectiveType,
@@ -406,12 +389,15 @@ mod tests {
         assert!(compare_asset_fallback(&asset2, &asset3).is_gt());
     }
 
-    /// Creates appraisal from corresponding assets and metrics
+    /// Creates appraisal from corresponding assets and metrics.
     ///
     /// # Panics
     ///
     /// Panics if `assets` and `metrics` have different lengths
-    fn appraisal_outputs(assets: Vec<Asset>, metrics: Vec<AppraisalMetric>) -> AppraisalMetrics {
+    fn appraisal_outputs(
+        assets: Vec<Asset>,
+        metrics: Vec<Box<dyn MetricTrait>>,
+    ) -> AppraisalMetrics {
         assert_eq!(
             assets.len(),
             metrics.len(),
@@ -421,26 +407,27 @@ mod tests {
         assets
             .into_iter()
             .zip(metrics)
-            .map(|(asset, metric)| {
-                (
-                    AssetRef::from(asset),
-                    metric.boxed().expect("test metrics should be valid"),
-                )
-            })
+            .map(|(asset, metric)| (AssetRef::from(asset), metric))
             .collect()
     }
 
-    /// Creates appraisal outputs with given metrics.
-    /// Copies the provided default asset for each metric.
-    fn appraisal_outputs_with_investment_priority_invariant_to_assets(
-        metrics: Vec<AppraisalMetric>,
-        asset: &Asset,
-    ) -> AppraisalMetrics {
-        let assets = (0..metrics.len())
+    fn lcox_metric(value: f64) -> Box<dyn MetricTrait> {
+        Box::new(LCOXMetric::new(MoneyPerActivity(value)))
+    }
+
+    fn npv_metric(value: f64) -> Box<dyn MetricTrait> {
+        Box::new(NPVMetric::new(MoneyPerActivity(value)))
+    }
+
+    /// Test sorting by LCOX metric when invariant to asset properties
+    #[rstest]
+    fn appraisal_sort_by_lcox_metric(asset: Asset, process: Process) {
+        let process = Arc::new(process);
+        let assets = (0..3)
             .map(|index| {
                 Asset::new_ready(
                     AgentID(format!("agent{index}").into()),
-                    Arc::new(asset.process().clone()),
+                    process.clone(),
                     asset.region_id().clone(),
                     AssetCapacity::single(asset.total_capacity()),
                     asset.commission_year(),
@@ -448,20 +435,9 @@ mod tests {
                 .unwrap()
             })
             .collect();
-        appraisal_outputs(assets, metrics)
-    }
+        let metrics = vec![lcox_metric(5.0), lcox_metric(3.0), lcox_metric(7.0)];
 
-    /// Test sorting by LCOX metric when invariant to asset properties
-    #[rstest]
-    fn appraisal_sort_by_lcox_metric(asset: Asset) {
-        let metrics = vec![
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(3.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(7.0))),
-        ];
-
-        let mut outputs =
-            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
+        let mut outputs = appraisal_outputs(assets, metrics);
         sort_appraisal_outputs(&mut outputs);
 
         assert_approx_eq!(f64, outputs.get_index(0).unwrap().1.value(), 3.0); // Best (lowest)
@@ -471,15 +447,23 @@ mod tests {
 
     /// Test sorting by NPV metric when invariant to asset properties
     #[rstest]
-    fn appraisal_sort_by_npv_metric(asset: Asset) {
-        let metrics = vec![
-            AppraisalMetric::Npv(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Npv(Some(MoneyPerActivity(3.0))),
-            AppraisalMetric::Npv(Some(MoneyPerActivity(7.0))),
-        ];
+    fn appraisal_sort_by_npv_metric(asset: Asset, process: Process) {
+        let process = Arc::new(process);
+        let assets = (0..3)
+            .map(|index| {
+                Asset::new_ready(
+                    AgentID(format!("agent{index}").into()),
+                    process.clone(),
+                    asset.region_id().clone(),
+                    AssetCapacity::single(asset.total_capacity()),
+                    asset.commission_year(),
+                )
+                .unwrap()
+            })
+            .collect();
+        let metrics = vec![npv_metric(5.0), npv_metric(3.0), npv_metric(7.0)];
 
-        let mut outputs =
-            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
+        let mut outputs = appraisal_outputs(assets, metrics);
         sort_appraisal_outputs(&mut outputs);
 
         assert_approx_eq!(f64, outputs.get_index(0).unwrap().1.value(), 7.0); // Best (highest)
@@ -490,15 +474,23 @@ mod tests {
     /// Test that mixing LCOX and NPV metrics causes a runtime panic during comparison
     #[rstest]
     #[should_panic(expected = "Cannot compare metrics of different types")]
-    fn appraisal_sort_by_mixed_metrics_panics(asset: Asset) {
-        let metrics = vec![
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Npv(Some(MoneyPerActivity(3.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(3.0))),
-        ];
+    fn appraisal_sort_by_mixed_metrics_panics(asset: Asset, process: Process) {
+        let process = Arc::new(process);
+        let assets = (0..3)
+            .map(|index| {
+                Asset::new_ready(
+                    AgentID(format!("agent{index}").into()),
+                    process.clone(),
+                    asset.region_id().clone(),
+                    AssetCapacity::single(asset.total_capacity()),
+                    asset.commission_year(),
+                )
+                .unwrap()
+            })
+            .collect();
+        let metrics = vec![lcox_metric(5.0), npv_metric(3.0), lcox_metric(3.0)];
 
-        let mut outputs =
-            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
+        let mut outputs = appraisal_outputs(assets, metrics);
         // This should panic when trying to compare different metric types
         sort_appraisal_outputs(&mut outputs);
     }
@@ -525,11 +517,7 @@ mod tests {
             .collect();
 
         // All metrics have the same value
-        let metrics = vec![
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-        ];
+        let metrics = vec![lcox_metric(5.0), lcox_metric(5.0), lcox_metric(5.0)];
 
         let mut outputs = appraisal_outputs(assets, metrics);
         sort_appraisal_outputs(&mut outputs);
@@ -562,11 +550,7 @@ mod tests {
             })
             .collect();
 
-        let metrics = vec![
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-        ];
+        let metrics = vec![lcox_metric(5.0), lcox_metric(5.0), lcox_metric(5.0)];
 
         let mut outputs = appraisal_outputs(assets.clone(), metrics);
         sort_appraisal_outputs(&mut outputs);
@@ -626,10 +610,10 @@ mod tests {
 
         // All metrics have identical values to test fallback ordering
         let metrics = vec![
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(5.0))),
+            lcox_metric(5.0),
+            lcox_metric(5.0),
+            lcox_metric(5.0),
+            lcox_metric(5.0),
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
@@ -700,10 +684,10 @@ mod tests {
         let baseline_metric_value = 5.0;
         let best_metric_value = baseline_metric_value - 0.1;
         let metrics = vec![
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(best_metric_value))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(baseline_metric_value))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(baseline_metric_value))),
-            AppraisalMetric::Lcox(Some(MoneyPerActivity(baseline_metric_value))),
+            lcox_metric(best_metric_value),
+            lcox_metric(baseline_metric_value),
+            lcox_metric(baseline_metric_value),
+            lcox_metric(baseline_metric_value),
         ];
 
         let mut outputs = appraisal_outputs(assets, metrics);
@@ -727,17 +711,28 @@ mod tests {
     #[case(vec![5.0, 5.0, 9.0, 5.0], 1, "equality_does_not_resume_after_gap")]
     fn count_equal_best_lcox_metric(
         asset: Asset,
+        process: Process,
         #[case] metric_values: Vec<f64>,
         #[case] expected_count: usize,
         #[case] description: &str,
     ) {
-        let metrics: Vec<AppraisalMetric> = metric_values
-            .into_iter()
-            .map(|v| AppraisalMetric::Lcox(Some(MoneyPerActivity(v))))
-            .collect();
+        let process = Arc::new(process);
+        let metrics: Vec<Box<dyn MetricTrait>> =
+            metric_values.into_iter().map(lcox_metric).collect();
 
-        let outputs =
-            appraisal_outputs_with_investment_priority_invariant_to_assets(metrics, &asset);
+        let assets = (0..metrics.len())
+            .map(|index| {
+                Asset::new_ready(
+                    AgentID(format!("agent{index}").into()),
+                    process.clone(),
+                    asset.region_id().clone(),
+                    AssetCapacity::single(asset.total_capacity()),
+                    asset.commission_year(),
+                )
+                .unwrap()
+            })
+            .collect();
+        let outputs = appraisal_outputs(assets, metrics);
 
         assert_eq!(
             count_equal_and_best_appraisal_outputs(&outputs),
@@ -779,8 +774,8 @@ mod tests {
         let outputs = appraisal_outputs(
             vec![commissioned, candidate],
             vec![
-                AppraisalMetric::Lcox(Some(metric_value)),
-                AppraisalMetric::Lcox(Some(metric_value)),
+                lcox_metric(metric_value.value()),
+                lcox_metric(metric_value.value()),
             ],
         );
 
@@ -820,8 +815,8 @@ mod tests {
         let outputs = appraisal_outputs(
             vec![asset1, asset2],
             vec![
-                AppraisalMetric::Lcox(Some(metric_value)),
-                AppraisalMetric::Lcox(Some(metric_value)),
+                lcox_metric(metric_value.value()),
+                lcox_metric(metric_value.value()),
             ],
         );
 
