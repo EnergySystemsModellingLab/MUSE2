@@ -28,9 +28,9 @@ GW, emissions are measured in ktCO2, and monetary values are expressed in millio
 
 Every commodity must provide a unit label in the `units` field of `commodities.csv`. The
 label is useful for documentation purposes, and is only used by MUSE2 for consistency checks; MUSE2
-does not parse it or convert between labels. The simple example uses:
+does not parse it or convert between labels. The "simple" example uses:
 
-| Commodity | Type | Unit in the simple example |
+| Commodity | Type | Unit in the "simple" example |
 | --- | --- | --- |
 | GASPRD | Supply Equals Demand | PJ |
 | GASNAT | Supply Equals Demand | PJ |
@@ -47,7 +47,7 @@ Positive coefficients represent production and negative coefficients represent c
 coefficient therefore maps a dimensionless activity quantity to the corresponding commodity-flow
 quantity. The coefficient must be interpreted together with the commodity's unit label.
 
-For example, the simple example defines the gas combined-cycle turbine with these flows:
+For example, the "simple" example defines the gas combined-cycle turbine with these flows:
 
 | Flow | Coefficient | Units and meaning |
 | --- | ---: | --- |
@@ -72,7 +72,7 @@ The `capacity_to_activity` factor gives the maximum annual activity per unit of 
 flow coefficients, and commodity-unit labels work together to define what the capacity unit
 represents physically.
 
-In the simple example, the wind-farm and gas-turbine processes use `capacity_to_activity = 31.54`.
+In the "simple" example, the wind-farm and gas-turbine processes use `capacity_to_activity = 31.54`.
 Since electricity output is labelled `PJ` and has a coefficient of `1.0`, this value was chosen so that
 one capacity unit corresponds to 1 GW of electricity-generating capacity, able to produce up to
 31.54 PJ of electricity per year. This follows from:
