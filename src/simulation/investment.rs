@@ -25,8 +25,8 @@ use appraisal::coefficients::{
     calculate_activity_coefficients_for_assets, calculate_market_costs_for_assets,
 };
 use appraisal::{
-    AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
-    make_investment_decision, remove_nonfeasible_appraisal_outputs,
+    AppraisalMetrics, AppraisalOptimisation, calculate_metric, make_investment_decision,
+    perform_optimisation,
 };
 
 /// A map of demand across time slices for a specific market
@@ -315,7 +315,7 @@ pub fn get_demand_limiting_capacity(
 
 /// Print debug message if there are multiple equally good outputs
 fn log_on_equal_appraisal_outputs(
-    outputs: &[AppraisalOutput],
+    outputs: &[AssetRef],
     agent_id: &AgentID,
     commodity_id: &CommodityID,
     region_id: &RegionID,
@@ -324,13 +324,12 @@ fn log_on_equal_appraisal_outputs(
         return;
     }
 
-    let num_identical = count_equal_and_best_appraisal_outputs(outputs);
+    let num_identical = outputs.len().saturating_sub(1);
 
     if num_identical > 0 {
         let asset_details = outputs[..=num_identical]
             .iter()
-            .map(|output| {
-                let asset = &output.asset;
+            .map(|asset| {
                 format!(
                     "Process ID: '{}' (State: {}{}, Commission year: {})",
                     asset.process_id(),
@@ -399,48 +398,44 @@ pub fn select_best_assets(
             region_id
         );
 
-        // Appraise all options in parallel: each asset's appraisal is independent (all shared
-        // state is read-only within this block), so we can safely use Rayon here.
-        // Each HiGHS solve inside `appraise_investment` is configured to use only one thread
-        // (via `parallel="off"`) to avoid over-subscription.
-        let mut outputs: Vec<AppraisalOutput> = opt_assets
+        // Optimise all options in parallel. Each HiGHS solve is independent and configured to
+        // use only one thread to avoid over-subscription.
+        let mut optimisations: HashMap<AssetRef, AppraisalOptimisation> = opt_assets
             .par_iter()
-            .map(|asset| -> Result<Option<AppraisalOutput>> {
-                // Skip assets with zero capacity
+            .map(|asset| -> Result<Option<_>> {
                 if asset.total_capacity() <= Capacity(0.0) {
                     return Ok(None);
                 }
 
-                Ok(Some(appraise_investment(
-                    model,
-                    asset,
-                    commodity,
-                    objective_type,
-                    &activity_coefficients[asset],
-                    &market_costs[asset],
-                    &demand,
-                )?))
+                Ok(Some((
+                    asset.clone(),
+                    perform_optimisation(
+                        model,
+                        asset,
+                        commodity,
+                        &activity_coefficients[asset],
+                        &demand,
+                    )?,
+                )))
             })
             .collect::<Result<Vec<_>>>()? // propagate any solver error
             .into_iter()
             .flatten()
             .collect();
 
-        // Save appraisal results
-        writer.write_appraisal_debug_info(
-            year,
-            &format!("{} {} round {}", commodity.id, agent.id, round),
-            &outputs,
-            &demand,
-        )?;
-
-        // Discard non-feasible options
-        let num_nonfeasible = remove_nonfeasible_appraisal_outputs(&mut outputs);
+        // Discard options which cannot contribute to meeting demand.
+        let num_appraisals = optimisations.len();
+        let feasible_assets: Vec<_> = optimisations
+            .iter()
+            .filter(|(_, optimisation)| optimisation.has_activity())
+            .map(|(asset, _)| asset.clone())
+            .collect();
+        let num_nonfeasible = num_appraisals - feasible_assets.len();
 
         // If none of the remaining options are feasible, we terminate the loop. We may still be
         // able to meet the full demands with assets selected so far, so we continue anyway with a
         // warning.
-        if outputs.is_empty() {
+        if feasible_assets.is_empty() {
             warn!(
                 "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
                 year '{}', agent '{}'. {} non-feasible investments were not considered. \
@@ -450,6 +445,30 @@ pub fn select_best_assets(
             break;
         }
 
+        // Calculate metrics
+        let outputs: AppraisalMetrics = feasible_assets
+            .into_iter()
+            .map(|asset| {
+                let metric = calculate_metric(
+                    &asset,
+                    objective_type,
+                    &market_costs[&asset],
+                    &optimisations[&asset],
+                );
+                (asset, vec![metric])
+            })
+            .collect();
+
+        // Save appraisal results
+        writer.write_appraisal_debug_info(
+            year,
+            &format!("{} {} round {}", commodity.id, agent.id, round),
+            &outputs,
+            &optimisations,
+            &activity_coefficients,
+            &demand,
+        )?;
+
         // Select the best option according to the agent's decision rule. This returns a Vec of
         // best options, in case there are multiple equally good options.
         let outputs = make_investment_decision(outputs, &agent.decision_rule)?;
@@ -458,26 +477,29 @@ pub fn select_best_assets(
         log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);
 
         // Select the first option from the best options.
-        let best_output = outputs.into_iter().next().unwrap();
+        let best_asset = outputs.into_iter().next().unwrap();
 
         // Log the selected asset
         debug!(
             "Selected {} asset '{}' (capacity: {})",
-            best_output.asset.state(),
-            best_output.asset.process_id(),
-            best_output.asset.total_capacity()
+            best_asset.state(),
+            best_asset.process_id(),
+            best_asset.total_capacity()
         );
 
         // Record the selected asset and update the remaining selection state.
         record_asset_selection(
-            best_output.asset,
+            best_asset.clone(),
             &mut opt_assets,
             &mut remaining_agent_addition_limits,
             &mut available_retention_units,
             &mut best_assets,
         );
 
-        demand = best_output.unmet_demand;
+        demand = optimisations
+            .remove(&best_asset)
+            .expect("Missing optimisation result for selected asset")
+            .unmet_demand;
         round += 1;
     }
 

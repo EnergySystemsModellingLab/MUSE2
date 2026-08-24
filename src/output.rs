@@ -4,7 +4,8 @@ use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
-use crate::simulation::investment::appraisal::AppraisalOutput;
+use crate::simulation::investment::appraisal::coefficients::ActivityCoefficients;
+use crate::simulation::investment::appraisal::{AppraisalMetrics, AppraisalOptimisation};
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
@@ -13,9 +14,11 @@ use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub mod metadata;
 use metadata::write_metadata;
@@ -476,19 +479,21 @@ impl DebugDataWriter {
         &mut self,
         milestone_year: u32,
         run_description: &str,
-        appraisal_results: &[AppraisalOutput],
+        appraisal_results: &AppraisalMetrics,
     ) -> Result<()> {
-        for result in appraisal_results {
-            let row = AppraisalResultsRow {
-                milestone_year,
-                run_description: self.with_context(run_description),
-                asset_id: result.asset.id(),
-                process_id: result.asset.process_id().clone(),
-                region_id: result.asset.region_id().clone(),
-                capacity: result.asset.total_capacity(),
-                metric: result.metric.as_ref().map(|m| m.value()),
-            };
-            self.appraisal_results_writer.serialize(row)?;
+        for (asset, metrics) in appraisal_results {
+            for metric in metrics {
+                let row = AppraisalResultsRow {
+                    milestone_year,
+                    run_description: self.with_context(run_description),
+                    asset_id: asset.id(),
+                    process_id: asset.process_id().clone(),
+                    region_id: asset.region_id().clone(),
+                    capacity: asset.total_capacity(),
+                    metric: Some(metric.value()),
+                };
+                self.appraisal_results_writer.serialize(row)?;
+            }
         }
 
         Ok(())
@@ -499,20 +504,21 @@ impl DebugDataWriter {
         &mut self,
         milestone_year: u32,
         run_description: &str,
-        appraisal_results: &[AppraisalOutput],
+        optimisations: &HashMap<AssetRef, AppraisalOptimisation>,
+        activity_coefficients: &HashMap<AssetRef, Arc<ActivityCoefficients>>,
         demand: &IndexMap<TimeSliceID, Flow>,
     ) -> Result<()> {
-        for result in appraisal_results {
-            for (time_slice, activity) in &result.activity {
-                let activity_coefficient = result.activity_coefficients[time_slice];
+        for (asset, optimisation) in optimisations {
+            for (time_slice, activity) in &optimisation.activity {
+                let activity_coefficient = activity_coefficients[asset][time_slice];
                 let demand = demand[time_slice];
-                let unmet_demand = result.unmet_demand[time_slice];
+                let unmet_demand = optimisation.unmet_demand[time_slice];
                 let row = AppraisalResultsTimeSliceRow {
                     milestone_year,
                     run_description: self.with_context(run_description),
-                    asset_id: result.asset.id(),
-                    process_id: result.asset.process_id().clone(),
-                    region_id: result.asset.region_id().clone(),
+                    asset_id: asset.id(),
+                    process_id: asset.process_id().clone(),
+                    region_id: asset.region_id().clone(),
                     time_slice: time_slice.clone(),
                     activity: *activity,
                     activity_coefficient,
@@ -601,7 +607,9 @@ impl DataWriter {
         &mut self,
         milestone_year: u32,
         run_description: &str,
-        appraisal_results: &[AppraisalOutput],
+        appraisal_results: &AppraisalMetrics,
+        optimisations: &HashMap<AssetRef, AppraisalOptimisation>,
+        activity_coefficients: &HashMap<AssetRef, Arc<ActivityCoefficients>>,
         demand: &IndexMap<TimeSliceID, Flow>,
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug {
@@ -609,7 +617,8 @@ impl DataWriter {
             wtr.write_appraisal_time_slice_results(
                 milestone_year,
                 run_description,
-                appraisal_results,
+                optimisations,
+                activity_coefficients,
                 demand,
             )?;
         }
@@ -710,7 +719,7 @@ mod tests {
     use super::*;
     use crate::asset::AssetPool;
     use crate::fixture::{appraisal_output, asset, assets, commodity_id, region_id, time_slice};
-    use crate::simulation::investment::appraisal::AppraisalOutput;
+    use crate::simulation::investment::appraisal::MetricTrait;
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
@@ -1039,7 +1048,15 @@ mod tests {
     }
 
     #[rstest]
-    fn write_appraisal_results(asset: Asset, appraisal_output: AppraisalOutput) {
+    fn write_appraisal_results(
+        asset: Asset,
+        appraisal_output: (
+            AssetRef,
+            AppraisalOptimisation,
+            Box<dyn MetricTrait>,
+            Arc<ActivityCoefficients>,
+        ),
+    ) {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let dir = tempdir().unwrap();
@@ -1047,8 +1064,10 @@ mod tests {
         // Write appraisal results
         {
             let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            let (asset_ref, _, metric, _) = appraisal_output;
+            let metrics = indexmap! { asset_ref => vec![metric] };
             writer
-                .write_appraisal_results(milestone_year, &run_description, &[appraisal_output])
+                .write_appraisal_results(milestone_year, &run_description, &metrics)
                 .unwrap();
             writer.flush().unwrap();
         }
@@ -1075,7 +1094,12 @@ mod tests {
     #[rstest]
     fn write_appraisal_time_slice_results(
         asset: Asset,
-        appraisal_output: AppraisalOutput,
+        appraisal_output: (
+            AssetRef,
+            AppraisalOptimisation,
+            Box<dyn MetricTrait>,
+            Arc<ActivityCoefficients>,
+        ),
         time_slice: TimeSliceID,
     ) {
         let milestone_year = 2020;
@@ -1086,11 +1110,15 @@ mod tests {
         // Write appraisal time slice results
         {
             let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            let (asset_ref, optimisation, _, coefficients) = appraisal_output;
+            let optimisations = HashMap::from([(asset_ref.clone(), optimisation)]);
+            let activity_coefficients = HashMap::from([(asset_ref, coefficients)]);
             writer
                 .write_appraisal_time_slice_results(
                     milestone_year,
                     &run_description,
-                    &[appraisal_output],
+                    &optimisations,
+                    &activity_coefficients,
                     &demand,
                 )
                 .unwrap();

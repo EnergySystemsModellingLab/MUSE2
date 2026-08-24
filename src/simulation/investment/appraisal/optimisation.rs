@@ -20,11 +20,20 @@ use indexmap::IndexMap;
 pub type Variable = highs::Col;
 
 /// The result of optimising the dispatch of a candidate investment.
-pub struct ResultsMap {
+pub struct AppraisalOptimisation {
     /// Activity variables in each time slice
     pub activity: IndexMap<TimeSliceID, Activity>,
     /// Remaining unmet demand per time slice, computed post-solve
     pub unmet_demand: DemandMap,
+}
+
+impl AppraisalOptimisation {
+    /// Returns whether the asset has positive activity in at least one time slice.
+    pub fn has_activity(&self) -> bool {
+        self.activity
+            .values()
+            .any(|activity| *activity != Activity(0.0))
+    }
 }
 
 /// Adds activity variables to the problem, one per time slice.
@@ -106,7 +115,7 @@ pub fn perform_optimisation(
     commodity: &Commodity,
     activity_coefficients: &IndexMap<TimeSliceID, MoneyPerActivity>,
     demand: &DemandMap,
-) -> Result<ResultsMap> {
+) -> Result<AppraisalOptimisation> {
     // Create problem and add variables
     let mut problem = Problem::default();
     let activity_vars = add_activity_vars(&mut problem, activity_coefficients);
@@ -142,7 +151,7 @@ pub fn perform_optimisation(
         .collect();
     let unmet_demand =
         compute_unmet_demand(demand, &activity, commodity, asset, &model.time_slice_info);
-    Ok(ResultsMap {
+    Ok(AppraisalOptimisation {
         activity,
         unmet_demand,
     })

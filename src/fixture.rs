@@ -14,8 +14,8 @@ use crate::process::{
     ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
-use crate::simulation::investment::appraisal::AppraisalOutput;
-use crate::simulation::investment::appraisal::LCOXMetric;
+use crate::simulation::investment::appraisal::coefficients::ActivityCoefficients;
+use crate::simulation::investment::appraisal::{AppraisalOptimisation, LCOXMetric, MetricTrait};
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
@@ -396,17 +396,27 @@ pub fn time_slice_info2() -> TimeSliceInfo {
 }
 
 #[fixture]
-pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
+pub fn appraisal_output(
+    asset: Asset,
+    time_slice: TimeSliceID,
+) -> (
+    AssetRef,
+    AppraisalOptimisation,
+    Box<dyn MetricTrait>,
+    Arc<ActivityCoefficients>,
+) {
     let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
     let activity = indexmap! { time_slice.clone() => Activity(10.0) };
     let unmet_demand = indexmap! { time_slice.clone() => Flow(5.0) };
-    AppraisalOutput {
-        asset: AssetRef::from(asset),
-        activity_coefficients: Arc::new(activity_coefficients),
-        activity,
-        unmet_demand,
-        metric: Some(Box::new(LCOXMetric::new(MoneyPerActivity(4.14)))),
-    }
+    (
+        AssetRef::from(asset),
+        AppraisalOptimisation {
+            activity,
+            unmet_demand,
+        },
+        Box::new(LCOXMetric::new(MoneyPerActivity(4.14))),
+        Arc::new(activity_coefficients),
+    )
 }
 
 #[cfg(test)]
