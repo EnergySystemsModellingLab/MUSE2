@@ -24,7 +24,7 @@ pub mod appraisal;
 use appraisal::coefficients::calculate_coefficients_for_assets;
 use appraisal::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
-    sort_and_filter_appraisal_outputs,
+    make_investment_decision, remove_nonfeasible_appraisal_outputs,
 };
 
 /// A map of demand across time slices for a specific market
@@ -428,8 +428,8 @@ pub fn select_best_assets(
             &demand,
         )?;
 
-        // Sort by investment priority and discard non-feasible options
-        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);
+        // Discard non-feasible options
+        let num_nonfeasible = remove_nonfeasible_appraisal_outputs(&mut outputs);
 
         // If none of the remaining options are feasible, we terminate the loop. We may still be
         // able to meet the full demands with assets selected so far, so we continue anyway with a
@@ -444,9 +444,14 @@ pub fn select_best_assets(
             break;
         }
 
+        // Select the best option according to the agent's decision rule. This returns a Vec of
+        // best options, in case there are multiple equally good options.
+        let outputs = make_investment_decision(outputs, &agent.decision_rule)?;
+
         // Warn if there are multiple equally good assets
         log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);
 
+        // Select the first option from the best options.
         let best_output = outputs.into_iter().next().unwrap();
 
         // Log the selected asset

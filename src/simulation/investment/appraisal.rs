@@ -1,17 +1,16 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
 use super::DemandMap;
-use crate::agent::ObjectiveType;
+use crate::agent::{DecisionRule, ObjectiveType};
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, snas};
 use crate::model::Model;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, MoneyPerActivity, MoneyPerCapacity};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
 use indexmap::IndexMap;
-use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
@@ -62,18 +61,33 @@ pub struct AppraisalOutput {
     pub coefficients: Arc<ObjectiveCoefficients>,
 }
 
+/// The result of optimising the dispatch of a candidate investment.
+struct AppraisalOptimisation {
+    activity: IndexMap<TimeSliceID, Activity>,
+    unmet_demand: DemandMap,
+}
+
+impl AppraisalOptimisation {
+    fn from_results(results: optimisation::ResultsMap) -> Self {
+        Self {
+            activity: results.activity,
+            unmet_demand: results.unmet_demand,
+        }
+    }
+}
+
 impl AppraisalOutput {
     /// Create a new `AppraisalOutput`
     fn new<T: MetricTrait>(
         asset: AssetRef,
-        results: ResultsMap,
+        optimisation: AppraisalOptimisation,
         metric: Option<T>,
         coefficients: Arc<ObjectiveCoefficients>,
     ) -> Self {
         Self {
             asset,
-            activity: results.activity,
-            unmet_demand: results.unmet_demand,
+            activity: optimisation.activity,
+            unmet_demand: optimisation.unmet_demand,
             metric: metric.map(|m| Box::new(m) as Box<dyn MetricTrait>),
             coefficients,
         }
@@ -203,7 +217,19 @@ impl ComparableMetric for NPVMetric {
 /// `NPVMetric` implements the `MetricTrait` supertrait.
 impl MetricTrait for NPVMetric {}
 
-/// Calculate LCOX for a hypothetical investment in the given asset.
+/// Run the shared optimisation used by all appraisal metrics.
+fn run_appraisal_optimisation(
+    model: &Model,
+    asset: &AssetRef,
+    commodity: &Commodity,
+    coefficients: &Arc<ObjectiveCoefficients>,
+    demand: &DemandMap,
+) -> Result<AppraisalOptimisation> {
+    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
+    Ok(AppraisalOptimisation::from_results(results))
+}
+
+/// Calculate LCOX from a completed appraisal optimisation.
 ///
 /// This is more commonly referred to as Levelised Cost of *Electricity*, but as the model can
 /// include other flows, we use the term LCOX.
@@ -213,43 +239,35 @@ impl MetricTrait for NPVMetric {}
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 /// The returned `metric` is the LCOX value (lower is better).
 fn calculate_lcox(
-    model: &Model,
+    optimisation: AppraisalOptimisation,
     asset: &AssetRef,
-    commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
-    demand: &DemandMap,
-) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
-
+    coefficients: Arc<ObjectiveCoefficients>,
+) -> AppraisalOutput {
     let cost_index = lcox(
         asset.total_capacity(),
         annual_fixed_cost(asset),
-        &results.activity,
+        &optimisation.activity,
         &coefficients.market_costs,
     );
 
-    Ok(AppraisalOutput::new(
+    AppraisalOutput::new(
         asset.clone(),
-        results,
+        optimisation,
         cost_index.map(LCOXMetric::new),
-        coefficients.clone(),
-    ))
+        coefficients,
+    )
 }
 
-/// Calculate NPV for a hypothetical investment in the given asset.
+/// Calculate NPV from a completed appraisal optimisation.
 ///
 /// # Returns
 ///
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 fn calculate_npv(
-    model: &Model,
+    optimisation: AppraisalOptimisation,
     asset: &AssetRef,
-    commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
-    demand: &DemandMap,
-) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
-
+    coefficients: Arc<ObjectiveCoefficients>,
+) -> AppraisalOutput {
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
         annual_fixed_cost >= MoneyPerCapacity(0.0),
@@ -259,16 +277,16 @@ fn calculate_npv(
     let snas = snas(
         asset.total_capacity(),
         annual_fixed_cost,
-        &results.activity,
+        &optimisation.activity,
         &coefficients.market_costs,
     );
 
-    Ok(AppraisalOutput::new(
+    AppraisalOutput::new(
         asset.clone(),
-        results,
+        optimisation,
         snas.map(NPVMetric::new),
-        coefficients.clone(),
-    ))
+        coefficients,
+    )
 }
 
 /// Appraise the given investment with the specified objective type.
@@ -285,11 +303,13 @@ pub fn appraise_investment(
     coefficients: &Arc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let appraisal_method = match objective_type {
-        ObjectiveType::LevelisedCostOfX => calculate_lcox,
-        ObjectiveType::NetPresentValue => calculate_npv,
-    };
-    appraisal_method(model, asset, commodity, coefficients, demand)
+    let optimisation = run_appraisal_optimisation(model, asset, commodity, coefficients, demand)?;
+    let coefficients = coefficients.clone();
+
+    Ok(match objective_type {
+        ObjectiveType::LevelisedCostOfX => calculate_lcox(optimisation, asset, coefficients),
+        ObjectiveType::NetPresentValue => calculate_npv(optimisation, asset, coefficients),
+    })
 }
 
 /// Compare assets as a fallback if metrics are equal.
@@ -302,30 +322,66 @@ fn compare_asset_fallback(asset1: &Asset, asset2: &Asset) -> Ordering {
         .cmp(&(asset1.is_commissioned(), asset1.commission_year()))
 }
 
-/// Sort appraisal outputs by their investment priority and exclude non-feasible options.
+/// Remove appraisal outputs with invalid metrics and return the number removed.
+///
+/// An output with no metric is considered non-feasible. Options skipped before appraisal, such as
+/// assets with zero capacity, are not included in this count.
+pub fn remove_nonfeasible_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
+    let old_len = outputs.len();
+    outputs.retain(|output| output.metric.is_some());
+    old_len - outputs.len()
+}
+
+/// Sort appraisal outputs by their investment priority.
 ///
 /// Investment priority is primarily decided by appraisal metric. When appraisal metrics are equal,
 /// a tie-breaker fallback is used. Commissioned assets are preferred over uncommissioned assets,
 /// and newer assets are preferred over older ones. The function does not guarantee that all ties
 /// will be resolved.
 ///
-/// Before sorting, outputs are filtered to exclude entries with invalid metrics (i.e. `None`), so
-/// the length of the returned vector may be less than the input.
-///
-/// # Returns
-///
-/// Returns the number of non-feasible assets which were removed.
-pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
-    let old_len = outputs.len();
-    outputs.retain(|output| output.metric.is_some());
-    let num_nonfeasible = old_len - outputs.len();
-
+fn sort_appraisal_outputs(outputs: &mut [AppraisalOutput]) {
     outputs.sort_by(|output1, output2| match output1.compare_metric(output2) {
         // If equal, we fall back on comparing asset properties
         Ordering::Equal => compare_asset_fallback(&output1.asset, &output2.asset),
         cmp => cmp,
     });
+}
 
+/// Make an investment decision according to the configured decision rule.
+///
+/// Returns all options which are equally good according to the decision rule. The options must
+/// already have non-feasible outputs removed.
+pub fn make_investment_decision(
+    mut outputs: Vec<AppraisalOutput>,
+    decision_rule: &DecisionRule,
+) -> Result<Vec<AppraisalOutput>> {
+    match decision_rule {
+        DecisionRule::Single => {
+            sort_appraisal_outputs(&mut outputs);
+            if outputs.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            let num_best_outputs = count_equal_and_best_appraisal_outputs(&outputs) + 1;
+            let best_outputs = outputs.into_iter().take(num_best_outputs).collect();
+
+            Ok(best_outputs)
+        }
+        DecisionRule::Weighted => bail!("The weighted decision rule is not yet supported"),
+        DecisionRule::Lexicographical { .. } => {
+            bail!("The lexicographical decision rule is not yet supported")
+        }
+    }
+}
+
+/// Sort appraisal outputs by their investment priority and exclude non-feasible options.
+///
+/// This low-level helper is retained for callers which need the complete sorted list. New
+/// decision-making code should use [`remove_nonfeasible_appraisal_outputs`] followed by
+/// [`make_investment_decision`].
+pub fn sort_and_filter_appraisal_outputs(outputs: &mut Vec<AppraisalOutput>) -> usize {
+    let num_nonfeasible = remove_nonfeasible_appraisal_outputs(outputs);
+    sort_appraisal_outputs(outputs);
     num_nonfeasible
 }
 
