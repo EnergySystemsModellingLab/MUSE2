@@ -11,7 +11,7 @@ use muse2::process::{Process, ProcessID};
 use muse2::simulation::candidate_assets_for_next_year;
 use muse2::simulation::investment::{flatten_preset_demands_for_year, select_best_assets};
 use muse2::simulation::market::{
-    collect_investment_limits_for_candidates, get_asset_options, get_demand_portion_for_market,
+    collect_agent_addition_limits, get_asset_options, get_demand_portion_for_market,
     get_responsible_agents,
 };
 use muse2::simulation::optimisation::DispatchRun;
@@ -202,24 +202,29 @@ fn criterion_benchmark(c: &mut Criterion) {
                 model.parameters.capacity_limit_factor,
             )
             .collect();
-            let investment_limits =
-                collect_investment_limits_for_candidates(&opt_assets, commodity_portion);
+            let agent_addition_limits = collect_agent_addition_limits(
+                &agent,
+                region_id,
+                &commodity.id,
+                YEAR,
+                commodity_portion,
+            );
 
             group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
                 b.iter_batched(
                     || {
                         (
                             opt_assets.clone(),
-                            investment_limits.clone(),
+                            agent_addition_limits.clone(),
                             demand.clone(),
                         )
                     },
-                    |(opt_assets, investment_limits, demand)| {
+                    |(opt_assets, agent_addition_limits, demand)| {
                         let run = || {
                             select_best_assets(
                                 black_box(&model),
                                 opt_assets,
-                                investment_limits,
+                                agent_addition_limits,
                                 black_box(commodity),
                                 black_box(&agent),
                                 black_box(region_id),
