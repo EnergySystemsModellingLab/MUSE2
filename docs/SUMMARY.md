@@ -22,6 +22,7 @@
   - [Architecture and coding style](developer_guide/architecture_quickstart.md)
   - [Applying custom HiGHS options](developer_guide/custom_highs_options.md)
   - [Developing the documentation](developer_guide/docs.md)
+  - [Making a release](developer_guide/release.md)
 - [API documentation](./api/muse2/README.md)
 - [Release notes](release_notes/README.md)
   - [MUSE2 v2.0.0 (October 14, 2025)](release_notes/v2.0.0.md)
