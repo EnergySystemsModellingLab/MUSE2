@@ -27,8 +27,8 @@ digit represents minor changes. This is a looser versioning scheme than Semantic
    ```
 
 1. Remove the developer instructions from the versioned release notes.
-1. Add the new release notes to [the documentation
-   summary](../SUMMARY.md) and [the release notes index](../release_notes/README.md).
+1. Add the new release notes to [the documentation summary][documentation summary] and [the
+   release notes index][release notes index].
 1. Empty the release-note sections in `docs/release_notes/upcoming.md`, while retaining its
    developer instructions as a placeholder for the next release.
 
@@ -45,7 +45,7 @@ Once the preparation changes have been merged to `main` and CI has passed, creat
 GitHub Release with the exact `v2.X.Y` tag, such as `v2.3.4`.
 
 The published release triggers the workflows that build and attach binaries, publish the crate to
-[crates.io](https://crates.io/crates/muse2), and deploy the documentation. Tags must use the
+[crates.io], and deploy the documentation. Tags must use the
 `v2.X.Y` format so that the documentation tooling recognises them as MUSE2 releases.
 
 After publishing, manually check the [GitHub releases page], the [MUSE2 crates.io page], and the
@@ -64,3 +64,6 @@ match the MUSE2 release tag.
 [muse2_data_analysis repository]: https://github.com/EnergySystemsModellingLab/muse2_data_analysis
 [MUSE_OS]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 [Test with MUSE2 workflow]: https://github.com/EnergySystemsModellingLab/muse2_data_analysis/actions/workflows/ci.yml
+[crates.io]: https://crates.io/crates/muse2
+[documentation summary]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/docs/SUMMARY.md
+[release notes index]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/docs/release_notes/README.md
