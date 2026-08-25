@@ -13,7 +13,7 @@ repository's `main` branch against MUSE2's `main` branch.
 MUSE2 version numbers have the form `2.X.Y`. The first digit is fixed at `2` to distinguish MUSE2
 releases from the Python-based [MUSE_OS]. The second digit represents major changes, while the third
 digit represents minor changes. This is a looser versioning scheme than Semantic Versioning, where
-"major" and "minor" have more strict definitions.
+"major" and "minor" have stricter definitions.
 
 ## Prepare the release
 
