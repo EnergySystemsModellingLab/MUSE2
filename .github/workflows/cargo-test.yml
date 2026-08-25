@@ -44,14 +44,14 @@ jobs:
   benchmark:
     name: Run benchmarks
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Run cargo bench
         shell: bash
-        run: cargo bench --no-fail-fast | tee output.txt
+        run: cargo bench --features bench --no-fail-fast | tee output.txt
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
