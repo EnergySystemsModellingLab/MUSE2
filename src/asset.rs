@@ -9,8 +9,8 @@ use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceSelection};
 use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerFlow, UnitType, Year,
+    Activity, ActivityPerCapacity, Capacity, Dimensionless, FlowPerActivity, MoneyPerActivity,
+    MoneyPerCapacity, MoneyPerFlow, UnitType, Year,
 };
 use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
@@ -834,6 +834,11 @@ impl Asset {
         events.iter().map(|event| event.num_units).sum()
     }
 
+    /// Get the capacity which is mothballed.
+    pub fn mothballed_capacity(&self) -> Capacity {
+        self.capacity().unit_size() * Dimensionless(self.get_num_mothballed_units() as f64)
+    }
+
     /// Get the remaining number of units that are not mothballed.
     ///
     /// For non-commissioned assets, this always returns the total number of units.
@@ -1612,6 +1617,10 @@ mod tests {
         assert_eq!(commissioned_multi_unit.num_units(), 3);
         let asset = commissioned_multi_unit.with_mothballed_units(num_mothballed, Some(2020));
         assert_eq!(asset.get_num_mothballed_units(), num_mothballed);
+        assert_eq!(
+            asset.mothballed_capacity(),
+            Capacity(4.0 * num_mothballed as f64)
+        );
         assert_eq!(asset.get_num_nonmothballed_units(), 3 - num_mothballed);
         assert_eq!(asset.has_any_mothballed_units(), num_mothballed > 0);
     }
