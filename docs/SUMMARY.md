@@ -10,6 +10,7 @@
   - [Input Files](file_formats/input_files.md)
   - [Output Files](file_formats/output_files.md)
 - [Model Description](model/README.md)
+  - [Units and Dimensions](model/units_and_dimensions.md)
   - [Dispatch Optimisation](model/dispatch_optimisation.md)
   - [Investment Appraisal](model/investment.md)
   - [Commodity Prices](model/prices.md)
