@@ -11,7 +11,6 @@ use indexmap::IndexSet;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
 
 const COMMODITY_CONSTRAINTS_FILE_NAME: &str = "commodity_constraints.csv";
 
@@ -129,4 +128,175 @@ where
         }
     }
     Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fixture::assert_error;
+    use crate::time_slice::{TimeSliceID, TimeSliceSelection};
+    use crate::units::Year;
+    use float_cmp::assert_approx_eq;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn validate_raw_constraint(region_id: &str, balance_type: BalanceType) -> Result<()> {
+        let constraint = CommodityConstraintRaw {
+            commodity_id: "test_commodity".into(),
+            region_id: region_id.to_string(),
+            balance_type,
+            years: "2020".into(),
+            time_slice: "annual".into(),
+            limits: "1.2..2.3".into(),
+        };
+        constraint.validate()
+    }
+
+    #[test]
+    fn validate_constraints_valid() {
+        let valid = validate_raw_constraint("test_region", BalanceType::Production);
+        valid.unwrap();
+    }
+
+    #[test]
+    fn validate_constraints_invalid() {
+        // Invalid balance_type specified
+        let invalid = validate_raw_constraint("test_region", BalanceType::Net);
+        assert_error!(
+            invalid,
+            "Balance type cannot be 'net' for commodity constraints"
+        );
+    }
+
+    #[test]
+    fn read_commodity_constraints_success() -> Result<()> {
+        // Create a model dir and write invalid CSV content to force
+        // read_commodity_constraints_from_iter failure
+        let dir = tempdir()?;
+        let model_dir = dir.path();
+
+        // Create simple commodity constraints csv content
+        let csv = "commodity_id,region_id,balance_type,years,time_slice,limits
+ELCTRI,GBR,cons,2030,summer,12.34..56.78
+CO2EMT,GBR,cons,2030,winter,..9.99
+CO2EMT,GBR,prod,2030,summer,9.99..
+";
+        let file_path = model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME);
+        fs::write(&file_path, csv)?;
+
+        // Create basic model inputs
+        let mut commodity_ids: IndexSet<CommodityID> = IndexSet::new();
+        commodity_ids.insert(CommodityID::from("ELCTRI"));
+        commodity_ids.insert(CommodityID::from("CO2EMT"));
+
+        let mut region_ids: IndexSet<RegionID> = IndexSet::new();
+        region_ids.insert(RegionID::from("GBR"));
+
+        let time_slice1 = TimeSliceID {
+            season: "summer".into(),
+            time_of_day: "all-day".into(),
+        };
+        let time_slice2 = TimeSliceID {
+            season: "summer".into(),
+            time_of_day: "all-day".into(),
+        };
+        let time_slice_info = TimeSliceInfo {
+            seasons: [("summer".into(), Year(1.0)), ("winter".into(), Year(1.0))].into(),
+            times_of_day: ["day".into(), "night".into()].into(),
+            time_slices: [
+                (time_slice1.clone(), Year(1.0)),
+                (time_slice2.clone(), Year(1.0)),
+            ]
+            .into(),
+        };
+
+        let milestone_years = vec![2030];
+
+        // Create the constraints map
+        let constraints_map = read_commodity_constraints(
+            model_dir,
+            &commodity_ids,
+            &region_ids,
+            &time_slice_info,
+            &milestone_years,
+        )?;
+
+        // Check the constraints map contains the expected constraint, keyed by the expected
+        // commodity id
+        assert!(constraints_map.contains_key(&CommodityID::from("ELCTRI")));
+        assert!(constraints_map.contains_key(&CommodityID::from("CO2EMT")));
+
+        // ELCTRI constraint
+        let elctri_constraint = &constraints_map[&CommodityID::from("ELCTRI")];
+        let elctri_gbr_2030 = elctri_constraint
+            .get(&(RegionID::from("GBR"), 2030))
+            .unwrap();
+        assert_eq!(elctri_gbr_2030[0].balance_type, BalanceType::Consumption);
+        assert_eq!(
+            elctri_gbr_2030[0].ts_selection,
+            TimeSliceSelection::Season("summer".into()),
+        );
+        assert_approx_eq!(f64, elctri_gbr_2030[0].limits.start().value(), 12.34);
+        assert_approx_eq!(f64, elctri_gbr_2030[0].limits.end().value(), 56.78);
+
+        // CO2EMT constraints
+        let co2emt_constraint = &constraints_map[&CommodityID::from("CO2EMT")];
+        let co2emt_gbr_2030 = co2emt_constraint
+            .get(&(RegionID::from("GBR"), 2030))
+            .unwrap();
+        assert_eq!(co2emt_gbr_2030[0].balance_type, BalanceType::Consumption);
+        assert_eq!(
+            co2emt_gbr_2030[0].ts_selection,
+            TimeSliceSelection::Season("winter".into()),
+        );
+        assert_approx_eq!(f64, co2emt_gbr_2030[0].limits.start().value(), 0.0);
+        assert_approx_eq!(f64, co2emt_gbr_2030[0].limits.end().value(), 9.99);
+
+        assert_eq!(co2emt_gbr_2030[1].balance_type, BalanceType::Production);
+        assert_eq!(
+            co2emt_gbr_2030[1].ts_selection,
+            TimeSliceSelection::Season("summer".into()),
+        );
+        assert_approx_eq!(f64, co2emt_gbr_2030[1].limits.start().value(), 9.99);
+        assert_approx_eq!(f64, co2emt_gbr_2030[1].limits.end().value(), f64::INFINITY);
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_commodity_constraints_fails_with_invalid_csv() -> Result<()> {
+        // Create a model dir and write invalid CSV content to force
+        // read_commodity_constraints_from_iter failure
+        let dir = tempdir()?;
+        let model_dir = dir.path();
+
+        // Create invalid commodity constraints csv content
+        let file_path = model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME);
+        fs::write(&file_path, "invalid,commodity,constraints\nbad,row\n")?;
+
+        // Create empty model inputs
+        let commodity_ids: IndexSet<CommodityID> = IndexSet::new();
+        let region_ids: IndexSet<RegionID> = IndexSet::new();
+        let time_slice_info = TimeSliceInfo::default();
+        let milestone_years: Vec<u32> = vec![2020, 2030];
+
+        // Try to create the constraints map
+        let result = read_commodity_constraints(
+            model_dir,
+            &commodity_ids,
+            &region_ids,
+            &time_slice_info,
+            &milestone_years,
+        );
+
+        // Check failure and file path present in error message
+        assert!(result.is_err());
+        let err_text = format!("{:#}", result.unwrap_err());
+        assert!(
+            err_text.contains(COMMODITY_CONSTRAINTS_FILE_NAME),
+            "error message should include file name context, got: {err_text}"
+        );
+
+        Ok(())
+    }
 }
