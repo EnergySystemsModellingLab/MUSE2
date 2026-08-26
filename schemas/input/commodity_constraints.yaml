@@ -20,6 +20,9 @@ fields:
   - name: time_slice
     type: string
     description: The time slice(s) to which this entry applies
+    notes: |
+      Can be a single time slice (e.g. `winter.day`), a whole season (e.g. `winter`) or `annual`,
+      representing the whole year
   - name: limits
     type: string
     description: Lower and upper limits on the value of the commodity
