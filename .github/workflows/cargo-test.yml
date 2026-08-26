@@ -53,11 +53,38 @@ jobs:
         shell: bash
         run: cargo bench --features bench --no-fail-fast | tee output.txt
 
+      - name: Convert Criterion results to JSON
+        shell: python3 {0}
+        run: |
+          import json
+          from pathlib import Path
+
+          criterion_dir = Path("target/criterion")
+          results = []
+
+          # Walk every new/estimates.json produced by Criterion.
+          # The path structure is:
+          #   target/criterion/<group>/<bench_id>/new/estimates.json
+          # where Criterion sanitises any '/' in a group name to '_'.
+          # Stripping the leading criterion_dir and trailing new/estimates.json
+          # gives a stable, human-readable name that is consistent across runs.
+          for estimates_file in sorted(criterion_dir.rglob("new/estimates.json")):
+              parts = estimates_file.relative_to(criterion_dir).parts[:-2]
+              name = "/".join(parts)
+              data = json.loads(estimates_file.read_text())
+              value = data["median"]["point_estimate"]
+              results.append({"name": name, "value": value, "unit": "ns"})
+
+          Path("benchmark-results.json").write_text(json.dumps(results, indent=2))
+          print(f"Converted {len(results)} Criterion benchmark results to benchmark-results.json")
+          for r in results:
+              print(f"  {r['name']}: {r['value']:.0f} ns")
+
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          tool: "cargo"
-          output-file-path: output.txt
+          tool: "customSmallerIsBetter"
+          output-file-path: benchmark-results.json
           external-data-json-path: ./cache/benchmark-data.json
           fail-on-alert: true
           # GitHub API token to make a commit comment
