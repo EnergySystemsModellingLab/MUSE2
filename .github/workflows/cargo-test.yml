@@ -98,12 +98,18 @@ jobs:
           tool: "customSmallerIsBetter"
           output-file-path: benchmark-results.json
           external-data-json-path: ./cache/benchmark-data.json
+          # Fail the workflow if any benchmark regresses by more than 30% relative
+          # to the stored baseline. CI runners have variable load, so a threshold
+          # that is too tight will cause spurious failures; 130% is a reasonable
+          # starting point and can be tightened once baseline stability is known.
+          alert-threshold: "130%"
           fail-on-alert: true
           # GitHub API token to make a commit comment
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # Enable alert commit comment
+          # Post a comment on the commit when an alert is triggered, listing which
+          # benchmarks regressed and by how much.
           comment-on-alert: true
-          # Enable Job Summary for PRs
+          # Always write a job summary table, not only when a regression is found.
           summary-always: true
 
       # actions/cache automatically saves cache/benchmark-data.json at the end
