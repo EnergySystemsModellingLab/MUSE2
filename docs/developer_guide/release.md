@@ -6,7 +6,8 @@ This page describes the steps for making a new MUSE2 release.
 
 Before preparing the release, manually run the [Test with MUSE2 workflow] on the `main` branch of
 the [muse2_data_analysis repository] and check that all jobs pass. This workflow tests the analysis
-repository's `main` branch against MUSE2's `main` branch.
+repository's `main` branch against MUSE2's `main` branch. If it *does not pass*, identify and fix
+the errors there before proceeding with the release.
 
 ## Choose a version number
 
@@ -15,9 +16,23 @@ releases from the Python-based [MUSE_OS]. The second digit represents major chan
 digit represents minor changes. This is a looser versioning scheme than Semantic Versioning, where
 "major" and "minor" have stricter definitions.
 
-## Prepare the release
+## Finalise the release notes
 
-1. Review `docs/release_notes/upcoming.md` and make sure the entries are complete and correct.
+All releases should have comprehensive release notes explaining the main user-facing changes since
+the last release.
+
+Developers are encouraged to add a note to `docs/release_notes/upcoming.md` for each user-facing
+change as it is made. This file should therefore provide a good starting point, but it should **not**
+be assumed to be complete or up to date. Review the full PR history since the last release and make
+sure that all user-facing changes introduced since then are included. Do **not** include changes that
+are only relevant to developers, or fixes for bugs that were introduced after the previous release.
+
+Structure the notes in a user-friendly way, highlighting the main user-facing changes at the top and
+listing minor changes below. The release notes for `v2.1.0` provide a useful example for a major
+release.
+
+Once the release notes in `docs/release_notes/upcoming.md` are finalised:
+
 1. Copy `docs/release_notes/upcoming.md` to `docs/release_notes/v2.X.Y.md`.
 1. Update the heading in the new file to include the version and the date on which the release will
    be published, for example:
@@ -27,8 +42,7 @@ digit represents minor changes. This is a looser versioning scheme than Semantic
    ```
 
 1. Remove the developer instructions from the versioned release notes.
-1. Add the new release notes to [the documentation summary][documentation summary] and [the
-   release notes index][release notes index].
+1. Link the new release notes in `docs/SUMMARY.md` and `docs/release_notes/README.md`
 1. Empty the release-note sections in `docs/release_notes/upcoming.md`, while retaining its
    developer instructions as a placeholder for the next release.
 
@@ -65,5 +79,3 @@ match the MUSE2 release tag.
 [MUSE_OS]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 [Test with MUSE2 workflow]: https://github.com/EnergySystemsModellingLab/muse2_data_analysis/actions/workflows/ci.yml
 [crates.io]: https://crates.io/crates/muse2
-[documentation summary]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/docs/SUMMARY.md
-[release notes index]: https://github.com/EnergySystemsModellingLab/MUSE2/blob/main/docs/release_notes/README.md
