@@ -148,10 +148,10 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
-    fn validate_raw_constraint(region_id: &str, balance_type: BalanceType) -> Result<()> {
+    fn validate_raw_constraint(balance_type: BalanceType) -> Result<()> {
         let constraint = CommodityConstraintRaw {
             commodity_id: "test_commodity".into(),
-            region_id: region_id.to_string(),
+            region_id: "test_region".into(),
             balance_type,
             years: "2020".into(),
             time_slice: "annual".into(),
@@ -162,14 +162,14 @@ mod tests {
 
     #[test]
     fn validate_constraints_valid() {
-        let valid = validate_raw_constraint("test_region", BalanceType::Production);
+        let valid = validate_raw_constraint(BalanceType::Production);
         valid.unwrap();
     }
 
     #[test]
     fn validate_constraints_invalid() {
         // Invalid balance_type specified
-        let invalid = validate_raw_constraint("test_region", BalanceType::Net);
+        let invalid = validate_raw_constraint(BalanceType::Net);
         assert_error!(
             invalid,
             "Balance type cannot be 'net' for commodity constraints"
