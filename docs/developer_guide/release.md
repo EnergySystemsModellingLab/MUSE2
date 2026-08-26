@@ -41,10 +41,9 @@ Once the release notes in `docs/release_notes/upcoming.md` are finalised:
    # Release notes for MUSE2 v2.3.4 (January 3, 2027)
    ```
 
-1. Remove the developer instructions from the versioned release notes.
 1. Link the new release notes in `docs/SUMMARY.md` and `docs/release_notes/README.md`
-1. Empty the release-note sections in `docs/release_notes/upcoming.md`, while retaining its
-   developer instructions as a placeholder for the next release.
+1. Remove the release-note content from `docs/release_notes/upcoming.md`, while retaining the
+   headings so it is ready to track changes for the next release.
 
 ## Update version metadata
 
