@@ -4,7 +4,7 @@ use crate::commodity::{
     BalanceType, Commodity, CommodityConstraint, CommodityConstraintsMap, CommodityID,
     CommodityType,
 };
-use crate::id::IDCollection;
+use crate::id::{GetIDValue, IDCollection};
 use crate::input::{parse_range, parse_year_str};
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
@@ -109,14 +109,11 @@ where
         record.validate()?;
 
         // Extract fields from record
-        let commodity = commodities
-            .get(&CommodityID::new(&record.commodity_id))
-            .unwrap();
+        let (commodity_id, commodity) = commodities.get_id_value(&record.commodity_id)?;
         ensure!(
             commodity.kind != CommodityType::ServiceDemand,
             "SVD commodities are not permitted to have commodity constraints"
         );
-        let commodity_id = &commodity.id;
         let region_id = region_ids.get_id(&record.region_id)?;
         let years = parse_year_str(&record.years, milestone_years)?;
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
