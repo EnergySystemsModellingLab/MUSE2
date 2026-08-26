@@ -60,7 +60,7 @@ pub fn read_commodities(
     // Read constraints table
     let _commodity_constraints = read_commodity_constraints(
         model_dir,
-        &commodity_ids,
+        &commodities,
         region_ids,
         time_slice_info,
         milestone_years,

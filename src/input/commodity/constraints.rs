@@ -1,13 +1,16 @@
 //! Code for reading commodity constraints from a CSV file.
 use super::super::{input_err_msg, read_csv_optional};
-use crate::commodity::{BalanceType, CommodityConstraint, CommodityConstraintsMap, CommodityID};
+use crate::commodity::{
+    BalanceType, Commodity, CommodityConstraint, CommodityConstraintsMap, CommodityID,
+    CommodityType,
+};
 use crate::id::IDCollection;
 use crate::input::{parse_range, parse_year_str};
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::Flow;
 use anyhow::{Context, Result, ensure};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -48,7 +51,7 @@ impl CommodityConstraintRaw {
 /// # Arguments
 ///
 /// * `model_dir` - Folder containing model configuration files
-/// * `commodity_ids` - All possible commodity IDs
+/// * `commodities` - The commodities in the model
 /// * `region_ids` - All possible region IDs
 /// * `time_slice_info` - Information about time slices
 /// * `milestone_years` - All milestone years
@@ -59,7 +62,7 @@ impl CommodityConstraintRaw {
 /// commodity-constraints maps, or an error.
 pub fn read_commodity_constraints(
     model_dir: &Path,
-    commodity_ids: &IndexSet<CommodityID>,
+    commodities: &IndexMap<CommodityID, Commodity>,
     region_ids: &IndexSet<RegionID>,
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
@@ -68,7 +71,7 @@ pub fn read_commodity_constraints(
     let commodity_constraints_csv = read_csv_optional(&file_path)?;
     read_commodity_constraints_from_iter(
         commodity_constraints_csv,
-        commodity_ids,
+        commodities,
         region_ids,
         time_slice_info,
         milestone_years,
@@ -81,7 +84,7 @@ pub fn read_commodity_constraints(
 /// # Arguments
 ///
 /// * `iter` - Iterator over `CommodityConstraintRaw` records
-/// * `commodity_ids` - All possible commodity IDs
+/// * `commodities` - The commodoties in the model
 /// * `region_ids` - All possible region IDs
 /// * `time_slice_info` - Information about time slices
 /// * `milestone_years` - All milestone years
@@ -92,7 +95,7 @@ pub fn read_commodity_constraints(
 /// commodity-constraints maps, or an error.
 fn read_commodity_constraints_from_iter<I>(
     iter: I,
-    commodity_ids: &IndexSet<CommodityID>,
+    commodities: &IndexMap<CommodityID, Commodity>,
     region_ids: &IndexSet<RegionID>,
     time_slice_info: &TimeSliceInfo,
     milestone_years: &[u32],
@@ -106,7 +109,14 @@ where
         record.validate()?;
 
         // Extract fields from record
-        let commodity_id = commodity_ids.get_id(&record.commodity_id)?;
+        let commodity = commodities
+            .get(&CommodityID::new(&record.commodity_id))
+            .unwrap();
+        ensure!(
+            commodity.kind != CommodityType::ServiceDemand,
+            "SVD commodities are not permitted to have commodity constraints"
+        );
+        let commodity_id = &commodity.id;
         let region_id = region_ids.get_id(&record.region_id)?;
         let years = parse_year_str(&record.years, milestone_years)?;
         let ts_selection = time_slice_info.get_selection(&record.time_slice)?;
@@ -134,6 +144,7 @@ where
 mod tests {
     use super::*;
     use crate::fixture::assert_error;
+    use crate::input::commodity::{COMMODITY_FILE_NAME, read_commodities_file};
     use crate::time_slice::{TimeSliceID, TimeSliceSelection};
     use crate::units::Year;
     use float_cmp::assert_approx_eq;
@@ -170,24 +181,30 @@ mod tests {
 
     #[test]
     fn read_commodity_constraints_success() -> Result<()> {
-        // Create a model dir and write invalid CSV content to force
-        // read_commodity_constraints_from_iter failure
+        // Create a model dir and write simple CSV files
         let dir = tempdir()?;
         let model_dir = dir.path();
 
-        // Create simple commodity constraints csv content
-        let csv = "commodity_id,region_id,balance_type,years,time_slice,limits
+        // Create simple commodity constraints csv file
+        let constraints_csv = "commodity_id,region_id,balance_type,years,time_slice,limits
 ELCTRI,GBR,cons,2030,summer,12.34..56.78
 CO2EMT,GBR,cons,2030,winter,..9.99
 CO2EMT,GBR,prod,2030,summer,9.99..
 ";
-        let file_path = model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME);
-        fs::write(&file_path, csv)?;
+        fs::write(
+            model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME),
+            constraints_csv,
+        )?;
+
+        // Create simple commodities csv to simplify creating `Commodity`s
+        let commodities_csv = "id,description,type,time_slice_level,units
+ELCTRI,Electricity,sed,daynight,PJ
+CO2EMT,CO2 emitted,oth,annual,ktCO2
+";
+        fs::write(model_dir.join(COMMODITY_FILE_NAME), commodities_csv)?;
 
         // Create basic model inputs
-        let mut commodity_ids: IndexSet<CommodityID> = IndexSet::new();
-        commodity_ids.insert(CommodityID::from("ELCTRI"));
-        commodity_ids.insert(CommodityID::from("CO2EMT"));
+        let commodities = read_commodities_file(model_dir).unwrap();
 
         let mut region_ids: IndexSet<RegionID> = IndexSet::new();
         region_ids.insert(RegionID::from("GBR"));
@@ -215,7 +232,7 @@ CO2EMT,GBR,prod,2030,summer,9.99..
         // Create the constraints map
         let constraints_map = read_commodity_constraints(
             model_dir,
-            &commodity_ids,
+            &commodities,
             &region_ids,
             &time_slice_info,
             &milestone_years,
@@ -275,7 +292,7 @@ CO2EMT,GBR,prod,2030,summer,9.99..
         fs::write(&file_path, "invalid,commodity,constraints\nbad,row\n")?;
 
         // Create empty model inputs
-        let commodity_ids: IndexSet<CommodityID> = IndexSet::new();
+        let commodities: IndexMap<CommodityID, Commodity> = IndexMap::new();
         let region_ids: IndexSet<RegionID> = IndexSet::new();
         let time_slice_info = TimeSliceInfo::default();
         let milestone_years: Vec<u32> = vec![2020, 2030];
@@ -283,7 +300,7 @@ CO2EMT,GBR,prod,2030,summer,9.99..
         // Try to create the constraints map
         let result = read_commodity_constraints(
             model_dir,
-            &commodity_ids,
+            &commodities,
             &region_ids,
             &time_slice_info,
             &milestone_years,
