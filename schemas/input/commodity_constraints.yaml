@@ -12,8 +12,8 @@ fields:
     type: string
     description: The type of balance to which this is applied
     notes:
-      The "net" option is not valid here, as net production is already constrained by
-      the commodity balance constraints.
+      Valid options are "cons" and "prod"; the "net" option is not valid here, as net
+      production is already constrained by the commodity balance constraints.
   - name: years
     type: string
     description: The year(s) to which this entry applies
