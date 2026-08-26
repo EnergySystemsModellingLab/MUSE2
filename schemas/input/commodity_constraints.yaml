@@ -1,5 +1,7 @@
 $schema: https://specs.frictionlessdata.io/schemas/table-schema.json
-description: Specifies constraints on commodities.
+description: |
+  Specifies the limits on the total amount of consumption/production of a given
+  commodity in a given region, year and time slice(s).
 
 fields:
   - name: commodity_id
