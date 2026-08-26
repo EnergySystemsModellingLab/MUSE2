@@ -48,7 +48,7 @@ logtest = "2.0.0"
 ordered-float = "5.1.0"
 rstest = {version = "0.26.1", default-features = false, features = ["crate-name"]}
 similar = "3.1.0"
-yaml-rust2 = {version = "0.11.0", default-features = false}
+yaml-rust2 = {version = "0.12.0", default-features = false}
 
 [build-dependencies]
 built = {version = "0.8.1", features = ["chrono", "git2"]}
@@ -83,6 +83,10 @@ from_iter_instead_of_collect = "allow"
 
 [[bench]]
 name = "examples"
+harness = false
+
+[[bench]]
+name = "assets"
 harness = false
 
 [features]

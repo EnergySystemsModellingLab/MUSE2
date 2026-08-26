@@ -166,6 +166,8 @@ struct AssetCapacityRow {
     asset_id: AssetID,
     capacity: Capacity,
     num_units: u32,
+    mothballed_capacity: Capacity,
+    mothballed_units: u32,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.
@@ -638,6 +640,8 @@ impl DataWriter {
                 asset_id: asset.id().unwrap(),
                 capacity: asset.total_capacity(),
                 num_units: asset.capacity().num_units(),
+                mothballed_capacity: asset.mothballed_capacity(),
+                mothballed_units: asset.get_num_mothballed_units(),
             };
             self.asset_capacities.serialize(row)?;
         }
@@ -709,7 +713,9 @@ impl DataWriter {
 mod tests {
     use super::*;
     use crate::asset::AssetPool;
-    use crate::fixture::{appraisal_output, asset, assets, commodity_id, region_id, time_slice};
+    use crate::fixture::{
+        appraisal_output, asset, assets, commodity_id, multi_unit_asset, region_id, time_slice,
+    };
     use crate::simulation::investment::appraisal::AppraisalOutput;
     use crate::time_slice::TimeSliceID;
     use indexmap::indexmap;
@@ -761,6 +767,46 @@ mod tests {
             asset_id: asset.id().unwrap(),
             capacity: asset.total_capacity(),
             num_units: 1,
+            mothballed_capacity: Capacity(0.0),
+            mothballed_units: 0,
+        };
+        let records: Vec<AssetCapacityRow> =
+            csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn write_asset_capacities_with_mothballed_units(multi_unit_asset: Asset) {
+        let milestone_year = 2020;
+        let dir = tempdir().unwrap();
+        let mut assets = AssetPool::new();
+        assets.commission_new(2010, &mut vec![multi_unit_asset.into()]);
+        let asset = assets
+            .iter()
+            .next()
+            .unwrap()
+            .clone()
+            .with_mothballed_units(1, Some(milestone_year));
+
+        {
+            let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
+            writer
+                .write_asset_capacities(milestone_year, std::slice::from_ref(&asset))
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        let expected = AssetCapacityRow {
+            milestone_year,
+            asset_id: asset.id().unwrap(),
+            capacity: Capacity(12.0),
+            num_units: 3,
+            mothballed_capacity: Capacity(4.0),
+            mothballed_units: 1,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
