@@ -197,8 +197,8 @@ mod tests {
         // Create simple commodities CSV to simplify creating `Commodity`s
         let commodities_csv = concat!(
             "id,description,type,time_slice_level,units\n",
-            "ELCTRI,Electricity,sed,daynight,PJ\n",
-            "CO2EMT,CO2 emitted,oth,annual,ktCO2\n",
+            "ELCTRI,Electricity,sed,season,PJ\n",
+            "CO2EMT,CO2 emitted,oth,season,ktCO2\n",
         );
         fs::write(model_dir.join(COMMODITY_FILE_NAME), commodities_csv)?;
 
@@ -210,18 +210,28 @@ mod tests {
 
         let time_slice1 = TimeSliceID {
             season: "summer".into(),
-            time_of_day: "all-day".into(),
+            time_of_day: "day".into(),
         };
         let time_slice2 = TimeSliceID {
+            season: "summer".into(),
+            time_of_day: "night".into(),
+        };
+        let time_slice3 = TimeSliceID {
             season: "winter".into(),
-            time_of_day: "all-day".into(),
+            time_of_day: "day".into(),
+        };
+        let time_slice4 = TimeSliceID {
+            season: "winter".into(),
+            time_of_day: "night".into(),
         };
         let time_slice_info = TimeSliceInfo {
-            seasons: [("summer".into(), Year(1.0)), ("winter".into(), Year(1.0))].into(),
+            seasons: [("summer".into(), Year(0.5)), ("winter".into(), Year(0.5))].into(),
             times_of_day: ["day".into(), "night".into()].into(),
             time_slices: [
-                (time_slice1.clone(), Year(1.0)),
-                (time_slice2.clone(), Year(1.0)),
+                (time_slice1.clone(), Year(0.25)),
+                (time_slice2.clone(), Year(0.25)),
+                (time_slice3.clone(), Year(0.25)),
+                (time_slice4.clone(), Year(0.25)),
             ]
             .into(),
         };
