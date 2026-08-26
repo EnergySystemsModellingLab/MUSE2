@@ -63,7 +63,7 @@ jobs:
 
       - name: Run cargo bench
         shell: bash
-        run: cargo bench --features bench --no-fail-fast | tee output.txt
+        run: cargo bench --features bench --no-fail-fast
 
       - name: Convert Criterion results to JSON
         shell: python3 {0}
