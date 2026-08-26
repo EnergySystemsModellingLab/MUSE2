@@ -213,7 +213,7 @@ mod tests {
             time_of_day: "all-day".into(),
         };
         let time_slice2 = TimeSliceID {
-            season: "summer".into(),
+            season: "winter".into(),
             time_of_day: "all-day".into(),
         };
         let time_slice_info = TimeSliceInfo {
