@@ -182,22 +182,24 @@ mod tests {
         let dir = tempdir()?;
         let model_dir = dir.path();
 
-        // Create simple commodity constraints csv file
-        let constraints_csv = "commodity_id,region_id,balance_type,years,time_slice,limits
-ELCTRI,GBR,cons,2030,summer,12.34..56.78
-CO2EMT,GBR,cons,2030,winter,..9.99
-CO2EMT,GBR,prod,2030,summer,9.99..
-";
+        // Create simple commodity constraints CSV file
+        let constraints_csv = concat!(
+            "commodity_id,region_id,balance_type,years,time_slice,limits\n",
+            "ELCTRI,GBR,cons,2030,summer,12.34..56.78\n",
+            "CO2EMT,GBR,cons,2030,winter,..9.99\n",
+            "CO2EMT,GBR,prod,2030,summer,9.99..\n",
+        );
         fs::write(
             model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME),
             constraints_csv,
         )?;
 
-        // Create simple commodities csv to simplify creating `Commodity`s
-        let commodities_csv = "id,description,type,time_slice_level,units
-ELCTRI,Electricity,sed,daynight,PJ
-CO2EMT,CO2 emitted,oth,annual,ktCO2
-";
+        // Create simple commodities CSV to simplify creating `Commodity`s
+        let commodities_csv = concat!(
+            "id,description,type,time_slice_level,units\n",
+            "ELCTRI,Electricity,sed,daynight,PJ\n",
+            "CO2EMT,CO2 emitted,oth,annual,ktCO2\n",
+        );
         fs::write(model_dir.join(COMMODITY_FILE_NAME), commodities_csv)?;
 
         // Create basic model inputs
@@ -284,7 +286,7 @@ CO2EMT,CO2 emitted,oth,annual,ktCO2
         let dir = tempdir()?;
         let model_dir = dir.path();
 
-        // Create invalid commodity constraints csv content
+        // Create invalid commodity constraints CSV content
         let file_path = model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME);
         fs::write(&file_path, "invalid,commodity,constraints\nbad,row\n")?;
 
