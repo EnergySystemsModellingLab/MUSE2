@@ -500,7 +500,7 @@ fn get_candidate_assets<'a>(
 /// * `year` – Milestone year being solved.
 /// * `commodity_portion` – Agent's fractional share of commodity demand, used to scale limits.
 /// * `get_agent_limit` – Method on [`Process`] that returns the limit value.
-fn collect_agent_limits(
+pub fn collect_agent_limits(
     agent: &Agent,
     region_id: &RegionID,
     commodity_id: &CommodityID,
