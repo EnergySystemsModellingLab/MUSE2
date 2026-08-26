@@ -36,6 +36,7 @@ ready to be released, carry out the following steps:
 - The `addition_limit` column in `process_investment_constraints.csv` is now optional ([#1427])
 - Memory usage and performance has been drastically improved for divisible assets with many units
   ([#1464])
+- `asset_capacities.csv` now reports total and mothballed capacity and unit counts ([#1461])
 
 ## Breaking changes
 
