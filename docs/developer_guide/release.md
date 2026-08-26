@@ -28,7 +28,7 @@ sure that all user-facing changes introduced since then are included. Do **not**
 are only relevant to developers, or fixes for bugs that were introduced after the previous release.
 
 Structure the notes in a user-friendly way, highlighting the main user-facing changes at the top and
-listing minor changes below. The release notes for `v2.1.0` provide a useful example for a major
+listing minor changes below. The [release notes for `v2.1.0`] provide a useful example for a major
 release.
 
 Once the release notes in `docs/release_notes/upcoming.md` are finalised:
@@ -78,3 +78,4 @@ match the MUSE2 release tag.
 [MUSE_OS]: https://github.com/EnergySystemsModellingLab/MUSE_OS
 [Test with MUSE2 workflow]: https://github.com/EnergySystemsModellingLab/muse2_data_analysis/actions/workflows/ci.yml
 [crates.io]: https://crates.io/crates/muse2
+[release notes for `v2.1.0`]: https://energysystemsmodellinglab.github.io/MUSE2/v2.1.0/release_notes/v2.1.0.html
