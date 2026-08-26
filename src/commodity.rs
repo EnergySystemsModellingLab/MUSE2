@@ -57,6 +57,11 @@ pub struct Commodity {
     /// `time_slice_level` field. E.g. if the `time_slice_level` is seasonal, then there will be
     /// keys representing each season (and not e.g. individual time slices).
     pub demand: DemandMap,
+    /// Constraints for this commodity for different combinations of region, year and time slice.
+    ///
+    /// May be empty if there are no constraints for this commodity, otherwise there must be entries
+    /// for every combination of parameters.
+    pub constraints: CommodityConstraintsMap,
     /// Units for this commodity represented as a string e.g Petajoules, Tonnes
     /// This is only used for validation purposes.
     pub units: String,

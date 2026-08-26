@@ -2,8 +2,8 @@
 use super::{input_err_msg, read_csv};
 use crate::ISSUES_URL;
 use crate::commodity::{
-    BalanceType, Commodity, CommodityID, CommodityLevyMap, CommodityMap, CommodityType, DemandMap,
-    PricingStrategy,
+    BalanceType, Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityMap,
+    CommodityType, DemandMap, PricingStrategy,
 };
 use crate::model::{ALLOW_DANGEROUS_OPTION_NAME, dangerous_model_options_enabled};
 use crate::region::RegionID;
@@ -58,13 +58,13 @@ pub fn read_commodities(
     let commodity_ids = commodities.keys().cloned().collect();
 
     // Read constraints table
-    let _commodity_constraints = read_commodity_constraints(
+    let mut commodity_constraints = read_commodity_constraints(
         model_dir,
         &commodities,
         region_ids,
         time_slice_info,
         milestone_years,
-    );
+    )?;
 
     // Read costs table
     let mut costs = read_commodity_levies(
@@ -99,6 +99,9 @@ pub fn read_commodities(
             if let Some(demand) = demand.remove(&id) {
                 commodity.demand = demand;
             }
+            if let Some(commodity_constraints) = commodity_constraints.remove(&id) {
+                commodity.constraints = commodity_constraints;
+            }
 
             (id, commodity.into())
         })
@@ -131,6 +134,7 @@ where
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
+            constraints: CommodityConstraintsMap::default(),
             units: commodity_raw.units,
         };
 
@@ -217,6 +221,7 @@ mod tests {
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
+            constraints: CommodityConstraintsMap::default(),
             units: "PJ".into(),
         }
     }
