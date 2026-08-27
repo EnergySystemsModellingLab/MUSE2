@@ -253,10 +253,10 @@ candidate dispatch run are then used to seed and guide investment appraisal in s
 ## Diagnosing Infeasible Models
 
 In practice, a dispatch optimisation run may be **infeasible** for several reasons, such as
-insufficient installed asset capacity to meet demand or incompatible explicit commodity constraints.
-When this occurs, MUSE2 performs additional dispatch runs with modified optimisation problems to
-help identify the cause. The resulting diagnostic information is included in error messages and
-saved in the dispatch debug files.
+insufficient installed asset capacity to meet demand or incompatible commodity production/consumption
+constraints. When this occurs, MUSE2 performs additional dispatch runs with modified optimisation
+problems to help identify the cause. The resulting diagnostic information is included in error
+messages and saved in the dispatch debug files.
 
 ### Unmet Demand Diagnostic
 
@@ -285,9 +285,9 @@ an error identifying the exact out-of-balance markets.
 
 ### Commodity Constraints Diagnostic
 
-If the dispatch optimisation remains infeasible, MUSE2 reruns it with the explicit commodity
-constraints disabled. If this rerun succeeds, the infeasibility is likely caused by one or more
-constraints defined in `commodity_constraints.csv`.
+If the dispatch optimisation remains infeasible, MUSE2 reruns it with the commodity
+consumption/production constraints disabled. If this rerun succeeds, the infeasibility is likely
+caused by one or more constraints defined in `commodity_constraints.csv`.
 
 If the rerun remains infeasible, commodity constraints are not identified as the cause. Since
 commodity constraints are an experimental feature, this diagnosis should be treated as indicative
