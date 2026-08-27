@@ -32,9 +32,11 @@ const YEAR: u32 = 2030;
 /// competing candidate technologies (petrol, diesel, electric and hybrid cars), making it a
 /// representative, non-trivial case for asset selection.
 const COMMODITY_ID: &str = "TPASKM";
-/// The range of numbers of competing candidate technologies to benchmark, to see how
-/// [`select_best_assets`] scales with the size of the search space.
-const N_TECHNOLOGIES_RANGE: std::ops::RangeInclusive<usize> = 1..=20;
+/// The numbers of competing candidate technologies to benchmark, stepped in fives, to see how
+/// [`select_best_assets`] scales with the size of the search space. Values are zero-padded to
+/// two digits when used as benchmark IDs so that names sort correctly on the filesystem
+/// (e.g. `05` before `10` rather than `10` before `5`).
+const N_TECHNOLOGIES: &[usize] = &[1, 5, 10, 15, 20];
 
 /// Extract the `two_outputs` example model to a temporary directory, load it, and create a
 /// (non-debug) [`DataWriter`] for it.
@@ -163,7 +165,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     );
 
     // Real candidate technologies for this market, used as templates to build up to
-    // `N_TECHNOLOGIES_RANGE.end()` synthetic competing technologies
+    // `N_TECHNOLOGIES` synthetic competing technologies
     let templates: Vec<Arc<Process>> = agent
         .iter_search_space(region_id, &commodity.id, YEAR)
         .cloned()
@@ -184,7 +186,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             .sample_size(20)
             .measurement_time(Duration::from_secs(3));
 
-        for n in N_TECHNOLOGIES_RANGE {
+        for &n in N_TECHNOLOGIES {
             // Give the agent a synthetic search space of `n` competing technologies
             let mut agent = agent.clone();
             agent.search_space.insert(
@@ -210,40 +212,44 @@ fn criterion_benchmark(c: &mut Criterion) {
                 commodity_portion,
             );
 
-            group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
-                b.iter_batched(
-                    || {
-                        (
-                            opt_assets.clone(),
-                            agent_addition_limits.clone(),
-                            demand.clone(),
-                        )
-                    },
-                    |(opt_assets, agent_addition_limits, demand)| {
-                        let run = || {
-                            select_best_assets(
-                                black_box(&model),
-                                opt_assets,
-                                agent_addition_limits,
-                                black_box(commodity),
-                                black_box(&agent),
-                                black_box(region_id),
-                                black_box(&prices),
-                                demand,
-                                black_box(YEAR),
-                                &mut writer,
+            group.bench_with_input(
+                BenchmarkId::from_parameter(format!("{n:02}")),
+                &n,
+                |b, _| {
+                    b.iter_batched(
+                        || {
+                            (
+                                opt_assets.clone(),
+                                agent_addition_limits.clone(),
+                                demand.clone(),
                             )
-                            .expect("select_best_assets failed")
-                        };
-                        if *use_parallel {
-                            run()
-                        } else {
-                            sequential_pool.install(run)
-                        }
-                    },
-                    BatchSize::SmallInput,
-                );
-            });
+                        },
+                        |(opt_assets, agent_addition_limits, demand)| {
+                            let run = || {
+                                select_best_assets(
+                                    black_box(&model),
+                                    opt_assets,
+                                    agent_addition_limits,
+                                    black_box(commodity),
+                                    black_box(&agent),
+                                    black_box(region_id),
+                                    black_box(&prices),
+                                    demand,
+                                    black_box(YEAR),
+                                    &mut writer,
+                                )
+                                .expect("select_best_assets failed")
+                            };
+                            if *use_parallel {
+                                run()
+                            } else {
+                                sequential_pool.install(run)
+                            }
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
         }
         group.finish();
     }
