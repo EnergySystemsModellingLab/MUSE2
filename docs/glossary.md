@@ -194,8 +194,8 @@ which trade and other regional interactions are modelled.
 for a particular *Commodity*, *Region*, and *Year*. It determines which *Candidate Assets* are
 available during investment appraisal.
 
-**Season:** A user-defined subdivision of a representative *Year* that groups related *Time Slices*.
-For example, summer, winter or other.
+**Season:** A subdivision of a *Year* that groups related *Time Slices*. For example, summer,
+winter, or other.
 
 **Sector:** Models are often broken down into sectors, each of which is associated with specific
 *Service Demands* or specific *Commodity* production. For example, the residential sector, the power
