@@ -1,8 +1,9 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
-use crate::commodity::{CommodityID, CommodityType};
+use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
+use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
@@ -102,6 +103,8 @@ where
         candidate_assets,
     );
 
+    add_commodity_constraints(problem, variables, model, assets, year);
+
     let activity_keys =
         add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
@@ -113,6 +116,82 @@ where
     ConstraintKeys {
         commodity_balance_keys,
         activity_keys,
+    }
+}
+
+/// Add explicit production and consumption constraints for commodities.
+///
+/// These constraints are added even when no assets have a matching flow. This means, for example,
+/// that a minimum production constraint for a commodity with no producers makes the dispatch
+/// problem infeasible.
+fn add_commodity_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    model: &'a Model,
+    assets: &I,
+    year: u32,
+) where
+    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+{
+    for commodity in model.commodities.values() {
+        for ((region_id, constraint_year), constraints) in &commodity.constraints {
+            // Constraints are stored for every milestone year, so only apply the current year.
+            if *constraint_year != year {
+                continue;
+            }
+
+            for constraint in constraints {
+                // Each activity variable represents one asset in one time slice. Select only
+                // assets in the constrained region and flows in the requested direction.
+                let terms = assets
+                    .clone()
+                    .filter_region(region_id)
+                    .flat_map(|asset| {
+                        asset
+                            .iter_flows()
+                            .filter(|flow| {
+                                flow.commodity.id == commodity.id
+                                    && match constraint.balance_type {
+                                        BalanceType::Production => {
+                                            flow.direction() == FlowDirection::Output
+                                        }
+                                        BalanceType::Consumption => {
+                                            flow.direction() == FlowDirection::Input
+                                        }
+                                        BalanceType::Net => {
+                                            unreachable!("Net commodity constraints are invalid")
+                                        }
+                                    }
+                            })
+                            .flat_map(move |flow| {
+                                // A seasonal or annual selection becomes one term for every
+                                // underlying time slice covered by that selection.
+                                constraint.ts_selection.iter(&model.time_slice_info).map(
+                                    move |(time_slice, _)| {
+                                        let coefficient = match constraint.balance_type {
+                                            BalanceType::Production => flow.coeff.value(),
+                                            // Input flow coefficients are negative, but the
+                                            // constraint limits describe consumption as positive.
+                                            BalanceType::Consumption => -flow.coeff.value(),
+                                            BalanceType::Net => {
+                                                unreachable!(
+                                                    "Net commodity constraints are invalid"
+                                                )
+                                            }
+                                        };
+                                        (variables.get_activity_var(asset, time_slice), coefficient)
+                                    },
+                                )
+                            })
+                    })
+                    .collect::<Vec<_>>();
+
+                problem.add_row(
+                    constraint.limits.start().value()..=constraint.limits.end().value(),
+                    terms,
+                );
+            }
+        }
     }
 }
 
