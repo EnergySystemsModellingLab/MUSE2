@@ -1,4 +1,8 @@
 //! Code for reading commodity constraints from a CSV file.
+//!
+//! The `commodity_constraints.csv` file is optional. If it is provided, the
+//! `please_give_me_broken_results` option in `model.toml` must be set to `true` because commodity
+//! constraints are experimental.
 use super::super::{input_err_msg, read_csv_optional};
 use crate::commodity::{
     BalanceType, Commodity, CommodityConstraint, CommodityConstraintsMap, CommodityID,
@@ -6,6 +10,7 @@ use crate::commodity::{
 };
 use crate::id::{GetIDValue, IDCollection};
 use crate::input::{parse_range, parse_year_str};
+use crate::model::{ALLOW_DANGEROUS_OPTION_NAME, dangerous_model_options_enabled};
 use crate::region::RegionID;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::Flow;
@@ -69,14 +74,22 @@ pub fn read_commodity_constraints(
 ) -> Result<HashMap<CommodityID, CommodityConstraintsMap>> {
     let file_path = model_dir.join(COMMODITY_CONSTRAINTS_FILE_NAME);
     let commodity_constraints_csv = read_csv_optional(&file_path)?;
-    read_commodity_constraints_from_iter(
+    let commodity_constraints = read_commodity_constraints_from_iter(
         commodity_constraints_csv,
         commodities,
         region_ids,
         time_slice_info,
         milestone_years,
     )
-    .with_context(|| input_err_msg(&file_path))
+    .with_context(|| input_err_msg(&file_path))?;
+
+    ensure!(
+        commodity_constraints.is_empty() || dangerous_model_options_enabled(),
+        "Commodity constraints are currently experimental. To use them, set the \
+        {ALLOW_DANGEROUS_OPTION_NAME} option to true."
+    );
+
+    Ok(commodity_constraints)
 }
 
 /// Process raw commodity-constraint records into a constraints map.
