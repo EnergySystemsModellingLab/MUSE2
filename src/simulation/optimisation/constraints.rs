@@ -81,6 +81,7 @@ pub struct ConstraintKeys {
 /// # Returns
 ///
 /// Keys for the different constraints.
+#[allow(clippy::too_many_arguments)]
 pub fn add_model_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -89,6 +90,7 @@ pub fn add_model_constraints<'a, I>(
     markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
     candidate_assets: &'a [AssetRef],
+    include_commodity_constraints: bool,
 ) -> ConstraintKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
@@ -103,7 +105,9 @@ where
         candidate_assets,
     );
 
-    add_commodity_constraints(problem, variables, model, assets, year);
+    if include_commodity_constraints {
+        add_commodity_constraints(problem, variables, model, assets, year);
+    }
 
     let activity_keys =
         add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());

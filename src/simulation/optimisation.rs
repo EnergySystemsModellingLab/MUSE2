@@ -440,6 +440,7 @@ pub struct DispatchRun<'model, 'run> {
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run PriceMap>,
+    include_commodity_constraints: bool,
     year: u32,
     capacity_margin: Dimensionless,
 }
@@ -455,6 +456,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             candidate_assets: &[],
             markets_to_balance: &[],
             input_prices: None,
+            include_commodity_constraints: true,
             year,
             capacity_margin: Dimensionless(0.0),
         }
@@ -479,6 +481,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn with_candidates(self, candidate_assets: &'run [AssetRef]) -> Self {
         Self {
             candidate_assets,
+            ..self
+        }
+    }
+
+    /// Exclude explicit production and consumption constraints from the dispatch run.
+    pub fn without_commodity_constraints(self) -> Self {
+        Self {
+            include_commodity_constraints: false,
             ..self
         }
     }
@@ -541,11 +551,30 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 Ok(solution)
             }
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
-                // Re-run including unmet demand variables so we can record detailed unmet-demand
-                // debug output before returning an error to the caller.
+                // If explicit commodity constraints were included, first check whether they are
+                // the source of infeasibility.
+                let commodity_constraints_fix_infeasibility = if self.include_commodity_constraints
+                {
+                    match self.run_internal(
+                        markets_to_balance,
+                        /*include_commodity_constraints=*/ false,
+                        /*allow_unmet_demand=*/ false,
+                        input_prices,
+                    ) {
+                        Ok(_) => Some(true),
+                        Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => Some(false),
+                        Err(error) => return Err(error.into_anyhow()),
+                    }
+                } else {
+                    None
+                };
+
+                // Re-run with the original commodity constraints and unmet-demand variables so
+                // we can record detailed unmet-demand debug output before returning an error.
                 let solution = self
                     .run_internal(
                         markets_to_balance,
+                        self.include_commodity_constraints,
                         /*allow_unmet_demand=*/ true,
                         input_prices,
                     )
@@ -568,10 +597,17 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     "Model is infeasible, but there was no unmet demand"
                 );
 
+                let constraint_diagnosis = match commodity_constraints_fix_infeasibility {
+                    Some(true) => {
+                        " Removing the explicit commodity constraints makes the model feasible."
+                    }
+                    Some(false) | None => "",
+                };
+
                 bail!(
                     "The solver has indicated that the problem is infeasible, probably because \
                     the supplied assets could not meet the required demand. Demand was not met \
-                    for the following markets: {}",
+                    for the following markets: {}{constraint_diagnosis}",
                     format_items_with_cap(markets)
                 );
             }
@@ -587,6 +623,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ) -> Result<Solution<'model>, ModelError> {
         self.run_internal(
             markets_to_balance,
+            self.include_commodity_constraints,
             /*allow_unmet_demand=*/ false,
             input_prices,
         )
@@ -596,6 +633,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_internal(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
+        include_commodity_constraints: bool,
         allow_unmet_demand: bool,
         input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
@@ -645,6 +683,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             markets_to_balance,
             self.year,
             self.candidate_assets,
+            include_commodity_constraints,
         );
 
         // Create model and apply any user-supplied HiGHS options to it
