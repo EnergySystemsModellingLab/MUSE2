@@ -195,8 +195,6 @@ mod tests {
         // Create a model dir and write a simple commodities CSV file
         let dir = tempdir().unwrap();
         let model_dir = dir.path();
-
-        // Create simple commodities CSV to simplify creating `Commodity`s
         let commodities_csv = concat!(
             "id,description,type,time_slice_level,units\n",
             "ELCTRI,Electricity,sed,season,PJ\n",

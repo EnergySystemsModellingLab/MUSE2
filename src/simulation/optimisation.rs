@@ -18,6 +18,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
+use log::warn;
 use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Range;
@@ -569,13 +570,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     diagnoses.push(diagnosis);
                 }
 
-                // Get diagnostic information for commodity constraints
-                if let Some(diagnosis) = self.run_commodity_constraints_diagnosis(
-                    markets_to_balance,
-                    input_prices,
-                    run_description,
-                    writer,
-                )? {
+                // Get diagnostic information for commodity constraints, if any apply this year.
+                if self.has_commodity_constraints()
+                    && let Some(diagnosis) = self.run_commodity_constraints_diagnosis(
+                        markets_to_balance,
+                        input_prices,
+                        run_description,
+                        writer,
+                    )?
+                {
                     diagnoses.push(diagnosis);
                 }
 
@@ -586,6 +589,16 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             // Other errors are propagated up to the caller
             Err(err) => Err(err.into_anyhow()),
         }
+    }
+
+    /// Check whether any explicit commodity constraints apply in the current year.
+    fn has_commodity_constraints(&self) -> bool {
+        self.model.commodities.values().any(|commodity| {
+            commodity
+                .constraints
+                .get(&self.year)
+                .is_some_and(|constraints| !constraints.is_empty())
+        })
     }
 
     /// Diagnose whether explicit commodity constraints cause infeasibility.
@@ -599,6 +612,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         if !self.include_commodity_constraints {
             return Ok(None);
         }
+
+        warn!("Dispatch optimisation was infeasible; running commodity constraints diagnostic");
 
         match self.run_internal(
             markets_to_balance,
@@ -640,6 +655,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         run_description: &str,
         writer: &mut DataWriter,
     ) -> Result<Option<String>> {
+        warn!("Dispatch optimisation was infeasible; running unmet demand diagnostic");
+
         match self.run_internal(
             markets_to_balance,
             self.include_commodity_constraints,
