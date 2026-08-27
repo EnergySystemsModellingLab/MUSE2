@@ -45,59 +45,26 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write # needed to push the updated baseline back to the repo
+      pull-requests: write # needed to post a comment when an alert is triggered
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Restore benchmark data
-        uses: actions/cache@v4
-        with:
-          path: cache/benchmark-data.json
-          # Unique key per run so each run saves a new entry; restore-keys finds
-          # the most recent previous entry when the exact key is not yet cached.
-          key: benchmark-data-${{ github.run_id }}
-          restore-keys: benchmark-data-
-
-      - name: Ensure benchmark cache directory exists
-        run: mkdir -p cache
 
       - name: Run cargo bench
         shell: bash
         run: cargo bench --features bench --no-fail-fast
 
       - name: Convert Criterion results to JSON
-        shell: python3 {0}
-        run: |
-          import json
-          from pathlib import Path
-
-          criterion_dir = Path("target/criterion")
-          results = []
-
-          # Walk every new/estimates.json produced by Criterion.
-          # The path structure is:
-          #   target/criterion/<group>/<bench_id>/new/estimates.json
-          # where Criterion sanitises any '/' in a group name to '_'.
-          # Stripping the leading criterion_dir and trailing new/estimates.json
-          # gives a stable, human-readable name that is consistent across runs.
-          for estimates_file in sorted(criterion_dir.rglob("new/estimates.json")):
-              parts = estimates_file.relative_to(criterion_dir).parts[:-2]
-              name = "/".join(parts)
-              data = json.loads(estimates_file.read_text())
-              value = data["median"]["point_estimate"]
-              results.append({"name": name, "value": value, "unit": "ns"})
-
-          Path("benchmark-results.json").write_text(json.dumps(results, indent=2))
-          print(f"Converted {len(results)} Criterion benchmark results to benchmark-results.json")
-          for r in results:
-              print(f"  {r['name']}: {r['value']:.0f} ns")
+        run: python3 benchmark/convert_criterion_output.py
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: "customSmallerIsBetter"
           output-file-path: benchmark-results.json
-          external-data-json-path: ./cache/benchmark-data.json
+          external-data-json-path: ./benchmark/benchmark-data.json
           # Fail the workflow if any benchmark regresses by more than 30% relative
           # to the stored baseline. CI runners have variable load, so a threshold
           # that is too tight will cause spurious failures; 130% is a reasonable
@@ -112,5 +79,14 @@ jobs:
           # Always write a job summary table, not only when a regression is found.
           summary-always: true
 
-      # actions/cache automatically saves cache/benchmark-data.json at the end
-      # of the job via its post step, keyed with the run-specific key above.
+      - name: Commit updated baseline
+        # Only update the stored baseline when code is merged to main. On pull
+        # requests the job reads the baseline for comparison but must not overwrite
+        # it, since the PR branch has not yet been reviewed and merged.
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@github.com"
+          git add benchmark/benchmark-data.json
+          git diff --staged --quiet || git commit -m "chore: update benchmark baseline [skip ci]"
+          git push
