@@ -7,7 +7,8 @@ description: |
   All settings are optional. If the `settings.toml` file does not exist, the default settings will
   be used.
 
-  The `settings.toml` file must be in the current working directory.
+  The `settings.toml` file is read from MUSE2's platform-specific configuration directory, in a
+  `muse2` subdirectory. Use `muse2 settings path` to find the exact location on your system.
 type: object
 properties:
   log_level:
