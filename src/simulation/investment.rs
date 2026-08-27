@@ -526,7 +526,7 @@ fn remove_assets_exceeding_agent_limits(
     only_candidates: bool,
 ) {
     opt_assets.retain(|asset| {
-        !(asset.is_candidate() && only_candidates)
+        (only_candidates && !asset.is_candidate())
             || remaining_agent_limits
                 .get(asset.process_id())
                 .is_none_or(|limit| *limit >= asset.total_capacity())
@@ -623,15 +623,16 @@ mod tests {
     use super::*;
     use crate::commodity::Commodity;
     use crate::fixture::{
-        asset, process, process_activity_limits_map, process_flows_map, svd_commodity, time_slice,
-        time_slice_info, time_slice_info2,
+        agent_id, asset, process, process_activity_limits_map, process_flows_map, svd_commodity,
+        time_slice, time_slice_info, time_slice_info2,
     };
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
     use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
     use crate::units::Dimensionless;
     use crate::units::{Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
+
     use std::sync::Arc;
 
     #[rstest]
@@ -829,5 +830,93 @@ mod tests {
             remaining_agent_limits[asset.process_id()].clone(),
             Capacity(8.0)
         );
+    }
+
+    #[fixture]
+    fn commissioned_asset(agent_id: AgentID, asset: Asset) -> Asset {
+        Asset::new_commissioned(
+            agent_id,
+            Arc::new(asset.process().clone()),
+            asset.region_id().clone(),
+            asset.capacity(),
+            asset.commission_year(),
+        )
+        .unwrap()
+    }
+
+    #[fixture]
+    fn candidate_asset(asset: Asset) -> Asset {
+        Asset::new_candidate(
+            Arc::new(asset.process().clone()),
+            asset.region_id().clone(),
+            asset.capacity().unit_size(),
+            asset.commission_year(),
+        )
+        .unwrap()
+    }
+
+    #[rstest]
+    fn remove_assets_exceeding_agent_limits_works(
+        commissioned_asset: Asset,
+        candidate_asset: Asset,
+    ) {
+        let mut opt_assets = vec![
+            commissioned_asset.clone().into(),
+            candidate_asset.clone().into(),
+        ];
+        let limits = HashMap::from([(commissioned_asset.process_id().clone(), Capacity(1.0))]);
+
+        // Check only the candidate asset is removed when `only_candidates` is true
+        remove_assets_exceeding_agent_limits(&mut opt_assets, &limits, true);
+        assert_eq!(opt_assets.len(), 1);
+        assert_eq!(opt_assets[0], commissioned_asset.clone().into());
+
+        // Check all assets are removed when `only_candidates` is false
+        opt_assets.push(candidate_asset.clone().into());
+        remove_assets_exceeding_agent_limits(&mut opt_assets, &limits, false);
+        assert!(opt_assets.is_empty());
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn update_selection_state_works(
+        commissioned_asset: Asset,
+        candidate_asset: Asset,
+        #[case] commissioned: bool,
+    ) {
+        let best_asset: AssetRef = if commissioned {
+            commissioned_asset.clone().into()
+        } else {
+            candidate_asset.clone().into()
+        };
+        let mut opt_assets = vec![best_asset.clone()];
+        let mut addition_limits = HashMap::from([(best_asset.process_id().clone(), Capacity(2.0))]);
+        let mut total_limits = HashMap::from([(best_asset.process_id().clone(), Capacity(2.0))]);
+        let mut retention_units = HashMap::from([(best_asset.clone(), 1)]);
+
+        update_selection_state(
+            &best_asset,
+            &mut opt_assets,
+            &mut addition_limits,
+            &mut total_limits,
+            &mut retention_units,
+        );
+
+        if commissioned {
+            // Expect total_limits to reduce and retention_units to be removed
+            assert_eq!(total_limits[best_asset.process_id()], Capacity(0.0));
+            assert!(!retention_units.contains_key(&best_asset));
+
+            // Expect addition_limits to remain unchanged
+            assert_eq!(addition_limits[best_asset.process_id()], Capacity(2.0));
+        } else {
+            // Expect total_limits and addition_limits to reduce
+            assert_eq!(total_limits[best_asset.process_id()], Capacity(0.0));
+            assert_eq!(addition_limits[best_asset.process_id()], Capacity(0.0));
+
+            // Expect retention_units to remain unchanged
+            assert_eq!(retention_units[&best_asset], 1);
+        }
     }
 }
