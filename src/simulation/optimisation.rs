@@ -553,7 +553,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
                 // If explicit commodity constraints were included, first check whether they are
                 // the source of infeasibility.
-                let commodity_constraints_fix_infeasibility = if self.include_commodity_constraints
+                let commodity_constraints_cause_infeasibility = if self
+                    .include_commodity_constraints
                 {
                     match self.run_internal(
                         markets_to_balance,
@@ -597,17 +598,19 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     "Model is infeasible, but there was no unmet demand"
                 );
 
-                let constraint_diagnosis = match commodity_constraints_fix_infeasibility {
+                // Bail with diagnostic message about the markets with unmet demand, and whether
+                // commodity constraints are the cause of infeasibility
+                let constraint_diagnosis = match commodity_constraints_cause_infeasibility {
                     Some(true) => {
-                        " Removing the explicit commodity constraints makes the model feasible."
+                        " The problem is feasible when constraints from `commodity_constraints.csv` \
+                        are excluded."
                     }
                     Some(false) | None => "",
                 };
-
                 bail!(
                     "The solver has indicated that the problem is infeasible, probably because \
                     the supplied assets could not meet the required demand. Demand was not met \
-                    for the following markets: {}{constraint_diagnosis}",
+                    for the following markets: {}.{constraint_diagnosis}",
                     format_items_with_cap(markets)
                 );
             }
