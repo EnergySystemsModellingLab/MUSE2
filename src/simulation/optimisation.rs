@@ -608,7 +608,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         ) {
             Ok(solution) => {
                 let diagnostic_run_description =
-                    format!("{run_description}_COMMODITY_CONSTRAINTS_DIAGNOSTIC");
+                    format!("{run_description} COMMODITY_CONSTRAINTS_DIAGNOSTIC");
                 writer.write_dispatch_debug_info(
                     self.year,
                     &diagnostic_run_description,
@@ -650,7 +650,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 // The diagnostic solution is written only to provide debugging information; it is
                 // never returned as the result of the original dispatch run.
                 let diagnostic_run_description =
-                    format!("{run_description}_UNMET_DEMAND_DIAGNOSTIC");
+                    format!("{run_description} UNMET_DEMAND_DIAGNOSTIC");
                 writer.write_dispatch_debug_info(
                     self.year,
                     &diagnostic_run_description,
@@ -887,4 +887,38 @@ fn calculate_capacity_coefficient(asset: &AssetRef) -> MoneyPerCapacity {
     let annual_fixed_operating_cost = param.fixed_operating_cost * Year(1.0);
     annual_fixed_operating_cost
         + annual_capital_cost(param.capital_cost, param.lifetime, param.discount_rate)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::load_model;
+    use crate::patch::{FilePatch, ModelPatch};
+    use crate::simulation;
+    use tempfile::tempdir;
+
+    #[test]
+    fn commodity_constraints_infeasibility_is_reported() {
+        // The `missing_commodity` model has no BIOPRD-producing assets in the base year, so
+        // enforcing positive production of BIOPRD should make the model infeasible.
+        let model_dir = ModelPatch::from_example("missing_commodity")
+            .with_toml_patch("please_give_me_broken_results = true")
+            .with_file_patch(
+                FilePatch::new("commodity_constraints.csv").with_replacement(&[
+                    "commodity_id,region_id,balance_type,years,time_slice,limits",
+                    "BIOPRD,GBR,prod,2020,annual,0.0001..",
+                ]),
+            )
+            .build_to_tempdir()
+            .unwrap();
+        let model = load_model(model_dir.path()).unwrap();
+        let output_dir = tempdir().unwrap();
+
+        let error = simulation::run(&model, output_dir.path(), true).unwrap_err();
+        let message = format!("{error:#}");
+
+        assert!(
+            message.contains("The infeasibility is likely caused by one or more constraints defined in `commodity_constraints.csv`"),
+            "{message}"
+        );
+    }
 }
