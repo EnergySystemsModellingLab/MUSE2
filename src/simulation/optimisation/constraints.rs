@@ -120,10 +120,6 @@ where
 }
 
 /// Add explicit production and consumption constraints for commodities.
-///
-/// These constraints are added even when no assets have a matching flow. This means, for example,
-/// that a minimum production constraint for a commodity with no producers makes the dispatch
-/// problem infeasible.
 fn add_commodity_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -133,64 +129,45 @@ fn add_commodity_constraints<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
 {
+    // Commodity constraints are indexed by milestone year, so commodities without a constraint
+    // for this year do not contribute any rows.
     for commodity in model.commodities.values() {
-        for ((region_id, constraint_year), constraints) in &commodity.constraints {
-            // Constraints are stored for every milestone year, so only apply the current year.
-            if *constraint_year != year {
-                continue;
-            }
+        let Some(constraints) = commodity.constraints.get(&year) else {
+            continue;
+        };
 
-            for constraint in constraints {
-                // Each activity variable represents one asset in one time slice. Select only
-                // assets in the constrained region and flows in the requested direction.
-                let terms = assets
-                    .clone()
-                    .filter_region(region_id)
-                    .flat_map(|asset| {
-                        asset
-                            .iter_flows()
-                            .filter(|flow| {
-                                flow.commodity.id == commodity.id
-                                    && match constraint.balance_type {
-                                        BalanceType::Production => {
-                                            flow.direction() == FlowDirection::Output
-                                        }
-                                        BalanceType::Consumption => {
-                                            flow.direction() == FlowDirection::Input
-                                        }
-                                        BalanceType::Net => {
-                                            unreachable!("Net commodity constraints are invalid")
-                                        }
-                                    }
-                            })
-                            .flat_map(move |flow| {
-                                // A seasonal or annual selection becomes one term for every
-                                // underlying time slice covered by that selection.
-                                constraint.ts_selection.iter(&model.time_slice_info).map(
-                                    move |(time_slice, _)| {
-                                        let coefficient = match constraint.balance_type {
-                                            BalanceType::Production => flow.coeff.value(),
-                                            // Input flow coefficients are negative, but the
-                                            // constraint limits describe consumption as positive.
-                                            BalanceType::Consumption => -flow.coeff.value(),
-                                            BalanceType::Net => {
-                                                unreachable!(
-                                                    "Net commodity constraints are invalid"
-                                                )
-                                            }
-                                        };
-                                        (variables.get_activity_var(asset, time_slice), coefficient)
-                                    },
-                                )
-                            })
-                    })
-                    .collect::<Vec<_>>();
+        for constraint in constraints {
+            // Select the flow direction represented by the constraint and normalise the
+            // coefficient sign used in the solver row.
+            let (flow_direction, coefficient_sign) = match constraint.balance_type {
+                BalanceType::Production => (FlowDirection::Output, 1.0),
+                // Input flow coefficients are negative, but the constraint limits describe
+                // consumption as positive.
+                BalanceType::Consumption => (FlowDirection::Input, -1.0),
+                BalanceType::Net => unreachable!("Net commodity constraints are invalid"),
+            };
 
-                problem.add_row(
-                    constraint.limits.start().value()..=constraint.limits.end().value(),
-                    terms,
-                );
-            }
+            // Build one term for every matching asset and every time slice in the selection.
+            let terms = assets
+                .clone()
+                .filter_region(&constraint.region_id)
+                .flows_for_commodity(&commodity.id)
+                .filter(|(_, flow)| flow.direction() == flow_direction)
+                .flat_map(|(asset, flow)| {
+                    let coefficient = coefficient_sign * flow.coeff.value();
+                    constraint.ts_selection.iter(&model.time_slice_info).map(
+                        move |(time_slice, _)| {
+                            (variables.get_activity_var(asset, time_slice), coefficient)
+                        },
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            // Apply the configured inclusive lower and upper limits to the sum of the terms.
+            problem.add_row(
+                constraint.limits.start().value()..=constraint.limits.end().value(),
+                terms,
+            );
         }
     }
 }

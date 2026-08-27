@@ -124,12 +124,13 @@ where
         let commodity_map = map.entry(commodity_id.clone()).or_default();
         for year in &years {
             let constraint = CommodityConstraint {
+                region_id: region_id.clone(),
                 balance_type: record.balance_type.clone(),
                 ts_selection: ts_selection.clone(),
                 limits: limits.clone(),
             };
             commodity_map
-                .entry((region_id.clone(), *year))
+                .entry(*year)
                 .and_modify(|constraints| constraints.push(constraint.clone()))
                 .or_insert(vec![constraint]);
         }
@@ -254,9 +255,7 @@ mod tests {
 
         // ELCTRI constraint
         let elctri_constraint = &constraints_map[&CommodityID::from("ELCTRI")];
-        let elctri_gbr_2030 = elctri_constraint
-            .get(&(RegionID::from("GBR"), 2030))
-            .unwrap();
+        let elctri_gbr_2030 = elctri_constraint.get(&2030).unwrap();
         assert_eq!(elctri_gbr_2030[0].balance_type, BalanceType::Consumption);
         assert_eq!(
             elctri_gbr_2030[0].ts_selection,
@@ -267,9 +266,7 @@ mod tests {
 
         // CO2EMT constraints
         let co2emt_constraint = &constraints_map[&CommodityID::from("CO2EMT")];
-        let co2emt_gbr_2030 = co2emt_constraint
-            .get(&(RegionID::from("GBR"), 2030))
-            .unwrap();
+        let co2emt_gbr_2030 = co2emt_constraint.get(&2030).unwrap();
         assert_eq!(co2emt_gbr_2030[0].balance_type, BalanceType::Consumption);
         assert_eq!(
             co2emt_gbr_2030[0].ts_selection,
