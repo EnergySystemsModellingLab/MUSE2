@@ -57,14 +57,14 @@ jobs:
         run: cargo bench --features bench --no-fail-fast
 
       - name: Convert Criterion results to JSON
-        run: python3 benchmark/convert_criterion_output.py
+        run: python3 benches/convert_criterion_output.py
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: "customSmallerIsBetter"
           output-file-path: benchmark-results.json
-          external-data-json-path: ./benchmark/benchmark-data.json
+          external-data-json-path: ./benches/benchmark-data.json
           # Fail the workflow if any benchmark regresses by more than 30% relative
           # to the stored baseline. CI runners have variable load, so a threshold
           # that is too tight will cause spurious failures; 130% is a reasonable
@@ -87,6 +87,6 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "github-actions@github.com"
-          git add benchmark/benchmark-data.json
+          git add benches/benchmark-data.json
           git diff --staged --quiet || git commit -m "chore: update benchmark baseline [skip ci]"
           git push
