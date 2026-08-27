@@ -370,7 +370,7 @@ pub fn select_best_assets(
     let mut remaining_agent_addition_limits = agent_addition_limits;
 
     // Remaining total capacity for all assets
-    // As above
+    // Initialised as full agent total limits, and reduced as each asset is selection
     let mut remaining_agent_total_limits = agent_total_limits;
 
     // Store commissioned units available for retention and replace assets with single units
@@ -519,7 +519,7 @@ fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool
     demand.values().any(|flow| *flow > absolute_tolerance)
 }
 
-/// Remove candidate assets that exceed the provided process limit for one complete unit.
+/// Remove assets that exceed the provided process limits for one complete unit.
 fn remove_assets_exceeding_agent_limits(
     opt_assets: &mut Vec<AssetRef>,
     remaining_agent_limits: &HashMap<ProcessID, Capacity>,
@@ -540,6 +540,10 @@ fn subtract_capacity_from_remaining_limit(
 ) {
     if let Some(remaining_capacity) = remaining_agent_limits.get_mut(best_asset.process_id()) {
         *remaining_capacity -= best_asset.total_capacity();
+        assert!(
+            *remaining_capacity >= Capacity(0.0),
+            "Remaining Capacity has fallen below zero"
+        );
     }
 }
 
