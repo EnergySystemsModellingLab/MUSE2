@@ -235,8 +235,8 @@ when the *Asset* is created or inferred when an investment is made. *Unit Size* 
 at which retention, mothballing, and decommissioning decisions are made. For example, a 100 MW
 *Asset* with a 25 MW *Unit Size* has four units, which can be retained or mothballed independently.
 
-**Utilisation:** The percentage of an *Asset*'s *Capacity* that is actually used to produce its
-*Commodities*. Must be between 0 and 1, and can be measured at *Time Slice*, *Season*, or *Year* level.
+**Utilisation:** The proportion of an *Asset*'s *Capacity* that is actually used to produce its
+*Commodities*, ranging from 0 to 1 inclusive. Can be measured at *Time Slice*, *Season*, or *Year* level.
 For example, an *Asset* operating at 25 MW from 100 MW of available *Capacity* has 0.25
 *Utilisation*. *Availability* describes what the *Asset* could provide; *Utilisation* describes
 what it actually provides.
