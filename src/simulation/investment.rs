@@ -564,7 +564,7 @@ fn update_selection_state(
     remaining_agent_total_limits: &mut HashMap<ProcessID, Capacity>,
     available_retention_units: &mut HashMap<AssetRef, u32>,
 ) {
-    // Subtract agent capacity from the total capacity limit, if applicable.
+    // Subtract asset capacity from the total capacity limit, if applicable.
     subtract_capacity_from_remaining_limit(best_asset, remaining_agent_total_limits);
 
     // Update the remaining agent addition limit for the selected asset, if applicable, and remove it
