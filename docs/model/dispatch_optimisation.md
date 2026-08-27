@@ -252,7 +252,7 @@ candidate dispatch run are then used to seed and guide investment appraisal in s
 
 ## Diagnosing Infeasible Models
 
-In practice, dispatch optimisation run may be **infeasible** for several reasons, such as
+In practice, a dispatch optimisation run may be **infeasible** for several reasons, such as
 insufficient installed asset capacity to meet demand or incompatible explicit commodity constraints.
 When this occurs, MUSE2 performs additional dispatch runs with modified optimisation problems to
 help identify the cause. The resulting diagnostic information is included in error messages and
