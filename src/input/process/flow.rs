@@ -389,8 +389,9 @@ fn validate_secondary_flows(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::Commodity;
-    use crate::commodity::{CommodityLevyMap, DemandMap, PricingStrategy};
+    use crate::commodity::{
+        Commodity, CommodityConstraintsMap, CommodityLevyMap, DemandMap, PricingStrategy,
+    };
     use crate::fixture::{
         assert_error, assert_validate_fails_with_simple, assert_validate_ok_simple,
         other_commodity, process, sed_commodity, svd_commodity,
@@ -445,6 +446,7 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
+            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         }
     }
@@ -460,6 +462,7 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
+            constraints: CommodityConstraintsMap::new(),
             units: "tonnes".into(),
         }
     }

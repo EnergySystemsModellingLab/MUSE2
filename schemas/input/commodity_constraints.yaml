@@ -1,0 +1,34 @@
+$schema: https://specs.frictionlessdata.io/schemas/table-schema.json
+description: |
+  Specifies the limits on the total amount of consumption/production of a given
+  commodity in a given region, year and time slice(s).
+
+fields:
+  - name: commodity_id
+    type: string
+    description: The commodity to which this constraint applies
+  - name: region_id
+    type: string
+    description: The region in which this constraint applies
+  - name: balance_type
+    type: string
+    description: The type of balance to which this is applied
+    notes:
+      Valid options are "cons" and "prod"; the "net" option is not valid here, as net
+      production is already constrained by the commodity balance constraints.
+  - name: years
+    type: string
+    description: The year(s) to which this entry applies
+  - name: time_slice
+    type: string
+    description: The time slice(s) to which this entry applies
+    notes: |
+      Can be a single time slice (e.g. `winter.day`), a whole season (e.g. `winter`) or `annual`,
+      representing the whole year
+  - name: limits
+    type: string
+    description: Lower and upper limits on the value of the commodity
+    notes:
+      A string in the format `min..max`, where `min` and `max` are decimal numbers
+      (e.g. "0.12..78.9"). Either `min` or `max` can be omitted (e.g "0.12.." or
+      "..78.9"), which will set the corresponding limit to 0 or infinite, respectively.

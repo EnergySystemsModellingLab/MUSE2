@@ -6,6 +6,7 @@ use crate::units::{Flow, MoneyPerFlow};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 define_id_type! {CommodityID, "commodity ID"}
@@ -15,6 +16,9 @@ pub type CommodityMap = IndexMap<CommodityID, Arc<Commodity>>;
 
 /// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
 pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
+
+/// A map of vectors of [`CommodityConstraint`]s, keyed by region ID and year
+pub type CommodityConstraintsMap = HashMap<(RegionID, u32), Vec<CommodityConstraint>>;
 
 /// A map of demand values, keyed by region ID, year and time slice selection
 pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
@@ -53,6 +57,11 @@ pub struct Commodity {
     /// `time_slice_level` field. E.g. if the `time_slice_level` is seasonal, then there will be
     /// keys representing each season (and not e.g. individual time slices).
     pub demand: DemandMap,
+    /// Constraints for this commodity for different combinations of region, year and time slice.
+    ///
+    /// May be empty if there are no constraints for this commodity, otherwise there must be entries
+    /// for every combination of parameters.
+    pub constraints: CommodityConstraintsMap,
     /// Units for this commodity represented as a string e.g Petajoules, Tonnes
     /// This is only used for validation purposes.
     pub units: String,
@@ -114,6 +123,19 @@ pub enum PricingStrategy {
     #[serde(rename = "unpriced")]
     Unpriced,
 }
+
+/// A constraint imposed on commodity values
+#[derive(PartialEq, Debug, Clone)]
+pub struct CommodityConstraint {
+    /// The balance type for the commodity constraint
+    pub balance_type: BalanceType,
+    /// The time slice selection for the commodity constraint
+    pub ts_selection: TimeSliceSelection,
+    /// The range of values the commodity is constrained to lie between
+    pub limits: RangeInclusive<Flow>,
+}
+
+impl CommodityConstraint {}
 
 #[cfg(test)]
 mod tests {

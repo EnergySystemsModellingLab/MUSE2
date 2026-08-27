@@ -40,3 +40,53 @@ jobs:
         uses: ./.github/actions/codecov
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  benchmark:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # needed to push the updated baseline back to the repo
+      pull-requests: write # needed to post a comment when an alert is triggered
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Run cargo bench
+        shell: bash
+        run: cargo bench --features bench --no-fail-fast
+
+      - name: Convert Criterion results to JSON
+        run: python3 benches/convert_criterion_output.py
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "customSmallerIsBetter"
+          output-file-path: benchmark-results.json
+          external-data-json-path: ./benches/benchmark-data.json
+          # Fail the workflow if any benchmark regresses by more than 30% relative
+          # to the stored baseline. CI runners have variable load, so a threshold
+          # that is too tight will cause spurious failures; 130% is a reasonable
+          # starting point and can be tightened once baseline stability is known.
+          alert-threshold: "130%"
+          fail-on-alert: true
+          # GitHub API token to make a commit comment
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Post a comment on the commit when an alert is triggered, listing which
+          # benchmarks regressed and by how much.
+          comment-on-alert: true
+          # Always write a job summary table, not only when a regression is found.
+          summary-always: true
+
+      - name: Commit updated baseline
+        # Only update the stored baseline when code is merged to main. On pull
+        # requests the job reads the baseline for comparison but must not overwrite
+        # it, since the PR branch has not yet been reviewed and merged.
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@github.com"
+          git add benches/benchmark-data.json
+          git diff --staged --quiet || git commit -m "chore: update benchmark baseline [skip ci]"
+          git push
