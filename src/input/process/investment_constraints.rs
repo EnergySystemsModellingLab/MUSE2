@@ -199,7 +199,10 @@ where
                 .addition_limit
                 .map(|limit| limit * Year(years_since_prev as f64));
 
-            let constraint = Arc::new(ProcessInvestmentConstraint { addition_limit });
+            let constraint = Arc::new(ProcessInvestmentConstraint {
+                addition_limit,
+                total_capacity_limit: record.total_capacity_limit,
+            });
 
             try_insert(process_map, &(region.clone(), year), constraint.clone())?;
         }
