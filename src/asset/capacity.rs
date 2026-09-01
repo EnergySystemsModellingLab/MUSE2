@@ -7,20 +7,20 @@ use std::ops::{Add, Sub};
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct AssetCapacity {
     /// Number of units
-    num_units: u32,
+    num_tranches: u32,
     /// Size of each unit
     tranche_size: Capacity,
 }
 
 impl AssetCapacity {
     /// Create a new `AssetCapacity` with the given number of units and unit size
-    pub fn new(num_units: u32, tranche_size: Capacity) -> Self {
+    pub fn new(num_tranches: u32, tranche_size: Capacity) -> Self {
         assert!(
             tranche_size.is_finite() && tranche_size >= Capacity(0.0),
             "Unit size must be a finite non-negative number"
         );
         AssetCapacity {
-            num_units,
+            num_tranches,
             tranche_size,
         }
     }
@@ -44,8 +44,8 @@ impl AssetCapacity {
     }
 
     /// Returns the number of units in this `AssetCapacity`.
-    pub fn num_units(&self) -> u32 {
-        self.num_units
+    pub fn num_tranches(&self) -> u32 {
+        self.num_tranches
     }
 
     /// Returns the unit size of this `AssetCapacity`.
@@ -64,7 +64,7 @@ impl AssetCapacity {
 
     /// Returns the total capacity represented by this `AssetCapacity`.
     pub fn total_capacity(&self) -> Capacity {
-        self.tranche_size * Dimensionless(self.num_units as f64)
+        self.tranche_size * Dimensionless(self.num_tranches as f64)
     }
 }
 
@@ -75,7 +75,7 @@ impl Add for AssetCapacity {
     fn add(self, rhs: AssetCapacity) -> Self {
         self.check_same_tranche_size(rhs);
         AssetCapacity {
-            num_units: self.num_units + rhs.num_units,
+            num_tranches: self.num_tranches + rhs.num_tranches,
             tranche_size: self.tranche_size,
         }
     }
@@ -88,11 +88,11 @@ impl Sub for AssetCapacity {
     fn sub(self, rhs: AssetCapacity) -> Self {
         self.check_same_tranche_size(rhs);
         assert!(
-            self.num_units >= rhs.num_units,
+            self.num_tranches >= rhs.num_tranches,
             "Cannot subtract a larger AssetCapacity ({rhs:?}) from a smaller one ({self:?})"
         );
         AssetCapacity {
-            num_units: self.num_units - rhs.num_units,
+            num_tranches: self.num_tranches - rhs.num_tranches,
             tranche_size: self.tranche_size,
         }
     }
@@ -102,7 +102,7 @@ impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let size1 = self.tranche_size;
         let size2 = other.tranche_size;
-        (size1 == size2).then(|| self.num_units.cmp(&other.num_units))
+        (size1 == size2).then(|| self.num_tranches.cmp(&other.num_tranches))
     }
 }
 
@@ -117,13 +117,13 @@ mod tests {
     #[case(2, Capacity(3.5), Capacity(7.0))]
     #[case(u32::MAX, Capacity(0.0), Capacity(0.0))]
     fn new_works(
-        #[case] num_units: u32,
+        #[case] num_tranches: u32,
         #[case] tranche_size: Capacity,
         #[case] expected_total_capacity: Capacity,
     ) {
-        let capacity = AssetCapacity::new(num_units, tranche_size);
+        let capacity = AssetCapacity::new(num_tranches, tranche_size);
 
-        assert_eq!(capacity.num_units(), num_units);
+        assert_eq!(capacity.num_tranches(), num_tranches);
         assert_eq!(capacity.tranche_size(), tranche_size);
         assert_eq!(capacity.total_capacity(), expected_total_capacity);
     }
@@ -135,8 +135,8 @@ mod tests {
     #[case(Capacity(f64::NAN))]
     #[should_panic(expected = "Unit size must be a finite non-negative number")]
     fn new_rejects_non_finite_tranche_size(#[case] tranche_size: Capacity) {
-        let num_units = 1;
-        let _ = AssetCapacity::new(num_units, tranche_size);
+        let num_tranches = 1;
+        let _ = AssetCapacity::new(num_tranches, tranche_size);
     }
 
     #[rstest]
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(
             capacity - capacity,
             AssetCapacity {
-                num_units: 0,
+                num_tranches: 0,
                 tranche_size: Capacity(3.0),
             }
         );

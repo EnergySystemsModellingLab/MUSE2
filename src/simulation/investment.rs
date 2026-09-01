@@ -503,13 +503,13 @@ fn prepare_commissioned_assets_for_retention(assets: &mut [AssetRef]) -> HashMap
     let mut available_retention_units = HashMap::new();
 
     for asset in assets.iter_mut().filter(|asset| asset.is_commissioned()) {
-        let num_units = asset.num_units();
+        let num_tranches = asset.num_tranches();
 
         // Replace with single unit as we appraise one unit at a time
         *asset = asset.clone().as_single_unit();
 
         // Store remaining units
-        available_retention_units.insert(asset.clone(), num_units);
+        available_retention_units.insert(asset.clone(), num_tranches);
     }
 
     available_retention_units

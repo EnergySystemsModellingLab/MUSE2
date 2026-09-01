@@ -848,7 +848,7 @@ fn add_capacity_variables(
         // `capacity_margin`, and limited by `capacity_limit` if provided.
         // Since capacity variables are numbers of units, we apply constraints to the unit count
         let tranche_size = asset.capacity().tranche_size();
-        let current_units = asset.capacity().num_units();
+        let current_units = asset.capacity().num_tranches();
 
         let lower = (current_units as f64 * (1.0 - capacity_margin)).max(0.0);
 

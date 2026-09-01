@@ -11,7 +11,7 @@ fields:
   - name: capacity
     type: number
     description: The total capacity of the asset in this year
-  - name: num_units
+  - name: num_tranches
     type: integer
     description: The total number of units making up the asset in this year
   - name: mothballed_capacity

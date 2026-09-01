@@ -49,7 +49,7 @@ pub struct AssetID(u32);
 #[derive(PartialEq, Debug, Clone)]
 pub struct MothballEvent {
     year: u32,
-    num_units: u32,
+    num_tranches: u32,
 }
 
 /// The state of an asset
@@ -738,7 +738,7 @@ impl Asset {
             "Capacity must be >= 0"
         );
         assert!(
-            self.get_num_mothballed_units() <= capacity.num_units(),
+            self.get_num_mothballed_units() <= capacity.num_tranches(),
             "Cannot set capacity to a smaller number of units than are currently mothballed"
         );
         self.capacity = capacity;
@@ -831,7 +831,7 @@ impl Asset {
             return 0;
         };
 
-        events.iter().map(|event| event.num_units).sum()
+        events.iter().map(|event| event.num_tranches).sum()
     }
 
     /// Get the capacity which is mothballed.
@@ -843,12 +843,12 @@ impl Asset {
     ///
     /// For non-commissioned assets, this always returns the total number of units.
     pub fn get_num_nonmothballed_units(&self) -> u32 {
-        self.num_units() - self.get_num_mothballed_units()
+        self.num_tranches() - self.get_num_mothballed_units()
     }
 
     /// The number of units this asset represents
-    pub fn num_units(&self) -> u32 {
-        self.capacity().num_units()
+    pub fn num_tranches(&self) -> u32 {
+        self.capacity().num_tranches()
     }
 }
 
@@ -938,15 +938,15 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
 }
 
 /// Log that the specified number of units has been decommissioned for the given asset
-fn log_decommissioning(asset: &Asset, num_units: u32, reason: &str) {
+fn log_decommissioning(asset: &Asset, num_tranches: u32, reason: &str) {
     let (id, agent_id) = match &asset.state {
         AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
         _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
     };
     debug!(
         "Decommissioning {}/{} units of '{}' asset (ID: {}) for agent '{}' (reason: {})",
-        num_units,
-        asset.num_units(),
+        num_tranches,
+        asset.num_tranches(),
         asset.process_id(),
         id,
         agent_id,
@@ -990,19 +990,19 @@ impl AssetRef {
     ///
     /// # Panics
     ///
-    /// Panics if `new_num_units` is zero or exceeds the total capacity of this asset.
-    pub fn with_subset_of_units(self, new_num_units: u32) -> Self {
-        if new_num_units == self.num_units() {
+    /// Panics if `new_num_tranches` is zero or exceeds the total capacity of this asset.
+    pub fn with_subset_of_units(self, new_num_tranches: u32) -> Self {
+        if new_num_tranches == self.num_tranches() {
             return self;
         }
 
-        assert!(new_num_units > 0, "Cannot make an asset with zero units");
+        assert!(new_num_tranches > 0, "Cannot make an asset with zero units");
 
-        let max_num_units = self.capacity().num_units();
+        let max_num_tranches = self.capacity().num_tranches();
         let tranche_size = self.capacity().tranche_size();
 
         assert!(
-            new_num_units <= max_num_units,
+            new_num_tranches <= max_num_tranches,
             "Cannot make an asset with more units than original"
         );
 
@@ -1010,28 +1010,29 @@ impl AssetRef {
         // will have, we reduce this number to avoid there being more mothballed units than the new
         // asset has, which would be a logic error. We discard mothballed before non-mothballed
         // units.
-        let new_num_mothballed = new_num_units.saturating_sub(self.get_num_nonmothballed_units());
+        let new_num_mothballed =
+            new_num_tranches.saturating_sub(self.get_num_nonmothballed_units());
         let mut asset = self.with_mothballed_units(new_num_mothballed, None);
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_units, tranche_size));
+            .set_capacity(AssetCapacity::new(new_num_tranches, tranche_size));
         asset
     }
 
     /// Get an [`AssetRef`] representing a single unit of this asset.
     pub fn as_single_unit(self) -> Self {
-        let new_num_units = 1;
+        let new_num_tranches = 1;
         let tranche_size = self.capacity().tranche_size();
         let mut asset = self.with_no_mothballed_units();
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_units, tranche_size));
+            .set_capacity(AssetCapacity::new(new_num_tranches, tranche_size));
         asset
     }
 
     /// Decommission this asset
     fn decommission(self, reason: &str) {
-        log_decommissioning(&self, self.num_units(), reason);
+        log_decommissioning(&self, self.num_tranches(), reason);
     }
 
     /// Decommission any units that were mothballed at least `mothball_years` ago.
@@ -1046,7 +1047,7 @@ impl AssetRef {
         let units_to_remove: u32 = events
             .iter()
             .take_while(|event| event.year <= year.saturating_sub(mothball_years))
-            .map(|event| event.num_units)
+            .map(|event| event.num_tranches)
             .sum();
         if units_to_remove == 0 {
             // Nothing to do. Return self unmodified.
@@ -1056,8 +1057,8 @@ impl AssetRef {
         let reason = format!(
             "The asset has not been used for the set mothball years ({mothball_years} years)."
         );
-        let new_num_units = self.num_units() - units_to_remove;
-        if new_num_units == 0 {
+        let new_num_tranches = self.num_tranches() - units_to_remove;
+        if new_num_tranches == 0 {
             self.decommission(&reason);
             return None;
         }
@@ -1065,32 +1066,32 @@ impl AssetRef {
         // `with_subset_of_units` discards the oldest mothballed units first, which are exactly the
         // ones being decommissioned here.
         log_decommissioning(&self, units_to_remove, &reason);
-        Some(self.with_subset_of_units(new_num_units))
+        Some(self.with_subset_of_units(new_num_tranches))
     }
 
     /// Return a new [`AssetRef`] with the specified number of units mothballed.
     ///
-    /// If `num_units` equals the number of already mothballed units, the original asset is
+    /// If `num_tranches` equals the number of already mothballed units, the original asset is
     /// returned. If additional units may be mothballed, a value must be provided for `year`.
     ///
     /// # Panics
     ///
     /// Panics if attempting to mothball more units than the asset represents or if attempting to
     /// change the number of mothballed units for a non-commissioned asset.
-    pub fn with_mothballed_units(mut self, num_units: u32, year: Option<u32>) -> Self {
-        if num_units == 0 {
+    pub fn with_mothballed_units(mut self, num_tranches: u32, year: Option<u32>) -> Self {
+        if num_tranches == 0 {
             // Small optimisation
             return self.with_no_mothballed_units();
         }
 
         let num_already_mothballed = self.get_num_mothballed_units();
-        if num_units == num_already_mothballed {
+        if num_tranches == num_already_mothballed {
             // Nothing to do. Return self unmodified.
             return self;
         }
 
         assert!(
-            num_units <= self.num_units(),
+            num_tranches <= self.num_tranches(),
             "Cannot mothball more units than asset represents"
         );
 
@@ -1098,17 +1099,17 @@ impl AssetRef {
         let events = self.make_mut().get_mothball_events_mut().expect(
             "Cannot change number of mothballed units for an asset that hasn't been commissioned",
         );
-        if num_units < num_already_mothballed {
+        if num_tranches < num_already_mothballed {
             // Remove mothballing events until only required num of mothballed units remains,
             // starting with oldest
-            let mut remaining = num_already_mothballed - num_units;
+            let mut remaining = num_already_mothballed - num_tranches;
             while remaining > 0
                 && let Some(event) = events.front_mut()
             {
-                let to_remove = event.num_units.min(remaining);
-                event.num_units -= to_remove;
+                let to_remove = event.num_tranches.min(remaining);
+                event.num_tranches -= to_remove;
                 remaining -= to_remove;
-                if event.num_units == 0 {
+                if event.num_tranches == 0 {
                     events.pop_front();
                 }
             }
@@ -1128,7 +1129,7 @@ impl AssetRef {
             // Mothball extra units in specified year
             events.push_back(MothballEvent {
                 year,
-                num_units: num_units - num_already_mothballed,
+                num_tranches: num_tranches - num_already_mothballed,
             });
         }
 
@@ -1256,7 +1257,7 @@ mod tests {
     #[fixture]
     fn commissioned_multi_unit(mut multi_unit_asset: Asset) -> AssetRef {
         multi_unit_asset.commission(AssetID(0));
-        assert_eq!(multi_unit_asset.num_units(), 3);
+        assert_eq!(multi_unit_asset.num_tranches(), 3);
         AssetRef::from(multi_unit_asset)
     }
 
@@ -1508,15 +1509,15 @@ mod tests {
     #[case::all_all_units(3, true)]
     fn with_subset_of_units(
         multi_unit_asset: Asset,
-        #[case] num_units: u32,
+        #[case] num_tranches: u32,
         #[case] expect_same_asset: bool,
     ) {
         let asset = AssetRef::from(multi_unit_asset);
-        let asset_subset = asset.clone().with_subset_of_units(num_units);
+        let asset_subset = asset.clone().with_subset_of_units(num_tranches);
 
         assert_eq!(
             asset_subset.capacity(),
-            AssetCapacity::new(num_units, Capacity(4.0))
+            AssetCapacity::new(num_tranches, Capacity(4.0))
         );
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
@@ -1614,7 +1615,7 @@ mod tests {
     #[case::some(2)]
     #[case::all(3)]
     fn mothball_unit_counts(commissioned_multi_unit: AssetRef, #[case] num_mothballed: u32) {
-        assert_eq!(commissioned_multi_unit.num_units(), 3);
+        assert_eq!(commissioned_multi_unit.num_tranches(), 3);
         let asset = commissioned_multi_unit.with_mothballed_units(num_mothballed, Some(2020));
         assert_eq!(asset.get_num_mothballed_units(), num_mothballed);
         assert_eq!(
@@ -1635,7 +1636,7 @@ mod tests {
         for asset in [ready, candidate] {
             assert!(!asset.has_any_mothballed_units());
             assert_eq!(asset.get_num_mothballed_units(), 0);
-            assert_eq!(asset.get_num_nonmothballed_units(), asset.num_units());
+            assert_eq!(asset.get_num_nonmothballed_units(), asset.num_tranches());
         }
     }
 
@@ -1647,7 +1648,7 @@ mod tests {
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
                 year: 2020,
-                num_units: 1,
+                num_tranches: 1,
             }],
         );
 
@@ -1658,11 +1659,11 @@ mod tests {
             &[
                 MothballEvent {
                     year: 2020,
-                    num_units: 1,
+                    num_tranches: 1,
                 },
                 MothballEvent {
                     year: 2022,
-                    num_units: 1,
+                    num_tranches: 1,
                 },
             ],
         );
@@ -1679,11 +1680,11 @@ mod tests {
             &[
                 MothballEvent {
                     year: 2020,
-                    num_units: 1,
+                    num_tranches: 1,
                 },
                 MothballEvent {
                     year: 2022,
-                    num_units: 2,
+                    num_tranches: 2,
                 },
             ],
         );
@@ -1696,7 +1697,7 @@ mod tests {
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
                 year: 2022,
-                num_units: 1,
+                num_tranches: 1,
             }],
         );
     }
@@ -1777,7 +1778,7 @@ mod tests {
 
         // Taking a subset of 2 units caps the mothballed count at the new number of units
         let subset = asset.with_subset_of_units(2);
-        assert_eq!(subset.num_units(), 2);
+        assert_eq!(subset.num_tranches(), 2);
         assert_eq!(subset.get_num_mothballed_units(), 2);
     }
 
@@ -1801,13 +1802,13 @@ mod tests {
 
         // With a threshold of 2015, only the 2010 event is old enough to decommission
         let result = asset.with_decommission_mothballed(2025, 10).unwrap();
-        assert_eq!(result.num_units(), 2);
+        assert_eq!(result.num_tranches(), 2);
         assert_eq!(result.get_num_mothballed_units(), 1);
         assert_equal(
             result.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
                 year: 2020,
-                num_units: 1,
+                num_tranches: 1,
             }],
         );
     }

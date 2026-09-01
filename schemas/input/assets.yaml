@@ -15,12 +15,12 @@ fields:
     type: number
     description: The capacity of the asset
     notes: Must be >0
-  - name: num_units
+  - name: num_tranches
     type: integer
     description: The number of units comprising the asset
     notes: |
-      Optional. If provided, the asset is split into `num_units` units of size
-      `capacity / num_units` (taking precedence over the process's `tranche_size`). If omitted and the
+      Optional. If provided, the asset is split into `num_tranches` units of size
+      `capacity / num_tranches` (taking precedence over the process's `tranche_size`). If omitted and the
       process has a `tranche_size`, the asset is divided into `ceil(capacity / tranche_size)` units (note
       that rounding up the number of units can result in a total capacity greater than the specified
       capacity). If both values are omitted, the asset is represented as one unit with the full

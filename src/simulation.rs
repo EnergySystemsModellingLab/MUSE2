@@ -187,8 +187,8 @@ fn run_dispatch_for_year(
             .filter_map(|asset| {
                 // Exclude fully mothballed assets entirely. If assets are partially mothballed,
                 // get a new asset without the mothballed units.
-                let num_units = asset.get_num_nonmothballed_units();
-                (num_units > 0).then(|| asset.with_subset_of_units(num_units))
+                let num_tranches = asset.get_num_nonmothballed_units();
+                (num_tranches > 0).then(|| asset.with_subset_of_units(num_tranches))
             })
             .collect();
         &assets_vec

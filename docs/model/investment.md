@@ -109,7 +109,7 @@ Every asset consists of one or more equal-capacity units. A single-unit asset is
 mothballed as a whole, while the units of a multi-unit asset can be retained or mothballed
 independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
-- For assets defined in `assets.csv`, an explicitly supplied `num_units` determines the unit size.
+- For assets defined in `assets.csv`, an explicitly supplied `num_tranches` determines the unit size.
   Otherwise, a process `tranche_size` determines the unit size. If neither is supplied, the asset
   consists of one unit with its full capacity.
 - Assets invested in _by MUSE_ will use the process `tranche_size`, if defined, or will use a capacity

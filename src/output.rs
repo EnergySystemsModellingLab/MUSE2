@@ -165,7 +165,7 @@ struct AssetCapacityRow {
     milestone_year: u32,
     asset_id: AssetID,
     capacity: Capacity,
-    num_units: u32,
+    num_tranches: u32,
     mothballed_capacity: Capacity,
     mothballed_units: u32,
 }
@@ -639,7 +639,7 @@ impl DataWriter {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
                 capacity: asset.total_capacity(),
-                num_units: asset.capacity().num_units(),
+                num_tranches: asset.capacity().num_tranches(),
                 mothballed_capacity: asset.mothballed_capacity(),
                 mothballed_units: asset.get_num_mothballed_units(),
             };
@@ -766,7 +766,7 @@ mod tests {
             milestone_year,
             asset_id: asset.id().unwrap(),
             capacity: asset.total_capacity(),
-            num_units: 1,
+            num_tranches: 1,
             mothballed_capacity: Capacity(0.0),
             mothballed_units: 0,
         };
@@ -804,7 +804,7 @@ mod tests {
             milestone_year,
             asset_id: asset.id().unwrap(),
             capacity: Capacity(12.0),
-            num_units: 3,
+            num_tranches: 3,
             mothballed_capacity: Capacity(4.0),
             mothballed_units: 1,
         };
