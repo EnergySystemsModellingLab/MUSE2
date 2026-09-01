@@ -112,8 +112,9 @@ independently (see [Mothballing and Decommissioning](#mothballing-and-decommissi
 - For assets defined in `assets.csv`, an explicitly supplied `num_tranches` determines the tranche size.
   Otherwise, a process `tranche_size` determines the tranche size. If neither is supplied, the asset
   consists of one tranche with its full capacity.
-- Assets invested in _by MUSE_ will use the process `tranche_size`, if defined, or will use a capacity
-  based on demand at the time of investment (see "trial capacity" below).
+- Assets invested in _by MUSE_ are commissioned one tranche at a time, using the process
+  `tranche_size` if defined, or a tranche size inferred from demand at the time of investment (see
+  "trial capacity" below).
 
 ### Existing assets
 

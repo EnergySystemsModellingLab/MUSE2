@@ -551,7 +551,7 @@ fn subtract_capacity_from_remaining_limit(
 
 /// Update the remaining investment options and selection state.
 ///
-/// If the asset is a candidate, its capacity is subtracted from
+/// If the asset is a candidate, its one-tranche capacity is subtracted from
 /// `remaining_agent_addition_limits` (if applicable) to ensure that process addition limits are not
 /// exceeded. If the asset is commissioned, one tranche is subtracted from
 /// `available_retention_tranches` to ensure that retention does not invent new capacity.
@@ -596,7 +596,9 @@ fn update_selection_state(
     }
 }
 
-/// Record a selected asset.
+/// Record a selected asset. Candidate selections represent one tranche; repeated selections of the
+/// same candidate increase the resulting asset's number of tranches while preserving its tranche
+/// size.
 ///
 /// # Arguments
 ///
@@ -608,9 +610,9 @@ fn record_asset_selection(best_asset: AssetRef, best_assets: &mut Vec<AssetRef>)
         "Invalid asset type"
     );
 
-    // Add the selected asset to the list of best assets, or increase its capacity if it's already there.
+    // Add the selected asset to the list of best assets, or add one tranche if it's already there.
     if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset) {
-        // If the asset is already in the list of best assets, add the additional required capacity
+        // If the asset is already selected, add the additional required tranche
         existing_asset
             .make_mut()
             .increase_capacity(best_asset.capacity());

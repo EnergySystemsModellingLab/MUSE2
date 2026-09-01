@@ -63,11 +63,12 @@ pub struct Process {
     pub capacity_to_activity: ActivityPerCapacity,
     /// Investment constraints for this process
     pub investment_constraints: ProcessInvestmentConstraintsMap,
-    /// Capacity of the tranches in which an asset for this process will be divided into when commissioned, if any.
+    /// Capacity of each tranche for investments in this process, if any.
     ///
-    /// By default, an asset will not be divided when commissioned (`tranche_size` will be None), but
-    /// if this is set, then it will be divided in as many assets as needed to commission the total
-    /// capacity, each having a `tranche_size` capacity or a fraction of it.
+    /// Candidate assets are created with one tranche of this size, and MUSE may select multiple
+    /// tranches over successive investment rounds. For user-provided assets, this value determines
+    /// how their total capacity is represented as equal-capacity tranches; the number of tranches
+    /// is rounded up when necessary.
     pub tranche_size: Option<Capacity>,
 }
 
