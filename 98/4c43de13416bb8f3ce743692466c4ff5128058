@@ -1,0 +1,16 @@
+.all-contributorsrc
+  h_e76403a1cd4bf1 121-130
+README.md
+  h_e76403a1cd4bf1 3,92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "984c43de13416bb8f3ce743692466c4ff5128058",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
