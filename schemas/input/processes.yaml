@@ -32,7 +32,7 @@ fields:
       Factor relating capacity units (e.g. GW) to activity units (e.g. PJ). It is the
       maximum activity per year for one unit of capacity.
     notes: Must be >0. Optional (defaults to 1.0).
-  - name: unit_size
+  - name: tranche_size
     type: number
     description: Default capacity of the individual units making up assets of this process
     notes:

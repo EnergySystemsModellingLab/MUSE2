@@ -112,15 +112,15 @@ where
             "Asset capacity must be positive"
         );
         let asset_capacity = if let Some(num_units) = asset.num_units {
-            // A provided unit count takes precedence over the process unit_size.
+            // A provided unit count takes precedence over the process tranche_size.
             ensure!(num_units > 0, "num_units must be positive");
 
-            let unit_size = Capacity(asset.capacity.value() / num_units as f64);
-            AssetCapacity::new(num_units, unit_size)
-        } else if let Some(unit_size) = process.unit_size {
-            // No unit count was provided, so use the process unit_size to determine
+            let tranche_size = Capacity(asset.capacity.value() / num_units as f64);
+            AssetCapacity::new(num_units, tranche_size)
+        } else if let Some(tranche_size) = process.tranche_size {
+            // No unit count was provided, so use the process tranche_size to determine
             // how many units are needed to cover the asset's capacity.
-            let ratio = (asset.capacity / unit_size).value();
+            let ratio = (asset.capacity / tranche_size).value();
             let num_units = ratio.ceil();
 
             // Rounding up can increase the combined capacity of the resulting units.
@@ -130,16 +130,16 @@ where
                     Asset will be divided into {} units with combined capacity of {}.",
                     asset.capacity,
                     process_id,
-                    unit_size,
+                    tranche_size,
                     num_units,
-                    unit_size.value() * num_units
+                    tranche_size.value() * num_units
                 );
             }
 
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            AssetCapacity::new(num_units as u32, unit_size)
+            AssetCapacity::new(num_units as u32, tranche_size)
         } else {
-            // Without a process unit_size, lack of num_units implies the asset is indivisible
+            // Without a process tranche_size, lack of num_units implies the asset is indivisible
             // (consists of a single unit).
             AssetCapacity::single(asset.capacity)
         };
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[rstest]
-    fn explicit_unit_count_sets_unit_size(
+    fn explicit_unit_count_sets_tranche_size(
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
@@ -227,14 +227,14 @@ mod tests {
     }
 
     #[rstest]
-    fn missing_unit_count_uses_process_unit_size(
+    fn missing_unit_count_uses_process_tranche_size(
         agent_ids: IndexSet<AgentID>,
         mut processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
         Arc::get_mut(processes.get_mut("process1").unwrap())
             .unwrap()
-            .unit_size = Some(Capacity(4.0));
+            .tranche_size = Some(Capacity(4.0));
         let asset = AssetRaw {
             process_id: "process1".into(),
             region_id: "GBR".into(),

@@ -488,9 +488,9 @@ where
 
                 // The capacity variable represents number of units, so we need to multiply the
                 // per-capacity limits by the unit size.
-                let unit_size = asset.capacity().unit_size();
-                upper_limit *= unit_size.value();
-                lower_limit *= unit_size.value();
+                let tranche_size = asset.capacity().tranche_size();
+                upper_limit *= tranche_size.value();
+                lower_limit *= tranche_size.value();
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection

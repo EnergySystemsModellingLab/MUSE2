@@ -65,10 +65,10 @@ pub struct Process {
     pub investment_constraints: ProcessInvestmentConstraintsMap,
     /// Capacity of the units in which an asset for this process will be divided into when commissioned, if any.
     ///
-    /// By default, an asset will not be divided when commissioned (`unit_size` will be None), but
+    /// By default, an asset will not be divided when commissioned (`tranche_size` will be None), but
     /// if this is set, then it will be divided in as many assets as needed to commission the total
-    /// capacity, each having a `unit_size` capacity or a fraction of it.
-    pub unit_size: Option<Capacity>,
+    /// capacity, each having a `tranche_size` capacity or a fraction of it.
+    pub tranche_size: Option<Capacity>,
 }
 
 impl Process {

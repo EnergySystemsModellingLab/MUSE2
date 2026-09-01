@@ -850,7 +850,7 @@ mod tests {
         Asset::new_candidate(
             Arc::new(asset.process().clone()),
             asset.region_id().clone(),
-            asset.capacity().unit_size(),
+            asset.capacity().tranche_size(),
             asset.commission_year(),
         )
         .unwrap()

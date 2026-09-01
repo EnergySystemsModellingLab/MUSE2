@@ -449,8 +449,8 @@ pub fn get_asset_options<'a>(
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
 /// Each candidate is a single unit with a defined capacity.
-/// - For processes with a defined `unit_size`, the capacity is set to `unit_size`.
-/// - For processes without a defined `unit_size`, the capacity is calculated based on the total
+/// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
+/// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
 ///   demand for the commodity and the asset's maximum annual production per unit capacity
 ///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
 fn get_candidate_assets<'a>(
@@ -470,9 +470,9 @@ fn get_candidate_assets<'a>(
                     .unwrap();
 
             // Set capacity of the candidate for investment appraisal
-            let unit_size = if let Some(unit_size) = asset.process().unit_size {
+            let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
                 // For processes with a defined unit size, take this
-                unit_size
+                tranche_size
             } else {
                 // Otherwise, calculate unit size based on demand for the commodity, scaled by the
                 // capacity_limit_factor.
@@ -480,7 +480,7 @@ fn get_candidate_assets<'a>(
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
                 capacity_scale * capacity_limit_factor
             };
-            let asset_capacity = AssetCapacity::single(unit_size);
+            let asset_capacity = AssetCapacity::single(tranche_size);
             asset.set_capacity(asset_capacity);
             asset.into()
         })

@@ -110,9 +110,9 @@ mothballed as a whole, while the units of a multi-unit asset can be retained or 
 independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
 - For assets defined in `assets.csv`, an explicitly supplied `num_units` determines the unit size.
-  Otherwise, a process `unit_size` determines the unit size. If neither is supplied, the asset
+  Otherwise, a process `tranche_size` determines the unit size. If neither is supplied, the asset
   consists of one unit with its full capacity.
-- Assets invested in _by MUSE_ will use the process `unit_size`, if defined, or will use a capacity
+- Assets invested in _by MUSE_ will use the process `tranche_size`, if defined, or will use a capacity
   based on demand at the time of investment (see "trial capacity" below).
 
 ### Existing assets
@@ -127,7 +127,7 @@ mothballed.
 Before a candidate asset for new investment can be appraised, it is assigned a trial capacity which
 defines how much capacity can be installed in a single investment round.
 
-If a process has a defined `unit_size`, the trial capacity is set to one unit. Otherwise, it
+If a process has a defined `tranche_size`, the trial capacity is set to one unit. Otherwise, it
 calculated based on the capacity that would satisfy the total remaining demand if the asset operated
 at its maximum annual rate:
 

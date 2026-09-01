@@ -118,18 +118,18 @@ fn hash_unit<U: UnitType>(value: U) -> u64 {
 impl Asset {
     /// Create a new candidate asset
     ///
-    /// These candidates will have a single capacity unit with the given `unit_size`.
+    /// These candidates will have a single capacity unit with the given `tranche_size`.
     pub fn new_candidate(
         process: Arc<Process>,
         region_id: RegionID,
-        unit_size: Capacity,
+        tranche_size: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::single(unit_size),
+            AssetCapacity::single(tranche_size),
             commission_year,
             None,
         )
@@ -836,7 +836,7 @@ impl Asset {
 
     /// Get the capacity which is mothballed.
     pub fn mothballed_capacity(&self) -> Capacity {
-        self.capacity().unit_size() * Dimensionless(self.get_num_mothballed_units() as f64)
+        self.capacity().tranche_size() * Dimensionless(self.get_num_mothballed_units() as f64)
     }
 
     /// Get the remaining number of units that are not mothballed.
@@ -999,7 +999,7 @@ impl AssetRef {
         assert!(new_num_units > 0, "Cannot make an asset with zero units");
 
         let max_num_units = self.capacity().num_units();
-        let unit_size = self.capacity().unit_size();
+        let tranche_size = self.capacity().tranche_size();
 
         assert!(
             new_num_units <= max_num_units,
@@ -1014,18 +1014,18 @@ impl AssetRef {
         let mut asset = self.with_mothballed_units(new_num_mothballed, None);
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
+            .set_capacity(AssetCapacity::new(new_num_units, tranche_size));
         asset
     }
 
     /// Get an [`AssetRef`] representing a single unit of this asset.
     pub fn as_single_unit(self) -> Self {
         let new_num_units = 1;
-        let unit_size = self.capacity().unit_size();
+        let tranche_size = self.capacity().tranche_size();
         let mut asset = self.with_no_mothballed_units();
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
+            .set_capacity(AssetCapacity::new(new_num_units, tranche_size));
         asset
     }
 
@@ -1452,7 +1452,7 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        // It's permitted to create an AssetCapacity with zero unit_size, but this should be
+        // It's permitted to create an AssetCapacity with zero tranche_size, but this should be
         // rejected for UserAsset's
         let asset_capacity = AssetCapacity::single(capacity);
         assert_error!(

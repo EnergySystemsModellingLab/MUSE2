@@ -1,4 +1,4 @@
-id,description,regions,primary_output,start_year,end_year,capacity_to_activity,unit_size
+id,description,regions,primary_output,start_year,end_year,capacity_to_activity,tranche_size
 GASDRV,Dry gas extraction,all,GASPRD,2020,2040,1.0,
 GASPRC,Gas processing,all,GASNAT,2020,2040,1.0,
 WNDFRM,Wind farm,all,ELCTRI,2020,2040,31.54,
