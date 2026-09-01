@@ -37,6 +37,11 @@
   informative, however. ([#1376])
 - Stricter input validation: `capacity_to_activity` must now be greater than zero. Previously,
   `capacity_to_activity = 0` was permitted ([#1391])
+- The `capacity_limit_factor` in `model.toml` parameter has been renamed to
+  `capacity_tranche_fraction` ([#1502])
+- The `unit_size` parameter in `processes.csv` has been renamed to `tranche_size` ([#1502])
+- The `num_units` parameter in the `process_capacities.csv` output file has been renamed to
+  `num_tranches` ([#1502])
 
 ## Bug fixes
 
@@ -93,3 +98,4 @@
 [#1455]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1455
 [#1458]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1458
 [#1464]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1464
+[#1502]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1502
