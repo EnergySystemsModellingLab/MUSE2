@@ -1,0 +1,26 @@
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 210
+docs/model/investment.md
+  h_e76403a1cd4bf1 136,139
+benches/assets.rs
+  h_e76403a1cd4bf1 204
+src/model/parameters.rs
+  h_e76403a1cd4bf1 93,147,336
+src/simulation/market.rs
+  h_e76403a1cd4bf1 192,426,443,455,462,478,481
+schemas/input/model.yaml
+  h_e76403a1cd4bf1 33
+schemas/input/processes.yaml
+  h_e76403a1cd4bf1 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c2bec856e2072cf76bf65f2982fb5467edeb3925",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
