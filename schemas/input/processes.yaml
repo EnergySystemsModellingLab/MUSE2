@@ -34,9 +34,9 @@ fields:
     notes: Must be >0. Optional (defaults to 1.0).
   - name: tranche_size
     type: number
-    description: Default capacity of the individual units making up assets of this process
+    description: Default capacity of the individual tranches making up assets of this process
     notes:
-      Optional (defaults to None). If present, must be >0. If no unit size is specified, the unit
+      Optional (defaults to None). If present, must be >0. If no tranche size is specified, the tranche
       size used for investments is calculated based on demand at the time of investment and
       `capacity_limit_factor`. For a user-provided asset, `num_tranches` in `assets.csv` can instead
-      determine the unit size.
+      determine the tranche size.

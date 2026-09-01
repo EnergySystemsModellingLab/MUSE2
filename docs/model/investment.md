@@ -105,21 +105,21 @@ The annualised fixed cost (AFC) per unit of capacity differs between the two cat
 
 ## Asset Capacities
 
-Every asset consists of one or more equal-capacity units. A single-unit asset is retained or
-mothballed as a whole, while the units of a multi-unit asset can be retained or mothballed
+Every asset consists of one or more equal-capacity tranches. A single-tranche asset is retained or
+mothballed as a whole, while the tranches of a multi-tranche asset can be retained or mothballed
 independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
-- For assets defined in `assets.csv`, an explicitly supplied `num_tranches` determines the unit size.
-  Otherwise, a process `tranche_size` determines the unit size. If neither is supplied, the asset
-  consists of one unit with its full capacity.
+- For assets defined in `assets.csv`, an explicitly supplied `num_tranches` determines the tranche size.
+  Otherwise, a process `tranche_size` determines the tranche size. If neither is supplied, the asset
+  consists of one tranche with its full capacity.
 - Assets invested in _by MUSE_ will use the process `tranche_size`, if defined, or will use a capacity
   based on demand at the time of investment (see "trial capacity" below).
 
 ### Existing assets
 
 Existing assets (i.e assets that have already been commissioned, whether via `assets.csv` or by
-MUSE) are appraised one unit at a time to decide how many units to retain. This allows partial
-retention — for example, some units of a multi-unit plant may be retained while others are
+MUSE) are appraised one tranche at a time to decide how many tranches to retain. This allows partial
+retention — for example, some tranches of a multi-tranche plant may be retained while others are
 mothballed.
 
 ### Candidate assets
@@ -127,7 +127,7 @@ mothballed.
 Before a candidate asset for new investment can be appraised, it is assigned a trial capacity which
 defines how much capacity can be installed in a single investment round.
 
-If a process has a defined `tranche_size`, the trial capacity is set to one unit. Otherwise, it
+If a process has a defined `tranche_size`, the trial capacity is set to one tranche. Otherwise, it
 calculated based on the capacity that would satisfy the total remaining demand if the asset operated
 at its maximum annual rate:
 
@@ -309,7 +309,7 @@ terminates with an error.
 ## Mothballing and Decommissioning
 
 After investment is complete for a given MSY, any previously commissioned assets (or individual
-units making up the asset) that were not selected for retention are *mothballed*: their mothball
+tranches making up the asset) that were not selected for retention are *mothballed*: their mothball
 year is recorded and they are removed from the active asset pool. They remain available for
 potential re-selection in future MSYs.
 

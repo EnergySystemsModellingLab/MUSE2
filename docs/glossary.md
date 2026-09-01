@@ -33,13 +33,13 @@ an investment decision.
 be decommissioned when it reaches the end of its allowed *Lifetime* or after remaining mothballed for
 the configured period.
 
-**Asset Mothballing:** The temporary withdrawal of an *Asset* or some of its units from the active
+**Asset Mothballing:** The temporary withdrawal of an *Asset* or some of its tranches from the active
 pool when it is not selected for retention. A mothballed *Asset* is not dispatched, but may be
 reactivated in a later investment period; it is permanently decommissioned if it remains mothballed
 for longer than a configured number of years.
 
-**Asset Unit:** A discrete portion of an *Asset*'s *Capacity*. An *Asset* can consist of multiple
-*Asset Units* of equal size, which can be retained, mothballed, or decommissioned independently.
+**Asset Tranche:** A discrete portion of an *Asset*'s *Capacity*. An *Asset* can consist of multiple
+*Asset Tranches* of equal size, which can be retained, mothballed, or decommissioned independently.
 
 **Availability:** A *Process* property specifying the maximum, minimum, or fixed percentage of
 maximum *Activity* that its *Assets* can deliver over a period. It can be specified for a single
@@ -230,10 +230,11 @@ a day-night level requires the balance to be met separately in each time-of-day 
 *Time-slice Level*. For example, a selection can group all winter *Time Slices* so that a seasonal
 *Availability* limit applies to their combined *Activity*.
 
-**Unit Size:** The capacity of one unit of an *Asset*. Every *Asset* has a *Unit Size*, either defined
-when the *Asset* is created or inferred when an investment is made. *Unit Size* defines the granularity
-at which retention, mothballing, and decommissioning decisions are made. For example, a 100 MW
-*Asset* with a 25 MW *Unit Size* has four units, which can be retained or mothballed independently.
+**Tranche Size:** The capacity of one tranche of an *Asset*. Every *Asset* has a *Tranche Size*,
+either defined when the *Asset* is created or inferred when an investment is made. *Tranche Size*
+defines the granularity at which retention, mothballing, and decommissioning decisions are made. For
+example, a 100 MW *Asset* with a 25 MW *Tranche Size* has four tranches, which can be retained or
+mothballed independently.
 
 **Utilisation:** The proportion of an *Asset*'s *Capacity* that is actually used to produce its
 *Commodities*, ranging from 0 to 1 inclusive. Can be measured at *Time Slice*, *Season*, or *Year* level.
