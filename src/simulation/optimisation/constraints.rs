@@ -140,25 +140,30 @@ fn add_commodity_constraints<'a, I>(
             continue;
         };
 
+        // For each constraint, collect the relevant flows, and add the constraint as a row in the
+        // problem.
         for constraint in constraints {
-            // Select the flow direction represented by the constraint and normalise the
-            // coefficient sign used in the solver row.
-            let (flow_direction, coefficient_sign) = match constraint.balance_type {
-                BalanceType::Production => (FlowDirection::Output, 1.0),
-                // Input flow coefficients are negative, but the constraint limits describe
-                // consumption as positive.
-                BalanceType::Consumption => (FlowDirection::Input, -1.0),
+            // Select the direction of flows to collect. Production constraints constrain the sum
+            // of output flows, while consumption constraints constrain the sum of input flows.
+            let flow_direction = match constraint.balance_type {
+                BalanceType::Production => FlowDirection::Output,
+                BalanceType::Consumption => FlowDirection::Input,
                 BalanceType::Net => unreachable!("Net commodity constraints are invalid"),
             };
 
-            // Build one term for every matching asset and every time slice in the selection.
+            // Collect all relevant flows for this constraint. Each constraint covers a region,
+            // commodity and time slice selection, so we need to collect all input or output flows
+            // for the commodity for assets in the region, and for every time slice in the selection.
             let terms = assets
                 .clone()
                 .filter_region(&constraint.region_id)
                 .flows_for_commodity(&commodity.id)
                 .filter(|(_, flow)| flow.direction() == flow_direction)
                 .flat_map(|(asset, flow)| {
-                    let coefficient = coefficient_sign * flow.coeff.value();
+                    // Use the absolute value of the flow coefficient, as input flows are stored as
+                    // negative values, but constraints are always expressed in terms of positive
+                    // magnitudes.
+                    let coefficient = flow.coeff.abs().value();
                     constraint.ts_selection.iter(&model.time_slice_info).map(
                         move |(time_slice, _)| {
                             (variables.get_activity_var(asset, time_slice), coefficient)

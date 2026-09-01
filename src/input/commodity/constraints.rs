@@ -2,7 +2,7 @@
 //!
 //! The `commodity_constraints.csv` file is optional. If it is provided, the
 //! `please_give_me_broken_results` option in `model.toml` must be set to `true` because commodity
-//! constraints are experimental.
+//! constraints are experimental, and not yet factored in to the investment algorithm.
 use super::super::{input_err_msg, read_csv_optional};
 use crate::commodity::{
     BalanceType, Commodity, CommodityConstraint, CommodityConstraintsMap, CommodityID,
