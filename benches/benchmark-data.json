@@ -1,0 +1,112 @@
+{
+  "lastUpdate": 1788256182014,
+  "repoUrl": "https://github.com/EnergySystemsModellingLab/MUSE2",
+  "entries": {
+    "Benchmark": [
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "849164f50fd97a3388189aee2b020d8e4c594619",
+          "message": "Merge pull request #1516 from EnergySystemsModellingLab/allow_push_main\n\nUse PR instead of direct push to main",
+          "timestamp": "2026-09-01T10:45:49+01:00",
+          "tree_id": "f4e331cadaf5c3b9c48399c16a7484e673f3283e",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/849164f50fd97a3388189aee2b020d8e4c594619"
+        },
+        "date": 1788256182014,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 414093669,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 224283879.25,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 257200258.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 82232509.625,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 397768111.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 444982302.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 7184719.770833334,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 21415495.111111112,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 35291724,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 51844114.66666667,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 66430136.16666667,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 7215430.817307692,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 34758098.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 69328321.66666666,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 103927071,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 138376641.75,
+            "unit": "ns"
+          }
+        ]
+      }
+    ]
+  }
+}
