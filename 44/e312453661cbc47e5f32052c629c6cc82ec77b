@@ -1,0 +1,38 @@
+src/model/parameters.rs
+  h_e76403a1cd4bf1 89
+  s_d8fddce799deee::t_dc2fe0648ad4a5 91-92
+src/simulation/market.rs
+  s_d8fddce799deee::t_dc2fe0648ad4a5 451,455-456,478
+schemas/input/model.yaml
+  h_e76403a1cd4bf1 35
+  s_d8fddce799deee::t_dc2fe0648ad4a5 38-40,43-44
+docs/model/investment.md
+  h_e76403a1cd4bf1 132
+  s_d8fddce799deee::t_dc2fe0648ad4a5 127-129,131,133,141-143
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 210
+  s_d8fddce799deee::t_dc2fe0648ad4a5 211
+schemas/input/processes.yaml
+  h_e76403a1cd4bf1 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "44e312453661cbc47e5f32052c629c6cc82ec77b",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_d8fddce799deee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "edfcf1aa-3ad0-4db6-9235-d0f9f2553bac",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
