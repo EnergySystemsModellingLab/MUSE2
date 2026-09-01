@@ -714,7 +714,7 @@ mod tests {
     use super::*;
     use crate::asset::AssetPool;
     use crate::fixture::{
-        appraisal_output, asset, assets, commodity_id, multi_unit_asset, region_id, time_slice,
+        appraisal_output, asset, assets, commodity_id, multi_tranche_asset, region_id, time_slice,
     };
     use crate::simulation::investment::appraisal::AppraisalOutput;
     use crate::time_slice::TimeSliceID;
@@ -780,11 +780,11 @@ mod tests {
     }
 
     #[rstest]
-    fn write_asset_capacities_with_mothballed_tranches(multi_unit_asset: Asset) {
+    fn write_asset_capacities_with_mothballed_tranches(multi_tranche_asset: Asset) {
         let milestone_year = 2020;
         let dir = tempdir().unwrap();
         let mut assets = AssetPool::new();
-        assets.commission_new(2010, &mut vec![multi_unit_asset.into()]);
+        assets.commission_new(2010, &mut vec![multi_tranche_asset.into()]);
         let asset = assets
             .iter()
             .next()

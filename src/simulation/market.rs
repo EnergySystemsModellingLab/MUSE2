@@ -448,7 +448,7 @@ pub fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate is a single unit with a defined capacity.
+/// Each candidate is a single tranche with a defined capacity.
 /// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
 /// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
 ///   demand for the commodity and the asset's maximum annual production per unit capacity
@@ -471,10 +471,10 @@ fn get_candidate_assets<'a>(
 
             // Set capacity of the candidate for investment appraisal
             let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
-                // For processes with a defined unit size, take this
+                // For processes with a defined tranche size, take this
                 tranche_size
             } else {
-                // Otherwise, calculate unit size based on demand for the commodity, scaled by the
+                // Otherwise, calculate tranche size based on demand for the commodity, scaled by the
                 // capacity_limit_factor.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
@@ -525,7 +525,7 @@ mod tests {
     use crate::fixture::{process, region_id};
     use crate::process::{Process, ProcessInvestmentConstraint};
     use crate::region::RegionID;
-    use crate::units::Dimensionless;
+    use crate::units::{Capacity, Dimensionless};
     use rstest::rstest;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -556,8 +556,8 @@ mod tests {
         process.investment_constraints.insert(
             (region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
-                addition_limit: Some(crate::units::Capacity(10.0)),
-                total_capacity_limit: Some(crate::units::Capacity(100.0)),
+                addition_limit: Some(Capacity(10.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             }),
         );
         let commodity_id = "commodity".into();
@@ -573,7 +573,7 @@ mod tests {
             Process::agent_addition_limit,
         );
 
-        assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(5.0)));
+        assert_eq!(result.get(&process_id), Some(&Capacity(5.0)));
 
         let result = collect_agent_limits(
             &agent,
@@ -584,7 +584,7 @@ mod tests {
             Process::agent_total_limit,
         );
 
-        assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(50.0)));
+        assert_eq!(result.get(&process_id), Some(&Capacity(50.0)));
     }
 
     #[rstest]

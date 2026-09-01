@@ -106,28 +106,28 @@ where
             asset.agent_id,
         );
 
-        // Split overall capacity into units
+        // Split overall capacity into tranches
         ensure!(
             asset.capacity > Capacity(0.0),
             "Asset capacity must be positive"
         );
         let asset_capacity = if let Some(num_tranches) = asset.num_tranches {
-            // A provided unit count takes precedence over the process tranche_size.
+            // A provided tranche count takes precedence over the process tranche_size.
             ensure!(num_tranches > 0, "num_tranches must be positive");
 
             let tranche_size = Capacity(asset.capacity.value() / num_tranches as f64);
             AssetCapacity::new(num_tranches, tranche_size)
         } else if let Some(tranche_size) = process.tranche_size {
-            // No unit count was provided, so use the process tranche_size to determine
-            // how many units are needed to cover the asset's capacity.
+            // No tranche count was provided, so use the process tranche_size to determine
+            // how many tranches are needed to cover the asset's capacity.
             let ratio = (asset.capacity / tranche_size).value();
             let num_tranches = ratio.ceil();
 
-            // Rounding up can increase the combined capacity of the resulting units.
+            // Rounding up can increase the combined capacity of the resulting tranches.
             if !approx_eq!(f64, ratio, ratio.ceil()) {
                 warn!(
-                    "Asset capacity {} for process {} is not a multiple of unit size {}. \
-                    Asset will be divided into {} units with combined capacity of {}.",
+                    "Asset capacity {} for process {} is not a multiple of tranche size {}. \
+                    Asset will be divided into {} tranches with combined capacity of {}.",
                     asset.capacity,
                     process_id,
                     tranche_size,
@@ -140,7 +140,7 @@ where
             AssetCapacity::new(num_tranches as u32, tranche_size)
         } else {
             // Without a process tranche_size, lack of num_tranches implies the asset is indivisible
-            // (consists of a single unit).
+            // (consists of a single tranche).
             AssetCapacity::single(asset.capacity)
         };
 
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[rstest]
-    fn explicit_unit_count_sets_tranche_size(
+    fn explicit_tranche_count_sets_tranche_size(
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[rstest]
-    fn missing_unit_count_uses_process_tranche_size(
+    fn missing_tranche_count_uses_process_tranche_size(
         agent_ids: IndexSet<AgentID>,
         mut processes: ProcessMap,
         region_ids: IndexSet<RegionID>,

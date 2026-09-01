@@ -3,21 +3,21 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
-/// Capacity of an asset, expressed in terms of a number of discrete units of a given size.
+/// Capacity of an asset, expressed in terms of a number of discrete tranches of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct AssetCapacity {
-    /// Number of units
+    /// Number of tranches
     num_tranches: u32,
-    /// Size of each unit
+    /// Size of each tranche
     tranche_size: Capacity,
 }
 
 impl AssetCapacity {
-    /// Create a new `AssetCapacity` with the given number of units and unit size
+    /// Create a new `AssetCapacity` with the given number of tranches and tranche size
     pub fn new(num_tranches: u32, tranche_size: Capacity) -> Self {
         assert!(
             tranche_size.is_finite() && tranche_size >= Capacity(0.0),
-            "Unit size must be a finite non-negative number"
+            "Tranche size must be a finite non-negative number"
         );
         AssetCapacity {
             num_tranches,
@@ -25,7 +25,7 @@ impl AssetCapacity {
         }
     }
 
-    /// Create a new `AssetCapacity` with a single unit of the given size
+    /// Create a new `AssetCapacity` with a single tranche of the given size
     pub fn single(tranche_size: Capacity) -> Self {
         Self::new(1, tranche_size)
     }
@@ -34,7 +34,7 @@ impl AssetCapacity {
     ///
     /// # Panics
     ///
-    /// Panics if the unit size differs.
+    /// Panics if the tranche size differs.
     pub fn min(self, other: AssetCapacity) -> AssetCapacity {
         match self.partial_cmp(&other) {
             None => panic!("Comparing invalid AssetCapacity values ({self:?} and {other:?})"),
@@ -43,21 +43,21 @@ impl AssetCapacity {
         }
     }
 
-    /// Returns the number of units in this `AssetCapacity`.
+    /// Returns the number of tranches in this `AssetCapacity`.
     pub fn num_tranches(&self) -> u32 {
         self.num_tranches
     }
 
-    /// Returns the unit size of this `AssetCapacity`.
+    /// Returns the tranche size of this `AssetCapacity`.
     pub fn tranche_size(&self) -> Capacity {
         self.tranche_size
     }
 
-    /// Validates that two capacities have the same unit size.
+    /// Validates that two capacities have the same tranche size.
     fn check_same_tranche_size(&self, other: AssetCapacity) {
         assert_eq!(
             self.tranche_size, other.tranche_size,
-            "Can't perform operation on capacities with different unit sizes ({} and {})",
+            "Can't perform operation on capacities with different tranche sizes ({} and {})",
             self.tranche_size, other.tranche_size,
         );
     }
@@ -133,7 +133,7 @@ mod tests {
     #[case(Capacity(f64::INFINITY))]
     #[case(Capacity(f64::NEG_INFINITY))]
     #[case(Capacity(f64::NAN))]
-    #[should_panic(expected = "Unit size must be a finite non-negative number")]
+    #[should_panic(expected = "Tranche size must be a finite non-negative number")]
     fn new_rejects_non_finite_tranche_size(#[case] tranche_size: Capacity) {
         let num_tranches = 1;
         let _ = AssetCapacity::new(num_tranches, tranche_size);
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn subtracting_equal_capacities_returns_zero_units() {
+    fn subtracting_equal_capacities_returns_zero_tranches() {
         let capacity = AssetCapacity::new(2, Capacity(3.0));
 
         assert_eq!(

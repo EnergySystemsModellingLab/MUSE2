@@ -63,7 +63,7 @@ impl AssetPool {
 
     /// Decommission mothballed assets if mothballed long enough
     pub fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
-        // Empty the Vec and reconstruct it with only the remaining units of the remaining assets
+        // Empty the Vec and reconstruct it with only the remaining tranches of the remaining assets
         // after decommissioning. This sadly means we always allocate a new Vec, but modifying the
         // Vec in place leads to uglier code and unnecessary deep clones of assets.
         self.assets = std::mem::take(&mut self.assets)
@@ -99,15 +99,15 @@ impl AssetPool {
                 .iter_mut()
                 .find(|asset| asset.id().unwrap() == id)
             {
-                // At least some of the asset's units have made it back into the pool. Increase the
-                // capacity back to what it was before, with the unselected units set as mothballed.
+                // At least some of the asset's tranches have made it back into the pool. Increase the
+                // capacity back to what it was before, with the unselected tranches set as mothballed.
                 let num_mothballed = old_asset
                     .num_tranches()
                     .checked_sub(new_asset.num_tranches())
-                    .expect("Number of units has increased");
+                    .expect("Number of tranches has increased");
                 *new_asset = old_asset.with_mothballed_tranches(num_mothballed, Some(year));
             } else {
-                // None of this asset's units were selected. We mothball _all_ units and return to
+                // None of this asset's tranches were selected. We mothball _all_ tranches and return to
                 // the pool.
                 let num_mothballed = old_asset.num_tranches();
                 self.assets
@@ -189,7 +189,7 @@ mod tests {
     use super::super::Asset;
     use super::*;
     use crate::asset::{AssetCapacity, MothballEvent};
-    use crate::fixture::{asset, multi_unit_asset, process, process_parameter_map};
+    use crate::fixture::{asset, multi_tranche_asset, process, process_parameter_map};
     use crate::process::{Process, ProcessParameter};
     use crate::units::{
         Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity, MoneyPerCapacityPerYear,
@@ -259,10 +259,10 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_commission_new_multi_unit(multi_unit_asset: Asset) {
-        let commission_year = multi_unit_asset.commission_year;
+    fn asset_pool_commission_new_multi_tranche(multi_tranche_asset: Asset) {
+        let commission_year = multi_tranche_asset.commission_year;
         let mut asset_pool = AssetPool::new();
-        let mut user_assets = vec![multi_unit_asset.into()];
+        let mut user_assets = vec![multi_tranche_asset.into()];
         assert!(asset_pool.assets.is_empty());
         asset_pool.commission_new(commission_year, &mut user_assets);
         assert!(user_assets.is_empty());
@@ -617,26 +617,26 @@ mod tests {
         asset_pool.mothball_unretained(vec![non_commissioned_asset], 2025);
     }
 
-    /// A commissioned multi-unit asset with three units.
+    /// A commissioned multi-tranche asset with three tranches.
     #[fixture]
-    fn commissioned_multi_unit(mut multi_unit_asset: Asset) -> AssetRef {
-        multi_unit_asset.commission(AssetID(0));
-        assert_eq!(multi_unit_asset.num_tranches(), 3);
-        AssetRef::from(multi_unit_asset)
+    fn commissioned_multi_tranche(mut multi_tranche_asset: Asset) -> AssetRef {
+        multi_tranche_asset.commission(AssetID(0));
+        assert_eq!(multi_tranche_asset.num_tranches(), 3);
+        AssetRef::from(multi_tranche_asset)
     }
 
     #[rstest]
-    fn asset_pool_mothball_unretained_partial(commissioned_multi_unit: AssetRef) {
-        // The full asset has three units; only two of them were retained in the pool
-        let full = commissioned_multi_unit;
-        let retained = full.clone().with_subset_of_units(2);
+    fn asset_pool_mothball_unretained_partial(commissioned_multi_tranche: AssetRef) {
+        // The full asset has three tranches; only two of them were retained in the pool
+        let full = commissioned_multi_tranche;
+        let retained = full.clone().with_subset_of_tranches(2);
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(retained);
 
         asset_pool.mothball_unretained(vec![full], 2025);
 
-        // The asset is restored to its full capacity, with the unretained unit mothballed
+        // The asset is restored to its full capacity, with the unretained tranche mothballed
         assert_eq!(asset_pool.assets.len(), 1);
         let asset = &asset_pool.assets[0];
         assert_eq!(asset.num_tranches(), 3);
@@ -651,16 +651,16 @@ mod tests {
     }
 
     #[rstest]
-    fn asset_pool_decommission_mothballed_partial(commissioned_multi_unit: AssetRef) {
-        // Mothball one unit in 2010 and one in 2020, leaving one active
-        let asset = commissioned_multi_unit
+    fn asset_pool_decommission_mothballed_partial(commissioned_multi_tranche: AssetRef) {
+        // Mothball one tranche in 2010 and one in 2020, leaving one active
+        let asset = commissioned_multi_tranche
             .with_mothballed_tranches(1, Some(2010))
             .with_mothballed_tranches(2, Some(2020));
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(asset);
 
-        // Threshold of 2015: only the unit mothballed in 2010 is old enough to decommission
+        // Threshold of 2015: only the tranche mothballed in 2010 is old enough to decommission
         asset_pool.decommission_mothballed(2025, 10);
 
         assert_eq!(asset_pool.assets.len(), 1);
@@ -678,10 +678,10 @@ mod tests {
 
     #[rstest]
     fn asset_pool_decommission_mothballed_removes_fully_mothballed(
-        commissioned_multi_unit: AssetRef,
+        commissioned_multi_tranche: AssetRef,
     ) {
-        // All three units mothballed long enough ago: the whole asset is removed from the pool
-        let asset = commissioned_multi_unit.with_mothballed_tranches(3, Some(2010));
+        // All three tranches mothballed long enough ago: the whole asset is removed from the pool
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(3, Some(2010));
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(asset);

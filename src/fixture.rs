@@ -215,7 +215,7 @@ pub fn asset(process: Process) -> Asset {
 }
 
 #[fixture]
-pub fn multi_unit_asset(process: Process) -> Asset {
+pub fn multi_tranche_asset(process: Process) -> Asset {
     Asset::new_ready(
         "agent1".into(),
         Arc::new(process),
