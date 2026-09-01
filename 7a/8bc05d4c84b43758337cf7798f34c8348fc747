@@ -1,0 +1,50 @@
+src/fixture.rs
+  h_e76403a1cd4bf1 327
+src/simulation/prices.rs
+  h_e76403a1cd4bf1 1413
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 853
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 491-493
+docs/model/investment.md
+  h_e76403a1cd4bf1 113,115,130
+src/input/asset.rs
+  h_e76403a1cd4bf1 115,118-121,123,133,135,140,142,208,230,237
+tests/regression.rs
+  h_e76403a1cd4bf1 30
+src/process.rs
+  h_e76403a1cd4bf1 68,70-71
+examples/simple/processes.csv
+  h_e76403a1cd4bf1 1
+src/simulation/market.rs
+  h_e76403a1cd4bf1 452-453,473,475,483
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 272,274,850,857,860
+src/asset.rs
+  h_e76403a1cd4bf1 121,125,132,839,1002,1017,1024,1028,1455
+src/asset/capacity.rs
+  h_e76403a1cd4bf1 12,17,19,24,29-30,52-53,57,59,61,67,76,79,89,96,103-104,121,124,127,137,139,158,168,195,215
+src/example/patches.rs
+  h_e76403a1cd4bf1 55
+src/input/process.rs
+  h_e76403a1cd4bf1 40,149-150,152-153,176
+tests/cli.rs
+  h_e76403a1cd4bf1 13
+docs/developer_guide/architecture_quickstart.md
+  h_e76403a1cd4bf1 124
+schemas/input/assets.yaml
+  h_e76403a1cd4bf1 23-24
+schemas/input/processes.yaml
+  h_e76403a1cd4bf1 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7a8bc05d4c84b43758337cf7798f34c8348fc747",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
