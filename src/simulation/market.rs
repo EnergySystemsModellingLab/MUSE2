@@ -320,6 +320,7 @@ pub fn select_assets_for_cycle(
 
         // Run dispatch
         let solution = DispatchRun::new(model, &all_assets, year)
+            .without_commodity_constraints()
             .with_market_balance_subset(&markets_to_balance)
             .with_flexible_capacity_assets(
                 &flexible_capacity_assets,

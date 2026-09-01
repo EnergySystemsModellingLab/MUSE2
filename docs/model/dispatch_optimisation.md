@@ -125,6 +125,28 @@ where:
   - For **Service Demand** (`SVD`): \\( \mathrm{Demand}\_{c, r, s} \\)
   - For **Supply-Equals-Demand** (`SED`): \\( 0 \\)
 
+### Commodity Consumption/Production Constraints
+
+Commodity constraints impose lower and upper limits on the total production or consumption of a
+commodity in a region over a specified time slice selection:
+
+\\[
+  L\_{c,r,s} \leq
+  \sum\_{a \in \mathbf{A}\_r^d} |f\_{\mathrm{coeff},a,c}| \cdot
+  \sum\_{t \in s} \mathrm{Activity}\_{a,t}
+  \leq U\_{c,r,s}
+\\]
+
+where:
+
+- \\( d \\) is the balance type: production (`prod`) or consumption (`cons`).
+- \\( \mathbf{A}\_r^d \\) contains assets in region \\( r \\) with flows in direction \\( d \\).
+- \\( L\_{c,r,s} \\) and \\( U\_{c,r,s} \\) are the lower and upper limits.
+
+These constraints are defined in the optional `commodity_constraints.csv` file. They can apply to
+`SED` and `OTH` commodities, but not `SVD` commodities. The feature is experimental and requires
+`please_give_me_broken_results = true` in `model.toml`.
+
 ## Shadow Prices
 
 The dual values (shadow prices) of the commodity balance constraints represent the marginal cost of
@@ -230,24 +252,23 @@ candidate dispatch run are then used to seed and guide investment appraisal in s
 
 ## Diagnosing Infeasible Models
 
-In practice, a dispatch optimisation run can fail if the problem is **infeasible** — typically
-because the installed asset capacity in the region is insufficient to meet the required exogenous or
-intermediate commodity demands.
+In practice, a dispatch optimisation run may be **infeasible** for several reasons, such as
+insufficient installed asset capacity to meet demand or incompatible commodity production/consumption
+constraints. When this occurs, MUSE2 performs additional dispatch runs with modified optimisation
+problems to help identify the cause. The resulting diagnostic information is included in error
+messages and saved in the dispatch debug files.
 
-To help debug and pinpoint the exact source of failure, MUSE2 employs a diagnostic mechanism using
-**unmet demand variables**:
+### Unmet Demand Diagnostic
 
-1. **First-Pass Run:** MUSE2 first attempts to solve the dispatch model in its standard form
-(without unmet demand variables).
-2. **Diagnostic Re-Run:** If the solver reports that the problem is infeasible, MUSE2 automatically
-spawns a second, diagnostic dispatch run. In this run, a set of slack variables representing unmet
-demand, \\( \mathrm{UnmetD}\_{c, r, t} \ge 0 \\), is added to the commodity balance constraints:
+1. **Diagnostic Re-Run:** MUSE2 reruns the dispatch optimisation with a set of slack variables
+representing unmet demand, \\( \\mathrm{UnmetD}\_{c, r, t} \\ge 0 \\), added to the commodity balance
+constraints:
    \\[
      \sum_{a \in \mathbf{A}\_r} f\_{\mathrm{coeff},a,c} \cdot \sum\_{t \in s}
      \mathrm{Activity}\_{a, t} +
      \sum\_{t \in s} \mathrm{UnmetD}\_{c, r, t} \ge \mathrm{Bound}\_{c, r, s}
    \\]
-3. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is mathematically
+1. **Objective Penalty:** To ensure the solver only leaves demand unmet if it is mathematically
 impossible to satisfy it, these variables are heavily penalised in the diagnostic objective function
 using the `value_of_lost_load` parameter (\\( \mathrm{VoLL} \\)):
    \\[
@@ -255,9 +276,19 @@ using the `value_of_lost_load` parameter (\\( \mathrm{VoLL} \\)):
       \mathrm{Cost}\_{\mathrm{Activity},a,t} +
     \mathrm{VoLL} \cdot \sum\_{c, r, t} \mathrm{UnmetD}\_{c, r, t}
    \\]
-4. **Isolating Shortfalls:** The addition of \\( \mathrm{UnmetD}\_{c, r, t} \\) guarantees that the
+1. **Isolating Shortfalls:** The addition of \\( \mathrm{UnmetD}\_{c, r, t} \\) guarantees that the
 LP remains mathematically feasible. When solved, any time slice, region, or commodity with a
 shortfall will have \\( \mathrm{UnmetD}_{c, r, t} > 0 \\).
-5. **Error Reporting:** MUSE2 scans the solution, identifies all balanced markets \\( (c, r) \\)
+1. **Error Reporting:** MUSE2 scans the solution, identifies all balanced markets \\( (c, r) \\)
 where unmet demand occurred, outputs detailed diagnostic CSV files, and aborts the simulation with
 an error identifying the exact out-of-balance markets.
+
+### Commodity Constraints Diagnostic
+
+If the dispatch optimisation remains infeasible, MUSE2 reruns it with the commodity
+consumption/production constraints disabled. If this rerun succeeds, the infeasibility is likely
+caused by one or more constraints defined in `commodity_constraints.csv`.
+
+If the rerun remains infeasible, commodity constraints are not identified as the cause. Since
+commodity constraints are an experimental feature, this diagnosis should be treated as indicative
+rather than definitive.

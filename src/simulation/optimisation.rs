@@ -14,10 +14,11 @@ use crate::units::{
     Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerFlow, Year,
 };
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
+use log::warn;
 use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Range;
@@ -440,6 +441,7 @@ pub struct DispatchRun<'model, 'run> {
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run PriceMap>,
+    include_commodity_constraints: bool,
     year: u32,
     capacity_margin: Dimensionless,
 }
@@ -455,6 +457,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             candidate_assets: &[],
             markets_to_balance: &[],
             input_prices: None,
+            include_commodity_constraints: true,
             year,
             capacity_margin: Dimensionless(0.0),
         }
@@ -479,6 +482,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn with_candidates(self, candidate_assets: &'run [AssetRef]) -> Self {
         Self {
             candidate_assets,
+            ..self
+        }
+    }
+
+    /// Exclude explicit production and consumption constraints from the dispatch run.
+    pub fn without_commodity_constraints(self) -> Self {
+        Self {
+            include_commodity_constraints: false,
             ..self
         }
     }
@@ -531,30 +542,139 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             .map(|prices| filter_input_prices(prices, markets_to_balance));
         let input_prices = input_prices_owned.as_ref();
 
-        // Try running dispatch. If it fails because the model is infeasible, it is likely that this
-        // is due to unmet demand, in this case, we rerun dispatch including extra variables to
-        // track the unmet demand so we can report the offending markets to users
+        // First solve the configured dispatch problem. If it is infeasible, run diagnostic solves
+        // below to distinguish unmet demand from infeasibility caused by explicit constraints.
         match self.run_without_unmet_demand_variables(markets_to_balance, input_prices) {
+            // If the run is successful, we write debug info and return the solution
             Ok(solution) => {
-                // Normal successful run: write debug info and return
                 writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
                 Ok(solution)
             }
+
+            // If the problem is infeasible, we run diagnostics to identify the cause and provide a
+            // more helpful error message.
             Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => {
-                // Re-run including unmet demand variables so we can record detailed unmet-demand
-                // debug output before returning an error to the caller.
-                let solution = self
-                    .run_internal(
+                // Generic message for infeasibility, to be augmented with more specific diagnostics
+                // below
+                let mut diagnoses = vec![
+                    "The solver has indicated that the dispatch problem is infeasible".to_string(),
+                ];
+
+                // Get diagnostic information for unmet demand
+                if let Some(diagnosis) = self.run_unmet_demand_diagnostic(
+                    markets_to_balance,
+                    input_prices,
+                    run_description,
+                    writer,
+                )? {
+                    diagnoses.push(diagnosis);
+                }
+
+                // Get diagnostic information for commodity constraints, if any apply this year.
+                if self.has_commodity_constraints()
+                    && let Some(diagnosis) = self.run_commodity_constraints_diagnosis(
                         markets_to_balance,
-                        /*allow_unmet_demand=*/ true,
                         input_prices,
-                    )
-                    .expect("Failed to run dispatch to calculate unmet demand");
+                        run_description,
+                        writer,
+                    )?
+                {
+                    diagnoses.push(diagnosis);
+                }
 
-                // Write debug CSVs to help diagnosis
-                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+                // Assemble and return the final error message, which may include multiple diagnoses
+                bail!("{}.", diagnoses.join(". "));
+            }
 
-                // Collect markets with unmet demand from the solution
+            // Other errors are propagated up to the caller
+            Err(err) => Err(err.into_anyhow()),
+        }
+    }
+
+    /// Check whether any explicit commodity constraints apply in the current year.
+    fn has_commodity_constraints(&self) -> bool {
+        self.model.commodities.values().any(|commodity| {
+            commodity
+                .constraints
+                .get(&self.year)
+                .is_some_and(|constraints| !constraints.is_empty())
+        })
+    }
+
+    /// Diagnose whether explicit commodity constraints cause infeasibility.
+    fn run_commodity_constraints_diagnosis(
+        &self,
+        markets_to_balance: &[(CommodityID, RegionID)],
+        input_prices: Option<&PriceMap>,
+        run_description: &str,
+        writer: &mut DataWriter,
+    ) -> Result<Option<String>> {
+        if !self.include_commodity_constraints {
+            return Ok(None);
+        }
+
+        warn!("Dispatch optimisation was infeasible; running commodity constraints diagnostic");
+
+        match self.run_internal(
+            markets_to_balance,
+            /*include_commodity_constraints=*/ false,
+            /*allow_unmet_demand=*/ false,
+            input_prices,
+        ) {
+            Ok(solution) => {
+                let diagnostic_run_description =
+                    format!("{run_description} COMMODITY_CONSTRAINTS_DIAGNOSTIC");
+                writer.write_dispatch_debug_info(
+                    self.year,
+                    &diagnostic_run_description,
+                    &solution,
+                )?;
+
+                Ok(Some(
+                    "The infeasibility is likely caused by one or more constraints defined in \
+                    `commodity_constraints.csv`. Please note that commodity constraints are \
+                    currently an experimental feature, so this is not necessarily unexpected"
+                        .to_string(),
+                ))
+            }
+
+            // The problem remains infeasible without explicit commodity constraints, so they are
+            // not identified as the cause. Don't return a diagnostic message in this case.
+            Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => Ok(None),
+
+            // Other errors are propagated up to the caller
+            Err(error) => Err(error.into_anyhow()),
+        }
+    }
+
+    /// Re-run the configured problem with unmet-demand variables to identify unmet demand.
+    fn run_unmet_demand_diagnostic(
+        &self,
+        markets_to_balance: &[(CommodityID, RegionID)],
+        input_prices: Option<&PriceMap>,
+        run_description: &str,
+        writer: &mut DataWriter,
+    ) -> Result<Option<String>> {
+        warn!("Dispatch optimisation was infeasible; running unmet demand diagnostic");
+
+        match self.run_internal(
+            markets_to_balance,
+            self.include_commodity_constraints,
+            /*allow_unmet_demand=*/ true,
+            input_prices,
+        ) {
+            Ok(solution) => {
+                // The diagnostic solution is written only to provide debugging information; it is
+                // never returned as the result of the original dispatch run.
+                let diagnostic_run_description =
+                    format!("{run_description} UNMET_DEMAND_DIAGNOSTIC");
+                writer.write_dispatch_debug_info(
+                    self.year,
+                    &diagnostic_run_description,
+                    &solution,
+                )?;
+
+                // Collect markets where the diagnostic solution uses positive unmet demand.
                 let markets: IndexSet<_> = solution
                     .iter_unmet_demand()
                     .filter(|(_, _, _, flow)| *flow > Flow(0.0))
@@ -563,19 +683,22 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                     })
                     .collect();
 
-                ensure!(
-                    !markets.is_empty(),
-                    "Model is infeasible, but there was no unmet demand"
-                );
-
-                bail!(
-                    "The solver has indicated that the problem is infeasible, probably because \
-                    the supplied assets could not meet the required demand. Demand was not met \
-                    for the following markets: {}",
-                    format_items_with_cap(markets)
-                );
+                Ok(Some(if markets.is_empty() {
+                    "No unmet demand was identified".to_string()
+                } else {
+                    format!(
+                        "Demand was not met for the following markets: {}",
+                        format_items_with_cap(markets)
+                    )
+                }))
             }
-            Err(err) => Err(err.into_anyhow()),
+
+            // The problem remains infeasible even with unmet demand variables, so unmet demand is
+            // not identified as the cause. Don't return a diagnostic message in this case.
+            Err(ModelError::NonOptimal(HighsModelStatus::Infeasible)) => Ok(None),
+
+            // Other errors are propagated up to the caller
+            Err(error) => Err(error.into_anyhow()),
         }
     }
 
@@ -587,6 +710,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ) -> Result<Solution<'model>, ModelError> {
         self.run_internal(
             markets_to_balance,
+            self.include_commodity_constraints,
             /*allow_unmet_demand=*/ false,
             input_prices,
         )
@@ -596,6 +720,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_internal(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
+        include_commodity_constraints: bool,
         allow_unmet_demand: bool,
         input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
@@ -645,6 +770,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             markets_to_balance,
             self.year,
             self.candidate_assets,
+            include_commodity_constraints,
         );
 
         // Create model and apply any user-supplied HiGHS options to it
