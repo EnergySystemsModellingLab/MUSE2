@@ -1,0 +1,27 @@
+src/simulation/market.rs
+  s_46df0224d0397d::t_276c679b0df19c 303,367,369-371,373-387
+  h_e76403a1cd4bf1 304,358,366,368,372
+  s_46df0224d0397d::t_840a276a4efee8 359-365
+  s_46df0224d0397d::t_e8977c2fc9af39 388-389
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b9ac52b540ad69f900bfc25f0870b0276b172ae2",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_46df0224d0397d": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "b76212aa-e4fd-4b46-82be-41bccfe2d786",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
