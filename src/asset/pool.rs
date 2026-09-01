@@ -105,13 +105,13 @@ impl AssetPool {
                     .num_tranches()
                     .checked_sub(new_asset.num_tranches())
                     .expect("Number of units has increased");
-                *new_asset = old_asset.with_mothballed_units(num_mothballed, Some(year));
+                *new_asset = old_asset.with_mothballed_tranches(num_mothballed, Some(year));
             } else {
                 // None of this asset's units were selected. We mothball _all_ units and return to
                 // the pool.
                 let num_mothballed = old_asset.num_tranches();
                 self.assets
-                    .push(old_asset.with_mothballed_units(num_mothballed, Some(year)));
+                    .push(old_asset.with_mothballed_tranches(num_mothballed, Some(year)));
             }
         }
         self.assets.sort();
@@ -548,7 +548,7 @@ mod tests {
         let mothball_years: u32 = 10;
         asset_pool.assets[0] = asset_pool[0]
             .clone()
-            .with_mothballed_units(1, Some(2025 - mothball_years));
+            .with_mothballed_tranches(1, Some(2025 - mothball_years));
 
         assert_equal(
             asset_pool.assets[0].get_mothball_events().unwrap().iter(),
@@ -640,7 +640,7 @@ mod tests {
         assert_eq!(asset_pool.assets.len(), 1);
         let asset = &asset_pool.assets[0];
         assert_eq!(asset.num_tranches(), 3);
-        assert_eq!(asset.get_num_mothballed_units(), 1);
+        assert_eq!(asset.get_num_mothballed_tranches(), 1);
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
@@ -654,8 +654,8 @@ mod tests {
     fn asset_pool_decommission_mothballed_partial(commissioned_multi_unit: AssetRef) {
         // Mothball one unit in 2010 and one in 2020, leaving one active
         let asset = commissioned_multi_unit
-            .with_mothballed_units(1, Some(2010))
-            .with_mothballed_units(2, Some(2020));
+            .with_mothballed_tranches(1, Some(2010))
+            .with_mothballed_tranches(2, Some(2020));
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(asset);
@@ -666,7 +666,7 @@ mod tests {
         assert_eq!(asset_pool.assets.len(), 1);
         let asset = &asset_pool.assets[0];
         assert_eq!(asset.num_tranches(), 2);
-        assert_eq!(asset.get_num_mothballed_units(), 1);
+        assert_eq!(asset.get_num_mothballed_tranches(), 1);
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
@@ -681,7 +681,7 @@ mod tests {
         commissioned_multi_unit: AssetRef,
     ) {
         // All three units mothballed long enough ago: the whole asset is removed from the pool
-        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2010));
+        let asset = commissioned_multi_unit.with_mothballed_tranches(3, Some(2010));
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(asset);

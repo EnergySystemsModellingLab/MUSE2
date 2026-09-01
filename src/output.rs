@@ -167,7 +167,7 @@ struct AssetCapacityRow {
     capacity: Capacity,
     num_tranches: u32,
     mothballed_capacity: Capacity,
-    mothballed_units: u32,
+    mothballed_tranches: u32,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.
@@ -641,7 +641,7 @@ impl DataWriter {
                 capacity: asset.total_capacity(),
                 num_tranches: asset.capacity().num_tranches(),
                 mothballed_capacity: asset.mothballed_capacity(),
-                mothballed_units: asset.get_num_mothballed_units(),
+                mothballed_tranches: asset.get_num_mothballed_tranches(),
             };
             self.asset_capacities.serialize(row)?;
         }
@@ -768,7 +768,7 @@ mod tests {
             capacity: asset.total_capacity(),
             num_tranches: 1,
             mothballed_capacity: Capacity(0.0),
-            mothballed_units: 0,
+            mothballed_tranches: 0,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
@@ -780,7 +780,7 @@ mod tests {
     }
 
     #[rstest]
-    fn write_asset_capacities_with_mothballed_units(multi_unit_asset: Asset) {
+    fn write_asset_capacities_with_mothballed_tranches(multi_unit_asset: Asset) {
         let milestone_year = 2020;
         let dir = tempdir().unwrap();
         let mut assets = AssetPool::new();
@@ -790,7 +790,7 @@ mod tests {
             .next()
             .unwrap()
             .clone()
-            .with_mothballed_units(1, Some(milestone_year));
+            .with_mothballed_tranches(1, Some(milestone_year));
 
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
@@ -806,7 +806,7 @@ mod tests {
             capacity: Capacity(12.0),
             num_tranches: 3,
             mothballed_capacity: Capacity(4.0),
-            mothballed_units: 1,
+            mothballed_tranches: 1,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))

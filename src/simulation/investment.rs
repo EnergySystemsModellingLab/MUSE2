@@ -615,7 +615,7 @@ fn record_asset_selection(best_asset: AssetRef, best_assets: &mut Vec<AssetRef>)
             .increase_capacity(best_asset.capacity());
     } else {
         // Otherwise add it to the list of best assets. Selected assets are unmothballed.
-        best_assets.push(best_asset.with_no_mothballed_units());
+        best_assets.push(best_asset.with_no_mothballed_tranches());
     }
 }
 

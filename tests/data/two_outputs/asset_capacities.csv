@@ -1,4 +1,4 @@
-milestone_year,asset_id,capacity,num_tranches,mothballed_capacity,mothballed_units
+milestone_year,asset_id,capacity,num_tranches,mothballed_capacity,mothballed_tranches
 2020,0,4010.2,1,0.0,0
 2020,1,1738.05,1,0.0,0
 2020,2,3789.64,1,0.0,0
