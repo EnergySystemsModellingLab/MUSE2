@@ -124,12 +124,13 @@ mothballed.
 
 ### Candidate assets
 
-Before a candidate asset for new investment can be appraised, it is assigned a trial capacity which
-defines how much capacity can be installed in a single investment round.
+Before a candidate asset for new investment can be appraised, it is assigned a trial capacity. This
+is the capacity of one tranche, or the amount of capacity that can be installed in a single
+investment round.
 
-If a process has a defined `tranche_size`, the trial capacity is set to one tranche. Otherwise, it
-calculated based on the capacity that would satisfy the total remaining demand if the asset operated
-at its maximum annual rate:
+If a process has a defined `tranche_size`, the trial capacity is set to that tranche size. Otherwise,
+the tranche size is inferred from the capacity that would satisfy the total annual demand if the
+asset operated at its maximum annual rate:
 
 \\[
   \mathrm{TrialCapacity} = \frac{\sum_t \mathrm{Demand}_t}{\mathrm{MaxAnnualSupplyPerCapacity}}
@@ -137,8 +138,9 @@ at its maximum annual rate:
 \\]
 
 `capacity_tranche_fraction` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
-size of investment increments relative to total demand. Lower values produce smaller investment
-increments (requiring more investment rounds), while higher values produce larger increments.
+size of inferred investment tranches relative to this demand-based capacity. Lower values produce
+smaller tranches and therefore require more investment rounds, while higher values produce larger
+tranches.
 
 ### Investment constraints
 

@@ -207,8 +207,8 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
 /// operates at its maximum annual activity for the entire year. It ignores finer-grained activity
 /// constraints and temporal variations in demand.
 ///
-/// This value is later scaled by `capacity_tranche_fraction` to set capacities for candidate assets in
-/// each round of investments.
+/// For processes that do not define a tranche size, this value is later scaled by
+/// `capacity_tranche_fraction` to set the capacity of one candidate investment tranche.
 ///
 /// If the asset has zero maximum annual supply, zero capacity is returned. This indicates that the
 /// asset is non-feasible, and will be excluded from consideration by `select_best_assets`.

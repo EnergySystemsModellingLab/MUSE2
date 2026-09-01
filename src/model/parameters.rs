@@ -86,9 +86,10 @@ pub struct ModelParameters {
     /// Don't change unless you know what you're doing.
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub commodity_balance_epsilon: Flow,
-    /// Affects the maximum capacity that can be given to a newly created asset.
+    /// Scales the size of inferred investment tranches for candidate assets.
     ///
-    /// It is the proportion of maximum capacity that could be required across time slices.
+    /// It is the proportion of the demand-based capacity scale used when the process does not
+    /// define a tranche size.
     #[serde(deserialize_with = "deserialise_proportion_nonzero")]
     pub capacity_tranche_fraction: Dimensionless,
     /// The pricing strategy used to calculate fallback prices for the mini dispatch optimisation

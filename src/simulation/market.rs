@@ -448,11 +448,12 @@ pub fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate is a single tranche with a defined capacity.
+/// Each candidate represents one investment tranche with a defined capacity.
 /// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
 /// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
 ///   demand for the commodity and the asset's maximum annual production per unit capacity
-///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_tranche_fraction`.
+///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
+///   `capacity_tranche_fraction` to infer the tranche size.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
@@ -474,8 +475,7 @@ fn get_candidate_assets<'a>(
                 // For processes with a defined tranche size, take this
                 tranche_size
             } else {
-                // Otherwise, calculate tranche size based on demand for the commodity, scaled by the
-                // capacity_tranche_fraction.
+                // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
                 capacity_scale * capacity_tranche_fraction
