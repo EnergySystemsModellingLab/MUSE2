@@ -40,7 +40,7 @@
 - The `capacity_limit_factor` parameter in `model.toml` has been renamed to
   `capacity_tranche_fraction` ([#1502])
 - The `unit_size` parameter in `processes.csv` has been renamed to `tranche_size` ([#1502])
-- The `num_units` parameter in the `process_capacities.csv` output file has been renamed to
+- The `num_units` parameter in the `asset_capacities.csv` output file has been renamed to
   `num_tranches` ([#1502])
 
 ## Bug fixes
