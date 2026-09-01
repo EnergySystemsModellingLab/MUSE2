@@ -1,0 +1,26 @@
+schemas/input/processes.yaml
+  h_e76403a1cd4bf1 37,39,42
+schemas/input/assets.yaml
+  h_e76403a1cd4bf1 20,22,24-26
+  h_e76403a1cd4bf1 27
+docs/release_notes/upcoming.md
+  h_e76403a1cd4bf1 23,25,30
+docs/glossary.md
+  h_e76403a1cd4bf1 36,41-42,233-234,236
+  h_e76403a1cd4bf1 235,237
+docs/model/investment.md
+  h_e76403a1cd4bf1 108-109,112-114,121-122,130,312
+schemas/output/asset_capacities.yaml
+  h_e76403a1cd4bf1 16,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a2d559c01b9caf939e38d88bd91771c71927eb00",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
