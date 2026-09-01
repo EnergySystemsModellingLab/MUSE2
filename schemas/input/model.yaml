@@ -30,7 +30,7 @@ properties:
     default: 1e-6
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
-  capacity_limit_factor:
+  capacity_tranche_fraction:
     type: number
     description: Scales the capacity assigned to candidate assets
     default: 0.05

@@ -90,7 +90,7 @@ pub struct ModelParameters {
     ///
     /// It is the proportion of maximum capacity that could be required across time slices.
     #[serde(deserialize_with = "deserialise_proportion_nonzero")]
-    pub capacity_limit_factor: Dimensionless,
+    pub capacity_tranche_fraction: Dimensionless,
     /// The pricing strategy used to calculate fallback prices for the mini dispatch optimisation
     /// during investment appraisal.
     ///
@@ -144,7 +144,7 @@ impl Default for ModelParameters {
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
             commodity_balance_epsilon: Flow(1e-6),
-            capacity_limit_factor: Dimensionless(0.05),
+            capacity_tranche_fraction: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
             seasonal_utilisation_penalty: MoneyPerCapacityPerYear(1e-6),
@@ -333,7 +333,7 @@ impl ModelParameters {
         // milestone_years
         check_milestone_years(&self.milestone_years)?;
 
-        // capacity_limit_factor already validated with deserialise_proportion_nonzero
+        // capacity_tranche_fraction already validated with deserialise_proportion_nonzero
 
         // fallback_pricing_strategy already validated by deserialisation
 

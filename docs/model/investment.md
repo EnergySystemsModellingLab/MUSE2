@@ -133,10 +133,10 @@ at its maximum annual rate:
 
 \\[
   \mathrm{TrialCapacity} = \frac{\sum_t \mathrm{Demand}_t}{\mathrm{MaxAnnualSupplyPerCapacity}}
-    \\times \mathrm{CapacityLimitFactor}
+    \\times \mathrm{CapacityTrancheFraction}
 \\]
 
-`capacity_limit_factor` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
+`capacity_tranche_fraction` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
 size of investment increments relative to total demand. Lower values produce smaller investment
 increments (requiring more investment rounds), while higher values produce larger increments.
 

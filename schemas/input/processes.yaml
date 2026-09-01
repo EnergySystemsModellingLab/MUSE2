@@ -38,5 +38,5 @@ fields:
     notes:
       Optional (defaults to None). If present, must be >0. If no tranche size is specified, the tranche
       size used for investments is calculated based on demand at the time of investment and
-      `capacity_limit_factor`. For a user-provided asset, `num_tranches` in `assets.csv` can instead
+      `capacity_tranche_fraction`. For a user-provided asset, `num_tranches` in `assets.csv` can instead
       determine the tranche size.

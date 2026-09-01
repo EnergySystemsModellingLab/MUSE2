@@ -201,7 +201,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 commodity,
                 region_id,
                 YEAR,
-                model.parameters.capacity_limit_factor,
+                model.parameters.capacity_tranche_fraction,
             )
             .collect();
             let agent_addition_limits = collect_agent_limits(

@@ -189,7 +189,7 @@ pub fn select_assets_for_single_market(
             commodity,
             region_id,
             year,
-            model.parameters.capacity_limit_factor,
+            model.parameters.capacity_tranche_fraction,
         )
         .collect::<Vec<_>>();
 
@@ -423,7 +423,7 @@ pub fn get_asset_options<'a>(
     commodity: &'a Commodity,
     region_id: &'a RegionID,
     year: u32,
-    capacity_limit_factor: Dimensionless,
+    capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     // Get existing assets which produce the commodity of interest
     let existing_assets = all_existing_assets
@@ -440,7 +440,7 @@ pub fn get_asset_options<'a>(
         region_id,
         commodity,
         year,
-        capacity_limit_factor,
+        capacity_tranche_fraction,
     );
 
     chain(existing_assets, candidate_assets)
@@ -452,14 +452,14 @@ pub fn get_asset_options<'a>(
 /// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
 /// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
 ///   demand for the commodity and the asset's maximum annual production per unit capacity
-///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
+///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_tranche_fraction`.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
     region_id: &'a RegionID,
     commodity: &'a Commodity,
     year: u32,
-    capacity_limit_factor: Dimensionless,
+    capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
         .iter_search_space(region_id, &commodity.id, year)
@@ -475,10 +475,10 @@ fn get_candidate_assets<'a>(
                 tranche_size
             } else {
                 // Otherwise, calculate tranche size based on demand for the commodity, scaled by the
-                // capacity_limit_factor.
+                // capacity_tranche_fraction.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                capacity_scale * capacity_limit_factor
+                capacity_scale * capacity_tranche_fraction
             };
             let asset_capacity = AssetCapacity::single(tranche_size);
             asset.set_capacity(asset_capacity);
