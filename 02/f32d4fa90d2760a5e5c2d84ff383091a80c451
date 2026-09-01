@@ -1,0 +1,55 @@
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/muse1_default/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+src/output.rs
+  h_e76403a1cd4bf1 170,644,771,783,793,809
+tests/data/simple_shadow/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/simple_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+src/asset.rs
+  h_e76403a1cd4bf1 741,821,829,839,845-846,1014-1015,1026,1081,1084,1087,1142-1143,1619-1620,1625-1626,1637-1639,1644,1646,1656,1673,1676-1677,1694-1695,1706-1707,1709,1714-1716,1718-1720,1725-1726,1733-1734,1739,1742,1747,1753-1754,1758-1762,1766,1769,1776-1777,1782,1787,1800-1801,1806,1819
+tests/data/simple_ironing_out/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+schemas/output/asset_capacities.yaml
+  h_e76403a1cd4bf1 20
+tests/data/simple_mothball/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/missing_commodity/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/simple_marginal/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/two_outputs/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/simple_unit_size/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/simple/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+src/asset/pool.rs
+  h_e76403a1cd4bf1 108,114,551,643,657-658,669,684
+tests/data/two_regions/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 618
+tests/data/simple_marginal_average/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+tests/data/simple_full/asset_capacities.csv
+  h_e76403a1cd4bf1 1
+src/simulation.rs
+  h_e76403a1cd4bf1 185,193
+  h_e76403a1cd4bf1 183-184,186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "02f32d4fa90d2760a5e5c2d84ff383091a80c451",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
