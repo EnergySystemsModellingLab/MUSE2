@@ -65,7 +65,7 @@ pub struct Process {
     pub investment_constraints: ProcessInvestmentConstraintsMap,
     /// Capacity of each tranche for investments in this process, if any.
     ///
-    /// Candidate assets are created with one tranche of this size, and MUSE may select multiple
+    /// Candidate assets are created with one tranche of this size, and MUSE2 may select multiple
     /// tranches over successive investment rounds. For user-provided assets, this value determines
     /// how their total capacity is represented as equal-capacity tranches; the number of tranches
     /// is rounded up when necessary.
