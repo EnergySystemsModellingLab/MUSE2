@@ -1,0 +1,14 @@
+docs/release_notes/v2.2.0.md
+  h_e76403a1cd4bf1 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c321b586d2be65feef789c3df2fe424cf699d827",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
