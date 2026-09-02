@@ -105,40 +105,43 @@ The annualised fixed cost (AFC) per unit of capacity differs between the two cat
 
 ## Asset Capacities
 
-Every asset consists of one or more equal-capacity units. A single-unit asset is retained or
-mothballed as a whole, while the units of a multi-unit asset can be retained or mothballed
+Every asset consists of one or more equal-capacity tranches. A single-tranche asset is retained or
+mothballed as a whole, while the tranches of a multi-tranche asset can be retained or mothballed
 independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
-- For assets defined in `assets.csv`, an explicitly supplied `num_units` determines the unit size.
-  Otherwise, a process `unit_size` determines the unit size. If neither is supplied, the asset
-  consists of one unit with its full capacity.
-- Assets invested in _by MUSE_ will use the process `unit_size`, if defined, or will use a capacity
-  based on demand at the time of investment (see "trial capacity" below).
+- For assets defined in `assets.csv`, an explicitly supplied `num_tranches` determines the tranche size.
+  Otherwise, a process `tranche_size` determines the tranche size. If neither is supplied, the asset
+  consists of one tranche with its full capacity.
+- Assets invested in _by MUSE_ are commissioned one tranche at a time, using the process
+  `tranche_size` if defined, or a tranche size inferred from demand at the time of investment (see
+  "trial capacity" below).
 
 ### Existing assets
 
 Existing assets (i.e assets that have already been commissioned, whether via `assets.csv` or by
-MUSE) are appraised one unit at a time to decide how many units to retain. This allows partial
-retention — for example, some units of a multi-unit plant may be retained while others are
+MUSE) are appraised one tranche at a time to decide how many tranches to retain. This allows partial
+retention — for example, some tranches of a multi-tranche plant may be retained while others are
 mothballed.
 
 ### Candidate assets
 
-Before a candidate asset for new investment can be appraised, it is assigned a trial capacity which
-defines how much capacity can be installed in a single investment round.
+Before a candidate asset for new investment can be appraised, it is assigned a trial capacity. This
+is the capacity of one tranche, or the amount of capacity that can be installed in a single
+investment round.
 
-If a process has a defined `unit_size`, the trial capacity is set to one unit. Otherwise, it
-calculated based on the capacity that would satisfy the total remaining demand if the asset operated
-at its maximum annual rate:
+If a process has a defined `tranche_size`, the trial capacity is set to that tranche size. Otherwise,
+the tranche size is inferred from the capacity that would satisfy the total annual demand if the
+asset operated at its maximum annual rate:
 
 \\[
   \mathrm{TrialCapacity} = \frac{\sum_t \mathrm{Demand}_t}{\mathrm{MaxAnnualSupplyPerCapacity}}
-    \\times \mathrm{CapacityLimitFactor}
+    \\times \mathrm{CapacityTrancheFraction}
 \\]
 
-`capacity_limit_factor` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
-size of investment increments relative to total demand. Lower values produce smaller investment
-increments (requiring more investment rounds), while higher values produce larger increments.
+`capacity_tranche_fraction` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
+size of inferred investment tranches relative to this demand-based capacity. Lower values produce
+smaller tranches and therefore require more investment rounds, while higher values produce larger
+tranches.
 
 ### Investment constraints
 
@@ -309,7 +312,7 @@ terminates with an error.
 ## Mothballing and Decommissioning
 
 After investment is complete for a given MSY, any previously commissioned assets (or individual
-units making up the asset) that were not selected for retention are *mothballed*: their mothball
+tranches making up the asset) that were not selected for retention are *mothballed*: their mothball
 year is recorded and they are removed from the active asset pool. They remain available for
 potential re-selection in future MSYs.
 

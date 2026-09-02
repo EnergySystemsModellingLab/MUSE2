@@ -20,14 +20,14 @@
 - The execution time of key simulation steps (e.g. dispatch, agent investment) is now logged
   ([#1421])
 - The `addition_limit` column in `process_investment_constraints.csv` is now optional ([#1427])
-- Memory usage and performance has been drastically improved for divisible assets with many units
+- Memory usage and performance has been drastically improved for divisible assets with many tranches
   ([#1464])
-- `asset_capacities.csv` now reports total and mothballed capacity and unit counts ([#1461])
+- `asset_capacities.csv` now reports total and mothballed capacity and tranche counts ([#1461])
 
 ## Breaking changes
 
 - Changed the default `pricing_strategy` for SED/SVD commodities from "shadow" to "full_average" ([#1281])
-- The individual units of divisible assets are no longer treated as separate assets and are instead
+- The individual tranches of divisible assets are no longer treated as separate assets and are instead
   grouped under a single larger asset, affecting a number of output files. The `group_id` column has
   been removed from all files. ([#1286], [#1302], [#1455])
 - The `agent_search_space.csv` input file has been renamed to `agent_search_spaces.csv` for
@@ -37,6 +37,11 @@
   informative, however. ([#1376])
 - Stricter input validation: `capacity_to_activity` must now be greater than zero. Previously,
   `capacity_to_activity = 0` was permitted ([#1391])
+- The `capacity_limit_factor` parameter in `model.toml` has been renamed to
+  `capacity_tranche_fraction` ([#1502])
+- The `unit_size` parameter in `processes.csv` has been renamed to `tranche_size` ([#1502])
+- The `num_units` parameter in the `asset_capacities.csv` output file has been renamed to
+  `num_tranches` ([#1502])
 
 ## Bug fixes
 
@@ -93,3 +98,4 @@
 [#1455]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1455
 [#1458]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1458
 [#1464]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1464
+[#1502]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1502

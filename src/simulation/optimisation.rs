@@ -268,10 +268,10 @@ impl Solution<'_> {
             .keys()
             .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
             .map(|(asset, capacity_var)| {
-                // The capacity variable represents number of units
-                let unit_size = asset.capacity().unit_size();
+                // The capacity variable represents number of tranches
+                let tranche_size = asset.capacity().tranche_size();
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let asset_capacity = AssetCapacity::new(capacity_var.round() as u32, unit_size);
+                let asset_capacity = AssetCapacity::new(capacity_var.round() as u32, tranche_size);
 
                 (asset, asset_capacity)
             })
@@ -846,18 +846,18 @@ fn add_capacity_variables(
         // Add a capacity variable for each asset
         // Bounds are calculated based on current capacity with wiggle-room defined by
         // `capacity_margin`, and limited by `capacity_limit` if provided.
-        // Since capacity variables are numbers of units, we apply constraints to the unit count
-        let unit_size = asset.capacity().unit_size();
-        let current_units = asset.capacity().num_units();
+        // Since capacity variables are numbers of tranches, we apply constraints to the tranche count
+        let tranche_size = asset.capacity().tranche_size();
+        let current_tranches = asset.capacity().num_tranches();
 
-        let lower = (current_units as f64 * (1.0 - capacity_margin)).max(0.0);
+        let lower = (current_tranches as f64 * (1.0 - capacity_margin)).max(0.0);
 
-        let mut upper = current_units as f64 * (1.0 + capacity_margin);
+        let mut upper = current_tranches as f64 * (1.0 + capacity_margin);
         if let Some(limit) = capacity_limits.and_then(|limits| limits.get(asset)) {
-            upper = upper.min((*limit / unit_size).value());
+            upper = upper.min((*limit / tranche_size).value());
         }
 
-        let var = problem.add_integer_column((coeff * unit_size).value(), lower..=upper);
+        let var = problem.add_integer_column((coeff * tranche_size).value(), lower..=upper);
 
         let existing = variables.insert(asset.clone(), var).is_some();
         assert!(!existing, "Duplicate entry for var");

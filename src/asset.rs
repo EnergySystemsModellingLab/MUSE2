@@ -45,11 +45,11 @@ pub use pool::AssetPool;
 )]
 pub struct AssetID(u32);
 
-/// Indicates the year and number of units mothballed
+/// Indicates the year and number of tranches mothballed
 #[derive(PartialEq, Debug, Clone)]
 pub struct MothballEvent {
     year: u32,
-    num_units: u32,
+    num_tranches: u32,
 }
 
 /// The state of an asset
@@ -72,7 +72,7 @@ pub enum AssetState {
         /// Years in which all of some of the asset was mothballed.
         ///
         /// Invariants: This **must** be sorted by year with older years first and the total number
-        /// of units must not exceed the total for this asset.
+        /// of tranches must not exceed the total for this asset.
         mothball_events: VecDeque<MothballEvent>,
     },
     /// The asset is ready for investment, but not yet confirmed
@@ -118,18 +118,18 @@ fn hash_unit<U: UnitType>(value: U) -> u64 {
 impl Asset {
     /// Create a new candidate asset
     ///
-    /// These candidates will have a single capacity unit with the given `unit_size`.
+    /// These candidates will have a single capacity tranche with the given `tranche_size`.
     pub fn new_candidate(
         process: Arc<Process>,
         region_id: RegionID,
-        unit_size: Capacity,
+        tranche_size: Capacity,
         commission_year: u32,
     ) -> Result<Self> {
         Self::new_with_state(
             AssetState::Candidate,
             process,
             region_id,
-            AssetCapacity::single(unit_size),
+            AssetCapacity::single(tranche_size),
             commission_year,
             None,
         )
@@ -738,8 +738,8 @@ impl Asset {
             "Capacity must be >= 0"
         );
         assert!(
-            self.get_num_mothballed_units() <= capacity.num_units(),
-            "Cannot set capacity to a smaller number of units than are currently mothballed"
+            self.get_num_mothballed_tranches() <= capacity.num_tranches(),
+            "Cannot set capacity to a smaller number of tranches than are currently mothballed"
         );
         self.capacity = capacity;
     }
@@ -817,38 +817,38 @@ impl Asset {
         }
     }
 
-    /// Whether this asset has any units mothballed
-    pub fn has_any_mothballed_units(&self) -> bool {
+    /// Whether this asset has any tranches mothballed
+    pub fn has_any_mothballed_tranches(&self) -> bool {
         self.get_mothball_events()
             .is_some_and(|events| !events.is_empty())
     }
 
-    /// Get the number of units which are mothballed.
+    /// Get the number of tranches which are mothballed.
     ///
     /// For non-commissioned assets, this always returns zero.
-    pub fn get_num_mothballed_units(&self) -> u32 {
+    pub fn get_num_mothballed_tranches(&self) -> u32 {
         let Some(events) = self.get_mothball_events() else {
             return 0;
         };
 
-        events.iter().map(|event| event.num_units).sum()
+        events.iter().map(|event| event.num_tranches).sum()
     }
 
     /// Get the capacity which is mothballed.
     pub fn mothballed_capacity(&self) -> Capacity {
-        self.capacity().unit_size() * Dimensionless(self.get_num_mothballed_units() as f64)
+        self.capacity().tranche_size() * Dimensionless(self.get_num_mothballed_tranches() as f64)
     }
 
-    /// Get the remaining number of units that are not mothballed.
+    /// Get the remaining number of tranches that are not mothballed.
     ///
-    /// For non-commissioned assets, this always returns the total number of units.
-    pub fn get_num_nonmothballed_units(&self) -> u32 {
-        self.num_units() - self.get_num_mothballed_units()
+    /// For non-commissioned assets, this always returns the total number of tranches.
+    pub fn get_num_nonmothballed_tranches(&self) -> u32 {
+        self.num_tranches() - self.get_num_mothballed_tranches()
     }
 
-    /// The number of units this asset represents
-    pub fn num_units(&self) -> u32 {
-        self.capacity().num_units()
+    /// The number of tranches this asset represents
+    pub fn num_tranches(&self) -> u32 {
+        self.capacity().num_tranches()
     }
 }
 
@@ -937,16 +937,16 @@ pub fn check_capacity_valid_for_asset(capacity: Capacity) -> Result<()> {
     Ok(())
 }
 
-/// Log that the specified number of units has been decommissioned for the given asset
-fn log_decommissioning(asset: &Asset, num_units: u32, reason: &str) {
+/// Log that the specified number of tranches has been decommissioned for the given asset
+fn log_decommissioning(asset: &Asset, num_tranches: u32, reason: &str) {
     let (id, agent_id) = match &asset.state {
         AssetState::Commissioned { id, agent_id, .. } => (*id, agent_id.clone()),
         _ => panic!("Cannot decommission an asset that hasn't been commissioned"),
     };
     debug!(
-        "Decommissioning {}/{} units of '{}' asset (ID: {}) for agent '{}' (reason: {})",
-        num_units,
-        asset.num_units(),
+        "Decommissioning {}/{} tranches of '{}' asset (ID: {}) for agent '{}' (reason: {})",
+        num_tranches,
+        asset.num_tranches(),
         asset.process_id(),
         id,
         agent_id,
@@ -982,73 +982,77 @@ impl AssetRef {
         }
     }
 
-    /// Get an [`AssetRef`] representing a subset of this asset's units.
+    /// Get an [`AssetRef`] representing a subset of this asset's tranches.
     ///
-    /// If some of the asset's units are mothballed, these are discarded before non-mothballed
-    /// units. For example, if an asset has seven units of which four are mothballed and we are
-    /// reducing the number of units to four, the new asset will have one mothballed unit.
+    /// If some of the asset's tranches are mothballed, these are discarded before non-mothballed
+    /// tranches. For example, if an asset has seven tranches of which four are mothballed and we are
+    /// reducing the number of tranches to four, the new asset will have one mothballed tranche.
     ///
     /// # Panics
     ///
-    /// Panics if `new_num_units` is zero or exceeds the total capacity of this asset.
-    pub fn with_subset_of_units(self, new_num_units: u32) -> Self {
-        if new_num_units == self.num_units() {
+    /// Panics if `new_num_tranches` is zero or exceeds the total capacity of this asset.
+    pub fn with_subset_of_tranches(self, new_num_tranches: u32) -> Self {
+        if new_num_tranches == self.num_tranches() {
             return self;
         }
 
-        assert!(new_num_units > 0, "Cannot make an asset with zero units");
-
-        let max_num_units = self.capacity().num_units();
-        let unit_size = self.capacity().unit_size();
-
         assert!(
-            new_num_units <= max_num_units,
-            "Cannot make an asset with more units than original"
+            new_num_tranches > 0,
+            "Cannot make an asset with zero tranches"
         );
 
-        // Make a new Asset with fewer units. If there are more mothballed units than the new asset
-        // will have, we reduce this number to avoid there being more mothballed units than the new
+        let max_num_tranches = self.capacity().num_tranches();
+        let tranche_size = self.capacity().tranche_size();
+
+        assert!(
+            new_num_tranches <= max_num_tranches,
+            "Cannot make an asset with more tranches than original"
+        );
+
+        // Make a new Asset with fewer tranches. If there are more mothballed tranches than the new asset
+        // will have, we reduce this number to avoid there being more mothballed tranches than the new
         // asset has, which would be a logic error. We discard mothballed before non-mothballed
-        // units.
-        let new_num_mothballed = new_num_units.saturating_sub(self.get_num_nonmothballed_units());
-        let mut asset = self.with_mothballed_units(new_num_mothballed, None);
+        // tranches.
+        let new_num_mothballed =
+            new_num_tranches.saturating_sub(self.get_num_nonmothballed_tranches());
+        let mut asset = self.with_mothballed_tranches(new_num_mothballed, None);
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
+            .set_capacity(AssetCapacity::new(new_num_tranches, tranche_size));
         asset
     }
 
-    /// Get an [`AssetRef`] representing a single unit of this asset.
-    pub fn as_single_unit(self) -> Self {
-        let new_num_units = 1;
-        let unit_size = self.capacity().unit_size();
-        let mut asset = self.with_no_mothballed_units();
+    /// Get an [`AssetRef`] representing a single tranche of this asset.
+    pub fn as_single_tranche(self) -> Self {
+        let new_num_tranches = 1;
+        let tranche_size = self.capacity().tranche_size();
+        let mut asset = self.with_no_mothballed_tranches();
         asset
             .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_units, unit_size));
+            .set_capacity(AssetCapacity::new(new_num_tranches, tranche_size));
         asset
     }
 
     /// Decommission this asset
     fn decommission(self, reason: &str) {
-        log_decommissioning(&self, self.num_units(), reason);
+        log_decommissioning(&self, self.num_tranches(), reason);
     }
 
-    /// Decommission any units that were mothballed at least `mothball_years` ago.
+    /// Decommission any tranches that were mothballed at least `mothball_years` ago.
     ///
-    /// If the asset still has some units remaining, it is returned, else None.
+    /// If the asset still has some tranches remaining, it is returned, else None.
     fn with_decommission_mothballed(self, year: u32, mothball_years: u32) -> Option<Self> {
         let events = self
             .get_mothball_events()
-            .expect("Can only decommission mothballed units in commissioned assets");
+            .expect("Can only decommission mothballed tranches in commissioned assets");
 
-        // Mothball events are ordered oldest-first, so this sums the units mothballed longest ago
-        let units_to_remove: u32 = events
+        // Mothball events are ordered oldest-first, so this sums the tranches mothballed longest ago
+        let tranches_to_remove: u32 = events
             .iter()
             .take_while(|event| event.year <= year.saturating_sub(mothball_years))
-            .map(|event| event.num_units)
+            .map(|event| event.num_tranches)
             .sum();
-        if units_to_remove == 0 {
+        if tranches_to_remove == 0 {
             // Nothing to do. Return self unmodified.
             return Some(self);
         }
@@ -1056,91 +1060,91 @@ impl AssetRef {
         let reason = format!(
             "The asset has not been used for the set mothball years ({mothball_years} years)."
         );
-        let new_num_units = self.num_units() - units_to_remove;
-        if new_num_units == 0 {
+        let new_num_tranches = self.num_tranches() - tranches_to_remove;
+        if new_num_tranches == 0 {
             self.decommission(&reason);
             return None;
         }
 
-        // `with_subset_of_units` discards the oldest mothballed units first, which are exactly the
+        // `with_subset_of_tranches` discards the oldest mothballed tranches first, which are exactly the
         // ones being decommissioned here.
-        log_decommissioning(&self, units_to_remove, &reason);
-        Some(self.with_subset_of_units(new_num_units))
+        log_decommissioning(&self, tranches_to_remove, &reason);
+        Some(self.with_subset_of_tranches(new_num_tranches))
     }
 
-    /// Return a new [`AssetRef`] with the specified number of units mothballed.
+    /// Return a new [`AssetRef`] with the specified number of tranches mothballed.
     ///
-    /// If `num_units` equals the number of already mothballed units, the original asset is
-    /// returned. If additional units may be mothballed, a value must be provided for `year`.
+    /// If `num_tranches` equals the number of already mothballed tranches, the original asset is
+    /// returned. If additional tranches may be mothballed, a value must be provided for `year`.
     ///
     /// # Panics
     ///
-    /// Panics if attempting to mothball more units than the asset represents or if attempting to
-    /// change the number of mothballed units for a non-commissioned asset.
-    pub fn with_mothballed_units(mut self, num_units: u32, year: Option<u32>) -> Self {
-        if num_units == 0 {
+    /// Panics if attempting to mothball more tranches than the asset represents or if attempting to
+    /// change the number of mothballed tranches for a non-commissioned asset.
+    pub fn with_mothballed_tranches(mut self, num_tranches: u32, year: Option<u32>) -> Self {
+        if num_tranches == 0 {
             // Small optimisation
-            return self.with_no_mothballed_units();
+            return self.with_no_mothballed_tranches();
         }
 
-        let num_already_mothballed = self.get_num_mothballed_units();
-        if num_units == num_already_mothballed {
+        let num_already_mothballed = self.get_num_mothballed_tranches();
+        if num_tranches == num_already_mothballed {
             // Nothing to do. Return self unmodified.
             return self;
         }
 
         assert!(
-            num_units <= self.num_units(),
-            "Cannot mothball more units than asset represents"
+            num_tranches <= self.num_tranches(),
+            "Cannot mothball more tranches than asset represents"
         );
 
         // Now that we know we have to modify self, call make_mut().
         let events = self.make_mut().get_mothball_events_mut().expect(
-            "Cannot change number of mothballed units for an asset that hasn't been commissioned",
+            "Cannot change number of mothballed tranches for an asset that hasn't been commissioned",
         );
-        if num_units < num_already_mothballed {
-            // Remove mothballing events until only required num of mothballed units remains,
+        if num_tranches < num_already_mothballed {
+            // Remove mothballing events until only required num of mothballed tranches remains,
             // starting with oldest
-            let mut remaining = num_already_mothballed - num_units;
+            let mut remaining = num_already_mothballed - num_tranches;
             while remaining > 0
                 && let Some(event) = events.front_mut()
             {
-                let to_remove = event.num_units.min(remaining);
-                event.num_units -= to_remove;
+                let to_remove = event.num_tranches.min(remaining);
+                event.num_tranches -= to_remove;
                 remaining -= to_remove;
-                if event.num_units == 0 {
+                if event.num_tranches == 0 {
                     events.pop_front();
                 }
             }
         } else {
             let year =
-                year.expect("Cannot increase number of mothballed units without supplying year");
+                year.expect("Cannot increase number of mothballed tranches without supplying year");
 
             if let Some(event) = events.back() {
                 // Need to check this as adding events in the past breaks the expected invariant for
                 // `mothball_events`
                 assert!(
                     event.year <= year,
-                    "Attempting to mothball units in a year in the past"
+                    "Attempting to mothball tranches in a year in the past"
                 );
             }
 
-            // Mothball extra units in specified year
+            // Mothball extra tranches in specified year
             events.push_back(MothballEvent {
                 year,
-                num_units: num_units - num_already_mothballed,
+                num_tranches: num_tranches - num_already_mothballed,
             });
         }
 
         self
     }
 
-    /// Returns a new [`AssetRef`] with no mothballed units.
+    /// Returns a new [`AssetRef`] with no mothballed tranches.
     ///
-    /// If the asset has no mothballed units, the original asset is returned.
-    pub fn with_no_mothballed_units(mut self) -> Self {
-        if self.has_any_mothballed_units() {
-            // Only commissioned assets can have mothballed units, so this is safe
+    /// If the asset has no mothballed tranches, the original asset is returned.
+    pub fn with_no_mothballed_tranches(mut self) -> Self {
+        if self.has_any_mothballed_tranches() {
+            // Only commissioned assets can have mothballed tranches, so this is safe
             self.make_mut().get_mothball_events_mut().unwrap().clear();
         }
 
@@ -1235,7 +1239,7 @@ mod tests {
     use crate::commodity::Commodity;
     use crate::fixture::{
         agent_id, assert_error, assert_patched_runs_ok_simple, assert_validate_fails_with_simple,
-        asset, multi_unit_asset, process, process_activity_limits_map, process_flows_map,
+        asset, multi_tranche_asset, process, process_activity_limits_map, process_flows_map,
         region_id, svd_commodity, time_slice, time_slice_info,
     };
     use crate::patch::FilePatch;
@@ -1252,12 +1256,12 @@ mod tests {
     use rstest::{fixture, rstest};
     use std::sync::Arc;
 
-    /// A commissioned asset with three units.
+    /// A commissioned asset with three tranches.
     #[fixture]
-    fn commissioned_multi_unit(mut multi_unit_asset: Asset) -> AssetRef {
-        multi_unit_asset.commission(AssetID(0));
-        assert_eq!(multi_unit_asset.num_units(), 3);
-        AssetRef::from(multi_unit_asset)
+    fn commissioned_multi_tranche(mut multi_tranche_asset: Asset) -> AssetRef {
+        multi_tranche_asset.commission(AssetID(0));
+        assert_eq!(multi_tranche_asset.num_tranches(), 3);
+        AssetRef::from(multi_tranche_asset)
     }
 
     #[rstest]
@@ -1452,7 +1456,7 @@ mod tests {
         region_id: RegionID,
         #[case] capacity: Capacity,
     ) {
-        // It's permitted to create an AssetCapacity with zero unit_size, but this should be
+        // It's permitted to create an AssetCapacity with zero tranche_size, but this should be
         // rejected for UserAsset's
         let asset_capacity = AssetCapacity::single(capacity);
         assert_error!(
@@ -1505,18 +1509,18 @@ mod tests {
 
     #[rstest]
     #[case::subset(2, false)]
-    #[case::all_all_units(3, true)]
-    fn with_subset_of_units(
-        multi_unit_asset: Asset,
-        #[case] num_units: u32,
+    #[case::all_tranches(3, true)]
+    fn with_subset_of_tranches(
+        multi_tranche_asset: Asset,
+        #[case] num_tranches: u32,
         #[case] expect_same_asset: bool,
     ) {
-        let asset = AssetRef::from(multi_unit_asset);
-        let asset_subset = asset.clone().with_subset_of_units(num_units);
+        let asset = AssetRef::from(multi_tranche_asset);
+        let asset_subset = asset.clone().with_subset_of_tranches(num_tranches);
 
         assert_eq!(
             asset_subset.capacity(),
-            AssetCapacity::new(num_units, Capacity(4.0))
+            AssetCapacity::new(num_tranches, Capacity(4.0))
         );
         assert_eq!(asset_subset.id(), asset.id());
         assert_eq!(asset_subset.agent_id(), asset.agent_id());
@@ -1525,15 +1529,15 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot make an asset with zero units")]
-    fn with_subset_of_units_panics_for_zero_units(commissioned_multi_unit: AssetRef) {
-        commissioned_multi_unit.with_subset_of_units(0);
+    #[should_panic(expected = "Cannot make an asset with zero tranches")]
+    fn with_subset_of_tranches_panics_for_zero_tranches(commissioned_multi_tranche: AssetRef) {
+        commissioned_multi_tranche.with_subset_of_tranches(0);
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot make an asset with more units than original")]
-    fn with_subset_of_units_panics_for_too_many_units(commissioned_multi_unit: AssetRef) {
-        commissioned_multi_unit.with_subset_of_units(4);
+    #[should_panic(expected = "Cannot make an asset with more tranches than original")]
+    fn with_subset_of_tranches_panics_for_too_many_tranches(commissioned_multi_tranche: AssetRef) {
+        commissioned_multi_tranche.with_subset_of_tranches(4);
     }
 
     #[rstest]
@@ -1613,177 +1617,181 @@ mod tests {
     #[case::none(0)]
     #[case::some(2)]
     #[case::all(3)]
-    fn mothball_unit_counts(commissioned_multi_unit: AssetRef, #[case] num_mothballed: u32) {
-        assert_eq!(commissioned_multi_unit.num_units(), 3);
-        let asset = commissioned_multi_unit.with_mothballed_units(num_mothballed, Some(2020));
-        assert_eq!(asset.get_num_mothballed_units(), num_mothballed);
+    fn mothball_tranche_counts(commissioned_multi_tranche: AssetRef, #[case] num_mothballed: u32) {
+        assert_eq!(commissioned_multi_tranche.num_tranches(), 3);
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(num_mothballed, Some(2020));
+        assert_eq!(asset.get_num_mothballed_tranches(), num_mothballed);
         assert_eq!(
             asset.mothballed_capacity(),
             Capacity(4.0 * num_mothballed as f64)
         );
-        assert_eq!(asset.get_num_nonmothballed_units(), 3 - num_mothballed);
-        assert_eq!(asset.has_any_mothballed_units(), num_mothballed > 0);
+        assert_eq!(asset.get_num_nonmothballed_tranches(), 3 - num_mothballed);
+        assert_eq!(asset.has_any_mothballed_tranches(), num_mothballed > 0);
     }
 
     #[rstest]
     fn mothball_counts_non_commissioned(asset: Asset, process: Process) {
-        // Non-commissioned assets never have mothballed units, regardless of state
+        // Non-commissioned assets never have mothballed tranches, regardless of state
         let ready = AssetRef::from(asset);
         let candidate = AssetRef::from(
             Asset::new_candidate(process.into(), "GBR".into(), Capacity(1.0), 2020).unwrap(),
         );
         for asset in [ready, candidate] {
-            assert!(!asset.has_any_mothballed_units());
-            assert_eq!(asset.get_num_mothballed_units(), 0);
-            assert_eq!(asset.get_num_nonmothballed_units(), asset.num_units());
+            assert!(!asset.has_any_mothballed_tranches());
+            assert_eq!(asset.get_num_mothballed_tranches(), 0);
+            assert_eq!(asset.get_num_nonmothballed_tranches(), asset.num_tranches());
         }
     }
 
     #[rstest]
-    fn with_mothballed_units_accumulates_events(commissioned_multi_unit: AssetRef) {
-        // Mothball one unit in 2020
-        let asset = commissioned_multi_unit.with_mothballed_units(1, Some(2020));
+    fn with_mothballed_tranches_accumulates_events(commissioned_multi_tranche: AssetRef) {
+        // Mothball one tranche in 2020
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(1, Some(2020));
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
                 year: 2020,
-                num_units: 1,
+                num_tranches: 1,
             }],
         );
 
-        // Mothball a second unit in 2022: events are retained in chronological order
-        let asset = asset.with_mothballed_units(2, Some(2022));
+        // Mothball a second tranche in 2022: events are retained in chronological order
+        let asset = asset.with_mothballed_tranches(2, Some(2022));
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[
                 MothballEvent {
                     year: 2020,
-                    num_units: 1,
+                    num_tranches: 1,
                 },
                 MothballEvent {
                     year: 2022,
-                    num_units: 1,
+                    num_tranches: 1,
                 },
             ],
         );
     }
 
     #[rstest]
-    fn with_mothballed_units_decrease_removes_oldest_first(commissioned_multi_unit: AssetRef) {
-        // Mothball 1 unit in 2020, then 2 more (3 total) in 2022
-        let asset = commissioned_multi_unit
-            .with_mothballed_units(1, Some(2020))
-            .with_mothballed_units(3, Some(2022));
+    fn with_mothballed_tranches_decrease_removes_oldest_first(
+        commissioned_multi_tranche: AssetRef,
+    ) {
+        // Mothball 1 tranche in 2020, then 2 more (3 total) in 2022
+        let asset = commissioned_multi_tranche
+            .with_mothballed_tranches(1, Some(2020))
+            .with_mothballed_tranches(3, Some(2022));
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[
                 MothballEvent {
                     year: 2020,
-                    num_units: 1,
+                    num_tranches: 1,
                 },
                 MothballEvent {
                     year: 2022,
-                    num_units: 2,
+                    num_tranches: 2,
                 },
             ],
         );
 
-        // Reduce to a single mothballed unit: the oldest event is fully removed and the newer
-        // event is partially reduced, leaving exactly one mothballed unit
-        let asset = asset.with_mothballed_units(1, None);
-        assert_eq!(asset.get_num_mothballed_units(), 1);
+        // Reduce to a single mothballed tranche: the oldest event is fully removed and the newer
+        // event is partially reduced, leaving exactly one mothballed tranche
+        let asset = asset.with_mothballed_tranches(1, None);
+        assert_eq!(asset.get_num_mothballed_tranches(), 1);
         assert_equal(
             asset.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
                 year: 2022,
-                num_units: 1,
+                num_tranches: 1,
             }],
         );
     }
 
     #[rstest]
-    fn with_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
-        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
-        // Requesting the same number of mothballed units is a no-op (the year is ignored)
-        let same = asset.clone().with_mothballed_units(2, Some(2099));
+    fn with_mothballed_tranches_noop_returns_same_rc(commissioned_multi_tranche: AssetRef) {
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(2, Some(2020));
+        // Requesting the same number of mothballed tranches is a no-op (the year is ignored)
+        let same = asset.clone().with_mothballed_tranches(2, Some(2099));
         assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
-    fn with_mothballed_units_zero_unmothballs(commissioned_multi_unit: AssetRef) {
-        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
-        assert!(asset.has_any_mothballed_units());
+    fn with_mothballed_tranches_zero_unmothballs(commissioned_multi_tranche: AssetRef) {
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(2, Some(2020));
+        assert!(asset.has_any_mothballed_tranches());
 
-        let asset = asset.with_mothballed_units(0, None);
-        assert!(!asset.has_any_mothballed_units());
-        assert_eq!(asset.get_num_mothballed_units(), 0);
+        let asset = asset.with_mothballed_tranches(0, None);
+        assert!(!asset.has_any_mothballed_tranches());
+        assert_eq!(asset.get_num_mothballed_tranches(), 0);
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot mothball more units than asset represents")]
-    fn with_mothballed_units_panics_for_too_many_units(commissioned_multi_unit: AssetRef) {
-        commissioned_multi_unit.with_mothballed_units(4, Some(2020));
+    #[should_panic(expected = "Cannot mothball more tranches than asset represents")]
+    fn with_mothballed_tranches_panics_for_too_many_tranches(commissioned_multi_tranche: AssetRef) {
+        commissioned_multi_tranche.with_mothballed_tranches(4, Some(2020));
     }
 
     #[rstest]
     #[should_panic(
-        expected = "Cannot change number of mothballed units for an asset that hasn't been commissioned"
+        expected = "Cannot change number of mothballed tranches for an asset that hasn't been commissioned"
     )]
-    fn with_mothballed_units_panics_for_non_commissioned(asset: Asset) {
-        AssetRef::from(asset).with_mothballed_units(1, Some(2020));
+    fn with_mothballed_tranches_panics_for_non_commissioned(asset: Asset) {
+        AssetRef::from(asset).with_mothballed_tranches(1, Some(2020));
     }
 
     #[rstest]
-    #[should_panic(expected = "Cannot increase number of mothballed units without supplying year")]
-    fn with_mothballed_units_panics_when_increasing_without_year(
-        commissioned_multi_unit: AssetRef,
+    #[should_panic(
+        expected = "Cannot increase number of mothballed tranches without supplying year"
+    )]
+    fn with_mothballed_tranches_panics_when_increasing_without_year(
+        commissioned_multi_tranche: AssetRef,
     ) {
-        commissioned_multi_unit.with_mothballed_units(1, None);
+        commissioned_multi_tranche.with_mothballed_tranches(1, None);
     }
 
     #[rstest]
-    #[should_panic(expected = "Attempting to mothball units in a year in the past")]
-    fn with_mothballed_units_panics_when_mothballing_in_the_past(
-        commissioned_multi_unit: AssetRef,
+    #[should_panic(expected = "Attempting to mothball tranches in a year in the past")]
+    fn with_mothballed_tranches_panics_when_mothballing_in_the_past(
+        commissioned_multi_tranche: AssetRef,
     ) {
-        // Mothball a unit in 2020, then attempt to mothball another in an earlier year, which would
+        // Mothball a tranche in 2020, then attempt to mothball another in an earlier year, which would
         // break the chronological ordering invariant of the mothball events
-        commissioned_multi_unit
-            .with_mothballed_units(1, Some(2020))
-            .with_mothballed_units(2, Some(2019));
+        commissioned_multi_tranche
+            .with_mothballed_tranches(1, Some(2020))
+            .with_mothballed_tranches(2, Some(2019));
     }
 
     #[rstest]
-    fn with_no_mothballed_units_clears_events(commissioned_multi_unit: AssetRef) {
-        let asset = commissioned_multi_unit.with_mothballed_units(2, Some(2020));
-        let asset = asset.with_no_mothballed_units();
-        assert!(!asset.has_any_mothballed_units());
-        assert_eq!(asset.get_num_mothballed_units(), 0);
+    fn with_no_mothballed_tranches_clears_events(commissioned_multi_tranche: AssetRef) {
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(2, Some(2020));
+        let asset = asset.with_no_mothballed_tranches();
+        assert!(!asset.has_any_mothballed_tranches());
+        assert_eq!(asset.get_num_mothballed_tranches(), 0);
     }
 
     #[rstest]
-    fn with_no_mothballed_units_noop_returns_same_rc(commissioned_multi_unit: AssetRef) {
-        // `commissioned_multi_unit` has no mothballed units, so the original Rc is returned unchanged
-        let asset = commissioned_multi_unit;
-        let same = asset.clone().with_no_mothballed_units();
+    fn with_no_mothballed_tranches_noop_returns_same_rc(commissioned_multi_tranche: AssetRef) {
+        // `commissioned_multi_tranche` has no mothballed tranches, so the original Rc is returned unchanged
+        let asset = commissioned_multi_tranche;
+        let same = asset.clone().with_no_mothballed_tranches();
         assert!(Arc::ptr_eq(&asset.0, &same.0));
     }
 
     #[rstest]
-    fn with_subset_of_units_caps_mothballed(commissioned_multi_unit: AssetRef) {
-        // Mothball all 3 units
-        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2020));
-        assert_eq!(asset.get_num_mothballed_units(), 3);
+    fn with_subset_of_tranches_caps_mothballed(commissioned_multi_tranche: AssetRef) {
+        // Mothball all 3 tranches
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(3, Some(2020));
+        assert_eq!(asset.get_num_mothballed_tranches(), 3);
 
-        // Taking a subset of 2 units caps the mothballed count at the new number of units
-        let subset = asset.with_subset_of_units(2);
-        assert_eq!(subset.num_units(), 2);
-        assert_eq!(subset.get_num_mothballed_units(), 2);
+        // Taking a subset of 2 tranches caps the mothballed count at the new number of tranches
+        let subset = asset.with_subset_of_tranches(2);
+        assert_eq!(subset.num_tranches(), 2);
+        assert_eq!(subset.get_num_mothballed_tranches(), 2);
     }
 
     #[rstest]
-    fn with_decommission_mothballed_nothing_old_enough(commissioned_multi_unit: AssetRef) {
-        let asset = commissioned_multi_unit.with_mothballed_units(1, Some(2020));
+    fn with_decommission_mothballed_nothing_old_enough(commissioned_multi_tranche: AssetRef) {
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(1, Some(2020));
         // Threshold is 2005, so the 2020 event is not old enough: the asset is returned unchanged
         let result = asset
             .clone()
@@ -1793,29 +1801,29 @@ mod tests {
     }
 
     #[rstest]
-    fn with_decommission_mothballed_partial(commissioned_multi_unit: AssetRef) {
-        // Mothball 1 unit in 2010 and 1 unit in 2020 (leaving 1 unit active)
-        let asset = commissioned_multi_unit
-            .with_mothballed_units(1, Some(2010))
-            .with_mothballed_units(2, Some(2020));
+    fn with_decommission_mothballed_partial(commissioned_multi_tranche: AssetRef) {
+        // Mothball 1 tranche in 2010 and 1 tranche in 2020 (leaving 1 tranche active)
+        let asset = commissioned_multi_tranche
+            .with_mothballed_tranches(1, Some(2010))
+            .with_mothballed_tranches(2, Some(2020));
 
         // With a threshold of 2015, only the 2010 event is old enough to decommission
         let result = asset.with_decommission_mothballed(2025, 10).unwrap();
-        assert_eq!(result.num_units(), 2);
-        assert_eq!(result.get_num_mothballed_units(), 1);
+        assert_eq!(result.num_tranches(), 2);
+        assert_eq!(result.get_num_mothballed_tranches(), 1);
         assert_equal(
             result.get_mothball_events().unwrap().iter(),
             &[MothballEvent {
                 year: 2020,
-                num_units: 1,
+                num_tranches: 1,
             }],
         );
     }
 
     #[rstest]
-    fn with_decommission_mothballed_all(commissioned_multi_unit: AssetRef) {
-        // All units mothballed long enough ago: the whole asset is decommissioned
-        let asset = commissioned_multi_unit.with_mothballed_units(3, Some(2010));
+    fn with_decommission_mothballed_all(commissioned_multi_tranche: AssetRef) {
+        // All tranches mothballed long enough ago: the whole asset is decommissioned
+        let asset = commissioned_multi_tranche.with_mothballed_tranches(3, Some(2010));
         assert!(asset.with_decommission_mothballed(2025, 10).is_none());
     }
 }

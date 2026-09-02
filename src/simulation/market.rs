@@ -189,7 +189,7 @@ pub fn select_assets_for_single_market(
             commodity,
             region_id,
             year,
-            model.parameters.capacity_limit_factor,
+            model.parameters.capacity_tranche_fraction,
         )
         .collect::<Vec<_>>();
 
@@ -423,7 +423,7 @@ pub fn get_asset_options<'a>(
     commodity: &'a Commodity,
     region_id: &'a RegionID,
     year: u32,
-    capacity_limit_factor: Dimensionless,
+    capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     // Get existing assets which produce the commodity of interest
     let existing_assets = all_existing_assets
@@ -440,7 +440,7 @@ pub fn get_asset_options<'a>(
         region_id,
         commodity,
         year,
-        capacity_limit_factor,
+        capacity_tranche_fraction,
     );
 
     chain(existing_assets, candidate_assets)
@@ -448,18 +448,19 @@ pub fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate is a single unit with a defined capacity.
-/// - For processes with a defined `unit_size`, the capacity is set to `unit_size`.
-/// - For processes without a defined `unit_size`, the capacity is calculated based on the total
+/// Each candidate represents one investment tranche with a defined capacity.
+/// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
+/// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
 ///   demand for the commodity and the asset's maximum annual production per unit capacity
-///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by `capacity_limit_factor`.
+///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
+///   `capacity_tranche_fraction` to infer the tranche size.
 fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
     agent: &'a Agent,
     region_id: &'a RegionID,
     commodity: &'a Commodity,
     year: u32,
-    capacity_limit_factor: Dimensionless,
+    capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
         .iter_search_space(region_id, &commodity.id, year)
@@ -470,17 +471,16 @@ fn get_candidate_assets<'a>(
                     .unwrap();
 
             // Set capacity of the candidate for investment appraisal
-            let unit_size = if let Some(unit_size) = asset.process().unit_size {
-                // For processes with a defined unit size, take this
-                unit_size
+            let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
+                // For processes with a defined tranche size, take this
+                tranche_size
             } else {
-                // Otherwise, calculate unit size based on demand for the commodity, scaled by the
-                // capacity_limit_factor.
+                // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
                 let capacity_scale =
                     calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                capacity_scale * capacity_limit_factor
+                capacity_scale * capacity_tranche_fraction
             };
-            let asset_capacity = AssetCapacity::single(unit_size);
+            let asset_capacity = AssetCapacity::single(tranche_size);
             asset.set_capacity(asset_capacity);
             asset.into()
         })
@@ -525,7 +525,7 @@ mod tests {
     use crate::fixture::{process, region_id};
     use crate::process::{Process, ProcessInvestmentConstraint};
     use crate::region::RegionID;
-    use crate::units::Dimensionless;
+    use crate::units::{Capacity, Dimensionless};
     use rstest::rstest;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -556,8 +556,8 @@ mod tests {
         process.investment_constraints.insert(
             (region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
-                addition_limit: Some(crate::units::Capacity(10.0)),
-                total_capacity_limit: Some(crate::units::Capacity(100.0)),
+                addition_limit: Some(Capacity(10.0)),
+                total_capacity_limit: Some(Capacity(100.0)),
             }),
         );
         let commodity_id = "commodity".into();
@@ -573,7 +573,7 @@ mod tests {
             Process::agent_addition_limit,
         );
 
-        assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(5.0)));
+        assert_eq!(result.get(&process_id), Some(&Capacity(5.0)));
 
         let result = collect_agent_limits(
             &agent,
@@ -584,7 +584,7 @@ mod tests {
             Process::agent_total_limit,
         );
 
-        assert_eq!(result.get(&process_id), Some(&crate::units::Capacity(50.0)));
+        assert_eq!(result.get(&process_id), Some(&Capacity(50.0)));
     }
 
     #[rstest]

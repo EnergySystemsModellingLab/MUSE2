@@ -486,11 +486,11 @@ where
                 let mut upper_limit = limits.end().value();
                 let mut lower_limit = limits.start().value();
 
-                // The capacity variable represents number of units, so we need to multiply the
-                // per-capacity limits by the unit size.
-                let unit_size = asset.capacity().unit_size();
-                upper_limit *= unit_size.value();
-                lower_limit *= unit_size.value();
+                // The capacity variable represents number of tranches, so we need to multiply the
+                // per-capacity limits by the tranche size.
+                let tranche_size = asset.capacity().tranche_size();
+                upper_limit *= tranche_size.value();
+                lower_limit *= tranche_size.value();
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection
@@ -640,7 +640,7 @@ mod tests {
     use crate::process::Process;
     use crate::process::{FlowType, ProcessFlow};
     use crate::time_slice::TimeSliceSelection;
-    use crate::units::{Capacity, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
@@ -701,7 +701,7 @@ mod tests {
     #[rstest]
     fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
         Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
-            .variable_operating_cost = crate::units::MoneyPerActivity(1.0);
+            .variable_operating_cost = MoneyPerActivity(1.0);
         let different = Asset::new_ready(
             "agent1".into(),
             Arc::new(process),

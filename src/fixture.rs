@@ -215,7 +215,7 @@ pub fn asset(process: Process) -> Asset {
 }
 
 #[fixture]
-pub fn multi_unit_asset(process: Process) -> Asset {
+pub fn multi_tranche_asset(process: Process) -> Asset {
     Asset::new_ready(
         "agent1".into(),
         Arc::new(process),
@@ -324,7 +324,7 @@ pub fn process(
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
         investment_constraints: process_investment_constraints,
-        unit_size: None,
+        tranche_size: None,
     }
 }
 
