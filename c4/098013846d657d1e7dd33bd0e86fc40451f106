@@ -1,0 +1,29 @@
+docs/release_notes/v2.2.0.md
+  h_e76403a1cd4bf1 83-88,90
+  s_89ed19146ead7a::t_79e00217bc7075 49-50,70,114,121-123
+  s_89ed19146ead7a::t_57ca9643a1c263 168
+  s_89ed19146ead7a::t_1e38aa031519c0 89,106-110
+  s_89ed19146ead7a::t_04ebeb0d87903c 46-47
+  s_89ed19146ead7a::t_d7a53d2dc2a717 120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c4098013846d657d1e7dd33bd0e86fc40451f106",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_89ed19146ead7a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "8425719d-46be-452f-afbc-4d3c0de06199",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
