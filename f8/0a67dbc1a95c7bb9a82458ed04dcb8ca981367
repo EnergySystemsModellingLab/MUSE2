@@ -1,0 +1,18 @@
+docs/release_notes/README.md
+  h_e76403a1cd4bf1 11
+docs/release_notes/v2.2.0.md
+  h_e76403a1cd4bf1 1
+docs/SUMMARY.md
+  h_e76403a1cd4bf1 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f80a67dbc1a95c7bb9a82458ed04dcb8ca981367",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
