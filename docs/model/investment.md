@@ -66,7 +66,7 @@ Each commodity market may be served by multiple agents, each responsible for a d
 (or *portion*) of the total demand. An agent's portion determines:
 
 - The fraction of the total demand that the agent is responsible for meeting.
-- The scaling applied to any `addition_limit` investment constraints
+- The scaling applied to any `addition_limit` and `total_capacity_limit` investment constraints
   (see [Investment Constraints](#investment-constraints)).
 
 Agent portions for each commodity and milestone year are defined in the agent input files.
@@ -145,21 +145,49 @@ tranches.
 
 ### Investment constraints
 
-Processes may have an `addition_limit` (see
-[`process_investment_constraints.csv`][process-investment-constraints-csv]) specifying the
-maximum new capacity that can be built per year. The installable capacity limit for a given MSY is:
+Processes may be subject to investment constraints defined in
+[`process_investment_constraints.csv`][process-investment-constraints-csv]: an `addition_limit`
+constraining new-build capacity, and a `total_capacity_limit` constraining total installed
+capacity.
+
+In multi-agent simulations, both limits are scaled by \\( \mathrm{AgentPortion} \\), the fraction
+of the commodity market for which an agent is responsible, to give a limit for each agent. One
+agent falling short of its own limits does **not** allow others to exceed theirs. Therefore, the
+overall limits can only ever be reached if *all* agents max out their own individual limits.
+
+#### Addition limits
+
+The `addition_limit` specifies the maximum new capacity that can be built *per year*, and applies
+only to **candidate** (new-build) assets. The installable capacity limit for a given process
+(\\( p \\)), agent (\\( g \\)), region (\\( r \\)), commodity (\\( c \\)) and milestone year is:
 
 \\[
-  \mathrm{MaxInstallableCapacity} = \mathrm{AdditionLimit} \times \Delta_{\mathrm{MSY}}
-    \times \mathrm{AgentPortion}
+  \mathrm{MaxInstallableCapacity}\_{p,r,y,g} = \mathrm{AdditionLimit}\_{p,r,y}
+    \cdot \Delta\_{\mathrm{MSY}} \cdot \mathrm{AgentPortion}\_{c,r,y,g}
 \\]
 
-where \\( \Delta_{\mathrm{MSY}} \\) is the number of years since the previous MSY and
-\\( \mathrm{AgentPortion} \\) is the fraction of the commodity market for which this agent is
-responsible.
+where \\( \Delta_{\mathrm{MSY}} \\) is the number of years since the previous milestone year.
 
-If the remaining installable capacity is exhausted, the candidate is excluded from further
-consideration.
+Each selection of a candidate asset tranche counts towards the \\(\mathrm{MaxInstallableCapacity} \\)
+of that process. A candidate asset tranche is excluded from consideration if its capacity would
+exceed the remaining limit.
+
+#### Total capacity limits
+
+The `total_capacity_limit` specifies a hard upper limit on the **total capacity** of a process that
+may exist at any given time. This includes both existing assets which are considered for retention,
+and candidate assets which are considered for commissioning. The total capacity limit for a given
+process, agent, region and milestone year is:
+
+\\[
+  \mathrm{MaxTotalCapacity}\_{p,r,y,g} = \mathrm{TotalCapacityLimit}\_{p,r,y}
+    \cdot \mathrm{AgentPortion}\_{c,r,y,g}
+\\]
+
+Each selection of a candidate asset tranche, or retention of an existing asset tranche, counts
+towards the \\(\mathrm{MaxTotalCapacity} \\) of their respective process. Any tranche (whether for
+a candidate asset or an existing asset) is excluded from consideration if it would exceed the
+remaining limit.
 
 ## Mini Dispatch Optimisation
 
