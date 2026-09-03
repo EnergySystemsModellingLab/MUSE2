@@ -121,7 +121,7 @@ differences in floating-point values in the output files.
 If the model is a [patched example], then you need to pass the `--patch` flag, e.g.:
 
 ```sh
-just regenerate_test_data --patch simple_unit_size
+just regenerate_test_data --patch simple_tranche_size
 ```
 
 [`log`]: https://docs.rs/log

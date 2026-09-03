@@ -11,8 +11,7 @@ use muse2::process::{Process, ProcessID};
 use muse2::simulation::candidate_assets_for_next_year;
 use muse2::simulation::investment::{flatten_preset_demands_for_year, select_best_assets};
 use muse2::simulation::market::{
-    collect_agent_addition_limits, get_asset_options, get_demand_portion_for_market,
-    get_responsible_agents,
+    collect_agent_limits, get_asset_options, get_demand_portion_for_market, get_responsible_agents,
 };
 use muse2::simulation::optimisation::DispatchRun;
 use muse2::simulation::prices::{Prices, calculate_prices};
@@ -137,6 +136,7 @@ fn build_synthetic_processes(templates: &[Arc<Process>], n: usize) -> Vec<Arc<Pr
 /// - `parallel`: uses the default Rayon global thread pool (all available cores).
 /// - `sequential`: installs a single-thread Rayon pool so that `par_iter` degenerates to serial
 ///   execution, giving a fair like-for-like comparison with the overhead of parallelism removed.
+#[allow(clippy::too_many_lines)]
 fn criterion_benchmark(c: &mut Criterion) {
     let (model, mut writer, _example_dir, _output_dir) = load_bench_model();
     let (base_year_assets, existing_assets, candidates) = build_assets_for_investment_year(&model);
@@ -201,15 +201,24 @@ fn criterion_benchmark(c: &mut Criterion) {
                 commodity,
                 region_id,
                 YEAR,
-                model.parameters.capacity_limit_factor,
+                model.parameters.capacity_tranche_fraction,
             )
             .collect();
-            let agent_addition_limits = collect_agent_addition_limits(
+            let agent_addition_limits = collect_agent_limits(
                 &agent,
                 region_id,
                 &commodity.id,
                 YEAR,
                 commodity_portion,
+                Process::agent_addition_limit,
+            );
+            let agent_total_limits = collect_agent_limits(
+                &agent,
+                region_id,
+                &commodity.id,
+                YEAR,
+                commodity_portion,
+                Process::agent_total_limit,
             );
 
             group.bench_with_input(
@@ -221,15 +230,17 @@ fn criterion_benchmark(c: &mut Criterion) {
                             (
                                 opt_assets.clone(),
                                 agent_addition_limits.clone(),
+                                agent_total_limits.clone(),
                                 demand.clone(),
                             )
                         },
-                        |(opt_assets, agent_addition_limits, demand)| {
+                        |(opt_assets, agent_addition_limits, agent_total_limits, demand)| {
                             let run = || {
                                 select_best_assets(
                                     black_box(&model),
                                     opt_assets,
                                     agent_addition_limits,
+                                    agent_total_limits,
                                     black_box(commodity),
                                     black_box(&agent),
                                     black_box(region_id),

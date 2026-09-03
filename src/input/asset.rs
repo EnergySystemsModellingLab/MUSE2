@@ -24,7 +24,7 @@ struct AssetRaw {
     agent_id: String,
     capacity: Capacity,
     #[serde(default)]
-    num_units: Option<u32>,
+    num_tranches: Option<u32>,
     commission_year: u32,
     #[serde(default)]
     max_decommission_year: Option<u32>,
@@ -106,41 +106,41 @@ where
             asset.agent_id,
         );
 
-        // Split overall capacity into units
+        // Split overall capacity into tranches
         ensure!(
             asset.capacity > Capacity(0.0),
             "Asset capacity must be positive"
         );
-        let asset_capacity = if let Some(num_units) = asset.num_units {
-            // A provided unit count takes precedence over the process unit_size.
-            ensure!(num_units > 0, "num_units must be positive");
+        let asset_capacity = if let Some(num_tranches) = asset.num_tranches {
+            // A provided tranche count takes precedence over the process tranche_size.
+            ensure!(num_tranches > 0, "num_tranches must be positive");
 
-            let unit_size = Capacity(asset.capacity.value() / num_units as f64);
-            AssetCapacity::new(num_units, unit_size)
-        } else if let Some(unit_size) = process.unit_size {
-            // No unit count was provided, so use the process unit_size to determine
-            // how many units are needed to cover the asset's capacity.
-            let ratio = (asset.capacity / unit_size).value();
-            let num_units = ratio.ceil();
+            let tranche_size = Capacity(asset.capacity.value() / num_tranches as f64);
+            AssetCapacity::new(num_tranches, tranche_size)
+        } else if let Some(tranche_size) = process.tranche_size {
+            // No tranche count was provided, so use the process tranche_size to determine
+            // how many tranches are needed to cover the asset's capacity.
+            let ratio = (asset.capacity / tranche_size).value();
+            let num_tranches = ratio.ceil();
 
-            // Rounding up can increase the combined capacity of the resulting units.
+            // Rounding up can increase the combined capacity of the resulting tranches.
             if !approx_eq!(f64, ratio, ratio.ceil()) {
                 warn!(
-                    "Asset capacity {} for process {} is not a multiple of unit size {}. \
-                    Asset will be divided into {} units with combined capacity of {}.",
+                    "Asset capacity {} for process {} is not a multiple of tranche size {}. \
+                    Asset will be divided into {} tranches with combined capacity of {}.",
                     asset.capacity,
                     process_id,
-                    unit_size,
-                    num_units,
-                    unit_size.value() * num_units
+                    tranche_size,
+                    num_tranches,
+                    tranche_size.value() * num_tranches
                 );
             }
 
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            AssetCapacity::new(num_units as u32, unit_size)
+            AssetCapacity::new(num_tranches as u32, tranche_size)
         } else {
-            // Without a process unit_size, lack of num_units implies the asset is indivisible
-            // (consists of a single unit).
+            // Without a process tranche_size, lack of num_tranches implies the asset is indivisible
+            // (consists of a single tranche).
             AssetCapacity::single(asset.capacity)
         };
 
@@ -184,7 +184,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
-            num_units: Some(1),
+            num_tranches: Some(1),
             commission_year: 2010,
             max_decommission_year,
         };
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[rstest]
-    fn explicit_unit_count_sets_unit_size(
+    fn explicit_tranche_count_sets_tranche_size(
         agent_ids: IndexSet<AgentID>,
         processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
@@ -215,7 +215,7 @@ mod tests {
             region_id: "GBR".into(),
             agent_id: "agent1".into(),
             capacity: Capacity(6.0),
-            num_units: Some(3),
+            num_tranches: Some(3),
             commission_year: 2010,
             max_decommission_year: None,
         };
@@ -227,20 +227,20 @@ mod tests {
     }
 
     #[rstest]
-    fn missing_unit_count_uses_process_unit_size(
+    fn missing_tranche_count_uses_process_tranche_size(
         agent_ids: IndexSet<AgentID>,
         mut processes: ProcessMap,
         region_ids: IndexSet<RegionID>,
     ) {
         Arc::get_mut(processes.get_mut("process1").unwrap())
             .unwrap()
-            .unit_size = Some(Capacity(4.0));
+            .tranche_size = Some(Capacity(4.0));
         let asset = AssetRaw {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             agent_id: "agent1".into(),
             capacity: Capacity(9.0),
-            num_units: None,
+            num_tranches: None,
             commission_year: 2010,
             max_decommission_year: None,
         };
@@ -257,7 +257,7 @@ mod tests {
             process_id: "process2".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
-            num_units: None,
+            num_tranches: None,
             commission_year: 2010,
             max_decommission_year: None,
         })]
@@ -266,7 +266,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
-            num_units: None,
+            num_tranches: None,
             commission_year: 2010,
             max_decommission_year: None,
         })]
@@ -275,7 +275,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "FRA".into(),
             capacity: Capacity(1.0),
-            num_units: None,
+            num_tranches: None,
             commission_year: 2010,
             max_decommission_year: None,
         })]
@@ -284,7 +284,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
-            num_units: None,
+            num_tranches: None,
             commission_year: 2010,
             max_decommission_year: Some(2005),
         })]
@@ -293,7 +293,7 @@ mod tests {
             process_id: "process1".into(),
             region_id: "GBR".into(),
             capacity: Capacity(1.0),
-            num_units: None,
+            num_tranches: None,
             commission_year: 2010,
             max_decommission_year: Some(2010),
         })]

@@ -17,8 +17,8 @@ pub type CommodityMap = IndexMap<CommodityID, Arc<Commodity>>;
 /// A map of [`MoneyPerFlow`]s, keyed by region ID, year and time slice ID for a specific levy
 pub type CommodityLevyMap = HashMap<(RegionID, u32, TimeSliceID), MoneyPerFlow>;
 
-/// A map of vectors of [`CommodityConstraint`]s, keyed by region ID and year
-pub type CommodityConstraintsMap = HashMap<(RegionID, u32), Vec<CommodityConstraint>>;
+/// A map of vectors of [`CommodityConstraint`]s, keyed by year
+pub type CommodityConstraintsMap = HashMap<u32, Vec<CommodityConstraint>>;
 
 /// A map of demand values, keyed by region ID, year and time slice selection
 pub type DemandMap = HashMap<(RegionID, u32, TimeSliceSelection), Flow>;
@@ -127,6 +127,8 @@ pub enum PricingStrategy {
 /// A constraint imposed on commodity values
 #[derive(PartialEq, Debug, Clone)]
 pub struct CommodityConstraint {
+    /// Region to which the commodity constraint applies
+    pub region_id: RegionID,
     /// The balance type for the commodity constraint
     pub balance_type: BalanceType,
     /// The time slice selection for the commodity constraint

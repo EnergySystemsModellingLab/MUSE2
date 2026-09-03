@@ -3,6 +3,10 @@ description: |
   Specifies the limits on the total amount of consumption/production of a given
   commodity in a given region, year and time slice(s).
 
+notes:
+  - Commodity constraints are currently experimental. To use this file, you must enable the
+    `please_give_me_broken_results` option in `model.toml`.
+
 fields:
   - name: commodity_id
     type: string

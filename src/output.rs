@@ -165,9 +165,9 @@ struct AssetCapacityRow {
     milestone_year: u32,
     asset_id: AssetID,
     capacity: Capacity,
-    num_units: u32,
+    num_tranches: u32,
     mothballed_capacity: Capacity,
-    mothballed_units: u32,
+    mothballed_tranches: u32,
 }
 
 /// Represents the flow-related data in a row of the commodity flows CSV file.
@@ -639,9 +639,9 @@ impl DataWriter {
                 milestone_year,
                 asset_id: asset.id().unwrap(),
                 capacity: asset.total_capacity(),
-                num_units: asset.capacity().num_units(),
+                num_tranches: asset.capacity().num_tranches(),
                 mothballed_capacity: asset.mothballed_capacity(),
-                mothballed_units: asset.get_num_mothballed_units(),
+                mothballed_tranches: asset.get_num_mothballed_tranches(),
             };
             self.asset_capacities.serialize(row)?;
         }
@@ -714,7 +714,7 @@ mod tests {
     use super::*;
     use crate::asset::AssetPool;
     use crate::fixture::{
-        appraisal_output, asset, assets, commodity_id, multi_unit_asset, region_id, time_slice,
+        appraisal_output, asset, assets, commodity_id, multi_tranche_asset, region_id, time_slice,
     };
     use crate::simulation::investment::appraisal::AppraisalOutput;
     use crate::time_slice::TimeSliceID;
@@ -766,9 +766,9 @@ mod tests {
             milestone_year,
             asset_id: asset.id().unwrap(),
             capacity: asset.total_capacity(),
-            num_units: 1,
+            num_tranches: 1,
             mothballed_capacity: Capacity(0.0),
-            mothballed_units: 0,
+            mothballed_tranches: 0,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))
@@ -780,17 +780,17 @@ mod tests {
     }
 
     #[rstest]
-    fn write_asset_capacities_with_mothballed_units(multi_unit_asset: Asset) {
+    fn write_asset_capacities_with_mothballed_tranches(multi_tranche_asset: Asset) {
         let milestone_year = 2020;
         let dir = tempdir().unwrap();
         let mut assets = AssetPool::new();
-        assets.commission_new(2010, &mut vec![multi_unit_asset.into()]);
+        assets.commission_new(2010, &mut vec![multi_tranche_asset.into()]);
         let asset = assets
             .iter()
             .next()
             .unwrap()
             .clone()
-            .with_mothballed_units(1, Some(milestone_year));
+            .with_mothballed_tranches(1, Some(milestone_year));
 
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
@@ -804,9 +804,9 @@ mod tests {
             milestone_year,
             asset_id: asset.id().unwrap(),
             capacity: Capacity(12.0),
-            num_units: 3,
+            num_tranches: 3,
             mothballed_capacity: Capacity(4.0),
-            mothballed_units: 1,
+            mothballed_tranches: 1,
         };
         let records: Vec<AssetCapacityRow> =
             csv::Reader::from_path(dir.path().join(ASSET_CAPACITIES_FILE_NAME))

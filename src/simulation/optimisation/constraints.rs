@@ -1,8 +1,9 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
-use crate::commodity::{CommodityID, CommodityType};
+use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
+use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
@@ -80,6 +81,7 @@ pub struct ConstraintKeys {
 /// # Returns
 ///
 /// Keys for the different constraints.
+#[allow(clippy::too_many_arguments)]
 pub fn add_model_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -88,6 +90,7 @@ pub fn add_model_constraints<'a, I>(
     markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
     candidate_assets: &'a [AssetRef],
+    include_commodity_constraints: bool,
 ) -> ConstraintKeys
 where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
@@ -102,6 +105,10 @@ where
         candidate_assets,
     );
 
+    if include_commodity_constraints {
+        add_commodity_constraints(problem, variables, model, assets, year);
+    }
+
     let activity_keys =
         add_activity_constraints(problem, variables, &model.time_slice_info, assets.clone());
 
@@ -113,6 +120,64 @@ where
     ConstraintKeys {
         commodity_balance_keys,
         activity_keys,
+    }
+}
+
+/// Add explicit production and consumption constraints for commodities.
+fn add_commodity_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    model: &'a Model,
+    assets: &I,
+    year: u32,
+) where
+    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+{
+    // Commodity constraints are indexed by milestone year, so commodities without a constraint
+    // for this year do not contribute any rows.
+    for commodity in model.commodities.values() {
+        let Some(constraints) = commodity.constraints.get(&year) else {
+            continue;
+        };
+
+        // For each constraint, collect the relevant flows, and add the constraint as a row in the
+        // problem.
+        for constraint in constraints {
+            // Select the direction of flows to collect. Production constraints constrain the sum
+            // of output flows, while consumption constraints constrain the sum of input flows.
+            let flow_direction = match constraint.balance_type {
+                BalanceType::Production => FlowDirection::Output,
+                BalanceType::Consumption => FlowDirection::Input,
+                BalanceType::Net => unreachable!("Net commodity constraints are invalid"),
+            };
+
+            // Collect all relevant flows for this constraint. Each constraint covers a region,
+            // commodity and time slice selection, so we need to collect all input or output flows
+            // for the commodity for assets in the region, and for every time slice in the selection.
+            let terms = assets
+                .clone()
+                .filter_region(&constraint.region_id)
+                .flows_for_commodity(&commodity.id)
+                .filter(|(_, flow)| flow.direction() == flow_direction)
+                .flat_map(|(asset, flow)| {
+                    // Use the absolute value of the flow coefficient, as input flows are stored as
+                    // negative values, but constraints are always expressed in terms of positive
+                    // magnitudes.
+                    let coefficient = flow.coeff.abs().value();
+                    constraint.ts_selection.iter(&model.time_slice_info).map(
+                        move |(time_slice, _)| {
+                            (variables.get_activity_var(asset, time_slice), coefficient)
+                        },
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            // Apply the configured inclusive lower and upper limits to the sum of the terms.
+            problem.add_row(
+                constraint.limits.start().value()..=constraint.limits.end().value(),
+                terms,
+            );
+        }
     }
 }
 
@@ -421,11 +486,11 @@ where
                 let mut upper_limit = limits.end().value();
                 let mut lower_limit = limits.start().value();
 
-                // The capacity variable represents number of units, so we need to multiply the
-                // per-capacity limits by the unit size.
-                let unit_size = asset.capacity().unit_size();
-                upper_limit *= unit_size.value();
-                lower_limit *= unit_size.value();
+                // The capacity variable represents number of tranches, so we need to multiply the
+                // per-capacity limits by the tranche size.
+                let tranche_size = asset.capacity().tranche_size();
+                upper_limit *= tranche_size.value();
+                lower_limit *= tranche_size.value();
 
                 // Collect capacity and activity terms
                 // We have a single capacity term, and activity terms for all time slices in the selection
@@ -575,7 +640,7 @@ mod tests {
     use crate::process::Process;
     use crate::process::{FlowType, ProcessFlow};
     use crate::time_slice::TimeSliceSelection;
-    use crate::units::{Capacity, FlowPerActivity, MoneyPerFlow};
+    use crate::units::{Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
@@ -636,7 +701,7 @@ mod tests {
     #[rstest]
     fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
         Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
-            .variable_operating_cost = crate::units::MoneyPerActivity(1.0);
+            .variable_operating_cost = MoneyPerActivity(1.0);
         let different = Asset::new_ready(
             "agent1".into(),
             Arc::new(process),

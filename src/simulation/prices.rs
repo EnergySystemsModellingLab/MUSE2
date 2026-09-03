@@ -1410,7 +1410,7 @@ mod tests {
             primary_output: None,
             capacity_to_activity: ActivityPerCapacity(1.0),
             investment_constraints: HashMap::new(),
-            unit_size: None,
+            tranche_size: None,
         }
     }
 

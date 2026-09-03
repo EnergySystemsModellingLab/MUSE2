@@ -37,7 +37,7 @@ struct ProcessRaw {
     start_year: Option<u32>,
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
-    unit_size: Option<Capacity>,
+    tranche_size: Option<Capacity>,
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -146,11 +146,11 @@ where
             .capacity_to_activity
             .unwrap_or(ActivityPerCapacity(1.0));
 
-        // Validate unit_size
-        if process_raw.unit_size.is_some() {
+        // Validate tranche_size
+        if process_raw.tranche_size.is_some() {
             ensure!(
-                process_raw.unit_size > Some(Capacity(0.0)),
-                "Error in process {}: unit_size must be > 0 or None",
+                process_raw.tranche_size > Some(Capacity(0.0)),
+                "Error in process {}: tranche_size must be > 0 or None",
                 process_raw.id
             );
         }
@@ -173,7 +173,7 @@ where
             primary_output,
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
-            unit_size: process_raw.unit_size,
+            tranche_size: process_raw.tranche_size,
         };
 
         ensure!(

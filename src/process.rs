@@ -63,18 +63,38 @@ pub struct Process {
     pub capacity_to_activity: ActivityPerCapacity,
     /// Investment constraints for this process
     pub investment_constraints: ProcessInvestmentConstraintsMap,
-    /// Capacity of the units in which an asset for this process will be divided into when commissioned, if any.
+    /// Capacity of each tranche for investments in this process, if any.
     ///
-    /// By default, an asset will not be divided when commissioned (`unit_size` will be None), but
-    /// if this is set, then it will be divided in as many assets as needed to commission the total
-    /// capacity, each having a `unit_size` capacity or a fraction of it.
-    pub unit_size: Option<Capacity>,
+    /// Candidate assets are created with one tranche of this size, and MUSE2 may select multiple
+    /// tranches over successive investment rounds. For user-provided assets, this value determines
+    /// how their total capacity is represented as equal-capacity tranches; the number of tranches
+    /// is rounded up when necessary.
+    pub tranche_size: Option<Capacity>,
 }
 
 impl Process {
     /// Whether the process can be commissioned in a given year
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
+    }
+
+    /// Calculate an agent's share of any limit for this process in a region and year based on
+    /// commodity portion.
+    fn agent_limit(
+        &self,
+        region_id: &RegionID,
+        commission_year: u32,
+        commodity_portion: Dimensionless,
+        get_limit: fn(&ProcessInvestmentConstraint) -> Option<Capacity>,
+    ) -> Option<Capacity> {
+        assert!(
+            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
+            "commodity_portion must be between 0 and 1 inclusive"
+        );
+
+        self.investment_constraints
+            .get(&(region_id.clone(), commission_year))
+            .and_then(|constraint| get_limit(constraint).map(|limit| limit * commodity_portion))
     }
 
     /// Calculate an agent's share of the addition limit for this process in a region and year
@@ -85,18 +105,28 @@ impl Process {
         commission_year: u32,
         commodity_portion: Dimensionless,
     ) -> Option<Capacity> {
-        assert!(
-            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
-            "commodity_portion must be between 0 and 1 inclusive"
-        );
+        self.agent_limit(
+            region_id,
+            commission_year,
+            commodity_portion,
+            ProcessInvestmentConstraint::get_addition_limit,
+        )
+    }
 
-        self.investment_constraints
-            .get(&(region_id.clone(), commission_year))
-            .and_then(|constraint| {
-                constraint
-                    .get_addition_limit()
-                    .map(|limit| limit * commodity_portion)
-            })
+    /// Calculate an agent's share of the total limit for this process in a region and year
+    /// based on commodity portion.
+    pub fn agent_total_limit(
+        &self,
+        region_id: &RegionID,
+        commission_year: u32,
+        commodity_portion: Dimensionless,
+    ) -> Option<Capacity> {
+        self.agent_limit(
+            region_id,
+            commission_year,
+            commodity_portion,
+            ProcessInvestmentConstraint::get_total_limit,
+        )
     }
 }
 
@@ -527,16 +557,19 @@ pub struct ProcessInvestmentConstraint {
     /// Addition constraint: Limit an agent can invest in the process, shared according to the
     /// agent's proportion of the process's primary commodity demand
     pub addition_limit: Option<Capacity>,
+    /// Total capacity limit for the process
+    pub total_capacity_limit: Option<Capacity>,
 }
 
 impl ProcessInvestmentConstraint {
-    /// Calculate the effective addition limit
-    ///
-    /// For now, this just returns `addition_limit`, but in the future when we add growth
-    /// limits and total capacity limits, this will have more complex logic which will depend on the
-    /// current total capacity.
+    /// Get the addition limit
     pub fn get_addition_limit(&self) -> Option<Capacity> {
         self.addition_limit
+    }
+
+    /// Get the total capacity limit allowed
+    pub fn get_total_limit(&self) -> Option<Capacity> {
+        self.total_capacity_limit
     }
 }
 
@@ -546,7 +579,7 @@ mod tests {
     use crate::commodity::{
         CommodityConstraintsMap, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
     };
-    use crate::fixture::{assert_error, region_id, time_slice, time_slice_info2};
+    use crate::fixture::{assert_error, process, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
     use crate::time_slice::TimeSliceSelection;
     use float_cmp::assert_approx_eq;
@@ -1166,5 +1199,72 @@ mod tests {
             ActivityLimits::new_from_limits(&limits, &time_slice_info2),
             "Availability limit for season winter clashes with time slice limits"
         );
+    }
+
+    #[rstest]
+    #[case(Dimensionless(1.1))]
+    #[case(Dimensionless(-0.1))]
+    #[should_panic(expected = "commodity_portion must be between 0 and 1 inclusive")]
+    fn agent_limit_invalid_commodity_portion(
+        process: Process,
+        region_id: RegionID,
+        #[case] commodity_portion: Dimensionless,
+    ) {
+        process.agent_limit(
+            &region_id,
+            2015,
+            commodity_portion,
+            ProcessInvestmentConstraint::get_addition_limit,
+        );
+    }
+
+    #[rstest]
+    fn agent_addition_limit_no_constraint(process: Process, region_id: RegionID) {
+        assert!(
+            process
+                .agent_addition_limit(&region_id, 2015, Dimensionless(1.0))
+                .is_none()
+        );
+    }
+
+    #[rstest]
+    fn agent_addition_limit_scaled_by_portion(mut process: Process, region_id: RegionID) {
+        process.investment_constraints.insert(
+            (region_id.clone(), 2015),
+            Arc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(crate::units::Capacity(10.0)),
+                total_capacity_limit: Some(crate::units::Capacity(100.0)),
+            }),
+        );
+
+        let result = process
+            .agent_addition_limit(&region_id, 2015, Dimensionless(0.5))
+            .unwrap();
+        assert_eq!(result, Capacity(5.0));
+    }
+
+    #[rstest]
+    fn agent_total_limit_no_constraint(process: Process, region_id: RegionID) {
+        assert!(
+            process
+                .agent_total_limit(&region_id, 2015, Dimensionless(1.0))
+                .is_none()
+        );
+    }
+
+    #[rstest]
+    fn agent_total_limit_scaled_by_portion(mut process: Process, region_id: RegionID) {
+        process.investment_constraints.insert(
+            (region_id.clone(), 2015),
+            Arc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(crate::units::Capacity(10.0)),
+                total_capacity_limit: Some(crate::units::Capacity(100.0)),
+            }),
+        );
+
+        let result = process
+            .agent_total_limit(&region_id, 2015, Dimensionless(0.5))
+            .unwrap();
+        assert_eq!(result, Capacity(50.0));
     }
 }

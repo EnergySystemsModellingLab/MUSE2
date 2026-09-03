@@ -30,16 +30,18 @@ properties:
     default: 1e-6
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
-  capacity_limit_factor:
+  capacity_tranche_fraction:
     type: number
-    description: Scales the capacity assigned to candidate assets
+    description: Scales the size of inferred investment tranches for candidate assets
     default: 0.05
     notes: |
-      Candidate assets for investment are assigned a characteristic capacity scale based on annual
-      demand. This parameter specifies the fraction of that scale appraised each investment round.
+      When a process does not define `tranche_size`, candidate assets for investment are assigned a
+      tranche whose capacity is this fraction of the characteristic capacity scale based on annual
+      demand. Each investment round appraises one such tranche.
 
       Must be >0 and <=1.
-      Lower values produce smaller investment increments, while higher values produce larger increments.
+      Lower values produce smaller tranches and require more investment rounds, while higher values
+      produce larger tranches.
   fallback_pricing_strategy:
     type: string
     description: Pricing strategy used to calculate fallback prices in the mini dispatch optimisation during investment appraisal

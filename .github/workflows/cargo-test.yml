@@ -79,14 +79,30 @@ jobs:
           # Always write a job summary table, not only when a regression is found.
           summary-always: true
 
-      - name: Commit updated baseline
+      - name: Create pull request with updated baseline
         # Only update the stored baseline when code is merged to main. On pull
         # requests the job reads the baseline for comparison but must not overwrite
         # it, since the PR branch has not yet been reviewed and merged.
+        # The PR is opened using GITHUB_TOKEN, which means GitHub's built-in
+        # anti-recursion protection applies: the pull_request event fired by
+        # creating this PR will not trigger a new workflow run.
+        # The fixed branch name (chore/benchmark-baseline) ensures that if further
+        # pushes to main occur before this PR is merged, the action force-pushes
+        # to the same branch and updates the existing PR rather than opening a new one.
+        # [skip ci] in the commit message and title prevents a redundant workflow
+        # run when the PR is squash-merged back to main.
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "github-actions@github.com"
-          git add benches/benchmark-data.json
-          git diff --staged --quiet || git commit -m "chore: update benchmark baseline [skip ci]"
-          git push
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore: update benchmark baseline [skip ci]"
+          branch: chore/benchmark-baseline
+          delete-branch: true
+          title: "chore: update benchmark baseline [skip ci]"
+          body: |
+            Automated update of the benchmark baseline data after a push to `main`.
+
+            > [!NOTE]
+            > Merge using **Squash merge** to ensure the `[skip ci]` tag is
+            > preserved in the squash-merge commit message, preventing a redundant
+            > benchmark run.
+          add-paths: benches/benchmark-data.json
