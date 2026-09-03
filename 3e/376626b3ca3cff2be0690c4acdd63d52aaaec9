@@ -1,0 +1,26 @@
+docs/model/time.md
+  s_59b454ecaf09ac::t_953b3fc9298cf3 27,68-75
+  h_e76403a1cd4bf1 61-63,67,79,83
+  s_59b454ecaf09ac::t_e214ebae8668b0 76-78,80-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3e376626b3ca3cff2be0690c4acdd63d52aaaec9",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_59b454ecaf09ac": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "c9e40c11-dba8-4c1b-810b-a9fd57a6309e",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
