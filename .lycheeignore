@@ -20,6 +20,3 @@
 
 # UKRI gateway tracker is unreliable
 ^https://gtr\.ukri\.org/
-
-# TO REMOVE AFTER v2.2.0 RELEASE
-^https://energysystemsmodellinglab\.github\.io/MUSE2/v2\.2\.0/
