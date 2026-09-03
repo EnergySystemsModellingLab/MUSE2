@@ -1,216 +1,320 @@
 {
-    "lastUpdate": 1788338865130,
-    "repoUrl": "https://github.com/EnergySystemsModellingLab/MUSE2",
-    "entries": {
-        "Benchmark": [
-            {
-                "commit": {
-                    "author": {
-                        "email": "t.bland@imperial.ac.uk",
-                        "name": "Tom Bland",
-                        "username": "tsmbland"
-                    },
-                    "committer": {
-                        "email": "noreply@github.com",
-                        "name": "GitHub",
-                        "username": "web-flow"
-                    },
-                    "distinct": true,
-                    "id": "849164f50fd97a3388189aee2b020d8e4c594619",
-                    "message": "Merge pull request #1516 from EnergySystemsModellingLab/allow_push_main\n\nUse PR instead of direct push to main",
-                    "timestamp": "2026-09-01T10:45:49+01:00",
-                    "tree_id": "f4e331cadaf5c3b9c48399c16a7484e673f3283e",
-                    "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/849164f50fd97a3388189aee2b020d8e4c594619"
-                },
-                "date": 1788256182014,
-                "tool": "customSmallerIsBetter",
-                "benches": [
-                    {
-                        "name": "example_run/circularity example",
-                        "value": 414093669,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/missing_commodity example",
-                        "value": 224283879.25,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/muse1_default example",
-                        "value": 257200258.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/simple example",
-                        "value": 82232509.625,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/two_outputs example",
-                        "value": 397768111.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/two_regions example",
-                        "value": 444982302.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/01",
-                        "value": 7184719.770833334,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/05",
-                        "value": 21415495.111111112,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/10",
-                        "value": 35291724,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/15",
-                        "value": 51844114.66666667,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/20",
-                        "value": 66430136.16666667,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/01",
-                        "value": 7215430.817307692,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/05",
-                        "value": 34758098.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/10",
-                        "value": 69328321.66666666,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/15",
-                        "value": 103927071,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/20",
-                        "value": 138376641.75,
-                        "unit": "ns"
-                    }
-                ]
-            },
-            {
-                "commit": {
-                    "author": {
-                        "email": "t.bland@imperial.ac.uk",
-                        "name": "Tom Bland",
-                        "username": "tsmbland"
-                    },
-                    "committer": {
-                        "email": "noreply@github.com",
-                        "name": "GitHub",
-                        "username": "web-flow"
-                    },
-                    "distinct": true,
-                    "id": "7cd741def65f50e860ac253032b4ca3251c7b017",
-                    "message": "Merge pull request #1518 from EnergySystemsModellingLab/tranche_terminology\n\nRename \"asset units\" to \"asset tranches\"",
-                    "timestamp": "2026-09-02T09:43:48+01:00",
-                    "tree_id": "da1bdb1e874694d494a495efec980fe3a5ea84c9",
-                    "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/7cd741def65f50e860ac253032b4ca3251c7b017"
-                },
-                "date": 1788338865130,
-                "tool": "customSmallerIsBetter",
-                "benches": [
-                    {
-                        "name": "example_run/circularity example",
-                        "value": 409557107.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/missing_commodity example",
-                        "value": 230289347.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/muse1_default example",
-                        "value": 296044869,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/simple example",
-                        "value": 84885164.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/two_outputs example",
-                        "value": 411436145,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "example_run/two_regions example",
-                        "value": 562801454,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/01",
-                        "value": 7261651.715277778,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/05",
-                        "value": 25327450.23125,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/10",
-                        "value": 41248697.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/15",
-                        "value": 59006656.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_parallel/20",
-                        "value": 77051985,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/01",
-                        "value": 7245930.892045455,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/05",
-                        "value": 34925940.8,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/10",
-                        "value": 69812982.5,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/15",
-                        "value": 104842185.25,
-                        "unit": "ns"
-                    },
-                    {
-                        "name": "select_best_assets_sequential/20",
-                        "value": 139540480.75,
-                        "unit": "ns"
-                    }
-                ]
-            }
+  "lastUpdate": 1788440667673,
+  "repoUrl": "https://github.com/EnergySystemsModellingLab/MUSE2",
+  "entries": {
+    "Benchmark": [
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "849164f50fd97a3388189aee2b020d8e4c594619",
+          "message": "Merge pull request #1516 from EnergySystemsModellingLab/allow_push_main\n\nUse PR instead of direct push to main",
+          "timestamp": "2026-09-01T10:45:49+01:00",
+          "tree_id": "f4e331cadaf5c3b9c48399c16a7484e673f3283e",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/849164f50fd97a3388189aee2b020d8e4c594619"
+        },
+        "date": 1788256182014,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 414093669,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 224283879.25,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 257200258.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 82232509.625,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 397768111.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 444982302.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 7184719.770833334,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 21415495.111111112,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 35291724,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 51844114.66666667,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 66430136.16666667,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 7215430.817307692,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 34758098.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 69328321.66666666,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 103927071,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 138376641.75,
+            "unit": "ns"
+          }
         ]
-    }
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7cd741def65f50e860ac253032b4ca3251c7b017",
+          "message": "Merge pull request #1518 from EnergySystemsModellingLab/tranche_terminology\n\nRename \"asset units\" to \"asset tranches\"",
+          "timestamp": "2026-09-02T09:43:48+01:00",
+          "tree_id": "da1bdb1e874694d494a495efec980fe3a5ea84c9",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/7cd741def65f50e860ac253032b4ca3251c7b017"
+        },
+        "date": 1788338865130,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 409557107.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 230289347.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 296044869,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 84885164.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 411436145,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 562801454,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 7261651.715277778,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 25327450.23125,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 41248697.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 59006656.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 77051985,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 7245930.892045455,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 34925940.8,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 69812982.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 104842185.25,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 139540480.75,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6a19604db44188ea1c8f24cbde34c193541fa3c4",
+          "message": "Merge pull request #1528 from EnergySystemsModellingLab/finalise_release\n\nFinalise v2.2.0 release",
+          "timestamp": "2026-09-03T14:00:19+01:00",
+          "tree_id": "24bd800c28ecef99476aade1f1e48a64abd36990",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/6a19604db44188ea1c8f24cbde34c193541fa3c4"
+        },
+        "date": 1788440667672,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 491859145.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 271642953,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 337702386.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 101135279,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 485146523.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 641326530,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 9132896.765151516,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 26819628.777777776,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 45113674.75,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 65351435.33333333,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 85097739.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 9107675.635526314,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 43859325.75,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 87553632.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 131658938.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 175652280.5,
+            "unit": "ns"
+          }
+        ]
+      }
+    ]
+  }
 }
