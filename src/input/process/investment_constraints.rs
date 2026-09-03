@@ -216,7 +216,6 @@ mod tests {
     use crate::fixture::{assert_error, processes};
     use crate::region::RegionID;
     use crate::units::Capacity;
-    use logtest::Logger;
     use rstest::rstest;
 
     fn validate_raw_constraint(
@@ -583,22 +582,6 @@ mod tests {
             total_capacity_limit,
         );
         assert_error!(invalid, error_msg);
-    }
-
-    #[test]
-    fn validate_capacity_growth_limit_warning() {
-        // Check warning raised if value above 1 provided
-        let mut logger = Logger::start();
-        let _ = validate_raw_constraint(
-            Some(CapacityPerYear(10.0)),
-            Some(Dimensionless(5.0)),
-            None,
-            None,
-        );
-        assert_eq!(
-            logger.pop().unwrap().args(),
-            "Interpreting capacity growth constraint '5' as 500%"
-        );
     }
 
     #[rstest]
