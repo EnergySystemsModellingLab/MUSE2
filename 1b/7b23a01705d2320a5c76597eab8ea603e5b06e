@@ -1,0 +1,17 @@
+docs/release_notes/v2.2.0.md
+  h_e76403a1cd4bf1 60-61,131
+  h_e76403a1cd4bf1 35-41,64
+.lycheeignore
+  h_e76403a1cd4bf1 23-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1b7b23a01705d2320a5c76597eab8ea603e5b06e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
