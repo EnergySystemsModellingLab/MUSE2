@@ -24,7 +24,7 @@ fields:
     type: number
     description: Yearly constraint on the amount agents can invest in the process
     notes: |
-      The addition limit is allocated evenly between all agents using their proportion of the
+      The addition limit is allocated between all agents in proportion to their share of the
       process's primary commodity demand.
   - name: capacity_growth_limit
     type: number
@@ -40,5 +40,7 @@ fields:
     notes: This is currently unused.
   - name: total_capacity_limit
     type: number
-    description: The hard upper limit on the amount agents can invest in the process
-    notes: This is currently unused.
+    description: A hard upper limit on the total amount of installed capacity that can exist at any given time
+    notes: |
+      The total capacity limit is allocated between all agents in proportion to their share of the
+      process's primary commodity demand.
