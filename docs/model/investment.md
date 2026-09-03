@@ -159,7 +159,8 @@ overall limits can only ever be reached if *all* agents max out their own indivi
 
 The `addition_limit` specifies the maximum new capacity that can be built *per year*, and applies
 only to **candidate** (new-build) assets. The installable capacity limit for a given process
-(\\( p \\)), agent (\\( g \\)), region (\\( r \\)), commodity (\\( c \\)) and milestone year is:
+(\\( p \\)), agent (\\( g \\)), region (\\( r \\)), commodity (\\( c \\)) and milestone year
+(\\( y \\)) is:
 
 \\[
   \mathrm{MaxInstallableCapacity}\_{p,r,y,g} = \mathrm{AdditionLimit}\_{p,r,y}
@@ -177,7 +178,7 @@ exceed the remaining limit.
 The `total_capacity_limit` specifies a hard upper limit on the **total capacity** of a process that
 may exist at any given time. This includes both existing assets which are considered for retention,
 and candidate assets which are considered for commissioning. The total capacity limit for a given
-process, agent, region and milestone year is:
+process, agent, region, commodity and milestone year is:
 
 \\[
   \mathrm{MaxTotalCapacity}\_{p,r,y,g} = \mathrm{TotalCapacityLimit}\_{p,r,y}
