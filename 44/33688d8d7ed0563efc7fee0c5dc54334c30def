@@ -1,0 +1,28 @@
+schemas/input/process_investment_constraints.yaml
+  h_e76403a1cd4bf1 43-46
+docs/model/investment.md
+  h_e76403a1cd4bf1 152-156,160-162,165-166,169,171-173,177-181,183-184,187-190
+  s_e3e974a6a6f6c0::t_cfeb76a02b34d0 69,148-151,158-159,174-176,182,185
+  h_e76403a1cd4bf1 157,170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4433688d8d7ed0563efc7fee0c5dc54334c30def",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_e3e974a6a6f6c0": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "8e4e6505-e522-4b54-a7a5-eed304600a78",
+        "model": "copilot/claude-sonnet-5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
