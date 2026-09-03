@@ -1,4 +1,4 @@
-exclude: ^schemas/table-schema.json$
+exclude: ^(schemas/table-schema\.json|benches/benchmark-data\.json)$
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
