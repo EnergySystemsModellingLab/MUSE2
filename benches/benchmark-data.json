@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1788440667673,
+  "lastUpdate": 1788445958284,
   "repoUrl": "https://github.com/EnergySystemsModellingLab/MUSE2",
   "entries": {
     "Benchmark": [
@@ -311,6 +311,110 @@
           {
             "name": "select_best_assets_sequential/20",
             "value": 175652280.5,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d24583fa1a4f41b2487514bc1c104fb0ef027d88",
+          "message": "Merge pull request #1534 from EnergySystemsModellingLab/remove_link_exception\n\nRemove link exception",
+          "timestamp": "2026-09-03T15:28:24+01:00",
+          "tree_id": "4b45c7f722c8409c964739c37e24fd27d9c86142",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/d24583fa1a4f41b2487514bc1c104fb0ef027d88"
+        },
+        "date": 1788445958284,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 485005327.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 267393399.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 398033308.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 98447847.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 475690878.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 581272947,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 8951954.479166668,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 26635655.15158371,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 44999426.75,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 64755456.333333336,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 84394632.25,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 8948390.285511363,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 43190364.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 85928509.25,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 128785560.75,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 171715156,
             "unit": "ns"
           }
         ]
