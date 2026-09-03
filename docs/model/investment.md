@@ -451,19 +451,24 @@ markets have been invested in.
 
 When markets form a cycle, the partial dispatch after each market in the cycle uses **flexible
 capacity variables** for all newly committed assets in the cycle. Rather than fixing the capacity of
-these assets at their committed value, the solver may adjust capacity within the bounds:
+these assets at their committed value, the solver may adjust the number of selected tranches within
+the bounds:
 
 \\[
-  \bigl[(1 - \mathrm{capacity\_margin}) \cdot \mathrm{Capacity}_a, \space
-        (1 + \mathrm{capacity\_margin}) \cdot \mathrm{Capacity}_a\bigr]
+  \bigl[(1 - \mathrm{capacity\_margin}) \cdot \mathrm{NumTranches}_a, \space
+        (1 + \mathrm{capacity\_margin}) \cdot \mathrm{NumTranches}_a\bigr]
 \\]
 
-where \\( \mathrm{Capacity}\_a \\) is the committed capacity of asset \\( a \\). The upper bound is
-additionally capped by the asset's `MaxInstallableCapacity`. This allows the dispatch to absorb
-small demand shifts caused by subsequent markets in the cycle.
+where \\( \mathrm{NumTranches}\_a \\) is the initially committed number of tranches of asset
+\\( a \\). The upper bound is additionally capped by the process's `MaxInstallableCapacity`.
 
-Each flexible capacity variable enters the dispatch objective with a cost coefficient equal to the
-asset's AFC (annualised capital cost plus fixed O&M).
+> Note: Total capacity limits are not yet accounted for - this is a known bug which will be
+> addressed in future versions.
+
+Each flexible capacity variable enters the dispatch as an integer variable, with a cost coefficient
+equal to the asset's AFC (annualised capital cost plus fixed O&M) multiplied by the tranche size.
+This flexibility allows the dispatch to absorb small demand shifts caused by subsequent markets in
+the cycle.
 
 If the demand shift for a previously settled market in the cycle exceeds what the flexible capacity
 can accommodate, the simulation terminates with an error. The user should increase the
