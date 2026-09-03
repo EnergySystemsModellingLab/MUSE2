@@ -1,0 +1,14 @@
+docs/model/investment.md
+  h_e76403a1cd4bf1 454-455,458-459,462-463,465-471
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "bb610de20a555c68528cceeb91d50212e5b52db4",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
