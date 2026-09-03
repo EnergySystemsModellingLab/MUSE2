@@ -584,6 +584,17 @@ mod tests {
         assert_error!(invalid, error_msg);
     }
 
+    #[test]
+    fn validate_capacity_growth_limit_above_one_is_allowed() {
+        let valid = validate_raw_constraint(
+            Some(CapacityPerYear(10.0)),
+            Some(Dimensionless(5.0)),
+            None,
+            None,
+        );
+        valid.unwrap();
+    }
+
     #[rstest]
     #[case(Some(CapacityPerYear(10.0)), None, None, None)]
     #[case(Some(CapacityPerYear(10.0)), None, Some(Dimensionless(1.0)), None)]
