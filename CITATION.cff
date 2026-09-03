@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: If you use this software, please cite it as below.
 title: MUSE2
-version: 2.1.0
-date-released: 2026-03-31
+version: 2.2.0
+date-released: 2026-09-03
 authors:
     - family-names: Dewar
       given-names: Alex
@@ -25,6 +25,11 @@ authors:
       given-names: Benjamin
     - family-names: Karimi
       given-names: Aurash
+    - family-names: Daniel
+      given-names: Cummins
+      orcid: https://orcid.org/0000-0003-2177-6521
+    - family-names: Mitchell
+      given-names: Melissa Jade
     - family-names: Hawkes
       given-names: Adam
       orcid: https://orcid.org/0000-0001-9720-332X
