@@ -1,0 +1,14 @@
+src/input/process/investment_constraints.rs
+  h_e76403a1cd4bf1 447-464,473
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9b9428e901f69dc8ada0a5128a6c2059b234a7f5",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
