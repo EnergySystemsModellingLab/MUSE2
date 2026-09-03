@@ -1,0 +1,17 @@
+docs/model/investment.md
+  h_e76403a1cd4bf1 163,181
+  h_e76403a1cd4bf1 162
+schemas/input/process_investment_constraints.yaml
+  h_e76403a1cd4bf1 27,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3726dba6e1a7c5a85d81fdfbd5fecc9b2e0f44ee",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
