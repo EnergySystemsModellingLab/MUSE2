@@ -284,7 +284,7 @@ pub fn select_assets_for_cycle(
         markets_to_balance.extend_from_slice(&markets[0..=idx]);
 
         // Run dispatch
-        let solution = DispatchRun::new(model, &all_assets, year)
+        let solution = DispatchRun::new(model, &all_assets, year, &current_demand)
             .without_commodity_constraints()
             .with_market_balance_subset(&markets_to_balance)
             .run(

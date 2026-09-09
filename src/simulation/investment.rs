@@ -111,9 +111,10 @@ pub fn perform_agent_investment(
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected_assets, year)
+        let current_markets: Vec<_> = market_set.iter_markets().cloned().collect();
+        let solution = DispatchRun::new(model, &all_selected_assets, year, &net_demand)
             .without_commodity_constraints()
-            .with_market_balance_subset(&seen_markets)
+            .with_market_balance_subset(&current_markets)
             .with_input_prices(&prices.shadow)
             .run(&format!("post {market_set} investment"), writer)?;
 
