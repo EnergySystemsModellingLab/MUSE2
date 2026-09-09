@@ -9,7 +9,7 @@ use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -456,10 +456,7 @@ fn candidate_balance_epsilon(
 ///
 /// Returns an `ActivityKeys` where `offset` is the row index of the first
 /// activity constraint added and `keys` enumerates the `(asset, time_selection)`
-/// entries in the same row order. Note that for flexible-capacity assets two rows
-/// (upper and lower bounds) are added per selection; in that case the same key is
-/// stored twice to match the solver ordering.
-///
+/// entries in the same row order.
 #[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#asset-activity-limits"))]
 fn add_activity_constraints<'a, I>(
     problem: &mut Problem,
@@ -476,61 +473,23 @@ where
     let offset = problem.num_rows();
 
     let mut keys = Vec::new();
-    let capacity_vars: IndexMap<&AssetRef, highs::Col> = variables.iter_capacity_vars().collect();
 
     // Create constraints for each asset
     for asset in assets {
-        if let Some(&capacity_var) = capacity_vars.get(asset) {
-            // Asset with flexible capacity
-            for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
-                let mut upper_limit = limits.end().value();
-                let mut lower_limit = limits.start().value();
+        for (ts_selection, limits) in asset.iter_activity_limits() {
+            let limits = limits.start().value()..=limits.end().value();
 
-                // The capacity variable represents number of tranches, so we need to multiply the
-                // per-capacity limits by the tranche size.
-                let tranche_size = asset.capacity().tranche_size();
-                upper_limit *= tranche_size.value();
-                lower_limit *= tranche_size.value();
+            // Collect activity terms for the time slices in this selection
+            let terms = ts_selection
+                .iter(time_slice_info)
+                .map(|(time_slice, _)| (variables.get_activity_var(asset, time_slice), 1.0))
+                .collect::<Vec<_>>();
 
-                // Collect capacity and activity terms
-                // We have a single capacity term, and activity terms for all time slices in the selection
-                let mut terms_upper = vec![(capacity_var, -upper_limit)];
-                let mut terms_lower = vec![(capacity_var, -lower_limit)];
-                for (time_slice, _) in ts_selection.iter(time_slice_info) {
-                    let var = variables.get_activity_var(asset, time_slice);
-                    terms_upper.push((var, 1.0));
-                    terms_lower.push((var, 1.0));
-                }
+            // Constraint: sum of activities in selection within limits
+            problem.add_row(limits, &terms);
 
-                // Upper bound: sum(activity) - (capacity * upper_limit_per_capacity) ≤ 0
-                problem.add_row(..=0.0, &terms_upper);
-
-                // Lower bound: sum(activity) - (capacity * lower_limit_per_capacity) ≥ 0
-                problem.add_row(0.0.., &terms_lower);
-
-                // Store keys for retrieving duals later.
-                // TODO: a bit of a hack pushing identical keys twice. Safe for now so long as we don't
-                // use the activity duals for anything important when using flexible capacity assets.
-                keys.push((asset.clone(), ts_selection.clone()));
-                keys.push((asset.clone(), ts_selection.clone()));
-            }
-        } else {
-            // Fixed-capacity asset: simple absolute activity limits.
-            for (ts_selection, limits) in asset.iter_activity_limits() {
-                let limits = limits.start().value()..=limits.end().value();
-
-                // Collect activity terms for the time slices in this selection
-                let terms = ts_selection
-                    .iter(time_slice_info)
-                    .map(|(time_slice, _)| (variables.get_activity_var(asset, time_slice), 1.0))
-                    .collect::<Vec<_>>();
-
-                // Constraint: sum of activities in selection within limits
-                problem.add_row(limits, &terms);
-
-                // Store keys for retrieving duals later.
-                keys.push((asset.clone(), ts_selection.clone()));
-            }
+            // Store keys for retrieving duals later.
+            keys.push((asset.clone(), ts_selection.clone()));
         }
     }
 
@@ -544,7 +503,7 @@ where
 /// which is the authoritative check for equivalence. This also handles hash collisions correctly.
 ///
 /// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
-/// constraints (i.e. flexible-capacity assets have already been filtered out).
+/// constraints.
 fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
 where
     I: Iterator<Item = &'a AssetRef>,
@@ -581,8 +540,7 @@ where
 /// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
 /// slice.
 ///
-/// Flexible-capacity assets are excluded because their maximum activity depends on a decision
-/// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
+/// The constraints added here are not included in [`ConstraintKeys`], as their duals
 /// are not currently used.
 fn add_equal_utilisation_constraints<'a, I>(
     problem: &mut Problem,
@@ -592,14 +550,7 @@ fn add_equal_utilisation_constraints<'a, I>(
 ) where
     I: Iterator<Item = &'a AssetRef> + 'a,
 {
-    // Identify flexible-capacity assets so we can exclude them from the constraints
-    let flexible_assets: HashSet<_> = variables
-        .iter_capacity_vars()
-        .map(|(asset, _)| asset)
-        .collect();
-
-    let asset_groups =
-        group_dispatch_equivalent_assets(assets.filter(|asset| !flexible_assets.contains(asset)));
+    let asset_groups = group_dispatch_equivalent_assets(assets);
 
     // For each group of assets, add constraints to force equal utilisation in each time slice
     // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
