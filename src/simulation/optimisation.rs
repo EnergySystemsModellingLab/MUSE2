@@ -1,25 +1,20 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
-use crate::asset::{Asset, AssetCapacity, AssetRef, AssetState};
+use crate::asset::{Asset, AssetRef};
 use crate::commodity::CommodityID;
-use crate::finance::annual_capital_cost;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
-use crate::units::{
-    Activity, Capacity, Dimensionless, Flow, Money, MoneyPerActivity, MoneyPerCapacity,
-    MoneyPerFlow, Year,
-};
+use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, anyhow, bail};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use log::warn;
-use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Range;
 
@@ -38,9 +33,6 @@ type Variable = highs::Col;
 /// The map of activity variables for assets
 type ActivityVariableMap = IndexMap<(AssetRef, TimeSliceID), Variable>;
 
-/// A map of capacity variables for assets
-type CapacityVariableMap = IndexMap<AssetRef, Variable>;
-
 /// Variables representing unmet demand for a given market
 type UnmetDemandVariableMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Variable>;
 
@@ -57,8 +49,6 @@ pub struct VariableMap {
     activity_vars: ActivityVariableMap,
     existing_asset_var_idx: Range<usize>,
     candidate_asset_var_idx: Range<usize>,
-    capacity_vars: CapacityVariableMap,
-    capacity_var_idx: Range<usize>,
     unmet_demand_vars: UnmetDemandVariableMap,
     unmet_demand_var_idx: Range<usize>,
 }
@@ -104,8 +94,6 @@ impl VariableMap {
             activity_vars,
             existing_asset_var_idx,
             candidate_asset_var_idx,
-            capacity_vars: CapacityVariableMap::new(),
-            capacity_var_idx: Range::default(),
             unmet_demand_vars: UnmetDemandVariableMap::default(),
             unmet_demand_var_idx: Range::default(),
         }
@@ -172,11 +160,6 @@ impl VariableMap {
     /// Iterate over the keys for activity variables
     fn activity_var_keys(&self) -> indexmap::map::Keys<'_, (AssetRef, TimeSliceID), Variable> {
         self.activity_vars.keys()
-    }
-
-    /// Iterate over capacity variables
-    fn iter_capacity_vars(&self) -> impl Iterator<Item = (&AssetRef, Variable)> {
-        self.capacity_vars.iter().map(|(asset, var)| (asset, *var))
     }
 }
 
@@ -261,22 +244,6 @@ impl Solution<'_> {
             })
     }
 
-    /// Iterate over capacity values
-    pub fn iter_capacity(&self) -> impl Iterator<Item = (&AssetRef, AssetCapacity)> {
-        self.variables
-            .capacity_vars
-            .keys()
-            .zip(self.solution.columns()[self.variables.capacity_var_idx.clone()].iter())
-            .map(|(asset, capacity_var)| {
-                // The capacity variable represents number of tranches
-                let tranche_size = asset.capacity().tranche_size();
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let asset_capacity = AssetCapacity::new(capacity_var.round() as u32, tranche_size);
-
-                (asset, asset_capacity)
-            })
-    }
-
     /// Keys and dual values for commodity balance constraints.
     pub fn iter_commodity_balance_duals(
         &self,
@@ -296,11 +263,7 @@ impl Solution<'_> {
 
     /// Keys and dual values for activity constraints.
     ///
-    /// Note: if there are any flexible capacity assets, these will have two duals with identical
-    /// keys, and there will be no way to distinguish between them in the resulting iterator.
-    /// Recommended for now only to use this function when there are no flexible capacity assets.
-    ///
-    /// Also note: this excludes seasonal and annual constraints. Recommended for now not to use
+    /// Note: this excludes seasonal and annual constraints. Recommended for now not to use
     /// this for models that include seasonal or annual availability constraints.
     pub fn iter_activity_duals(
         &self,
@@ -436,14 +399,11 @@ fn filter_input_prices(
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
-    flexible_capacity_assets: &'run [AssetRef],
-    capacity_limits: Option<&'run HashMap<AssetRef, Capacity>>,
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run PriceMap>,
     include_commodity_constraints: bool,
     year: u32,
-    capacity_margin: Dimensionless,
 }
 
 impl<'model, 'run> DispatchRun<'model, 'run> {
@@ -452,29 +412,11 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         Self {
             model,
             existing_assets: assets,
-            flexible_capacity_assets: &[],
-            capacity_limits: None,
             candidate_assets: &[],
             markets_to_balance: &[],
             input_prices: None,
             include_commodity_constraints: true,
             year,
-            capacity_margin: Dimensionless(0.0),
-        }
-    }
-
-    /// Include the specified flexible capacity assets in the dispatch run
-    pub fn with_flexible_capacity_assets(
-        self,
-        flexible_capacity_assets: &'run [AssetRef],
-        capacity_limits: Option<&'run HashMap<AssetRef, Capacity>>,
-        capacity_margin: Dimensionless,
-    ) -> Self {
-        Self {
-            flexible_capacity_assets,
-            capacity_limits,
-            capacity_margin,
-            ..self
         }
     }
 
@@ -741,25 +683,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             variables.add_unmet_demand_variables(&mut problem, self.model, markets_to_balance);
         }
 
-        // Check flexible capacity assets is a subset of existing assets
-        for asset in self.flexible_capacity_assets {
-            assert!(
-                self.existing_assets.contains(asset),
-                "Flexible capacity assets must be a subset of existing assets. Offending asset: {asset:?}"
-            );
-        }
-
-        // Add capacity variables for flexible capacity assets
-        if !self.flexible_capacity_assets.is_empty() {
-            variables.capacity_var_idx = add_capacity_variables(
-                &mut problem,
-                &mut variables.capacity_vars,
-                self.flexible_capacity_assets,
-                self.capacity_limits,
-                self.capacity_margin,
-            );
-        }
-
         // Add constraints
         let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
         let constraint_keys = add_model_constraints(
@@ -821,51 +744,6 @@ fn add_activity_variables(
     start..problem.num_cols()
 }
 
-fn add_capacity_variables(
-    problem: &mut Problem,
-    variables: &mut CapacityVariableMap,
-    assets: &[AssetRef],
-    capacity_limits: Option<&HashMap<AssetRef, Capacity>>,
-    capacity_margin: Dimensionless,
-) -> Range<usize> {
-    let capacity_margin = capacity_margin.value();
-
-    // This line **must** come before we add more variables
-    let start = problem.num_cols();
-
-    for asset in assets {
-        // Can only have flexible capacity for `Ready` assets
-        assert!(
-            matches!(asset.state(), AssetState::Ready { .. }),
-            "Flexible capacity can only be assigned to `Ready` type assets. Offending asset: {asset:?}"
-        );
-
-        // Coefficient: cost per capacity
-        let coeff = calculate_capacity_coefficient(asset);
-
-        // Add a capacity variable for each asset
-        // Bounds are calculated based on current capacity with wiggle-room defined by
-        // `capacity_margin`, and limited by `capacity_limit` if provided.
-        // Since capacity variables are numbers of tranches, we apply constraints to the tranche count
-        let tranche_size = asset.capacity().tranche_size();
-        let current_tranches = asset.capacity().num_tranches();
-
-        let lower = (current_tranches as f64 * (1.0 - capacity_margin)).max(0.0);
-
-        let mut upper = current_tranches as f64 * (1.0 + capacity_margin);
-        if let Some(limit) = capacity_limits.and_then(|limits| limits.get(asset)) {
-            upper = upper.min((*limit / tranche_size).value());
-        }
-
-        let var = problem.add_integer_column((coeff * tranche_size).value(), lower..=upper);
-
-        let existing = variables.insert(asset.clone(), var).is_some();
-        assert!(!existing, "Duplicate entry for var");
-    }
-
-    start..problem.num_cols()
-}
-
 /// Calculate the cost coefficient for an activity variable.
 ///
 /// Normally, the cost coefficient is the same as the asset's operating costs for the given year and
@@ -894,14 +772,4 @@ fn calculate_activity_coefficient(
     } else {
         opex
     }
-}
-
-/// Calculate the cost coefficient for a capacity variable (for flexible capacity assets only).
-///
-/// This includes both the annual fixed operating cost and the annual capital cost.
-fn calculate_capacity_coefficient(asset: &AssetRef) -> MoneyPerCapacity {
-    let param = asset.process_parameter();
-    let annual_fixed_operating_cost = param.fixed_operating_cost * Year(1.0);
-    annual_fixed_operating_cost
-        + annual_capital_cost(param.capital_cost, param.lifetime, param.discount_rate)
 }
