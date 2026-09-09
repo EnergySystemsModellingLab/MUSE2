@@ -457,6 +457,7 @@ fn candidate_balance_epsilon(
 /// Returns an `ActivityKeys` where `offset` is the row index of the first
 /// activity constraint added and `keys` enumerates the `(asset, time_selection)`
 /// entries in the same row order.
+///
 #[doc = concat!("[1]: ", crate::docs_url!("model/dispatch_optimisation.html#asset-activity-limits"))]
 fn add_activity_constraints<'a, I>(
     problem: &mut Problem,
