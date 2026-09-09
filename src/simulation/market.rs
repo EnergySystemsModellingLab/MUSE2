@@ -1,7 +1,7 @@
 //! Code for creating sets of markets.
 use super::optimisation::DispatchRun;
 use crate::agent::Agent;
-use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef, AssetState};
+use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
@@ -236,17 +236,9 @@ pub fn select_assets_for_single_market(
 /// Iterates through the a pre-ordered set of markets forming a cycle, selecting assets for each
 /// market in turn.
 ///
-/// Dispatch optimisation is performed after each market is visited to rebalance demand.
-/// While dispatching, newly selected (`Ready`) assets are given flexible capacity (bounded by
-/// `capacity_margin`) so small demand shifts caused by later markets can be absorbed. After all
-/// markets have been visited once, the final set of assets is returned, applying any capacity
-/// adjustments from the final full-system dispatch optimisation.
+/// Dispatch optimisation is performed after each market is visited.
 ///
-/// Dispatch may fail at any point if new demands are encountered for previously visited markets,
-/// and the `capacity_margin` is not sufficient to absorb the demand shift. At this point, the
-/// simulation is terminated with an error prompting the user to increase the `capacity_margin`.
-/// A longer-term solution (TODO) may be to trigger re-investment for the affected markets. Other
-/// yet-to-implement features may also help to stabilise the cycle, such as capacity growth limits.
+/// Dispatch may fail at any point if new demands are encountered for previously visited markets.
 #[allow(clippy::too_many_arguments)]
 pub fn select_assets_for_cycle(
     model: &Model,
@@ -265,7 +257,6 @@ pub fn select_assets_for_cycle(
     // Iterate over the markets to select assets
     let mut current_demand = demand.clone();
     let mut assets_for_cycle = IndexMap::new();
-    let mut last_solution = None;
     for (idx, (commodity_id, region_id)) in markets.iter().enumerate() {
         // Select assets for this market
         let assets = select_assets_for_single_market(
@@ -292,53 +283,15 @@ pub fn select_assets_for_cycle(
         let mut markets_to_balance = seen_markets.to_vec();
         markets_to_balance.extend_from_slice(&markets[0..=idx]);
 
-        // We allow all `Ready` state assets to have flexible capacity
-        let flexible_capacity_assets: Vec<_> = assets_for_cycle_flat
-            .iter()
-            .filter(|asset| matches!(asset.state(), AssetState::Ready { .. }))
-            .cloned()
-            .collect();
-
-        // Retrieve installable capacity limits for flexible capacity assets.
-        let mut agent_share_cache = HashMap::new();
-        let capacity_limits = flexible_capacity_assets
-            .iter()
-            .filter_map(|asset| {
-                let agent_id = asset.agent_id().unwrap();
-                let commodity_id = asset.primary_output_commodity().unwrap();
-                let agent_share = *agent_share_cache
-                    .entry((agent_id, commodity_id))
-                    .or_insert_with(|| {
-                        model.agents[agent_id].commodity_portions[&(commodity_id.clone(), year)]
-                    });
-                asset
-                    .process()
-                    .agent_addition_limit(asset.region_id(), asset.commission_year(), agent_share)
-                    .map(|max_capacity| (asset.clone(), max_capacity))
-            })
-            .collect::<HashMap<_, _>>();
-
         // Run dispatch
         let solution = DispatchRun::new(model, &all_assets, year)
             .without_commodity_constraints()
             .with_market_balance_subset(&markets_to_balance)
-            .with_flexible_capacity_assets(
-                &flexible_capacity_assets,
-                Some(&capacity_limits),
-                // Gives newly selected cycle assets limited capacity wiggle-room; existing assets stay fixed.
-                model.parameters.capacity_margin,
-            )
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment"),
                 writer,
             )
-            .with_context(|| {
-                format!(
-                    "Cycle balancing failed for cycle ({markets_str}), capacity_margin: {}. \
-                     Try increasing the capacity_margin.",
-                    model.parameters.capacity_margin
-                )
-            })?;
+            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
 
         // Calculate new net demand map with all assets selected so far
         current_demand.clone_from(demand);
@@ -347,29 +300,10 @@ pub fn select_assets_for_cycle(
             &solution.create_flow_map(),
             &assets_for_cycle_flat,
         );
-        last_solution = Some(solution);
     }
 
-    // Finally, update flexible capacity assets based on the final solution
-    let mut all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
-    if let Some(solution) = last_solution {
-        let new_capacities: HashMap<_, _> = solution.iter_capacity().collect();
-        for asset in &mut all_cycle_assets {
-            if let Some(new_capacity) = new_capacities.get(asset) {
-                debug!(
-                    "Capacity of asset '{}' modified during cycle balancing ({} to {})",
-                    asset.process_id(),
-                    asset.total_capacity(),
-                    new_capacity.total_capacity()
-                );
-                asset.make_mut().set_capacity(*new_capacity);
-            }
-        }
-    }
-
-    // Drop any assets who's capacities were dropped to zero
-    all_cycle_assets.retain(|asset| asset.num_tranches() > 0);
-
+    // Collect assets
+    let all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
     Ok(all_cycle_assets)
 }
 
