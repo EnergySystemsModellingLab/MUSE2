@@ -8,8 +8,8 @@ use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
-    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
-    update_net_demand_map,
+    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale,
+    flatten_preset_demands_for_year, select_best_assets, update_net_demand_map,
 };
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
@@ -283,18 +283,17 @@ pub fn select_assets_for_cycle(
 
     // STEP 1
     // Iterate over the markets in order1, considering all processes
-
-    // Iterate over the markets to select assets
     let mut net_demand = demand.clone();
     let mut assets_for_first_pass = Vec::new();
-    let mut final_pass_1_solution = None;
-    for (idx, (commodity_id, region_id)) in investment_order.iter().enumerate() {
+    for market in investment_order {
+        let (commodity_id, region_id) = market.clone();
+
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 1");
         let selected_assets = select_assets_for_single_market(
             model,
-            commodity_id,
-            region_id,
+            &commodity_id,
+            &region_id,
             year,
             &net_demand,
             existing_assets,
@@ -309,16 +308,11 @@ pub fn select_assets_for_cycle(
         let mut all_assets = previously_selected_assets.to_vec();
         all_assets.extend(assets_for_first_pass.iter().cloned());
 
-        // We balance all previously seen markets plus all cycle markets up to and including this one
-        let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&investment_order[0..=idx]);
-
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
-        let solution = DispatchRun::new(model, &all_assets, year)
-            .allow_unmet_demand()
+        let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
             .without_commodity_constraints()
-            .with_market_balance_subset(&markets_to_balance)
+            .with_market_balance_subset(std::slice::from_ref(market))
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1"),
                 writer,
@@ -326,31 +320,18 @@ pub fn select_assets_for_cycle(
             .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
         debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
 
-        // Update demand map
+        // Update demand map with flows from newly selected assets
         update_net_demand_map(
             &mut net_demand,
             &solution.create_flow_map(),
             &selected_assets,
         );
-        final_pass_1_solution = Some(solution);
-    }
-
-    // Use the final pass-1 dispatch residual as the starting demand for pass 2. The dispatch
-    // solution is authoritative for balanced markets; retain the existing demand for markets
-    // which were not included in that dispatch subset.
-    if let Some(solution) = final_pass_1_solution.as_ref() {
-        for (commodity_id, region_id, time_slice, unmet_demand) in solution.iter_unmet_demand() {
-            net_demand.insert(
-                (commodity_id.clone(), region_id.clone(), time_slice.clone()),
-                unmet_demand,
-            );
-        }
     }
 
     // STEP 2
     // Iterate over the markets in order2, excluding the specified processes
-    // This time we disallow unmet demand
-
+    let preset_demands =
+        flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
     let mut assets_for_second_pass = Vec::new();
     for (idx, (commodity_id, region_id)) in investment_order.iter().enumerate() {
         // Select assets for this market
@@ -380,7 +361,7 @@ pub fn select_assets_for_cycle(
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
-        let solution = DispatchRun::new(model, &all_assets, year)
+        let solution = DispatchRun::new(model, &all_assets, year, &preset_demands)
             .without_commodity_constraints()
             .with_market_balance_subset(&markets_to_balance)
             .run(
