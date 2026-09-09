@@ -255,9 +255,9 @@ struct AppraisalResultsTimeSliceRow {
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
-    time_slice_level: TimeSliceLevel,
     activity: Activity,
     activity_coefficient: MoneyPerActivity,
+    time_slice_level: TimeSliceLevel,
     demand_for_selection: Flow,
     unmet_demand_for_selection: Flow,
 }
@@ -525,9 +525,9 @@ impl DebugDataWriter {
                     process_id: result.asset.process_id().clone(),
                     region_id: result.asset.region_id().clone(),
                     time_slice: time_slice.clone(),
-                    time_slice_level,
                     activity: *activity,
                     activity_coefficient,
+                    time_slice_level,
                     demand_for_selection: demand,
                     unmet_demand_for_selection: unmet_demand,
                 };
@@ -1164,9 +1164,9 @@ mod tests {
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice: time_slice.clone(),
-            time_slice_level: TimeSliceLevel::DayNight,
             activity: Activity(10.0),
             activity_coefficient: MoneyPerActivity(0.5),
+            time_slice_level: TimeSliceLevel::DayNight,
             demand_for_selection: Flow(100.0),
             unmet_demand_for_selection: Flow(5.0),
         };
