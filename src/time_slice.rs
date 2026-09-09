@@ -190,7 +190,9 @@ impl TimeSliceSelection {
 }
 
 /// The time granularity for a particular operation
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Deserialize, strum::EnumIter)]
+#[derive(
+    PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize, strum::EnumIter,
+)]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
     #[serde(rename = "daynight")]
@@ -211,20 +213,6 @@ impl TimeSliceLevel {
             Self::Season => TimeSliceSelection::Season(ts.season.clone()),
             Self::DayNight => TimeSliceSelection::Single(ts.clone()),
         }
-    }
-}
-
-impl Serialize for TimeSliceLevel {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let s = match self {
-            Self::DayNight => "daynight",
-            Self::Season => "season",
-            Self::Annual => "annual",
-        };
-        serializer.serialize_str(s)
     }
 }
 
