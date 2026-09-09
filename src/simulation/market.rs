@@ -15,7 +15,6 @@ use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result};
-use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::HashMap;
@@ -56,8 +55,6 @@ impl MarketSet {
     /// * `demand` – Net demand profiles available to all markets before selection.
     /// * `existing_assets` – Assets already commissioned in the system.
     /// * `prices` – Commodity price assumptions to use when valuing investments.
-    /// * `seen_markets` – Markets for which investments have already been settled.
-    /// * `previously_selected_assets` – Assets chosen in earlier market sets.
     /// * `writer` – Data sink used to log optimisation artefacts.
     #[allow(clippy::too_many_arguments)]
     pub fn select_assets(
@@ -67,8 +64,6 @@ impl MarketSet {
         demand: &AllDemandMap,
         existing_assets: &[AssetRef],
         prices: &Prices,
-        seen_markets: &[(CommodityID, RegionID)],
-        previously_selected_assets: &[AssetRef],
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
@@ -91,8 +86,6 @@ impl MarketSet {
                     demand,
                     existing_assets,
                     prices,
-                    seen_markets,
-                    previously_selected_assets,
                     writer,
                 )
                 .with_context(|| {
@@ -114,8 +107,6 @@ impl MarketSet {
                         demand,
                         existing_assets,
                         prices,
-                        seen_markets,
-                        previously_selected_assets,
                         writer,
                     )?;
                     all_assets.extend(assets);
@@ -247,64 +238,57 @@ pub fn select_assets_for_cycle(
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &Prices,
-    seen_markets: &[(CommodityID, RegionID)],
-    previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
 
     // Iterate over the markets to select assets
-    let mut current_demand = demand.clone();
-    let mut assets_for_cycle = IndexMap::new();
-    for (idx, (commodity_id, region_id)) in markets.iter().enumerate() {
+    let mut net_demand = demand.clone();
+    let mut all_selected_assets = Vec::new();
+    for market in markets {
+        let (commodity_id, region_id) = market.clone();
+
         // Select assets for this market
-        let assets = select_assets_for_single_market(
+        let selected_assets = select_assets_for_single_market(
             model,
-            commodity_id,
-            region_id,
+            &commodity_id,
+            &region_id,
             year,
-            &current_demand,
+            &net_demand,
             existing_assets,
             prices,
             writer,
         )?;
-        assets_for_cycle.insert((commodity_id.clone(), region_id.clone()), assets);
 
-        // Assemble full list of assets for dispatch (previously selected + all chosen so far)
-        let mut all_assets = previously_selected_assets.to_vec();
-        let assets_for_cycle_flat: Vec<_> = assets_for_cycle
-            .values()
-            .flat_map(|v| v.iter().cloned())
-            .collect();
-        all_assets.extend_from_slice(&assets_for_cycle_flat);
+        // If no assets have been selected, skip dispatch optimisation
+        // **TODO**: this probably means there's no demand for the market, which we could
+        // presumably preempt
+        if selected_assets.is_empty() {
+            continue;
+        }
 
-        // We balance all previously seen markets plus all cycle markets up to and including this one
-        let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&markets[0..=idx]);
+        all_selected_assets.extend(selected_assets.iter().cloned());
 
         // Run dispatch
-        let solution = DispatchRun::new(model, &all_assets, year, &current_demand)
+        let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
             .without_commodity_constraints()
-            .with_market_balance_subset(&markets_to_balance)
+            .with_market_balance_subset(std::slice::from_ref(market))
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment"),
                 writer,
             )
             .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
 
-        // Calculate new net demand map with all assets selected so far
-        current_demand.clone_from(demand);
+        // Update demand map with flows from newly selected assets
         update_net_demand_map(
-            &mut current_demand,
+            &mut net_demand,
             &solution.create_flow_map(),
-            &assets_for_cycle_flat,
+            &selected_assets,
         );
     }
 
-    // Collect assets
-    let all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
-    Ok(all_cycle_assets)
+    Ok(all_selected_assets)
 }
 
 /// Get a portion of the demand profile for this market

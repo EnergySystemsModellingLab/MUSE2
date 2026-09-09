@@ -69,29 +69,11 @@ pub fn perform_agent_investment(
         investment_order.iter().join(" -> ")
     );
 
-    // Keep track of the markets that have been seen so far. This will be used to apply
-    // balance constraints in the dispatch optimisation - we only apply balance constraints for
-    // markets that have been seen so far.
-    let mut seen_markets = Vec::new();
-
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selected_assets = market_set.select_assets(
-            model,
-            year,
-            &net_demand,
-            existing_assets,
-            prices,
-            &seen_markets,
-            &all_selected_assets,
-            writer,
-        )?;
-
-        // Update our list of seen markets
-        for market in market_set.iter_markets() {
-            seen_markets.push(market.clone());
-        }
+        let selected_assets =
+            market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
 
         // If no assets have been selected, skip dispatch optimisation
         // **TODO**: this probably means there's no demand for the market, which we could
