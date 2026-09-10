@@ -14,7 +14,7 @@ use crate::simulation::investment::{
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
@@ -29,7 +29,14 @@ pub enum MarketSet {
     /// Assets are selected for a group of markets which forms a cycle.
     /// Experimental: handled by [`select_assets_for_cycle`] and guarded by the broken options
     /// parameter.
-    Cycle(Vec<(CommodityID, RegionID)>),
+    Cycle {
+        /// Investment order for first pass
+        first_pass: Vec<(CommodityID, RegionID)>,
+        /// Investment order for second pass
+        second_pass: Vec<(CommodityID, RegionID)>,
+        /// Processes to exclude from the second pass
+        excluded_processes: Vec<ProcessID>,
+    },
     /// Assets are selected for a layer of independent [`MarketSet`]s
     Layer(Vec<MarketSet>),
 }
@@ -41,7 +48,7 @@ impl MarketSet {
     ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
             MarketSet::Single(market) => Box::new(std::iter::once(market)),
-            MarketSet::Cycle(markets) => Box::new(markets.iter()),
+            MarketSet::Cycle { first_pass, .. } => Box::new(first_pass.iter()),
             MarketSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_markets())),
         }
     }
@@ -80,13 +87,14 @@ impl MarketSet {
                 demand,
                 existing_assets,
                 prices,
+                &[],
                 writer,
             ),
-            MarketSet::Cycle(markets) => {
+            MarketSet::Cycle { .. } => {
                 debug!("Starting investment for cycle '{self}'");
                 select_assets_for_cycle(
                     model,
-                    markets,
+                    self,
                     year,
                     demand,
                     existing_assets,
@@ -133,11 +141,14 @@ impl Display for MarketSet {
             MarketSet::Single((commodity_id, region_id)) => {
                 write!(f, "{commodity_id}|{region_id}")
             }
-            MarketSet::Cycle(markets) => {
+            MarketSet::Cycle { first_pass, .. } => {
                 write!(
                     f,
                     "({})",
-                    markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ")
+                    first_pass
+                        .iter()
+                        .map(|(c, r)| format!("{c}|{r}"))
+                        .join(", ")
                 )
             }
             MarketSet::Layer(ids) => {
@@ -159,6 +170,7 @@ pub fn select_assets_for_single_market(
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &Prices,
+    excluded_processes: &[ProcessID],
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let commodity = &model.commodities[commodity_id];
@@ -182,7 +194,7 @@ pub fn select_assets_for_single_market(
         );
 
         // Existing and candidate assets from which to choose
-        let opt_assets = get_asset_options(
+        let mut opt_assets = get_asset_options(
             existing_assets,
             &demand_portion_for_market,
             agent,
@@ -192,6 +204,9 @@ pub fn select_assets_for_single_market(
             model.parameters.capacity_tranche_fraction,
         )
         .collect::<Vec<_>>();
+
+        // Exclude certain processes from the options
+        opt_assets.retain(|asset| !excluded_processes.contains(asset.process_id()));
 
         // Calculate the agent's share of addition limits for candidate processes
         let agent_addition_limits = collect_agent_limits(
@@ -242,7 +257,7 @@ pub fn select_assets_for_single_market(
 #[allow(clippy::too_many_arguments)]
 pub fn select_assets_for_cycle(
     model: &Model,
-    markets: &[(CommodityID, RegionID)],
+    market_set: &MarketSet,
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
@@ -251,13 +266,28 @@ pub fn select_assets_for_cycle(
     previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
+    let MarketSet::Cycle {
+        first_pass,
+        second_pass,
+        excluded_processes,
+    } = market_set
+    else {
+        bail!("expected MarketSet::Cycle");
+    };
+
     // Precompute a joined string for logging
-    let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
+    let markets_str = first_pass
+        .iter()
+        .map(|(c, r)| format!("{c}|{r}"))
+        .join(", ");
+
+    // STEP 1
+    // Iterate over the markets in order1, considering all processes
 
     // Iterate over the markets to select assets
     let mut current_demand = demand.clone();
     let mut assets_for_cycle = IndexMap::new();
-    for (idx, (commodity_id, region_id)) in markets.iter().enumerate() {
+    for (idx, (commodity_id, region_id)) in first_pass.iter().enumerate() {
         // Select assets for this market
         let assets = select_assets_for_single_market(
             model,
@@ -267,6 +297,7 @@ pub fn select_assets_for_cycle(
             &current_demand,
             existing_assets,
             prices,
+            &[],
             writer,
         )?;
         assets_for_cycle.insert((commodity_id.clone(), region_id.clone()), assets);
@@ -281,14 +312,15 @@ pub fn select_assets_for_cycle(
 
         // We balance all previously seen markets plus all cycle markets up to and including this one
         let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&markets[0..=idx]);
+        markets_to_balance.extend_from_slice(&first_pass[0..=idx]);
 
         // Run dispatch
         let solution = DispatchRun::new(model, &all_assets, year)
+            .allow_unmet_demand()
             .without_commodity_constraints()
             .with_market_balance_subset(&markets_to_balance)
             .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment"),
+                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1"),
                 writer,
             )
             .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
@@ -302,9 +334,73 @@ pub fn select_assets_for_cycle(
         );
     }
 
-    // Collect assets
+    // STEP 2
+    // Iterate over the markets in order2, excluding the specified processes
+    // This time we disallow unmet demand
+
+    for (idx, (commodity_id, region_id)) in second_pass.iter().enumerate() {
+        // Select assets for this market
+        let assets = select_assets_for_single_market(
+            model,
+            commodity_id,
+            region_id,
+            year,
+            &current_demand,
+            existing_assets,
+            prices,
+            &excluded_processes,
+            writer,
+        )?;
+        assets_for_cycle.insert((commodity_id.clone(), region_id.clone()), assets);
+
+        // Assemble full list of assets for dispatch (previously selected + all chosen so far)
+        let mut all_assets = previously_selected_assets.to_vec();
+        let assets_for_cycle_flat: Vec<_> = assets_for_cycle
+            .values()
+            .flat_map(|v| v.iter().cloned())
+            .collect();
+        all_assets.extend_from_slice(&assets_for_cycle_flat);
+
+        // We balance all previously seen markets plus all cycle markets up to and including this one
+        let mut markets_to_balance = seen_markets.to_vec();
+        markets_to_balance.extend_from_slice(&first_pass[0..=idx]);
+
+        // Run dispatch
+        let solution = DispatchRun::new(model, &all_assets, year)
+            .without_commodity_constraints()
+            .with_market_balance_subset(&markets_to_balance)
+            .run(
+                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
+                writer,
+            )
+            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
+
+        // Calculate new net demand map with all assets selected so far
+        current_demand.clone_from(demand);
+        update_net_demand_map(
+            &mut current_demand,
+            &solution.create_flow_map(),
+            &assets_for_cycle_flat,
+        );
+    }
+
+    // Combine equivalent candidate assets
+    let mut combined_assets: Vec<AssetRef> = Vec::new();
     let all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
-    Ok(all_cycle_assets)
+    for asset in all_cycle_assets {
+        if let Some(existing_asset) = combined_assets
+            .iter_mut()
+            .find(|existing| **existing == asset)
+        {
+            existing_asset
+                .make_mut()
+                .increase_capacity(asset.capacity());
+        } else {
+            combined_assets.push(asset);
+        }
+    }
+
+    Ok(combined_assets)
 }
 
 /// Get a portion of the demand profile for this market

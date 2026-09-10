@@ -163,13 +163,13 @@ fn price_market_set(
                 strategy_override,
             );
         }
-        MarketSet::Cycle(markets) => {
+        MarketSet::Cycle { first_pass, .. } => {
             price_cycle(
                 model,
                 solution_without_candidates,
                 solution_with_candidates,
                 year,
-                markets,
+                first_pass,
                 shadow_prices,
                 annual_activities,
                 market_prices,
