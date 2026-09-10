@@ -56,8 +56,9 @@ pub fn perform_agent_investment(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
-    let mut net_demand =
+    let preset_demands =
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
+    let mut net_demand = preset_demands.clone();
 
     // Keep a list of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -69,11 +70,21 @@ pub fn perform_agent_investment(
         investment_order.iter().join(" -> ")
     );
 
+    // Keep track of the markets that have been seen so far. This will be used to apply
+    // balance constraints in the dispatch optimisation - we only apply balance constraints for
+    // markets that have been seen so far.
+    let mut seen_markets = Vec::new();
+
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
         let selected_assets =
             market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
+
+        // Update our list of seen markets
+        for market in market_set.iter_markets() {
+            seen_markets.push(market.clone());
+        }
 
         // If no assets have been selected, skip dispatch optimisation
         // **TODO**: this probably means there's no demand for the market, which we could
@@ -93,10 +104,9 @@ pub fn perform_agent_investment(
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
-        let current_markets: Vec<_> = market_set.iter_markets().cloned().collect();
-        let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
+        let solution = DispatchRun::new(model, &all_selected_assets, year, &preset_demands)
             .without_commodity_constraints()
-            .with_market_balance_subset(&current_markets)
+            .with_market_balance_subset(&seen_markets)
             .with_input_prices(&prices.shadow)
             .run(&format!("post {market_set} investment"), writer)?;
 
