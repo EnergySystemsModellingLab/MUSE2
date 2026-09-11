@@ -56,8 +56,9 @@ pub fn perform_agent_investment(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
-    let mut net_demand =
+    let preset_demands =
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
+    let mut net_demand = preset_demands.clone();
 
     // Keep a list of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -77,16 +78,8 @@ pub fn perform_agent_investment(
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selected_assets = market_set.select_assets(
-            model,
-            year,
-            &net_demand,
-            existing_assets,
-            prices,
-            &seen_markets,
-            &all_selected_assets,
-            writer,
-        )?;
+        let selected_assets =
+            market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
 
         // Update our list of seen markets
         for market in market_set.iter_markets() {
@@ -111,7 +104,7 @@ pub fn perform_agent_investment(
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected_assets, year)
+        let solution = DispatchRun::new(model, &all_selected_assets, year, &preset_demands)
             .without_commodity_constraints()
             .with_market_balance_subset(&seen_markets)
             .with_input_prices(&prices.shadow)

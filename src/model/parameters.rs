@@ -113,13 +113,6 @@ pub struct ModelParameters {
     /// The relative tolerance for price convergence in the ironing out loop
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub price_tolerance: Dimensionless,
-    /// Slack applied during cycle balancing, allowing newly selected assets to flex their capacity
-    /// by this proportion.
-    ///
-    /// Existing assets remain fixed; this gives newly selected assets the wiggle-room to absorb
-    /// small demand changes before we would otherwise need to break for re-investment.
-    #[serde(deserialize_with = "deserialise_finite_non_negative")]
-    pub capacity_margin: Dimensionless,
     /// Number of years an asset can remain unused before being decommissioned
     pub mothball_years: u32,
     /// Absolute tolerance when checking if remaining demand is close enough to zero
@@ -152,7 +145,6 @@ impl Default for ModelParameters {
             annual_utilisation_penalty: MoneyPerCapacityPerYear(1e-6),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
-            capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
             highs: HighsOptions::default(),
@@ -354,8 +346,6 @@ impl ModelParameters {
         check_max_ironing_out_iterations(self.max_ironing_out_iterations)?;
 
         // price_tolerance already validated with deserialise_finite_non_negative
-
-        // capacity_margin already validated with deserialise_finite_non_negative
 
         // remaining_demand_absolute_tolerance already validated with
         // deserialise_finite_non_negative; check remaining constraints here
