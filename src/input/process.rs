@@ -38,6 +38,7 @@ struct ProcessRaw {
     end_year: Option<u32>,
     capacity_to_activity: Option<ActivityPerCapacity>,
     tranche_size: Option<Capacity>,
+    feedback_process: Option<bool>,
 }
 define_id_getter! {ProcessRaw, ProcessID}
 
@@ -174,6 +175,7 @@ where
             capacity_to_activity,
             investment_constraints: ProcessInvestmentConstraintsMap::new(),
             tranche_size: process_raw.tranche_size,
+            feedback_process: process_raw.feedback_process.unwrap_or(false),
         };
 
         ensure!(

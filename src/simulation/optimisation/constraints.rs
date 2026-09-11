@@ -5,6 +5,7 @@ use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
 use crate::process::FlowDirection;
 use crate::region::RegionID;
+use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
@@ -88,6 +89,7 @@ pub fn add_model_constraints<'a, I>(
     model: &'a Model,
     assets: &I,
     markets_to_balance: &'a [(CommodityID, RegionID)],
+    market_demands: &AllDemandMap,
     year: u32,
     candidate_assets: &'a [AssetRef],
     include_commodity_constraints: bool,
@@ -101,7 +103,7 @@ where
         model,
         assets,
         markets_to_balance,
-        year,
+        market_demands,
         candidate_assets,
     );
 
@@ -330,7 +332,7 @@ fn add_commodity_balance_constraints<'a, I>(
     model: &'a Model,
     assets: &I,
     markets_to_balance: &'a [(CommodityID, RegionID)],
-    year: u32,
+    market_demands: &AllDemandMap,
     candidate_assets: &'a [AssetRef],
 ) -> CommodityBalanceKeys
 where
@@ -394,14 +396,18 @@ where
                 model.parameters.commodity_balance_epsilon,
             );
 
-            // For SVD commodities, the lower bound is the exogenous demand (or epsilon if larger).
-            // For SED commodities, the lower bound is just epsilon.
-            let min = match commodity.kind {
-                CommodityType::ServiceDemand => {
-                    commodity.demand[&(region_id.clone(), year, ts_selection.clone())].max(epsilon)
-                }
-                _ => epsilon,
+            // For SVD commodities, the demand must be present in the map; for SED commodities,
+            // missing entries mean no demand for this selection.
+            let key = (
+                commodity_id.clone(),
+                region_id.clone(),
+                ts_selection.clone(),
+            );
+            let demand_for_selection = match commodity.kind {
+                CommodityType::ServiceDemand => market_demands[&key],
+                _ => market_demands.get(&key).copied().unwrap_or(Flow(0.0)),
             };
+            let min = demand_for_selection.max(epsilon);
 
             // Consume collected terms into a row. `terms.drain(..)` ensures the vector is
             // emptied for the next selection.
