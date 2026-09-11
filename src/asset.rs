@@ -983,6 +983,7 @@ impl AssetRef {
                 self.region_id(),
                 self.commission_year,
                 self.agent_id(),
+                hash_unit(self.capacity().tranche_size()),
             ))
         }
     }
@@ -1168,7 +1169,7 @@ impl Hash for AssetRef {
 #[derive(PartialEq, PartialOrd, Eq, Ord, Hash)]
 enum AssetCmp<'a> {
     WithID(AssetID),
-    WithoutID((&'a ProcessID, &'a RegionID, u32, Option<&'a AgentID>)),
+    WithoutID((&'a ProcessID, &'a RegionID, u32, Option<&'a AgentID>, u64)),
 }
 
 /// Additional methods for iterating over assets
