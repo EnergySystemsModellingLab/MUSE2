@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1788440667673,
+  "lastUpdate": 1789134333415,
   "repoUrl": "https://github.com/EnergySystemsModellingLab/MUSE2",
   "entries": {
     "Benchmark": [
@@ -311,6 +311,110 @@
           {
             "name": "select_best_assets_sequential/20",
             "value": 175652280.5,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c8215b8079c34452ed6a78eef9bfe18c97bf32b0",
+          "message": "Merge pull request #1546 from EnergySystemsModellingLab/revert-1540-demand_map\n\nRevert \"Use `TimeSliceSelection` for demand maps\"",
+          "timestamp": "2026-09-11T14:38:05+01:00",
+          "tree_id": "353888df46084e56ae00d9f85a12d9029a1b769e",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/c8215b8079c34452ed6a78eef9bfe18c97bf32b0"
+        },
+        "date": 1789134333414,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 487294726.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 271186321,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 412046272.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 98795882.16666666,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 478586509.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 685423491,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 8991960.267857142,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 26926073.133333333,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 45278043.625,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 67043689.83333333,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 84823574.25,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 9140267.425,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 43325366.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 86678350,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 130081675,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 173157696,
             "unit": "ns"
           }
         ]
