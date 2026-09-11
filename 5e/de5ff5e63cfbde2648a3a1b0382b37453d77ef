@@ -37,7 +37,7 @@ tests/data/two_outputs/commodity_flows.csv
 tests/data/simple/debug_dispatch_assets.csv
   h_e76403a1cd4bf1 354-401,403-404,406,409-411,414,416-417,419-422,424-425,427-433,438,441,446-545,549-553,558-673,675,677,678-681,686-689,1458-1493,1497-1553,1554,1555,1556-1558,1559,1560-1562,1563-1564,1565,1566-1569
 src/simulation/investment.rs
-  h_e76403a1cd4bf1 61,73-77,81-82,84-87,88,107,109
+  h_e76403a1cd4bf1 59,61,73-77,81-82,84-88,107,109
 tests/data/missing_commodity/asset_capacities.csv
   h_e76403a1cd4bf1 17,20,23
 tests/data/missing_commodity/commodity_flows.csv
