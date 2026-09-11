@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub mod optimisation;
 use optimisation::{DispatchRun, FlowMap};
 pub mod investment;
-use investment::perform_agent_investment;
+use investment::{collect_preset_demands_for_year, perform_agent_investment};
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
@@ -178,13 +178,15 @@ fn run_dispatch_for_year(
     debug_assert!(assets.iter().all(|asset| !asset.is_candidate()));
     debug_assert!(candidates.iter().all(|asset| asset.is_candidate()));
 
+    let market_demands = collect_preset_demands_for_year(&model.commodities, year);
+
     // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
     // flows (i.e. all are zero)
     let (solution_existing, flow_map) = if assets.is_empty() {
         (None, FlowMap::default())
     } else {
-        let solution =
-            DispatchRun::new(model, assets, year).run("final without candidates", writer)?;
+        let solution = DispatchRun::new(model, assets, year, &market_demands)
+            .run("final without candidates", writer)?;
         let flow_map = solution.create_flow_map();
         (Some(solution), flow_map)
     };
@@ -195,7 +197,7 @@ fn run_dispatch_for_year(
         None
     } else {
         Some(
-            DispatchRun::new(model, assets, year)
+            DispatchRun::new(model, assets, year, &market_demands)
                 .with_candidates(candidates)
                 .run("final with candidates", writer)?,
         )

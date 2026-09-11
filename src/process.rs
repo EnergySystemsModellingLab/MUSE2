@@ -70,6 +70,8 @@ pub struct Process {
     /// how their total capacity is represented as equal-capacity tranches; the number of tranches
     /// is rounded up when necessary.
     pub tranche_size: Option<Capacity>,
+    /// Whether this process participates in feedback loops between commodities.
+    pub feedback_process: bool,
 }
 
 impl Process {
