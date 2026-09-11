@@ -15,7 +15,6 @@ use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result, bail};
-use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::HashMap;
@@ -248,7 +247,7 @@ pub fn select_assets_for_single_market(
     Ok(selected_assets)
 }
 
-/// Iterates through the a pre-ordered set of markets forming a cycle, selecting assets for each
+/// Iterates through a pre-ordered set of markets forming a cycle, selecting assets for each
 /// market in turn.
 ///
 /// Dispatch optimisation is performed after each market is visited.
@@ -285,36 +284,36 @@ pub fn select_assets_for_cycle(
     // Iterate over the markets in order1, considering all processes
 
     // Iterate over the markets to select assets
-    let mut current_demand = demand.clone();
-    let mut assets_for_cycle = IndexMap::new();
+    let mut net_demand = demand.clone();
+    let mut assets_for_first_pass = Vec::new();
+    let mut final_pass_1_solution = None;
     for (idx, (commodity_id, region_id)) in first_pass.iter().enumerate() {
         // Select assets for this market
-        let assets = select_assets_for_single_market(
+        debug!("Running {commodity_id}|{region_id} selection pass 1");
+        let selected_assets = select_assets_for_single_market(
             model,
             commodity_id,
             region_id,
             year,
-            &current_demand,
+            &net_demand,
             existing_assets,
             prices,
             &[],
             writer,
         )?;
-        assets_for_cycle.insert((commodity_id.clone(), region_id.clone()), assets);
+        debug!("Completed {commodity_id}|{region_id} selection pass 1");
+        assets_for_first_pass.extend(selected_assets.iter().cloned());
 
         // Assemble full list of assets for dispatch (previously selected + all chosen so far)
         let mut all_assets = previously_selected_assets.to_vec();
-        let assets_for_cycle_flat: Vec<_> = assets_for_cycle
-            .values()
-            .flat_map(|v| v.iter().cloned())
-            .collect();
-        all_assets.extend_from_slice(&assets_for_cycle_flat);
+        all_assets.extend(assets_for_first_pass.iter().cloned());
 
         // We balance all previously seen markets plus all cycle markets up to and including this one
         let mut markets_to_balance = seen_markets.to_vec();
         markets_to_balance.extend_from_slice(&first_pass[0..=idx]);
 
         // Run dispatch
+        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
         let solution = DispatchRun::new(model, &all_assets, year)
             .allow_unmet_demand()
             .without_commodity_constraints()
@@ -324,20 +323,86 @@ pub fn select_assets_for_cycle(
                 writer,
             )
             .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
+        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
 
-        // Calculate new net demand map with all assets selected so far
-        current_demand.clone_from(demand);
+        // Update demand map
         update_net_demand_map(
-            &mut current_demand,
+            &mut net_demand,
             &solution.create_flow_map(),
-            &assets_for_cycle_flat,
+            &selected_assets,
+        );
+        final_pass_1_solution = Some(solution);
+    }
+
+    // Use the final pass-1 dispatch residual as the starting demand for pass 2. The dispatch
+    // solution is authoritative for balanced markets; retain the existing demand for markets
+    // which were not included in that dispatch subset.
+    if let Some(solution) = final_pass_1_solution.as_ref() {
+        for (commodity_id, region_id, time_slice, unmet_demand) in solution.iter_unmet_demand() {
+            net_demand.insert(
+                (commodity_id.clone(), region_id.clone(), time_slice.clone()),
+                unmet_demand,
+            );
+        }
+    }
+
+    // STEP 2
+    // Iterate over the markets in order2, excluding the specified processes
+    // This time we disallow unmet demand
+
+    let mut assets_for_second_pass = Vec::new();
+    for (idx, (commodity_id, region_id)) in second_pass.iter().enumerate() {
+        // Select assets for this market
+        debug!("Running {commodity_id}|{region_id} selection pass 2");
+        let selected_assets = select_assets_for_single_market(
+            model,
+            commodity_id,
+            region_id,
+            year,
+            &net_demand,
+            existing_assets,
+            prices,
+            &excluded_processes,
+            writer,
+        )?;
+        debug!("Completed {commodity_id}|{region_id} selection pass 2");
+        assets_for_second_pass.extend(selected_assets.iter().cloned());
+
+        // Assemble full list of assets for dispatch (previously selected + all chosen so far)
+        let mut all_assets = previously_selected_assets.to_vec();
+        all_assets.extend(assets_for_first_pass.iter().cloned());
+        all_assets.extend(assets_for_second_pass.iter().cloned());
+
+        // We balance all previously seen markets plus all cycle markets up to and including this one
+        let mut markets_to_balance = seen_markets.to_vec();
+        markets_to_balance.extend_from_slice(&second_pass[0..=idx]);
+
+        // Run dispatch
+        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
+        let solution = DispatchRun::new(model, &all_assets, year)
+            .without_commodity_constraints()
+            .with_market_balance_subset(&markets_to_balance)
+            .run(
+                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
+                writer,
+            )
+            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
+        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
+
+        // Update demand map
+        update_net_demand_map(
+            &mut net_demand,
+            &solution.create_flow_map(),
+            &selected_assets,
         );
     }
 
     // Combine equivalent candidate assets
     let mut combined_assets: Vec<AssetRef> = Vec::new();
-    let all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
-    for asset in all_cycle_assets {
+    for asset in assets_for_first_pass
+        .into_iter()
+        .chain(assets_for_second_pass)
+    {
         if let Some(existing_asset) = combined_assets
             .iter_mut()
             .find(|existing| **existing == asset)
