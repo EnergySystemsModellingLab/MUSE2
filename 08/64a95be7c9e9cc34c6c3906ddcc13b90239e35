@@ -1,0 +1,68 @@
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 543
+  h_e76403a1cd4bf1 12,459,479-480,482-486,488-489,491-492,506,553
+src/simulation/market.rs
+  h_e76403a1cd4bf1 241,294,305-306
+  h_e76403a1cd4bf1 4,239
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 266
+  h_e76403a1cd4bf1 4,12
+src/simulation.rs
+  h_e76403a1cd4bf1 18
+tests/data/simple/debug_dispatch_assets.csv
+  h_e76403a1cd4bf1 354-401,403-404,406,409-411,414,416-417,419-422,424-425,427-433,438,441,446-545,549-553,558-673,675,677,678-681,686-689,1458-1493,1497-1553,1554,1555,1556-1558,1559,1560-1562,1563-1564,1565,1566-1569
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 72-76,91-94,116
+  h_e76403a1cd4bf1 95
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 46
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,706-729,821-826,833-841,857-865,948-951,960-961,972-977,1322,1325,1698-1713
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 178-185,210-241,274-297,302-305,338-339,341,351,353,386-401,434-449,498-513
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 46
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,706-729,821-826,833-841,857-865,948-951,960-961,972-977,1322,1325,1698-1713
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 178-185,210-241,274-297,302-305,338-339,341,351,353,386-401,434-449,498-513
+tests/data/missing_commodity/asset_capacities.csv
+  h_e76403a1cd4bf1 23
+tests/data/missing_commodity/commodity_flows.csv
+  h_e76403a1cd4bf1 620,690-705
+tests/data/missing_commodity/commodity_prices.csv
+  h_e76403a1cd4bf1 122-125,154-157,179-180,182,184,190-193,202-213,218-241
+tests/data/simple/debug_appraisal_results.csv
+  h_e76403a1cd4bf1 105-107,261
+tests/data/simple/debug_commodity_balance_duals.csv
+  h_e76403a1cd4bf1 146-161,164-166,168-209,226-273,562-577,586-589,594-625
+tests/data/simple/debug_solver.csv
+  h_e76403a1cd4bf1 5-7,13-14
+tests/data/two_outputs/asset_capacities.csv
+  h_e76403a1cd4bf1 26,29,36,39,42-43,46-47
+tests/data/two_outputs/commodity_flows.csv
+  h_e76403a1cd4bf1 562-593,642-689,733-738,757-762,766-777,793-801,820-823,884-887,890-897,900-903,908-913,957-962,978-1025,1074-1121,1170-1175,1178,1182,1204-1209,1213-1221,1225-1233,1266-1271,1274,1278,1300-1305,1309-1317,1321-1329,1342-1377,1458-1473,1554-1569,1588-1593,1597-1605,1609-1617,1714-1745
+tests/data/two_outputs/commodity_prices.csv
+  h_e76403a1cd4bf1 162-177,194-225,258-273,275-277,279-281,283-285,287-289,291-293,295-297,299-301,303-321,330-337,354-385,402-465
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "0864a95be7c9e9cc34c6c3906ddcc13b90239e35",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_8230b4a00febd8": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "8b3feba6-082a-4da2-a69c-3297e84c1d4e",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
