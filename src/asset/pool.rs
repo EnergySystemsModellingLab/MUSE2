@@ -61,62 +61,6 @@ impl AssetPool {
             });
     }
 
-    /// Decommission mothballed assets if mothballed long enough
-    pub fn decommission_mothballed(&mut self, year: u32, mothball_years: u32) {
-        // Empty the Vec and reconstruct it with only the remaining tranches of the remaining assets
-        // after decommissioning. This sadly means we always allocate a new Vec, but modifying the
-        // Vec in place leads to uglier code and unnecessary deep clones of assets.
-        self.assets = std::mem::take(&mut self.assets)
-            .into_iter()
-            .filter_map(|asset| asset.with_decommission_mothballed(year, mothball_years))
-            .collect();
-    }
-
-    /// Mothball the specified assets if they are no longer in the active pool and put them back
-    /// again.
-    ///
-    /// # Arguments
-    ///
-    /// * `assets` - Assets to possibly mothball
-    /// * `year` - Mothball year
-    ///
-    /// # Panics
-    ///
-    /// Panics if any of the provided assets was never commissioned.
-    pub fn mothball_unretained<I>(&mut self, assets: I, year: u32)
-    where
-        I: IntoIterator<Item = AssetRef>,
-    {
-        for old_asset in assets {
-            let id = old_asset
-                .id()
-                .expect("Cannot mothball asset that has not been commissioned");
-
-            // Note that we cannot use a binary search here, as `self.assets` may have become
-            // unsorted by new assets added below
-            if let Some(new_asset) = self
-                .assets
-                .iter_mut()
-                .find(|asset| asset.id().unwrap() == id)
-            {
-                // At least some of the asset's tranches have made it back into the pool. Increase the
-                // capacity back to what it was before, with the unselected tranches set as mothballed.
-                let num_mothballed = old_asset
-                    .num_tranches()
-                    .checked_sub(new_asset.num_tranches())
-                    .expect("Number of tranches has increased");
-                *new_asset = old_asset.with_mothballed_tranches(num_mothballed, Some(year));
-            } else {
-                // None of this asset's tranches were selected. We mothball _all_ tranches and return to
-                // the pool.
-                let num_mothballed = old_asset.num_tranches();
-                self.assets
-                    .push(old_asset.with_mothballed_tranches(num_mothballed, Some(year)));
-            }
-        }
-        self.assets.sort();
-    }
-
     /// Get an asset with the specified ID.
     ///
     /// # Returns
