@@ -1,0 +1,14 @@
+src/simulation/market.rs
+  h_e76403a1cd4bf1 267,297,301,316-317,346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d45b4653057457a403e8ef0bd2c8545cf43b45b8",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
