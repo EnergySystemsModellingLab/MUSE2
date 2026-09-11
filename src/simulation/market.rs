@@ -334,56 +334,6 @@ pub fn select_assets_for_cycle(
         );
     }
 
-    // STEP 2
-    // Iterate over the markets in order2, excluding the specified processes
-    // This time we disallow unmet demand
-
-    for (idx, (commodity_id, region_id)) in second_pass.iter().enumerate() {
-        // Select assets for this market
-        let assets = select_assets_for_single_market(
-            model,
-            commodity_id,
-            region_id,
-            year,
-            &current_demand,
-            existing_assets,
-            prices,
-            &excluded_processes,
-            writer,
-        )?;
-        assets_for_cycle.insert((commodity_id.clone(), region_id.clone()), assets);
-
-        // Assemble full list of assets for dispatch (previously selected + all chosen so far)
-        let mut all_assets = previously_selected_assets.to_vec();
-        let assets_for_cycle_flat: Vec<_> = assets_for_cycle
-            .values()
-            .flat_map(|v| v.iter().cloned())
-            .collect();
-        all_assets.extend_from_slice(&assets_for_cycle_flat);
-
-        // We balance all previously seen markets plus all cycle markets up to and including this one
-        let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&first_pass[0..=idx]);
-
-        // Run dispatch
-        let solution = DispatchRun::new(model, &all_assets, year)
-            .without_commodity_constraints()
-            .with_market_balance_subset(&markets_to_balance)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-
-        // Calculate new net demand map with all assets selected so far
-        current_demand.clone_from(demand);
-        update_net_demand_map(
-            &mut current_demand,
-            &solution.create_flow_map(),
-            &assets_for_cycle_flat,
-        );
-    }
-
     // Combine equivalent candidate assets
     let mut combined_assets: Vec<AssetRef> = Vec::new();
     let all_cycle_assets: Vec<_> = assets_for_cycle.into_values().flatten().collect();
