@@ -1,0 +1,16 @@
+src/output.rs
+  h_e76403a1cd4bf1 434-437
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 408,428,449-456,505-515
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a738a387e29d13bc25a7d2b6d619145d8e269d1c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
