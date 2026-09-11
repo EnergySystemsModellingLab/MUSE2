@@ -176,7 +176,7 @@ pub fn select_assets_for_single_market(
         let demand_portion_for_market = get_demand_portion_for_market(
             &model.time_slice_info,
             demand,
-            commodity,
+            commodity_id,
             region_id,
             commodity_portion,
         );
@@ -377,21 +377,20 @@ pub fn select_assets_for_cycle(
 pub fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
-    commodity: &Commodity,
+    commodity_id: &CommodityID,
     region_id: &RegionID,
     commodity_portion: Dimensionless,
 ) -> DemandMap {
     time_slice_info
-        .iter_selections_at_level(commodity.time_slice_level)
-        .map(|ts_selection| {
-            let demand_for_selection = *demand
-                .get(&(
-                    commodity.id.clone(),
-                    region_id.clone(),
-                    ts_selection.clone(),
-                ))
-                .unwrap_or(&Flow(0.0));
-            (ts_selection, commodity_portion * demand_for_selection)
+        .iter_ids()
+        .map(|time_slice| {
+            (
+                time_slice.clone(),
+                commodity_portion
+                    * *demand
+                        .get(&(commodity_id.clone(), region_id.clone(), time_slice.clone()))
+                        .unwrap_or(&Flow(0.0)),
+            )
         })
         .collect()
 }
