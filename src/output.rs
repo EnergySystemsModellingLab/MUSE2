@@ -430,16 +430,11 @@ impl DebugDataWriter {
             return Ok(());
         }
 
-        // If the unmet demand writer already exist, we panic, as it should not happen
-        assert!(
-            self.unmet_demand_writer.is_none(),
-            "Unmet demand file already exists!"
-        );
-
         let run_description = self.with_context(run_description);
-        let writer = self
-            .unmet_demand_writer
-            .insert(csv::Writer::from_path(&self.unmet_demand_file_path)?);
+        if self.unmet_demand_writer.is_none() {
+            self.unmet_demand_writer = Some(csv::Writer::from_path(&self.unmet_demand_file_path)?);
+        }
+        let writer = self.unmet_demand_writer.as_mut().unwrap();
         for (commodity_id, region_id, time_slice, value) in rows {
             let row = UnmetDemandRow {
                 milestone_year,

@@ -403,6 +403,7 @@ pub struct DispatchRun<'model, 'run> {
     markets_to_balance: &'run [(CommodityID, RegionID)],
     input_prices: Option<&'run PriceMap>,
     include_commodity_constraints: bool,
+    allow_unmet_demand: bool,
     year: u32,
 }
 
@@ -416,6 +417,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             markets_to_balance: &[],
             input_prices: None,
             include_commodity_constraints: true,
+            allow_unmet_demand: false,
             year,
         }
     }
@@ -432,6 +434,14 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn without_commodity_constraints(self) -> Self {
         Self {
             include_commodity_constraints: false,
+            ..self
+        }
+    }
+
+    /// Allow unmet demand in the dispatch solution.
+    pub fn allow_unmet_demand(self) -> Self {
+        Self {
+            allow_unmet_demand: true,
             ..self
         }
     }
@@ -483,6 +493,17 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             .input_prices
             .map(|prices| filter_input_prices(prices, markets_to_balance));
         let input_prices = input_prices_owned.as_ref();
+
+        if self.allow_unmet_demand {
+            let solution = self.run_internal(
+                markets_to_balance,
+                self.include_commodity_constraints,
+                true,
+                input_prices,
+            )?;
+            writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+            return Ok(solution);
+        }
 
         // First solve the configured dispatch problem. If it is infeasible, run diagnostic solves
         // below to distinguish unmet demand from infeasibility caused by explicit constraints.
