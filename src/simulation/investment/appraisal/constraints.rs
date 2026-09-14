@@ -113,8 +113,8 @@ fn add_seasonal_peak_variables(
     for (season, duration) in &model.time_slice_info.seasons {
         // Scale penalty by season duration
         // We make the penalty negative as we're doing a max optimisation
-        let col_factor = -(model.parameters.seasonal_utilisation_penalty * *duration);
-        let variable = problem.add_column(col_factor.value(), 0.0..);
+        let _col_factor = -(model.parameters.seasonal_utilisation_penalty * *duration);
+        let variable = problem.add_column(0.0, 0.0..);
         seasonal_peak_vars.insert(season.clone(), variable);
     }
     seasonal_peak_vars
@@ -124,8 +124,8 @@ fn add_seasonal_peak_variables(
 fn add_annual_peak_variable(problem: &mut Problem, model: &Model) -> highs::Col {
     // Penalty is applied over the whole year, so scale by 1 year
     // We make the penalty negative as we're doing a max optimisation
-    let col_factor = -(model.parameters.annual_utilisation_penalty * Year(1.0));
-    problem.add_column(col_factor.value(), 0.0..)
+    let _col_factor = -(model.parameters.annual_utilisation_penalty * Year(1.0));
+    problem.add_column(0.0, 0.0..)
 }
 
 /// Add constraints linking seasonal peak variables to activity variables for each (asset, season) pair.
