@@ -16,6 +16,8 @@ use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 
+const LEXICOGRAPHIC_TOLERANCE: f64 = 1e-6;
+
 /// A decision variable in the optimisation
 ///
 /// This alias represents a column created in the `highs` solver. Callers rely on the order
@@ -50,7 +52,6 @@ fn add_activity_vars(
 /// Adds constraints to the problem.
 fn add_constraints(
     problem: &mut Problem,
-    model: &Model,
     asset: &AssetRef,
     commodity: &Commodity,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
@@ -66,7 +67,6 @@ fn add_constraints(
         demand,
         activity_vars,
     );
-    add_utilisation_peak_constraints(problem, model, asset, activity_vars);
 }
 
 /// Computes remaining unmet demand per time slice after a solve.
@@ -120,7 +120,6 @@ pub fn perform_optimisation(
     // Add constraints
     add_constraints(
         &mut problem,
-        model,
         asset,
         commodity,
         &activity_vars,
@@ -128,7 +127,7 @@ pub fn perform_optimisation(
         &model.time_slice_info,
     );
 
-    // Solve model
+    // Build the primary highs model
     let mut highs_model = problem.optimise(Sense::Maximise);
     apply_highs_options_from_toml(&mut highs_model, &model.parameters.highs.appraisal_options)
         .context("Failed to apply custom HiGHS options to appraisal optimisation")?;
@@ -138,6 +137,19 @@ pub fn perform_optimisation(
     // (setting `threads=N` would fail if the scheduler was already initialised on this thread
     // by a previous solve with a different count).
     highs_model.set_option("parallel", "off");
+
+    // Solve the primary highs model and get the objective value
+    let solved = solve_optimal(highs_model).map_err(ModelError::into_anyhow)?;
+    let z_star = solved.objective_value();
+
+    // Build the secondary optimisation
+    let mut highs_model =
+        build_secondary_model(solved, model, asset, &activity_vars, coefficients, z_star);
+    apply_highs_options_from_toml(&mut highs_model, &model.parameters.highs.appraisal_options)
+        .context("Failed to apply custom HiGHS options to appraisal optimisation")?;
+    highs_model.set_option("parallel", "off");
+
+    // Solve the secondary optimisation and collect the results
     let solution = solve_optimal(highs_model)
         .map_err(ModelError::into_anyhow)?
         .get_solution();
@@ -153,4 +165,34 @@ pub fn perform_optimisation(
         activity,
         unmet_demand,
     })
+}
+
+fn build_secondary_model(
+    solved: highs::SolvedModel,
+    model: &Model,
+    asset: &AssetRef,
+    activity_vars: &IndexMap<TimeSliceID, Variable>,
+    coefficients: &ObjectiveCoefficients,
+    z_star: f64,
+) -> highs::Model {
+    let mut problem = highs::Model::from(solved);
+
+    for &activity_var in activity_vars.values() {
+        problem.change_column_cost(activity_var, 0.0);
+    }
+
+    add_utilisation_peak_constraints(&mut problem, model, asset, activity_vars);
+
+    problem.add_row(
+        z_star * (1.0 - LEXICOGRAPHIC_TOLERANCE)..,
+        activity_vars.iter().map(|(time_slice, variable)| {
+            (
+                *variable,
+                coefficients.activity_coefficients[time_slice].value(),
+            )
+        }),
+    );
+
+    problem.set_sense(Sense::Minimise);
+    problem
 }
