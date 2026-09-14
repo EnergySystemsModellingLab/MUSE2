@@ -1,0 +1,16 @@
+src/simulation/investment/appraisal/coefficients.rs
+  h_e76403a1cd4bf1 72-73
+tests/data/simple/debug_appraisal_results_time_slices.csv
+  h_e76403a1cd4bf1 2-4177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7029db3db3a2ed7a796b3ffec1b3fb874fc24050",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
