@@ -6,7 +6,7 @@ use crate::commodity::Commodity;
 use crate::model::Model;
 use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, Year};
-use highs::{Model as HighsModel, RowProblem as Problem};
+use highs::RowProblem as Problem;
 use indexmap::IndexMap;
 
 /// Adds activity constraints to the problem.
@@ -63,9 +63,11 @@ pub fn add_demand_constraints(
 
 /// Add seasonal and annual utilisation peak constraints to the problem.
 ///
-/// This is almost identical to equivalent constraints in the full-system dispatch.
+/// This is almost identical to equivalent constraints in the full-system dispatch, but here we
+/// make the penalties negative as this is a maximise optimisation (whereas dispatch is a minimise
+/// optimisation).
 pub fn add_utilisation_peak_constraints(
-    problem: &mut HighsModel,
+    problem: &mut Problem,
     model: &Model,
     asset: &AssetRef,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
@@ -104,29 +106,31 @@ pub fn add_utilisation_peak_constraints(
 
 /// Add seasonal peak variables to the problem.
 fn add_seasonal_peak_variables(
-    problem: &mut HighsModel,
+    problem: &mut Problem,
     model: &Model,
 ) -> IndexMap<Season, highs::Col> {
     let mut seasonal_peak_vars = IndexMap::new();
     for (season, duration) in &model.time_slice_info.seasons {
         // Scale penalty by season duration
-        let col_factor = (model.parameters.seasonal_utilisation_penalty * *duration).value();
-        let variable = problem.add_col(col_factor, 0.0.., []);
+        // We make the penalty negative as we're doing a max optimisation
+        let col_factor = -(model.parameters.seasonal_utilisation_penalty * *duration);
+        let variable = problem.add_column(col_factor.value(), 0.0..);
         seasonal_peak_vars.insert(season.clone(), variable);
     }
     seasonal_peak_vars
 }
 
 /// Add annual peak variable to the problem.
-fn add_annual_peak_variable(problem: &mut HighsModel, model: &Model) -> highs::Col {
+fn add_annual_peak_variable(problem: &mut Problem, model: &Model) -> highs::Col {
     // Penalty is applied over the whole year, so scale by 1 year
-    let col_factor = (model.parameters.annual_utilisation_penalty * Year(1.0)).value();
-    problem.add_col(col_factor, 0.0.., [])
+    // We make the penalty negative as we're doing a max optimisation
+    let col_factor = -(model.parameters.annual_utilisation_penalty * Year(1.0));
+    problem.add_column(col_factor.value(), 0.0..)
 }
 
 /// Add constraints linking seasonal peak variables to activity variables for each (asset, season) pair.
 fn add_seasonal_peak_constraints(
-    problem: &mut HighsModel,
+    problem: &mut Problem,
     asset: &AssetRef,
     activity_vars: &IndexMap<TimeSliceID, Variable>,
     time_slice_info: &TimeSliceInfo,
@@ -157,7 +161,7 @@ fn add_seasonal_peak_constraints(
 
 /// Add constraints linking seasonal peak variables to annual peak variables for each asset.
 fn add_annual_peak_constraints(
-    problem: &mut HighsModel,
+    problem: &mut Problem,
     time_slice_info: &TimeSliceInfo,
     annual_peak_var: highs::Col,
     seasonal_peak_vars: &IndexMap<Season, highs::Col>,

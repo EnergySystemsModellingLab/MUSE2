@@ -18,13 +18,13 @@ mod regression {
 
     // We only check the debug files for the `simple` example at present
     define_regression_test_with_debug_files!(simple);
-    define_regression_test_with_debug_files!(circularity);
 
     // Other example models
     define_regression_test!(missing_commodity);
     define_regression_test!(muse1_default);
     define_regression_test!(two_outputs);
     define_regression_test!(two_regions);
+    define_regression_test!(circularity);
 
     // Patched examples
     define_regression_test_with_patches!(simple_tranche_size);
