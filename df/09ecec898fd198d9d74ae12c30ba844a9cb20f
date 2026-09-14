@@ -1,0 +1,44 @@
+src/simulation/investment/appraisal/coefficients.rs
+  h_e76403a1cd4bf1 72
+src/simulation/investment/appraisal/constraints.rs
+  h_e76403a1cd4bf1 116-117,127-128
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 26,34
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 242-273,322-337,354-385,402-433,451-453,455-457,459-461,463-465,482-497
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 26,34
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 242-273,322-337,354-385,402-433,451-453,455-457,459-461,463-465,482-497
+tests/data/muse1_default/asset_capacities.csv
+  h_e76403a1cd4bf1 5,7-9,11-15,17-23,25-33,35-45
+tests/data/muse1_default/assets.csv
+  h_e76403a1cd4bf1 6-15
+tests/data/muse1_default/commodity_flows.csv
+  h_e76403a1cd4bf1 62-97,110-169,182-265,278-385,398-529
+tests/data/muse1_default/commodity_prices.csv
+  h_e76403a1cd4bf1 26-37,44-55,62-73,80-91,98-121
+tests/data/simple/debug_appraisal_results.csv
+  h_e76403a1cd4bf1 104,106,259-261
+tests/data/simple/debug_appraisal_results_time_slices.csv
+  h_e76403a1cd4bf1 2-4177
+tests/data/two_regions/asset_capacities.csv
+  h_e76403a1cd4bf1 10-11,16-21,26-32,34-35,40-46,48-50,52-53,58-64,66-68,70-72,74-75,80-86,88-90,92-94,96-98,100-101
+tests/data/two_regions/assets.csv
+  h_e76403a1cd4bf1 9-29
+tests/data/two_regions/commodity_flows.csv
+  h_e76403a1cd4bf1 116-127,176-247,296-415,464-631,680-895,944-1201
+tests/data/two_regions/commodity_prices.csv
+  h_e76403a1cd4bf1 50-55,62-67,81,83-84,86-91,93,95-96,98-103,105,107-108,116,118,121-128,130,133-140,142,145,152-181,188-241
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "df09ecec898fd198d9d74ae12c30ba844a9cb20f",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
