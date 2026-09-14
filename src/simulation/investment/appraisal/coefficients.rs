@@ -69,7 +69,8 @@ pub fn calculate_coefficients_for_asset(
 ) -> ObjectiveCoefficients {
     // Small constant added to each activity coefficient to ensure break-even/slightly negative
     // assets are still dispatched
-    const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(f64::EPSILON * 100.0);
+    // const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(f64::EPSILON * 100.0);
+    const EPSILON_ACTIVITY_COEFFICIENT: MoneyPerActivity = MoneyPerActivity(1e-4);
 
     // Activity coefficients
     let mut activity_coefficients = IndexMap::new();
