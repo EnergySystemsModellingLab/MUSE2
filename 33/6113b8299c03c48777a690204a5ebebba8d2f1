@@ -1,0 +1,20 @@
+src/simulation/prices.rs
+  h_e76403a1cd4bf1 167,174
+  h_e76403a1cd4bf1 166,168
+src/graph/investment.rs
+  h_e76403a1cd4bf1 133
+src/simulation/market.rs
+  h_e76403a1cd4bf1 33,49-50,144,149,258,271,279,291,314,355,379
+  h_e76403a1cd4bf1 32,48,143,145,366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "336113b8299c03c48777a690204a5ebebba8d2f1",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
