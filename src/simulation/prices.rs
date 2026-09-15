@@ -163,13 +163,15 @@ fn price_market_set(
                 strategy_override,
             );
         }
-        MarketSet::Cycle(markets) => {
+        MarketSet::Cycle {
+            investment_order, ..
+        } => {
             price_cycle(
                 model,
                 solution_without_candidates,
                 solution_with_candidates,
                 year,
-                markets,
+                investment_order,
                 shadow_prices,
                 annual_activities,
                 market_prices,
@@ -1411,6 +1413,7 @@ mod tests {
             capacity_to_activity: ActivityPerCapacity(1.0),
             investment_constraints: HashMap::new(),
             tranche_size: None,
+            feedback_process: false,
         }
     }
 

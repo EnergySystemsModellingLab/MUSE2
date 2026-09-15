@@ -4,10 +4,11 @@ use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
+use crate::simulation::investment::DemandMap;
 use crate::simulation::investment::appraisal::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
-use crate::time_slice::TimeSliceID;
+use crate::time_slice::{TimeSliceID, TimeSliceLevel};
 use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use csv;
@@ -255,10 +256,11 @@ struct AppraisalResultsTimeSliceRow {
     process_id: ProcessID,
     region_id: RegionID,
     time_slice: TimeSliceID,
+    time_slice_level: TimeSliceLevel,
     activity: Activity,
     activity_coefficient: MoneyPerActivity,
-    demand: Flow,
-    unmet_demand: Flow,
+    demand_for_selection: Flow,
+    unmet_demand_for_selection: Flow,
 }
 
 /// For writing extra debug information about the model
@@ -430,16 +432,11 @@ impl DebugDataWriter {
             return Ok(());
         }
 
-        // If the unmet demand writer already exist, we panic, as it should not happen
-        assert!(
-            self.unmet_demand_writer.is_none(),
-            "Unmet demand file already exists!"
-        );
-
         let run_description = self.with_context(run_description);
-        let writer = self
-            .unmet_demand_writer
-            .insert(csv::Writer::from_path(&self.unmet_demand_file_path)?);
+        if self.unmet_demand_writer.is_none() {
+            self.unmet_demand_writer = Some(csv::Writer::from_path(&self.unmet_demand_file_path)?);
+        }
+        let writer = self.unmet_demand_writer.as_mut().unwrap();
         for (commodity_id, region_id, time_slice, value) in rows {
             let row = UnmetDemandRow {
                 milestone_year,
@@ -502,13 +499,15 @@ impl DebugDataWriter {
         milestone_year: u32,
         run_description: &str,
         appraisal_results: &[AppraisalOutput],
-        demand: &IndexMap<TimeSliceID, Flow>,
+        demand: &DemandMap,
+        balance_level: TimeSliceLevel,
     ) -> Result<()> {
         for result in appraisal_results {
             for (time_slice, activity) in &result.activity {
                 let activity_coefficient = result.coefficients.activity_coefficients[time_slice];
-                let demand = demand[time_slice];
-                let unmet_demand = result.unmet_demand[time_slice];
+                let selection = balance_level.containing_selection(time_slice);
+                let demand = demand[&selection];
+                let unmet_demand = result.unmet_demand[&selection];
                 let row = AppraisalResultsTimeSliceRow {
                     milestone_year,
                     run_description: self.with_context(run_description),
@@ -518,8 +517,9 @@ impl DebugDataWriter {
                     time_slice: time_slice.clone(),
                     activity: *activity,
                     activity_coefficient,
-                    demand,
-                    unmet_demand,
+                    time_slice_level: balance_level,
+                    demand_for_selection: demand,
+                    unmet_demand_for_selection: unmet_demand,
                 };
                 self.appraisal_results_time_slice_writer.serialize(row)?;
             }
@@ -604,7 +604,8 @@ impl DataWriter {
         milestone_year: u32,
         run_description: &str,
         appraisal_results: &[AppraisalOutput],
-        demand: &IndexMap<TimeSliceID, Flow>,
+        demand: &DemandMap,
+        balance_level: TimeSliceLevel,
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug {
             wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
@@ -613,6 +614,7 @@ impl DataWriter {
                 run_description,
                 appraisal_results,
                 demand,
+                balance_level,
             )?;
         }
 
@@ -717,7 +719,7 @@ mod tests {
         appraisal_output, asset, assets, commodity_id, multi_tranche_asset, region_id, time_slice,
     };
     use crate::simulation::investment::appraisal::AppraisalOutput;
-    use crate::time_slice::TimeSliceID;
+    use crate::time_slice::{TimeSliceID, TimeSliceSelection};
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
     use rstest::rstest;
@@ -1127,7 +1129,7 @@ mod tests {
         let milestone_year = 2020;
         let run_description = "test_run".to_string();
         let dir = tempdir().unwrap();
-        let demand = indexmap! {time_slice.clone() => Flow(100.0) };
+        let demand = indexmap! {TimeSliceSelection::Single(time_slice.clone()) => Flow(100.0) };
 
         // Write appraisal time slice results
         {
@@ -1138,6 +1140,7 @@ mod tests {
                     &run_description,
                     &[appraisal_output],
                     &demand,
+                    TimeSliceLevel::DayNight,
                 )
                 .unwrap();
             writer.flush().unwrap();
@@ -1151,10 +1154,11 @@ mod tests {
             process_id: asset.process_id().clone(),
             region_id: asset.region_id().clone(),
             time_slice: time_slice.clone(),
+            time_slice_level: TimeSliceLevel::DayNight,
             activity: Activity(10.0),
             activity_coefficient: MoneyPerActivity(0.5),
-            demand: Flow(100.0),
-            unmet_demand: Flow(5.0),
+            demand_for_selection: Flow(100.0),
+            unmet_demand_for_selection: Flow(5.0),
         };
         let records: Vec<AppraisalResultsTimeSliceRow> =
             csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME))

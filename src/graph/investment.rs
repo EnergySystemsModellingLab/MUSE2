@@ -129,13 +129,14 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
-            _ => MarketSet::Cycle(
-                node_weight
+            _ => MarketSet::Cycle {
+                investment_order: node_weight
                     .iter()
                     .flat_map(|s| s.iter_markets())
                     .cloned()
                     .collect(),
-            ),
+                excluded_processes: vec![], // TODO: placeholder
+            },
         },
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
@@ -600,7 +601,10 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            MarketSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
+            MarketSet::Cycle {
+                investment_order: vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())],
+                excluded_processes: vec![],
+            }
         );
     }
 

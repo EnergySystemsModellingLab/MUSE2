@@ -17,7 +17,7 @@ impl AssetCapacity {
     pub fn new(num_tranches: u32, tranche_size: Capacity) -> Self {
         assert!(
             tranche_size.is_finite() && tranche_size >= Capacity(0.0),
-            "Tranche size must be a finite non-negative number"
+            "Tranche size must be a finite non-negative number. Got {tranche_size}"
         );
         AssetCapacity {
             num_tranches,
