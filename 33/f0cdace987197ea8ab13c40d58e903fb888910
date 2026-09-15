@@ -1,0 +1,14 @@
+src/simulation/prices.rs
+  h_e76403a1cd4bf1 103-111,114,119,126,131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "33f0cdace987197ea8ab13c40d58e903fb888910",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
