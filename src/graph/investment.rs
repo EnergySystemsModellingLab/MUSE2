@@ -130,12 +130,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
             _ => MarketSet::Cycle {
-                first_pass: node_weight
-                    .iter()
-                    .flat_map(|s| s.iter_markets())
-                    .cloned()
-                    .collect(),
-                second_pass: node_weight // TODO: placeholder
+                investment_order: node_weight
                     .iter()
                     .flat_map(|s| s.iter_markets())
                     .cloned()

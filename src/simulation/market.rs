@@ -29,10 +29,8 @@ pub enum MarketSet {
     /// Experimental: handled by [`select_assets_for_cycle`] and guarded by the broken options
     /// parameter.
     Cycle {
-        /// Investment order for first pass
-        first_pass: Vec<(CommodityID, RegionID)>,
-        /// Investment order for second pass
-        second_pass: Vec<(CommodityID, RegionID)>,
+        /// Investment order
+        investment_order: Vec<(CommodityID, RegionID)>,
         /// Processes to exclude from the second pass
         excluded_processes: Vec<ProcessID>,
     },
@@ -47,7 +45,9 @@ impl MarketSet {
     ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
             MarketSet::Single(market) => Box::new(std::iter::once(market)),
-            MarketSet::Cycle { first_pass, .. } => Box::new(first_pass.iter()),
+            MarketSet::Cycle {
+                investment_order, ..
+            } => Box::new(investment_order.iter()),
             MarketSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_markets())),
         }
     }
@@ -140,11 +140,13 @@ impl Display for MarketSet {
             MarketSet::Single((commodity_id, region_id)) => {
                 write!(f, "{commodity_id}|{region_id}")
             }
-            MarketSet::Cycle { first_pass, .. } => {
+            MarketSet::Cycle {
+                investment_order, ..
+            } => {
                 write!(
                     f,
                     "({})",
-                    first_pass
+                    investment_order
                         .iter()
                         .map(|(c, r)| format!("{c}|{r}"))
                         .join(", ")
@@ -253,7 +255,7 @@ pub fn select_assets_for_single_market(
 /// Dispatch optimisation is performed after each market is visited.
 ///
 /// Dispatch may fail at any point if new demands are encountered for previously visited markets.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_assets_for_cycle(
     model: &Model,
     market_set: &MarketSet,
@@ -266,8 +268,7 @@ pub fn select_assets_for_cycle(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let MarketSet::Cycle {
-        first_pass,
-        second_pass,
+        investment_order,
         excluded_processes,
     } = market_set
     else {
@@ -275,7 +276,7 @@ pub fn select_assets_for_cycle(
     };
 
     // Precompute a joined string for logging
-    let markets_str = first_pass
+    let markets_str = investment_order
         .iter()
         .map(|(c, r)| format!("{c}|{r}"))
         .join(", ");
@@ -287,7 +288,7 @@ pub fn select_assets_for_cycle(
     let mut net_demand = demand.clone();
     let mut assets_for_first_pass = Vec::new();
     let mut final_pass_1_solution = None;
-    for (idx, (commodity_id, region_id)) in first_pass.iter().enumerate() {
+    for (idx, (commodity_id, region_id)) in investment_order.iter().enumerate() {
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 1");
         let selected_assets = select_assets_for_single_market(
@@ -310,7 +311,7 @@ pub fn select_assets_for_cycle(
 
         // We balance all previously seen markets plus all cycle markets up to and including this one
         let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&first_pass[0..=idx]);
+        markets_to_balance.extend_from_slice(&investment_order[0..=idx]);
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
@@ -351,7 +352,7 @@ pub fn select_assets_for_cycle(
     // This time we disallow unmet demand
 
     let mut assets_for_second_pass = Vec::new();
-    for (idx, (commodity_id, region_id)) in second_pass.iter().enumerate() {
+    for (idx, (commodity_id, region_id)) in investment_order.iter().enumerate() {
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 2");
         let selected_assets = select_assets_for_single_market(
@@ -362,7 +363,7 @@ pub fn select_assets_for_cycle(
             &net_demand,
             existing_assets,
             prices,
-            &excluded_processes,
+            excluded_processes,
             writer,
         )?;
         debug!("Completed {commodity_id}|{region_id} selection pass 2");
@@ -375,7 +376,7 @@ pub fn select_assets_for_cycle(
 
         // We balance all previously seen markets plus all cycle markets up to and including this one
         let mut markets_to_balance = seen_markets.to_vec();
-        markets_to_balance.extend_from_slice(&second_pass[0..=idx]);
+        markets_to_balance.extend_from_slice(&investment_order[0..=idx]);
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
