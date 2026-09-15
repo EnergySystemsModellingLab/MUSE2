@@ -1,0 +1,68 @@
+src/simulation/investment.rs
+  s_1c62ba1a623acb::t_e056490fcf042f 30-31,33-34,133,146-149,151-152,169-174,177,181
+  s_1c62ba1a623acb::t_eccfede5af74e2 11,13,126
+  s_1c62ba1a623acb::t_d4c5e5a68c97a2 301
+  s_1c62ba1a623acb::t_1263d35c65a52a 192,197-198
+  h_e76403a1cd4bf1 665,709-710,776-777,817
+  s_1c62ba1a623acb::t_2644355d78cb69 230
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 438
+  s_1c62ba1a623acb::t_78f37e06d44caa 196,199
+  s_1c62ba1a623acb::t_8502390c8bc927 231-232
+src/graph/investment.rs
+  s_1c62ba1a623acb::t_47caf9c37197b1 604-607
+src/simulation/investment/appraisal/optimisation.rs
+  s_1c62ba1a623acb::t_eccfede5af74e2 12,68,79-81,83-84
+src/simulation/investment/appraisal/constraints.rs
+  s_1c62ba1a623acb::t_eccfede5af74e2 51
+src/simulation/optimisation/constraints.rs
+  s_1c62ba1a623acb::t_cf402f34ebc643 401-405
+  s_1c62ba1a623acb::t_eccfede5af74e2 406-409
+src/simulation/market.rs
+  s_1c62ba1a623acb::t_a248db9e57bbe4 2,298,343,350-351
+  s_1c62ba1a623acb::t_eccfede5af74e2 354,356,363-368,421
+  s_1c62ba1a623acb::t_4fbf3be83c2cbe 284-292,345,361,383
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 15,195,453,456-457,459,466
+  s_1c62ba1a623acb::t_d76677b197492c 11-12,362
+  h_e76403a1cd4bf1 267-268,370-371,377-378,395-398,400-402,406,408,559
+  s_1c62ba1a623acb::t_76decbabbe9b66 297,323-328,427
+  s_1c62ba1a623acb::t_d64b045571bb76 344
+  s_1c62ba1a623acb::t_e903ada37ad955 458,460-465
+  s_1c62ba1a623acb::t_e81a3a5ed67948 346-349
+src/input/process/flow.rs
+  s_1c62ba1a623acb::t_ee94598be21cdd 368
+src/fixture.rs
+  s_1c62ba1a623acb::t_0aff54db495598 410
+  s_1c62ba1a623acb::t_ee94598be21cdd 22
+src/output.rs
+  s_1c62ba1a623acb::t_ee94598be21cdd 720
+  s_1c62ba1a623acb::t_cf402f34ebc643 7
+  s_1c62ba1a623acb::t_a12c6edf8c1f80 1141
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 501-502,507-509
+  s_1c62ba1a623acb::t_0aff54db495598 1130
+  s_1c62ba1a623acb::t_d4c5e5a68c97a2 11,605-606,615
+examples/circularity/processes.csv
+  h_e76403a1cd4bf1 1-19
+src/asset/capacity.rs
+  h_e76403a1cd4bf1 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "da51b1495e21228a104eebf8020f36b9e290085f",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_1c62ba1a623acb": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "93666a3a-7142-41ca-9605-d5208d3d850b",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
