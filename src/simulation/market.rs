@@ -268,8 +268,7 @@ pub fn select_assets_for_cycle(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let MarketSet::Cycle {
-        investment_order,
-        excluded_processes,
+        investment_order, ..
     } = market_set
     else {
         bail!("expected MarketSet::Cycle");
@@ -302,11 +301,13 @@ pub fn select_assets_for_cycle(
             writer,
         )?;
         debug!("Completed {commodity_id}|{region_id} selection pass 1");
-        assets_for_first_pass.extend(selected_assets.iter().cloned());
 
-        // Assemble full list of assets for dispatch (previously selected + all chosen so far)
-        let mut all_assets = previously_selected_assets.to_vec();
-        all_assets.extend(assets_for_first_pass.iter().cloned());
+        // If no assets have been selected, skip to the next market
+        if selected_assets.is_empty() {
+            debug!("No assets selected for '{commodity_id}|{region_id}'");
+            continue;
+        }
+        assets_for_first_pass.extend(selected_assets.iter().cloned());
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
@@ -334,6 +335,14 @@ pub fn select_assets_for_cycle(
         flatten_preset_demands_for_year(&model.commodities, &model.time_slice_info, year);
     let mut assets_for_second_pass = Vec::new();
     for (idx, (commodity_id, region_id)) in investment_order.iter().enumerate() {
+        // Collect excluded processes
+        let excluded_processes = model
+            .processes
+            .iter()
+            .filter(|(_, process)| process.feedback_process)
+            .map(|(process_id, _)| process_id.clone())
+            .collect::<Vec<_>>();
+
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 2");
         let selected_assets = select_assets_for_single_market(
@@ -344,10 +353,16 @@ pub fn select_assets_for_cycle(
             &net_demand,
             existing_assets,
             prices,
-            excluded_processes,
+            &excluded_processes,
             writer,
         )?;
         debug!("Completed {commodity_id}|{region_id} selection pass 2");
+
+        // If no assets have been selected, skip to the next market
+        if selected_assets.is_empty() {
+            debug!("No assets selected for '{commodity_id}|{region_id}'");
+            continue;
+        }
         assets_for_second_pass.extend(selected_assets.iter().cloned());
 
         // Assemble full list of assets for dispatch (previously selected + all chosen so far)
@@ -371,7 +386,7 @@ pub fn select_assets_for_cycle(
             .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
         debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
 
-        // Update demand map
+        // Update demand map with flows from newly selected assets
         update_net_demand_map(
             &mut net_demand,
             &solution.create_flow_map(),
