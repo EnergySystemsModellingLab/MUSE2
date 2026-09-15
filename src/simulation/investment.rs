@@ -194,7 +194,7 @@ pub fn update_net_demand_map(
                     .and_modify(|value| *value -= *flow)
                     .or_insert(-*flow);
 
-                if value.abs() <= Flow::EPSILON {
+                if *value < Flow(0.0) {
                     *value = Flow(0.0);
                 }
             }
@@ -227,9 +227,6 @@ pub fn calculate_candidate_asset_capacity_scale(
         return Capacity(0.0);
     }
     let annual_demand = demand.values().copied().sum::<Flow>();
-    if annual_demand <= Flow(1e-12) {
-        return Capacity(0.0);
-    }
     annual_demand / max_annual_supply_per_capacity
 }
 

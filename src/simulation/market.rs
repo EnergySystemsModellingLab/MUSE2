@@ -422,25 +422,10 @@ pub fn select_assets_for_cycle(
         );
     }
 
-    // Combine equivalent candidate assets
-    let mut combined_assets: Vec<AssetRef> = Vec::new();
-    for asset in retained_first_pass_assets
+    Ok(retained_first_pass_assets
         .into_iter()
         .chain(assets_for_second_pass)
-    {
-        if let Some(existing_asset) = combined_assets
-            .iter_mut()
-            .find(|existing| **existing == asset)
-        {
-            existing_asset
-                .make_mut()
-                .increase_capacity(asset.capacity());
-        } else {
-            combined_assets.push(asset);
-        }
-    }
-
-    Ok(combined_assets)
+        .collect())
 }
 
 /// Get a portion of the demand profile for this market
@@ -458,11 +443,6 @@ pub fn get_demand_portion_for_market(
             let demand = *demand
                 .get(&(commodity_id.clone(), region_id.clone(), selection.clone()))
                 .unwrap_or(&Flow(0.0));
-            let demand = if demand.abs() <= Flow(1e-12) {
-                Flow(0.0)
-            } else {
-                demand
-            };
             (selection, commodity_portion * demand)
         })
         .collect()
