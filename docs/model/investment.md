@@ -256,6 +256,11 @@ constraints:
   \max \sum_t \alpha_t \cdot \mathrm{Activity}_t
 \\]
 
+In addition, seasonal/annual utilisation penalties are included to encourage even spread of
+utilisation within and across seasons. These are equivalent to the
+[Seasonal/Annual Utilisation Penalties][dispatch-utilisation-penalties] used in the full-system
+dispatch optimisation.
+
 ## Metric Calculation
 
 After the dispatch LP is solved, an investment metric is calculated from the resulting activity
@@ -518,3 +523,4 @@ assets shaping the demand seen by those upstream.
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
 [process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
 [dispatch-optimisation]: ./dispatch_optimisation.md
+[dispatch-utilisation-penalties]: ./dispatch_optimisation.md#seasonalannual-utilisation-penalties
