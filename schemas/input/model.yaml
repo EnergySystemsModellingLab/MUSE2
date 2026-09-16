@@ -78,7 +78,7 @@ properties:
   annual_utilisation_penalty:
     type: number
     description: Penalty per unit of capacity used across the whole year
-    default: 1e-6
+    default: 1e-5
     notes: |
       A small additive penalty to discourage assets from using a high capacity-equivalent peak
       across the year. This should be very small, as it is only intended to break ties between
