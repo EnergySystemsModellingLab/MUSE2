@@ -1,0 +1,16 @@
+tests/data/simple/debug_appraisal_results.csv
+  h_e76403a1cd4bf1 104,259-260,262
+tests/data/simple/debug_appraisal_results_time_slices.csv
+  h_e76403a1cd4bf1 1-4177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "1a78d47e74224c39179d20546bbd448c54ef6c40",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
