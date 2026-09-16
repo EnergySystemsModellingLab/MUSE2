@@ -1,0 +1,30 @@
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 30-31,33-34,133-134,137,144-151,176-182,286,423,650,694-695,761-762,802
+  h_e76403a1cd4bf1 11,13,59
+src/simulation/market.rs
+  h_e76403a1cd4bf1 179,380,385-387,389,391,393-394
+  h_e76403a1cd4bf1 388,390,392
+benches/assets.rs
+  h_e76403a1cd4bf1 157,161
+src/fixture.rs
+  h_e76403a1cd4bf1 22,409
+src/output.rs
+  h_e76403a1cd4bf1 10,258,261-262,506-507,512-520,528,531-532,617-618,627,732,1142,1153,1167,1170-1171
+src/simulation/investment/appraisal/constraints.rs
+  h_e76403a1cd4bf1 51-58
+src/simulation/investment/appraisal/optimisation.rs
+  h_e76403a1cd4bf1 12,68,71-73,82-93
+src/time_slice.rs
+  h_e76403a1cd4bf1 217-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "a3674ec2e6346f6dd11ae83d682f500240895ec8",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
