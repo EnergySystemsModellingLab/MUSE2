@@ -1,0 +1,26 @@
+src/simulation/investment/appraisal/constraints.rs
+  s_70d6c5a24bcdc8::t_2c5e81c7420790 31,52
+  s_70d6c5a24bcdc8::t_2f8d667c860128 140-142
+  h_e76403a1cd4bf1 57,64-67,94,114,125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2a1f22676aff73c47423fc962459fa1d6c8168d2",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_70d6c5a24bcdc8": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4fc1d1cd-d01e-4a04-b573-bf95b2d686ba",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
