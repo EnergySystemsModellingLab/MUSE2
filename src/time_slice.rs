@@ -190,7 +190,9 @@ impl TimeSliceSelection {
 }
 
 /// The time granularity for a particular operation
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Deserialize, strum::EnumIter)]
+#[derive(
+    PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize, strum::EnumIter,
+)]
 pub enum TimeSliceLevel {
     /// Treat individual time slices separately
     #[serde(rename = "daynight")]
