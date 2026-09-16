@@ -1,0 +1,17 @@
+src/simulation/investment/appraisal/constraints.rs
+  h_e76403a1cd4bf1 6-7,64-169
+src/simulation/investment/appraisal/optimisation.rs
+  h_e76403a1cd4bf1 5,53,69,115
+  h_e76403a1cd4bf1 4,6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "3f910355cf5ca776f80af1652f76af930eaff72c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
