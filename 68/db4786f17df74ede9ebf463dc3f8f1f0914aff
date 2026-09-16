@@ -1,0 +1,14 @@
+src/model/parameters.rs
+  h_e76403a1cd4bf1 152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "68db4786f17df74ede9ebf463dc3f8f1f0914aff",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
