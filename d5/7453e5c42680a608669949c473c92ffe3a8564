@@ -1,0 +1,14 @@
+src/output.rs
+  h_e76403a1cd4bf1 260,530,1169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "d57453e5c42680a608669949c473c92ffe3a8564",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
