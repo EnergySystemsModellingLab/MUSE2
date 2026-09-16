@@ -209,7 +209,7 @@ Setting either parameter to zero disables its corresponding penalty. The seasona
 how strongly activity is spread within seasons, while the annual parameter controls how strongly it
 is spread across seasons. Both are weighted objective terms, so their values should be small enough
 that smoothing dispatch does not outweigh meaningful differences in operating cost (default for
-both = `1e-6`).
+`seasonal_utilisation_penalty` and `annual_utilisation_penalty` are `1e-6` and `1e-5` respectively).
 
 ---
 
