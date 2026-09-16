@@ -1,13 +1,87 @@
 //! Module for validating commodity graphs
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
-use crate::commodity::{CommodityMap, CommodityType};
-use crate::process::{Process, ProcessMap};
+use crate::commodity::{CommodityID, CommodityMap, CommodityType};
+use crate::process::{Process, ProcessID, ProcessMap};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Dimensionless, Flow};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
+use petgraph::algo::toposort;
+use petgraph::visit::EdgeRef;
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
+
+/// Checks that all processes representing a SED-to-SED conversion agree on whether they are
+/// feedback processes.
+fn validate_feedback_processes(graph: &CommoditiesGraph, commodities: &CommodityMap) -> Result<()> {
+    // Parallel process edges represent the same commodity conversion. Grouping them lets us
+    // compare every process contributing to that conversion rather than choosing one edge.
+    let mut conversions: HashMap<(CommodityID, CommodityID), Vec<(ProcessID, bool)>> =
+        HashMap::new();
+
+    for edge in graph.edge_references() {
+        // Source, sink, and demand edges do not describe a commodity-to-commodity conversion.
+        let (Some(GraphNode::Commodity(source)), Some(GraphNode::Commodity(target))) = (
+            graph.node_weight(edge.source()),
+            graph.node_weight(edge.target()),
+        ) else {
+            continue;
+        };
+
+        // Only SED markets can be both consumed and produced, and therefore only SED-to-SED
+        // conversions can participate in an SCC and influence the investment ordering.
+        if commodities[source].kind != CommodityType::SupplyEqualsDemand
+            || commodities[target].kind != CommodityType::SupplyEqualsDemand
+        {
+            continue;
+        }
+
+        let process = match edge.weight() {
+            GraphEdge::Primary {
+                process_id,
+                feedback,
+            }
+            | GraphEdge::Secondary {
+                process_id,
+                feedback,
+            } => (process_id.clone(), *feedback),
+            GraphEdge::Demand => continue,
+        };
+
+        conversions
+            .entry((source.clone(), target.clone()))
+            .or_default()
+            .push(process);
+    }
+
+    // Check each conversion independently. A conversion is valid when every contributing process
+    // agrees, whether that shared label is feedback or non-feedback.
+    for ((source, target), processes) in conversions {
+        let Some((_, first_feedback)) = processes.first() else {
+            continue;
+        };
+        if processes
+            .iter()
+            .all(|(_, feedback)| feedback == first_feedback)
+        {
+            continue;
+        }
+
+        // Include every contributing process in the error so the conflicting input rows are easy
+        // to locate and correct.
+        let process_details = processes
+            .iter()
+            .map(|(process_id, feedback)| format!("{process_id}={feedback}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        bail!(
+            "Conversion {source} -> {target} has conflicting feedback_process values: {process_details}"
+        );
+    }
+
+    Ok(())
+}
 
 /// Prepares a graph for validation with [`validate_commodities_graph`].
 ///
@@ -35,7 +109,9 @@ fn prepare_commodities_graph_for_validation(
     filtered_graph.retain_edges(|graph, edge_idx| {
         // Get the process for the edge
         let process_id = match graph.edge_weight(edge_idx).unwrap() {
-            GraphEdge::Primary(process_id) | GraphEdge::Secondary(process_id) => process_id,
+            GraphEdge::Primary { process_id, .. } | GraphEdge::Secondary { process_id, .. } => {
+                process_id
+            }
             GraphEdge::Demand => panic!("Demand edges should not be present in the base graph"),
         };
         let process = &processes[process_id];
@@ -165,6 +241,11 @@ fn validate_commodities_graph(
                     !has_outgoing || has_incoming,
                     "SED commodity {commodity_id} may be consumed but has no producers"
                 );
+                // SED: if produced (incoming edges), must also be consumed (outgoing edges)
+                ensure!(
+                    !has_incoming || has_outgoing,
+                    "SED commodity {commodity_id} may be produced but has no consumers"
+                );
             }
             CommodityType::Other => {
                 // OTH: cannot have both incoming and outgoing edges
@@ -208,6 +289,7 @@ pub fn validate_commodity_graphs_for_model(
 ) -> Result<()> {
     // Validate graphs at all time slice levels (taking into account process availability and demand)
     for ((region_id, year), base_graph) in commodity_graphs {
+        // Validate the original graph
         for ts_level in TimeSliceLevel::iter() {
             for ts_selection in time_slice_info.iter_selections_at_level(ts_level) {
                 let graph = prepare_commodities_graph_for_validation(
@@ -227,6 +309,82 @@ pub fn validate_commodity_graphs_for_model(
             }
         }
     }
+    Ok(())
+}
+
+/// Validate graphs without feedback processes
+pub fn validate_non_feedback_commodity_graphs_for_model(
+    commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
+    processes: &ProcessMap,
+    commodities: &CommodityMap,
+    time_slice_info: &TimeSliceInfo,
+) -> Result<()> {
+    // Validate graphs at all time slice levels (taking into account process availability and demand)
+    for ((region_id, year), base_graph) in commodity_graphs {
+        validate_non_feedback_commodity_graphs_for_region_year(
+            base_graph,
+            region_id,
+            *year,
+            processes,
+            commodities,
+            time_slice_info,
+        )
+        .with_context(|| {format!("Error for for {region_id} in {year}.")})
+        .with_context(|| {
+            "Commodity networks must be acyclic and fully resolvable in the absence of feedback processes. \
+                Please use `feedback_process` to mark all feedback processes."
+                .to_string()
+        })?;
+    }
+    Ok(())
+}
+
+fn validate_non_feedback_commodity_graphs_for_region_year(
+    base_graph: &CommoditiesGraph,
+    region_id: &RegionID,
+    year: u32,
+    processes: &ProcessMap,
+    commodities: &CommodityMap,
+    time_slice_info: &TimeSliceInfo,
+) -> Result<()> {
+    // Check for consistency amongst feedback processes
+    validate_feedback_processes(base_graph, commodities)?;
+
+    // Create a filtered graph without feedback processes
+    let mut graph_without_feedback = base_graph.clone();
+    graph_without_feedback.retain_edges(|graph, edge_idx| match graph.edge_weight(edge_idx) {
+        Some(GraphEdge::Primary { feedback, .. } | GraphEdge::Secondary { feedback, .. }) => {
+            !feedback
+        }
+        Some(GraphEdge::Demand) => true,
+        None => unreachable!("Retained graph edge must have a weight"),
+    });
+
+    // Check that this graph is acyclic
+    if let Err(cycle) = toposort(&graph_without_feedback, None) {
+        let cycle_node = graph_without_feedback
+            .node_weight(cycle.node_id())
+            .expect("cycle node must exist");
+        bail!("Graph contains a cycle involving {cycle_node}");
+    }
+
+    // Validate the network that remains after feedback processes are removed.
+    // Do not need to quote the time slice selection in the error message, as `feedback_process`
+    // is a whole year property, so any breakages here are irrelevant of the ts selection
+    for ts_level in TimeSliceLevel::iter() {
+        for ts_selection in time_slice_info.iter_selections_at_level(ts_level) {
+            let graph = prepare_commodities_graph_for_validation(
+                &graph_without_feedback,
+                processes,
+                commodities,
+                region_id,
+                year,
+                &ts_selection,
+            );
+            validate_commodities_graph(&graph, commodities, ts_level)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -258,8 +416,22 @@ mod tests {
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
         let node_d = graph.add_node(GraphNode::Demand);
-        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
+        graph.add_edge(
+            node_a,
+            node_b,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_b,
+            node_c,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
         graph.add_edge(node_c, node_d, GraphEdge::Demand);
 
         // Validate the graph at DayNight level
@@ -284,8 +456,22 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
-        graph.add_edge(node_c, node_a, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_a, node_b, GraphEdge::Primary("process2".into()));
+        graph.add_edge(
+            node_c,
+            node_a,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_a,
+            node_b,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
 
         // Validate the graph at DayNight level
         assert_error!(
@@ -326,7 +512,14 @@ mod tests {
         // Build invalid graph: B(SED) -> A(SED)
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
+        graph.add_edge(
+            node_b,
+            node_a,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
 
         // Validate the graph at DayNight level
         assert_error!(
@@ -352,8 +545,22 @@ mod tests {
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_a, node_c, GraphEdge::Primary("process2".into()));
+        graph.add_edge(
+            node_b,
+            node_a,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_a,
+            node_c,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
 
         // Validate the graph at DayNight level
         assert_error!(
