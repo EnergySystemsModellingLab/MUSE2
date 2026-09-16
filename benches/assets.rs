@@ -165,6 +165,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         &commodity.id,
         region_id,
         commodity_portion,
+        commodity.time_slice_level,
     );
 
     // Real candidate technologies for this market, used as templates to build up to
