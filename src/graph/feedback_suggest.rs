@@ -1,10 +1,11 @@
-//! Suggests which processes to mark as `feedback_process` when the non-feedback commodity
-//! network is cyclic.
+//! Suggests the correct `feedback_process` configuration when a model's current settings leave the
+//! commodity network unresolvable.
 //!
 //! When [`validate_non_feedback_commodity_graphs_for_model`](super::validate) fails, the network
-//! contains a cycle that cannot be resolved without feedback processes. This module searches for
-//! the smallest sets of processes that, if marked as feedback (removing all their edges), leave a
-//! network that is both acyclic and structurally valid.
+//! cannot be resolved with the current feedback flags \u2014 either because a loop is not fully marked,
+//! or because processes that are not part of any loop have been marked and removed needed edges.
+//! This module searches for the smallest complete feedback sets that leave a network which is both
+//! acyclic and structurally valid (which may be the empty set, meaning nothing should be marked).
 //!
 //! Validity is stricter than mere acyclicity: after the feedback edges are removed, a SED commodity
 //! must be either fully connected (produced and consumed) or fully disconnected (neither). Breaking
@@ -17,9 +18,7 @@
 //!
 //! 1. Enumerate every simple cycle in the commodity conversion graph with Johnson's algorithm and
 //!    reduce each to the *set of processes* on its edges. Cycles are detected over the full
-//!    topology, ignoring existing feedback flags, so a loop that is only *partially* marked is
-//!    still found and can be completed (e.g. if the turbine is already marked, we can still suggest
-//!    the electrolyser).
+//!    topology, ignoring existing feedback flags, so a partially-marked loop is still found.
 //! 2. Search for the smallest sets of processes to mark. A HiGHS MILP proposes a minimum-size set
 //!    that touches ("hits") every cycle; each proposal is verified by actually marking those
 //!    processes as feedback and re-running
@@ -30,7 +29,9 @@
 //!
 //! The search reports every minimal valid set (so the user sees genuine alternatives), or an empty
 //! result if none exists — for example when the sole producer of an externally-consumed commodity
-//! is the only way to break a cycle, which commonly arises with multiple-output processes.
+//! is the only way to break a cycle, which commonly arises with multiple-output processes. Each set
+//! is the *complete* list of processes to mark, independent of what is already marked, so a process
+//! that is currently marked but missing from a suggestion should be unmarked.
 //!
 //! Suggestions are generated for the single region/year graph whose validation failed. A suggestion
 //! that fixes that graph may break another region/year, which the user resolves iteratively.
@@ -53,13 +54,15 @@ const MAX_ITERATIONS: usize = 1000;
 /// A candidate set of processes to mark as `feedback_process` to make the graph valid.
 pub type FeedbackSuggestion = BTreeSet<ProcessID>;
 
-/// Suggests sets of processes to mark as `feedback_process` to make the given graph valid.
+/// Suggests the complete `feedback_process` sets that would make the given graph valid.
 ///
-/// `base_graph` is the failing region/year graph, still carrying the user's existing feedback
-/// flags. The remaining arguments are exactly what the validator needs to re-check a candidate.
+/// `base_graph` is the failing region/year graph. Existing feedback flags on it are ignored when
+/// evaluating candidates, so each suggestion is a complete feedback set. The remaining arguments
+/// are what the validator needs to re-check a candidate.
 ///
-/// Returns every minimal set of processes that resolves the failure (so the caller can present
-/// alternatives), or an empty `Vec` if no such set exists.
+/// Returns every minimal valid set. This may be the empty set (the network has no loops, so nothing
+/// should be marked), one or more non-empty sets (the processes that should be marked), or an empty
+/// `Vec` if no valid configuration exists at all.
 pub fn suggest_feedback_processes(
     base_graph: &CommoditiesGraph,
     processes: &ProcessMap,
@@ -68,15 +71,12 @@ pub fn suggest_feedback_processes(
     region_id: &RegionID,
     year: u32,
 ) -> Vec<FeedbackSuggestion> {
-    // Phase 1: find every cycle, expressed as the set of processes that could break it.
+    // Find every cycle, expressed as the set of processes that could break it. If there are none,
+    // the search still runs and reports the empty set (nothing should be marked) when that is valid.
     let mut cycle_sets: HashSet<BTreeSet<ProcessID>> = HashSet::new();
     collect_cycle_sets(base_graph, &mut cycle_sets);
-    if cycle_sets.is_empty() {
-        // No cycles means the failure is not something feedback processes can fix.
-        return Vec::new();
-    }
 
-    // Phase 2: search for minimal sets that break every cycle *and* pass full validation.
+    // Search for minimal sets that break every cycle *and* pass full validation.
     search_valid_sets(&cycle_sets, |candidate| {
         candidate_passes_validation(
             base_graph,
@@ -90,13 +90,14 @@ pub fn suggest_feedback_processes(
     })
 }
 
-/// Tests one candidate set by marking its processes as feedback and reusing the real validator.
+/// Tests one candidate set as the *complete* feedback set, reusing the real validator.
 ///
-/// The candidate is *added to* the graph's existing feedback flags: `base_graph` already reflects
-/// what the user has marked, and here we additionally set `feedback = true` on every edge belonging
-/// to a candidate process. A suggestion therefore means "mark these in addition to what you already
-/// have". Delegating to `validate_non_feedback_commodity_graphs_for_region_year` keeps this check
-/// identical to real validation.
+/// Existing feedback flags on `base_graph` are ignored: every edge is marked as feedback exactly
+/// when its process is in the candidate, and cleared otherwise. A suggestion is therefore the full
+/// set of processes that should be marked, so a process that is currently marked but absent from a
+/// suggestion is one the user should unmark. Delegating to
+/// `validate_non_feedback_commodity_graphs_for_region_year` keeps this check identical to real
+/// validation.
 fn candidate_passes_validation(
     base_graph: &CommoditiesGraph,
     processes: &ProcessMap,
@@ -120,9 +121,8 @@ fn candidate_passes_validation(
         else {
             continue;
         };
-        if candidate.contains(process_id) {
-            *feedback = true;
-        }
+        // Overwrite existing marks: the candidate is the complete feedback set under test.
+        *feedback = candidate.contains(process_id);
     }
     validate_non_feedback_commodity_graphs_for_region_year(
         &graph,
@@ -135,11 +135,33 @@ fn candidate_passes_validation(
     .is_ok()
 }
 
-/// Formats the suggestions for the error message.
+/// Builds the top-level guidance for a `feedback_process` configuration failure.
+///
+/// The wording distinguishes the three outcomes of [`suggest_feedback_processes`]: mark a specific
+/// set (or one of several alternatives), mark nothing at all (an acyclic network), or no valid
+/// configuration exists.
+pub fn feedback_error_message(suggestions: &[FeedbackSuggestion]) -> String {
+    let base = "The commodity network cannot be resolved with the current `feedback_process` \
+        settings.";
+    match suggestions {
+        // A cyclic network with no valid marking (e.g. a sole producer must break the loop).
+        [] => format!("{base} No valid `feedback_process` configuration could be found."),
+        // An acyclic network: the only valid set is empty, so nothing should be marked.
+        [only] if only.is_empty() => {
+            format!("{base} No processes in this model should be marked as `feedback_process`.")
+        }
+        _ => format!(
+            "{base} Recommended to set `feedback_process = true` for: {}.",
+            format_feedback_suggestions(suggestions)
+        ),
+    }
+}
+
+/// Formats the non-empty suggestion sets for the error message.
 ///
 /// A single option is rendered as a bare list (`A, B`); multiple options are each wrapped in
 /// parentheses and joined with `" or "` (`(A, B) or (C)`) so the alternatives read unambiguously.
-pub fn format_feedback_suggestions(suggestions: &[FeedbackSuggestion]) -> String {
+fn format_feedback_suggestions(suggestions: &[FeedbackSuggestion]) -> String {
     let multiple = suggestions.len() > 1;
     suggestions
         .iter()
@@ -216,6 +238,16 @@ fn search_valid_sets(
         .collect::<BTreeSet<ProcessID>>()
         .into_iter()
         .collect();
+
+    // With no cycles the only possible feedback set is empty: nothing should be marked. Report it
+    // if valid so the caller can tell the user to unmark everything.
+    if candidates.is_empty() {
+        return is_valid(&BTreeSet::new())
+            .then(BTreeSet::new)
+            .into_iter()
+            .collect();
+    }
+
     let index: HashMap<&ProcessID, usize> =
         candidates.iter().enumerate().map(|(i, p)| (p, i)).collect();
 
@@ -499,5 +531,30 @@ mod tests {
     fn search_returns_empty_when_nothing_valid() {
         let cycle_sets = HashSet::from([BTreeSet::from(["p1".into(), "p2".into()])]);
         assert!(search_valid_sets(&cycle_sets, |_| false).is_empty());
+    }
+
+    #[test]
+    fn search_reports_empty_set_when_acyclic() {
+        // No cycles: the only candidate feedback set is empty, and it is valid.
+        let suggestions = search_valid_sets(&HashSet::new(), |_| true);
+        assert_eq!(suggestions, vec![BTreeSet::new()]);
+    }
+
+    #[test]
+    fn message_recommends_unmarking_for_empty_set() {
+        let message = feedback_error_message(&[BTreeSet::new()]);
+        assert!(message.contains("No processes in this model should be marked"));
+    }
+
+    #[test]
+    fn message_lists_processes_to_mark() {
+        let message = feedback_error_message(&[BTreeSet::from(["A".into(), "B".into()])]);
+        assert!(message.contains("Set `feedback_process = true` for exactly: A, B"));
+    }
+
+    #[test]
+    fn message_reports_no_valid_configuration() {
+        let message = feedback_error_message(&[]);
+        assert!(message.contains("No valid `feedback_process` configuration"));
     }
 }
