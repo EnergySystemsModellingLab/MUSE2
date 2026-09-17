@@ -1,5 +1,5 @@
 //! Module for validating commodity graphs
-use super::feedback_suggest::{format_feedback_suggestions, suggest_feedback_processes};
+use super::feedback_suggest::{feedback_error_message, suggest_feedback_processes};
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
 use crate::process::{Process, ProcessID, ProcessMap};
@@ -330,11 +330,8 @@ pub fn validate_non_feedback_commodity_graphs_for_model(
             commodities,
             time_slice_info,
         )
-        .with_context(|| format!("Error for for {region_id} in {year}."))
+        .with_context(|| format!("Error for {region_id} in {year}."))
         .with_context(|| {
-            let base = "The commodity network contains a circular dependency. Break it by \
-                marking the processes that close the loop with `feedback_process = true`."
-                .to_string();
             let suggestions = suggest_feedback_processes(
                 base_graph,
                 processes,
@@ -343,14 +340,7 @@ pub fn validate_non_feedback_commodity_graphs_for_model(
                 region_id,
                 *year,
             );
-            if suggestions.is_empty() {
-                base
-            } else {
-                format!(
-                    "{base} Suggestions: {}",
-                    format_feedback_suggestions(&suggestions)
-                )
-            }
+            feedback_error_message(&suggestions)
         })?;
     }
     Ok(())
