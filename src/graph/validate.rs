@@ -1,4 +1,5 @@
 //! Module for validating commodity graphs
+use super::feedback_suggest::{feedback_error_message, suggest_feedback_processes};
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityID, CommodityMap, CommodityType};
 use crate::process::{Process, ProcessID, ProcessMap};
@@ -324,17 +325,23 @@ pub fn validate_non_feedback_commodity_graphs_for_model(
             commodities,
             time_slice_info,
         )
-        .with_context(|| {format!("Error for for {region_id} in {year}.")})
+        .with_context(|| format!("Error for {region_id} in {year}."))
         .with_context(|| {
-            "Commodity networks must be acyclic and fully resolvable in the absence of feedback processes. \
-                Please use `feedback_process` to mark all feedback processes."
-                .to_string()
+            let suggestions = suggest_feedback_processes(
+                base_graph,
+                processes,
+                commodities,
+                time_slice_info,
+                region_id,
+                *year,
+            );
+            feedback_error_message(&suggestions)
         })?;
     }
     Ok(())
 }
 
-fn validate_non_feedback_commodity_graphs_for_region_year(
+pub(super) fn validate_non_feedback_commodity_graphs_for_region_year(
     base_graph: &CommoditiesGraph,
     region_id: &RegionID,
     year: u32,
