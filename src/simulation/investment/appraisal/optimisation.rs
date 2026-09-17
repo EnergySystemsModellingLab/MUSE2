@@ -9,7 +9,7 @@ use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Dimensionless, Flow};
+use crate::units::Activity;
 use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
@@ -65,15 +65,7 @@ fn add_constraints(
     );
 }
 
-/// Computes remaining unmet demand per time slice after a solve.
-///
-/// For each time-slice selection at the commodity's balance level, the selection-level residual
-/// (`demand_total - supply_total`, clamped to zero) is divided equally across the time slices in
-/// the selection.
-///
-/// The exact per-time-slice distribution is arbitrary: all downstream consumers sum values back up
-/// to the selection level before using them (e.g. the next round's demand constraint, and
-/// `is_any_remaining_demand`), so only the selection-level total needs to be correct.
+/// Computes remaining unmet demand per balance-level selection after a solve.
 fn compute_unmet_demand(
     demand: &DemandMap,
     activity: &IndexMap<TimeSliceID, Activity>,
@@ -84,19 +76,12 @@ fn compute_unmet_demand(
     let mut unmet_demand = DemandMap::new();
     let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
     for ts_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level) {
-        let time_slices: Vec<_> = ts_selection.iter(time_slice_info).collect();
-        let demand_for_selection: Flow = time_slices.iter().map(|(ts, _)| demand[*ts]).sum();
-        let supply_for_selection: Flow = time_slices
-            .iter()
-            .map(|(ts, _)| activity[*ts] * flow_coeff)
+        let supply_for_selection = ts_selection
+            .iter(time_slice_info)
+            .map(|(ts, _)| activity[ts] * flow_coeff)
             .sum();
-
-        #[allow(clippy::cast_precision_loss)]
-        let unmet_per_slice = (demand_for_selection - supply_for_selection).max(Flow(0.0))
-            / Dimensionless(time_slices.len() as f64);
-        for (time_slice, _) in &time_slices {
-            unmet_demand.insert((*time_slice).clone(), unmet_per_slice);
-        }
+        let unmet = (demand[&ts_selection] - supply_for_selection).max(crate::units::Flow(0.0));
+        unmet_demand.insert(ts_selection, unmet);
     }
     unmet_demand
 }

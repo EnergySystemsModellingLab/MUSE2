@@ -14,6 +14,7 @@ use std::io::Write as IoWrite;
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod feedback_suggest;
 pub mod investment;
 pub mod validate;
 
@@ -41,11 +42,21 @@ pub enum GraphNode {
 /// An edge in the commodity graph
 pub enum GraphEdge {
     /// An edge representing a primary flow of a process
-    #[display("{_0}")]
-    Primary(ProcessID),
+    #[display("{process_id}")]
+    Primary {
+        /// The process responsible for the flow.
+        process_id: ProcessID,
+        /// Whether the process participates in a feedback conversion.
+        feedback: bool,
+    },
     /// An edge representing a secondary (non-primary) flow of a process
-    #[display("{_0}")]
-    Secondary(ProcessID),
+    #[display("{process_id}")]
+    Secondary {
+        /// The process responsible for the flow.
+        process_id: ProcessID,
+        /// Whether the process participates in a feedback conversion.
+        feedback: bool,
+    },
     /// An edge representing a service demand
     #[display("DEMAND")]
     Demand,
@@ -150,9 +161,15 @@ fn create_commodities_graph_for_region_year(
                 source_node_index,
                 target_node_index,
                 if is_primary {
-                    GraphEdge::Primary(process.id.clone())
+                    GraphEdge::Primary {
+                        process_id: process.id.clone(),
+                        feedback: process.feedback_process,
+                    }
                 } else {
-                    GraphEdge::Secondary(process.id.clone())
+                    GraphEdge::Secondary {
+                        process_id: process.id.clone(),
+                        feedback: process.feedback_process,
+                    }
                 },
             );
         }
@@ -181,7 +198,7 @@ pub fn build_commodity_graphs_for_model(
 fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
     match edge_ref.weight() {
         // Use dashed lines for secondary flows
-        GraphEdge::Secondary(_) => "style=dashed".to_string(),
+        GraphEdge::Secondary { .. } => "style=dashed".to_string(),
         // Other edges use default attributes
         _ => String::new(),
     }

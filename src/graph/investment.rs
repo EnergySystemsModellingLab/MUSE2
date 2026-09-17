@@ -129,13 +129,14 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
         |_, node_weight| match node_weight.len() {
             0 => unreachable!("Condensed graph node must have at least one member"),
             1 => node_weight[0].clone(),
-            _ => MarketSet::Cycle(
-                node_weight
+            _ => MarketSet::Cycle {
+                investment_order: node_weight
                     .iter()
                     .flat_map(|s| s.iter_markets())
                     .cloned()
                     .collect(),
-            ),
+                excluded_processes: vec![], // TODO: placeholder
+            },
         },
         // Keep edges the same
         |_, edge_weight| edge_weight.clone(),
@@ -162,10 +163,12 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///   `i` comes before `j`, then `j` cannot be before `i`).
 /// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic (i.e. if
 ///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
-/// * The objective minimises the number of “forward” edges (edges that would point from an earlier
-///   market to a later one), counted within the original SCC and treated as unit penalties. A small
-///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
-///   >1 would instead prioritise exporters even if it created extra conflicts in the final order).
+/// * The objective minimises unit penalties for violating conversion ordering. For a normal edge
+///   `i -> j`, the penalty favours `j` before `i`; for a feedback edge, it favours `i` before `j`.
+///   Feedback labels are checked for consistency across each conversion before this function is
+///   called. A small bias (<1) is added to nudge exporters earlier without outweighing the main
+///   objective (a bias >1 would instead prioritise exporters even if it created extra conflicts in
+///   the final order).
 ///
 /// Once the MILP is solved, markets are scored by the number of pairwise “wins” (how many other
 /// markets they precede). Sorting by this score — using the original index as a tiebreaker to keep
@@ -183,8 +186,9 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///
 /// Additionally, C has an outgoing edge to a node outside the cycle.
 ///
-/// The costs matrix in the MILP is set up to penalise any edge that points “forward” in the final
-/// order: if there's an edge from X to Y we prefer to place Y before X so the edge points backwards:
+/// The costs matrix in the MILP is set up to penalise any non-feedback edge that points “forward”
+/// in the final order: if there's an edge from X to Y we prefer to place Y before X so the edge
+/// points backwards. Feedback edges reverse this preference, placing X before Y:
 ///
 /// ```text
 ///    |   | A | B | C |
@@ -192,6 +196,10 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///    | B | 1 | 0 | 0 |
 ///    | C | 0 | 1 | 0 |
 /// ```
+///
+/// For feedback edges, the corresponding penalty is placed in the opposite matrix entry. If all
+/// edges in a cycle are feedback edges, the directional penalties can therefore balance, leaving
+/// the external-outgoing bias to determine the order.
 ///
 /// On top of this, we give a small preference to markets that export outside the SCC, so nodes with
 /// outgoing edges beyond the cycle are pushed earlier. This is done via an `EXTERNAL_BIAS`
@@ -276,9 +284,23 @@ fn order_sccs(
         for (i, &idx) in original_indices.iter().enumerate() {
             // Loop over the edges going out of this node
             for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
-                // If the target j is inside this SCC, record a penalty for putting i before j
+                // If the target j is inside this SCC, record a penalty for the preferred order.
                 if let Some(&j) = index_position.get(&edge.target()) {
-                    penalties[i][j] = 1.0;
+                    let feedback = match edge.weight() {
+                        GraphEdge::Primary { feedback, .. }
+                        | GraphEdge::Secondary { feedback, .. } => *feedback,
+                        GraphEdge::Demand => unreachable!(
+                            "Demand edges should not be present in the investment graph"
+                        ),
+                    };
+                    if feedback {
+                        // Feedback conversions prefer the source before the target, so penalise
+                        // the opposite ordering variable from a normal conversion.
+                        penalties[j][i] = 1.0;
+                    } else {
+                        // Normal conversions retain the downstream-first preference.
+                        penalties[i][j] = 1.0;
+                    }
 
                 // Otherwise, mark that i has an outgoing edge to outside the SCC
                 } else {
@@ -520,7 +542,10 @@ mod tests {
             original.add_edge(
                 node_indices[src],
                 node_indices[dst],
-                GraphEdge::Primary("process1".into()),
+                GraphEdge::Primary {
+                    process_id: "process1".into(),
+                    feedback: false,
+                },
             );
         }
         // External market receiving exports from C; encourages C to appear early.
@@ -528,7 +553,10 @@ mod tests {
         original.add_edge(
             node_indices[2],
             external,
-            GraphEdge::Primary("process2".into()),
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
         );
 
         // Single SCC containing all markets.
@@ -556,8 +584,22 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
 
         // Add edges: A -> B -> C
-        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
+        graph.add_edge(
+            node_a,
+            node_b,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_b,
+            node_c,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
@@ -585,8 +627,22 @@ mod tests {
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
 
         // Add edges creating a cycle: A -> B -> A
-        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_b, node_a, GraphEdge::Primary("process2".into()));
+        graph.add_edge(
+            node_a,
+            node_b,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_b,
+            node_a,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
@@ -600,7 +656,10 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(
             result[0],
-            MarketSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
+            MarketSet::Cycle {
+                investment_order: vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())],
+                excluded_processes: vec![],
+            }
         );
     }
 
@@ -620,10 +679,38 @@ mod tests {
         let node_d = graph.add_node(GraphNode::Commodity("D".into()));
 
         // Add edges
-        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_a, node_c, GraphEdge::Primary("process2".into()));
-        graph.add_edge(node_b, node_d, GraphEdge::Primary("process3".into()));
-        graph.add_edge(node_c, node_d, GraphEdge::Primary("process4".into()));
+        graph.add_edge(
+            node_a,
+            node_b,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_a,
+            node_c,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_b,
+            node_d,
+            GraphEdge::Primary {
+                process_id: "process3".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_c,
+            node_d,
+            GraphEdge::Primary {
+                process_id: "process4".into(),
+                feedback: false,
+            },
+        );
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
@@ -658,8 +745,22 @@ mod tests {
         let node_c = graph.add_node(GraphNode::Commodity("C".into()));
 
         // Add edges: A -> B -> C
-        graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
-        graph.add_edge(node_b, node_c, GraphEdge::Primary("process2".into()));
+        graph.add_edge(
+            node_a,
+            node_b,
+            GraphEdge::Primary {
+                process_id: "process1".into(),
+                feedback: false,
+            },
+        );
+        graph.add_edge(
+            node_b,
+            node_c,
+            GraphEdge::Primary {
+                process_id: "process2".into(),
+                feedback: false,
+            },
+        );
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
