@@ -14,6 +14,7 @@ use std::io::Write as IoWrite;
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod feedback_suggest;
 pub mod investment;
 pub mod validate;
 
