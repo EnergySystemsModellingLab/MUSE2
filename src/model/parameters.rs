@@ -149,7 +149,7 @@ impl Default for ModelParameters {
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
             seasonal_utilisation_penalty: MoneyPerCapacityPerYear(1e-6),
-            annual_utilisation_penalty: MoneyPerCapacityPerYear(1e-6),
+            annual_utilisation_penalty: MoneyPerCapacityPerYear(1e-5),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
             capacity_margin: Dimensionless(0.2),
