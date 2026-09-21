@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1788440667673,
+  "lastUpdate": 1789996970400,
   "repoUrl": "https://github.com/EnergySystemsModellingLab/MUSE2",
   "entries": {
     "Benchmark": [
@@ -311,6 +311,110 @@
           {
             "name": "select_best_assets_sequential/20",
             "value": 175652280.5,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "t.bland@imperial.ac.uk",
+            "name": "Tom Bland",
+            "username": "tsmbland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9a3d2a6c7bbc1aaa215cb1dd50a7e86903d46be4",
+          "message": "Merge pull request #1550 from EnergySystemsModellingLab/increase_annual_penalty\n\nIncrease `annual_utilisation_penalty`",
+          "timestamp": "2026-09-21T14:16:17+01:00",
+          "tree_id": "7c04c4ddd99fec77da43991d6e02525754750334",
+          "url": "https://github.com/EnergySystemsModellingLab/MUSE2/commit/9a3d2a6c7bbc1aaa215cb1dd50a7e86903d46be4"
+        },
+        "date": 1789996970399,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "example_run/circularity example",
+            "value": 441116998,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/missing_commodity example",
+            "value": 245042445.75,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/muse1_default example",
+            "value": 400329220,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/simple example",
+            "value": 90530161.66666666,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_outputs example",
+            "value": 447225466.5,
+            "unit": "ns"
+          },
+          {
+            "name": "example_run/two_regions example",
+            "value": 632041752.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/01",
+            "value": 7560517.226923076,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/05",
+            "value": 27058596.585526317,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/10",
+            "value": 44116650.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/15",
+            "value": 63059721.16666667,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_parallel/20",
+            "value": 82569746.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/01",
+            "value": 7631439.791666666,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/05",
+            "value": 37132715.5,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/10",
+            "value": 74480565.16666666,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/15",
+            "value": 112976001,
+            "unit": "ns"
+          },
+          {
+            "name": "select_best_assets_sequential/20",
+            "value": 153886922.5,
             "unit": "ns"
           }
         ]
