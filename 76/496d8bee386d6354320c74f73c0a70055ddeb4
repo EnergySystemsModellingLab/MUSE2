@@ -1,0 +1,32 @@
+src/graph/validate.rs
+  s_880992cd066765::t_6e6f8b47c4e5c8 333,343
+  s_880992cd066765::t_5e9321c7660e45 2
+src/graph/feedback_suggest.rs
+  h_e76403a1cd4bf1 151,154,546
+  s_880992cd066765::t_58da0969831f16 241-250
+  s_880992cd066765::t_d142287bff4e29 535-545,547-559
+  s_880992cd066765::t_f84049c30bc0b1 21,32-34,59-61,93,95-100,124-125
+  s_880992cd066765::t_dd5b16b2e7913a 57,63-65,74-75,79,138-150,152-153,155-160,164
+  s_880992cd066765::t_f7eabd02a55ab4 1-2,5-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "76496d8bee386d6354320c74f73c0a70055ddeb4",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_880992cd066765": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "06293d04-590f-4173-9965-2efc3dbbb4db",
+        "model": "copilot/claude-opus-4.8"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}

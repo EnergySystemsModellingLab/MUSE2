@@ -1,0 +1,125 @@
+src/simulation/market.rs
+  h_e76403a1cd4bf1 17,31,32,33,34-36,48,49-50,89,92,96,143,144,145,149,174,199,210-212,259,262,267-268,271,272,273-277,279,293-294,299-301,303,306-307,312,315,317-322,331,332,334,336,340,342,360,370-371,372,373,373-374,376,377-378,379,381-382,384-385,384-386,387-392,394,395-398,399,400-402,403-404,403-405,406,407,407,408,409-413,409-415,415,416,417,419,422-426,431-443,559
+  h_e76403a1cd4bf1 150-152,280-283
+  s_345dfe54ca13e7::t_e24ee834671053 253
+  s_345dfe54ca13e7::t_686ba00a0c823b 296,304,355,357,369,375,393,417,419-420,428-430
+  s_9204c98d7120d7::t_3b75c6a195a9ab 358-359
+  s_9204c98d7120d7::t_93b705cfe10fbc 295,309,353,380,418
+  s_1c62ba1a623acb::t_a248db9e57bbe4 2,298,343,350-351
+  s_1c62ba1a623acb::t_eccfede5af74e2 354,356,363-368,421
+  s_1c62ba1a623acb::t_4fbf3be83c2cbe 284-292,345,361,383
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 15,195,453,456-457,459,466
+  s_1c62ba1a623acb::t_d76677b197492c 11-12,362
+  s_1c62ba1a623acb::t_76decbabbe9b66 297,323-328,427
+  s_1c62ba1a623acb::t_d64b045571bb76 344
+  s_1c62ba1a623acb::t_e903ada37ad955 458,460-465
+  s_1c62ba1a623acb::t_e81a3a5ed67948 346-349
+src/asset.rs
+  h_e76403a1cd4bf1 986,1172
+src/graph/investment.rs
+  h_e76403a1cd4bf1 132,133,134-139
+  s_1c62ba1a623acb::t_47caf9c37197b1 604-607
+src/simulation/prices.rs
+  h_e76403a1cd4bf1 167,174
+  h_e76403a1cd4bf1 166,168
+  s_6952e06ab80b65::t_68c691473f6bfd 1416
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 59,61,115,665,709-710,776-777,817
+  s_1c62ba1a623acb::t_e056490fcf042f 30-31,33-34,133,146-149,151-152,169-174,177,181
+  s_1c62ba1a623acb::t_eccfede5af74e2 11,13,126
+  s_1c62ba1a623acb::t_d4c5e5a68c97a2 301
+  s_1c62ba1a623acb::t_1263d35c65a52a 192,197-198
+  s_1c62ba1a623acb::t_2644355d78cb69 230
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 438
+  s_1c62ba1a623acb::t_78f37e06d44caa 196,199
+  s_1c62ba1a623acb::t_8502390c8bc927 231-232
+benches/assets.rs
+  h_e76403a1cd4bf1 98-100,104
+  h_e76403a1cd4bf1 103,105-107
+src/simulation.rs
+  h_e76403a1cd4bf1 18,181-183,189-190,201
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 11,405,414-419,425,723
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 8,92,106,335,399-400,410
+  s_1c62ba1a623acb::t_cf402f34ebc643 401-405
+  s_1c62ba1a623acb::t_eccfede5af74e2 406-409
+src/process.rs
+  s_6952e06ab80b65::t_68c691473f6bfd 73-74
+src/input/process.rs
+  s_6952e06ab80b65::t_68c691473f6bfd 41,178
+src/fixture.rs
+  s_6952e06ab80b65::t_68c691473f6bfd 328
+  s_1c62ba1a623acb::t_0aff54db495598 410
+  s_1c62ba1a623acb::t_ee94598be21cdd 22
+src/simulation/investment/appraisal/optimisation.rs
+  s_1c62ba1a623acb::t_eccfede5af74e2 12,68,79-81,83-84
+src/simulation/investment/appraisal/constraints.rs
+  s_1c62ba1a623acb::t_eccfede5af74e2 51
+src/input/process/flow.rs
+  s_1c62ba1a623acb::t_ee94598be21cdd 368
+src/output.rs
+  s_1c62ba1a623acb::t_ee94598be21cdd 720
+  s_1c62ba1a623acb::t_cf402f34ebc643 7
+  s_1c62ba1a623acb::t_a12c6edf8c1f80 1141
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 501-502,507-509
+  s_1c62ba1a623acb::t_0aff54db495598 1130
+  s_1c62ba1a623acb::t_d4c5e5a68c97a2 11,605-606,615
+examples/circularity/processes.csv
+  h_e76403a1cd4bf1 1-19
+src/asset/capacity.rs
+  h_e76403a1cd4bf1 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "99db3cb8f19f4bc0babec7b246f0daf75089ce62",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_1c62ba1a623acb": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "93666a3a-7142-41ca-9605-d5208d3d850b",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_345dfe54ca13e7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "457c5545-69b2-4550-9a76-8110118f5e55",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_6952e06ab80b65": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "716a64ff-fb77-4be3-aad6-c4ac880f9af1",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_7d78c8f4fce317": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "c887fb44-5744-4e7f-8598-c2f9e2291f16",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_9204c98d7120d7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "e77c469d-1dbf-46ed-975e-47c69536b81f",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
