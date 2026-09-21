@@ -242,11 +242,6 @@ fn validate_commodities_graph(
                     !has_outgoing || has_incoming,
                     "SED commodity {commodity_id} may be consumed but has no producers"
                 );
-                // SED: if produced (incoming edges), must also be consumed (outgoing edges)
-                ensure!(
-                    !has_incoming || has_outgoing,
-                    "SED commodity {commodity_id} may be produced but has no consumers"
-                );
             }
             CommodityType::Other => {
                 // OTH: cannot have both incoming and outgoing edges
