@@ -56,7 +56,7 @@ pub fn perform_agent_investment(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
-    let mut net_demand = flatten_preset_demands_for_year(&model.commodities, year);
+    let mut net_demand = collect_preset_demands_for_year(&model.commodities, year);
 
     // Keep a list of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -127,14 +127,12 @@ pub fn perform_agent_investment(
     Ok(all_selected_assets)
 }
 
-/// Flatten the preset commodity demands for a given year into a map of commodity, region and
-/// time slice to demand.
+/// Collect the preset commodity demands for a given year into a map of commodity, region and
+/// time slice selection to demand.
 ///
 /// Demand for each commodity is stored at its natural time-slice selection level, matching the
 /// balance level at which the investment appraisal operates.
-///
-/// **TODO**: these assumptions may need to be revisited, e.g. when we come to storage technologies
-pub fn flatten_preset_demands_for_year(commodities: &CommodityMap, year: u32) -> AllDemandMap {
+pub fn collect_preset_demands_for_year(commodities: &CommodityMap, year: u32) -> AllDemandMap {
     let mut demand_map = AllDemandMap::new();
     for (commodity_id, commodity) in commodities {
         for ((region_id, data_year, time_slice_selection), demand) in &commodity.demand {

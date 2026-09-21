@@ -9,7 +9,7 @@ use muse2::model::Model;
 use muse2::output::DataWriter;
 use muse2::process::{Process, ProcessID};
 use muse2::simulation::candidate_assets_for_next_year;
-use muse2::simulation::investment::{flatten_preset_demands_for_year, select_best_assets};
+use muse2::simulation::investment::{collect_preset_demands_for_year, select_best_assets};
 use muse2::simulation::market::{
     collect_agent_limits, get_asset_options, get_demand_portion_for_market, get_responsible_agents,
 };
@@ -154,7 +154,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             .next()
             .expect("No agent found responsible for the target commodity/region/year");
 
-    let net_demand = flatten_preset_demands_for_year(&model.commodities, YEAR);
+    let net_demand = collect_preset_demands_for_year(&model.commodities, YEAR);
     let demand = get_demand_portion_for_market(
         &model.time_slice_info,
         &net_demand,
