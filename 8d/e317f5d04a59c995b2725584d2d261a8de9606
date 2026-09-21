@@ -1,0 +1,16 @@
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 59,130-131,135
+benches/assets.rs
+  h_e76403a1cd4bf1 12,157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8de317f5d04a59c995b2725584d2d261a8de9606",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
