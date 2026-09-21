@@ -1,0 +1,149 @@
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 544
+  h_e76403a1cd4bf1 12,459,480-481,483-487,489-490,492-493,507,554
+  s_1c62ba1a623acb::t_eccfede5af74e2 404
+src/simulation/market.rs
+  h_e76403a1cd4bf1 241,256,294,305-306
+  h_e76403a1cd4bf1 4,239
+  s_345dfe54ca13e7::t_686ba00a0c823b 302
+  s_9204c98d7120d7::t_3b75c6a195a9ab 303-304
+  s_1c62ba1a623acb::t_d76677b197492c 11-12
+  s_1c62ba1a623acb::t_e903ada37ad955 327
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 266
+  h_e76403a1cd4bf1 4,12
+src/simulation.rs
+  h_e76403a1cd4bf1 18
+tests/data/simple/debug_dispatch_assets.csv
+  h_e76403a1cd4bf1 358-401,403-404,406,409-411,414,416-417,419-422,424-425,427-433,438,441,446-447,449,454-462,464-513,515-530,534-543,545,549-553,558-561,566-574,576-625,627-642,646-655,657-673,675,677,678-681,686-689,1458-1493,1497-1553,1554,1555,1556-1558,1559,1560-1562,1563-1564,1565,1566-1569
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 71-75,90-93,115,648,692-693,759-760
+  h_e76403a1cd4bf1 94
+  s_1c62ba1a623acb::t_e056490fcf042f 31,34
+  s_1c62ba1a623acb::t_eccfede5af74e2 11,13
+  s_1c62ba1a623acb::t_d4c5e5a68c97a2 284
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 421
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 46
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-633,636-641,706-717,720,821-826,833-838,857-865,948-951,972-977,1322,1325,1698-1713
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 178-181,210-229,274-293,338-339,341,351,353,386-401,434-449,498-513
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 46
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-633,636-641,706-717,720,821-826,833-838,857-865,948-951,972-977,1322,1325,1698-1713
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 178-181,210-229,274-293,338-339,341,351,353,386-401,434-449,498-513
+tests/data/missing_commodity/asset_capacities.csv
+  h_e76403a1cd4bf1 23
+tests/data/missing_commodity/commodity_flows.csv
+  h_e76403a1cd4bf1 620,690-705
+tests/data/missing_commodity/commodity_prices.csv
+  h_e76403a1cd4bf1 122-125,154-157,179-180,182,184,190-193,202-213,218-241
+tests/data/simple/debug_appraisal_results.csv
+  h_e76403a1cd4bf1 26,29,39,41,43,45,47,49,51,55,57,59,63,65,67,69,71,73,75,79,82,86-97,99-103,105,107,262
+tests/data/simple/debug_commodity_balance_duals.csv
+  h_e76403a1cd4bf1 150-161,164-166,168-177,182-193,196-209,230-241,244-257,262-273,566-577,586-589,598-609,614-625
+tests/data/two_outputs/asset_capacities.csv
+  h_e76403a1cd4bf1 26,36
+src/simulation/investment/appraisal/constraints.rs
+  s_1c62ba1a623acb::t_eccfede5af74e2 54
+src/fixture.rs
+  s_1c62ba1a623acb::t_0aff54db495598 409
+  s_1c62ba1a623acb::t_ee94598be21cdd 22
+src/output.rs
+  s_1c62ba1a623acb::t_a12c6edf8c1f80 1148
+  s_1c62ba1a623acb::t_ff5c41bfa5f9df 514-515
+  s_1c62ba1a623acb::t_0aff54db495598 1137
+  h_e76403a1cd4bf1 261-262,526-527,1165-1166
+src/asset.rs
+  h_e76403a1cd4bf1 1171
+src/time_slice.rs
+  s_1c62ba1a623acb::t_52ea0a15348296 193,195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "fde459ab90b49f51941a9041bc511758aef5435a",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_1c62ba1a623acb": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "93666a3a-7142-41ca-9605-d5208d3d850b",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_345dfe54ca13e7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "457c5545-69b2-4550-9a76-8110118f5e55",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_6952e06ab80b65": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "716a64ff-fb77-4be3-aad6-c4ac880f9af1",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_7d78c8f4fce317": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "c887fb44-5744-4e7f-8598-c2f9e2291f16",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_8230b4a00febd8": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "8b3feba6-082a-4da2-a69c-3297e84c1d4e",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_880992cd066765": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "06293d04-590f-4173-9965-2efc3dbbb4db",
+        "model": "copilot/claude-opus-4.8"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_9204c98d7120d7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "e77c469d-1dbf-46ed-975e-47c69536b81f",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_fa15684a654e2d": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "f88da59f-796b-4e13-abac-f78d34c21ab6",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_ff4662e60448ef": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "5d47a432-3850-430f-8749-db45925801ca",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
