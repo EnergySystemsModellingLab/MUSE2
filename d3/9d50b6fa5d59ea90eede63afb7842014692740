@@ -1,0 +1,70 @@
+src/simulation/market.rs
+  h_e76403a1cd4bf1 11,12,17,31,32,33,34-36,48,49-50,89,92,96,143,144,145,149,174,198,209-211,258,261,270,271,272-277,279,284-285,288-290,292,295-296,301,304,312,313,315,317,321,323,331-332,333-334,336,337,337-338,340-343,345-346,347,348-349,348-350,352-354,357-359,360,361-362,361-363,364,365-371,365-374,373,375,377,379-383,388-400
+  h_e76403a1cd4bf1 150-152,280-283
+  s_345dfe54ca13e7::t_e24ee834671053 252
+  s_345dfe54ca13e7::t_686ba00a0c823b 287,293,305,309,327-328,335,339,351,355-356,375,377-378,384-387
+  s_9204c98d7120d7::t_3b75c6a195a9ab 329-330
+  s_9204c98d7120d7::t_93b705cfe10fbc 286,298,325,344,376
+src/asset.rs
+  h_e76403a1cd4bf1 986,1172
+src/graph/investment.rs
+  h_e76403a1cd4bf1 132,133,134-139
+src/simulation/prices.rs
+  h_e76403a1cd4bf1 167,174
+  h_e76403a1cd4bf1 166,168
+  s_6952e06ab80b65::t_68c691473f6bfd 1416
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 59,61,115
+benches/assets.rs
+  h_e76403a1cd4bf1 98-100,104
+  h_e76403a1cd4bf1 103,105-107
+src/simulation.rs
+  h_e76403a1cd4bf1 18,181-183,189-190,201
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 11,405,414-419,425,723
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 8,92,106,335,399-412
+src/process.rs
+  s_6952e06ab80b65::t_68c691473f6bfd 73-74
+src/input/process.rs
+  s_6952e06ab80b65::t_68c691473f6bfd 41,178
+src/fixture.rs
+  s_6952e06ab80b65::t_68c691473f6bfd 328
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d39d50b6fa5d59ea90eede63afb7842014692740",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_345dfe54ca13e7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "457c5545-69b2-4550-9a76-8110118f5e55",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_6952e06ab80b65": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "716a64ff-fb77-4be3-aad6-c4ac880f9af1",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_9204c98d7120d7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "e77c469d-1dbf-46ed-975e-47c69536b81f",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
