@@ -91,6 +91,10 @@ properties:
     type: number
     description: The relative tolerance for price convergence in the ironing out loop
     default: 1e-6
+  price_cycle_iterations:
+    type: integer
+    description: Number of iterations to perform when calculating prices for cyclically-dependent markets
+    default: 1
   capacity_margin:
     type: number
     description: Slack proportion for assets selected during cycle balancing to absorb small demand shifts

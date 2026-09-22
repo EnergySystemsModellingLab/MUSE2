@@ -113,6 +113,8 @@ pub struct ModelParameters {
     /// The relative tolerance for price convergence in the ironing out loop
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub price_tolerance: Dimensionless,
+    /// Number of iterations to perform when calculating prices for cyclically-dependent markets.
+    pub price_cycle_iterations: u32,
     /// Slack applied during cycle balancing, allowing newly selected assets to flex their capacity
     /// by this proportion.
     ///
@@ -152,6 +154,7 @@ impl Default for ModelParameters {
             annual_utilisation_penalty: MoneyPerCapacityPerYear(1e-5),
             max_ironing_out_iterations: 1,
             price_tolerance: Dimensionless(1e-6),
+            price_cycle_iterations: 1,
             capacity_margin: Dimensionless(0.2),
             mothball_years: 0,
             remaining_demand_absolute_tolerance: DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE,
@@ -263,6 +266,13 @@ fn check_max_ironing_out_iterations(value: u32) -> Result<()> {
     Ok(())
 }
 
+/// Check that the number of cycle price iterations is valid.
+fn check_price_cycle_iterations(value: u32) -> Result<()> {
+    ensure!(value > 0, "price_cycle_iterations cannot be zero");
+
+    Ok(())
+}
+
 /// Check that the `remaining_demand_absolute_tolerance` parameter is valid.
 fn check_remaining_demand_absolute_tolerance(
     dangerous_options_enabled: bool,
@@ -355,6 +365,9 @@ impl ModelParameters {
 
         // price_tolerance already validated with deserialise_finite_non_negative
 
+        // price_cycle_iterations
+        check_price_cycle_iterations(self.price_cycle_iterations)?;
+
         // capacity_margin already validated with deserialise_finite_non_negative
 
         // remaining_demand_absolute_tolerance already validated with
@@ -428,6 +441,15 @@ mod tests {
 
         let model_params = ModelParameters::from_path(dir.path()).unwrap();
         assert_eq!(model_params.milestone_years, [2020, 2100]);
+        assert_eq!(model_params.price_cycle_iterations, 1);
+    }
+
+    #[test]
+    fn model_params_deserialises_price_cycle_iterations() {
+        let model_params: ModelParameters =
+            toml::from_str("milestone_years = [2020, 2100]\nprice_cycle_iterations = 3").unwrap();
+
+        assert_eq!(model_params.price_cycle_iterations, 3);
     }
 
     #[test]
@@ -582,6 +604,21 @@ mod tests {
             expected_valid,
             value,
             "max_ironing_out_iterations cannot be zero",
+        );
+    }
+
+    #[rstest]
+    #[case(1, true)]
+    #[case(10, true)]
+    #[case(0, false)]
+    fn check_price_cycle_iterations_works(#[case] value: u32, #[case] expected_valid: bool) {
+        let result = check_price_cycle_iterations(value);
+
+        assert_validation_result(
+            result,
+            expected_valid,
+            value,
+            "price_cycle_iterations cannot be zero",
         );
     }
 
