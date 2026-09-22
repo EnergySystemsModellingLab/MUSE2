@@ -162,6 +162,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///   `i` comes before `j`, then `j` cannot be before `i`).
 /// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic (i.e. if
 ///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
+/// * Incoming-edge constraints require every market without an external incoming edge to retain at
+///   least one correctly ordered incoming edge within the SCC.
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
 ///   market to a later one), counted within the original SCC and treated as unit penalties. A small
 ///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
@@ -361,18 +363,20 @@ fn order_sccs(
                     continue;
                 }
 
-                // We need to know whether the original graph contains j -> i.
+                // Check if the original graph contains j -> i.
                 if original_graph
                     .find_edge(original_indices[j], original_indices[i])
                     .is_some()
                 {
-                    // Variable saying whether i comes before j
+                    // Get the variable saying whether i comes before j (i.e. "correct" ordering
+                    // for a j -> i edge) and add it to the terms
                     incoming_terms.push((vars[i][j].unwrap(), 1.0));
                 }
             }
 
             // If the node has an incoming edge from outside the SCC, then it doesn't need a
-            // correctly-ordered internal incoming edge. Otherwise it does.
+            // correctly-ordered internal incoming edge. Otherwise it does (i.e. a least one
+            // variable in `incoming_terms` must be 1.0)
             let required = if has_external_incoming[i] { 0.0 } else { 1.0 };
             problem.add_row(required.., incoming_terms);
         }
