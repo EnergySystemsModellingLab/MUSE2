@@ -124,11 +124,11 @@ those furthest upstream relative to the rest of the system (i.e., furthest from 
 downstream of the SCC), and working down. Marginal cost calculations use newly updated prices for
 input commodities already evaluated in the sequence, and fall back to the seeded shadow prices for
 any not yet evaluated, which may occur due to circular dependencies.
-<!-- Currently a hidden option, TBD whether we want to open this up: -->
-<!-- 2. **Iterative Refinement:** An iterative loop runs for a fixed number of iterations,
+3. **Iterative Refinement:** This process repeats for a fixed number of iterations,
 re-evaluating each market in the cycle in reverse order (starting with those
 furthest from commodities downstream of the SCC) to propagate the feedback effects through the
-circular markets. -->
+circular markets. The number of iterations is controlled by the `price_cycle_iterations` parameter
+in `model.toml` (default = 1 means just a single pass).
 
 <!-- markdownlint-disable MD024 -->
 ## Example
