@@ -183,7 +183,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
 /// A ← B ← C ← A
 /// ```
 ///
-/// Additionally, C has an outgoing edge to a node outside the cycle, and B has an incoming edge.
+/// Additionally, C has an outgoing edge to a node downstream of the cycle, and B has an incoming
+/// edge from upstream.
 ///
 /// The costs matrix in the MILP is set up to penalise any edge that points “forward” in the final
 /// order: if there's an edge from X to Y we prefer to place Y before X so the edge points backwards:
@@ -206,8 +207,19 @@ fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
 ///    | C | 0 | 1 | 0     |
 /// ```
 ///
-/// Solving this problem with binary decision variables for each `x[i][j]`, and constraints to enforce
-/// antisymmetry and transitivity, yields optimal decision variables of:
+/// Additionally, each node must retain at least one incoming edge from a node that appears after it
+/// in the final investment order. This includes edges within the SCC and any external incoming
+/// edges. In this example, since B has an incoming edge from outside the SCC, this constraint
+/// implies that only A and C must retain a correctly-ordered incoming edge from within the SCC:
+///
+/// ```text
+///    x[A][B] >= 1
+///    x[B][C] >= 0
+///    x[C][A] >= 1
+/// ```
+///
+/// Solving this problem with binary decision variables for each `x[i][j]`, and additional
+/// constraints to enforce antisymmetry and transitivity, yields optimal decision variables of:
 ///
 /// ```text
 ///    x[A][B] = 1 (A before B)
@@ -230,6 +242,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
 /// * The preference towards having exporter markets early in the order keeps C at the front.
 /// * As with any SCC, at least one pairwise violation is guaranteed. In this ordering, the only
 ///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
+/// * This pairwise violation is permitted because B has an additional producer upstream of the SCC.
 ///
 /// The resulting order replaces the original `MarketSet::Cycle` entry inside the condensed
 /// graph, providing a deterministic processing sequence for downstream logic.
