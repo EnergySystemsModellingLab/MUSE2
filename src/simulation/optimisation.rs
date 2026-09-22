@@ -8,6 +8,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
+use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, anyhow, bail};
@@ -401,6 +402,7 @@ pub struct DispatchRun<'model, 'run> {
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
     markets_to_balance: &'run [(CommodityID, RegionID)],
+    market_demands: &'run AllDemandMap,
     input_prices: Option<&'run PriceMap>,
     include_commodity_constraints: bool,
     year: u32,
@@ -408,12 +410,18 @@ pub struct DispatchRun<'model, 'run> {
 
 impl<'model, 'run> DispatchRun<'model, 'run> {
     /// Create a new [`DispatchRun`] for the specified model and assets for a given year
-    pub fn new(model: &'model Model, assets: &'run [AssetRef], year: u32) -> Self {
+    pub fn new(
+        model: &'model Model,
+        assets: &'run [AssetRef],
+        year: u32,
+        market_demands: &'run AllDemandMap,
+    ) -> Self {
         Self {
             model,
             existing_assets: assets,
             candidate_assets: &[],
             markets_to_balance: &[],
+            market_demands,
             input_prices: None,
             include_commodity_constraints: true,
             year,
@@ -691,6 +699,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             self.model,
             &all_assets,
             markets_to_balance,
+            self.market_demands,
             self.year,
             self.candidate_assets,
             include_commodity_constraints,
