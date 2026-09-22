@@ -264,6 +264,9 @@ pub fn select_assets_for_cycle(
     let market_order: HashMap<_, _> = markets.iter().enumerate().map(|(i, m)| (m, i)).collect();
     let mut feedback_processes: Vec<(ProcessID, RegionID)> = Vec::new();
     for (process_id, process) in &model.processes {
+        if !process.active_for_year(year) {
+            continue;
+        }
         let Some(primary_output) = &process.primary_output else {
             continue;
         };
