@@ -354,26 +354,26 @@ fn order_sccs(
         }
 
         // Every SCC node must retain at least one correctly-ordered incoming edge.
-        for j in 0..n {
+        for i in 0..n {
             let mut incoming_terms = Vec::new();
-            for i in 0..n {
+            for j in 0..n {
                 if i == j {
                     continue;
                 }
 
-                // We need to know whether the original graph contains i -> j.
-                // If so, x[i][j] represents that edge being retained.
+                // We need to know whether the original graph contains j -> i.
                 if original_graph
-                    .find_edge(original_indices[i], original_indices[j])
+                    .find_edge(original_indices[j], original_indices[i])
                     .is_some()
                 {
+                    // Variable saying whether i comes before j
                     incoming_terms.push((vars[i][j].unwrap(), 1.0));
                 }
             }
 
             // If the node has an incoming edge from outside the SCC, then it doesn't need a
             // correctly-ordered internal incoming edge. Otherwise it does.
-            let required = if has_external_incoming[j] { 0.0 } else { 1.0 };
+            let required = if has_external_incoming[i] { 0.0 } else { 1.0 };
             problem.add_row(required.., incoming_terms);
         }
 
