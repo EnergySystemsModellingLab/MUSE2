@@ -1,0 +1,18 @@
+src/simulation/market.rs
+  h_e76403a1cd4bf1 4,239,241,294,305-306
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 4,12,266
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 12,459,479-480,482-486,488-489,491-492,506,543,553
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "683c8661ff71fd1f092dea0a85e4db10ea6bdbb7",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
