@@ -183,7 +183,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
 /// A ← B ← C ← A
 /// ```
 ///
-/// Additionally, C has an outgoing edge to a node outside the cycle.
+/// Additionally, C has an outgoing edge to a node outside the cycle, and B has an incoming edge.
 ///
 /// The costs matrix in the MILP is set up to penalise any edge that points “forward” in the final
 /// order: if there's an edge from X to Y we prefer to place Y before X so the edge points backwards:
@@ -254,6 +254,15 @@ fn order_sccs(
             continue;
         }
 
+        // String representation of SCC for error messages
+        let scc_display = format!(
+            "({})",
+            scc.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
         // Capture current order and resolve each market set back to its original graph index.
         let original_order = scc.clone();
         let original_indices = original_order
@@ -299,7 +308,10 @@ fn order_sccs(
 
         // Make sure the SCC has at least one external incoming edge - panic if not as this should
         // not happen
-        assert!(has_external_incoming.contains(&true), "SCC has no inputs");
+        assert!(
+            has_external_incoming.contains(&true),
+            "SCC {scc_display} has no inputs"
+        );
 
         // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
         for (j, has_external) in has_external_outgoing.iter().enumerate() {
@@ -384,15 +396,6 @@ fn order_sccs(
             let required = if has_external_incoming[i] { 0.0 } else { 1.0 };
             problem.add_row(required.., incoming_terms);
         }
-
-        // String representation of SCC for error messages
-        let scc_display = format!(
-            "({})",
-            scc.iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
 
         // Solve model
         let model = problem.optimise(Sense::Minimise);
@@ -576,12 +579,22 @@ mod tests {
                 GraphEdge::Primary("process1".into()),
             );
         }
-        // External market receiving exports from C; encourages C to appear early.
-        let external = original.add_node(MarketSet::Single(("X".into(), "GBR".into())));
+        // Downstream market receives exports from C; encourages C to appear early.
+        let downstream = original.add_node(MarketSet::Single(("X".into(), "GBR".into())));
         original.add_edge(
             node_indices[2],
-            external,
+            downstream,
             GraphEdge::Primary("process2".into()),
+        );
+
+        // B receives imports from an upstream market, which permits internal B-producers to come
+        // before B in the investment order. Note: without at least one upstream input SCC ordering
+        // will fail
+        let upstream = original.add_node(MarketSet::Single(("Y".into(), "GBR".into())));
+        original.add_edge(
+            upstream,
+            node_indices[1],
+            GraphEdge::Primary("process3".into()),
         );
 
         // Single SCC containing all markets.
@@ -592,6 +605,7 @@ mod tests {
 
         // Expected order corresponds to the example in the doc comment.
         // Note that C should be first, as it has an outgoing edge to the external market.
+        // B is last because it receives inputs from upstream
         let expected = ["C", "A", "B"]
             .map(|id| MarketSet::Single((id.into(), "GBR".into())))
             .to_vec();
@@ -631,30 +645,34 @@ mod tests {
 
     #[rstest]
     fn solve_investment_order_cyclic_graph(sed_commodity: Commodity) {
-        // Create a simple cyclic graph: A -> B -> A
+        // Create a simple cyclic graph: X -> A -> B -> A
         let mut graph = Graph::new();
 
+        let node_x = graph.add_node(GraphNode::Commodity("X".into()));
         let node_a = graph.add_node(GraphNode::Commodity("A".into()));
         let node_b = graph.add_node(GraphNode::Commodity("B".into()));
 
-        // Add edges creating a cycle: A -> B -> A
+        // Add edges creating a cycle: X -> A -> B -> A
+        graph.add_edge(node_x, node_a, GraphEdge::Primary("process0".into()));
         graph.add_edge(node_a, node_b, GraphEdge::Primary("process1".into()));
         graph.add_edge(node_b, node_a, GraphEdge::Primary("process2".into()));
 
         // Create commodities map using fixtures
         let mut commodities = CommodityMap::new();
+        commodities.insert("X".into(), Arc::new(sed_commodity.clone()));
         commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
         commodities.insert("B".into(), Arc::new(sed_commodity));
 
         let graphs = IndexMap::from([(("GBR".into(), 2020), graph)]);
         let result = solve_investment_order_for_year(&graphs, &commodities, 2020).unwrap();
 
-        // Should be a single `Cycle` market set containing both commodities
-        assert_eq!(result.len(), 1);
+        // Should be a `Cycle` market set containing both commodities, followed by a `Single`
+        assert_eq!(result.len(), 2);
         assert_eq!(
             result[0],
-            MarketSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
+            MarketSet::Cycle(vec![("B".into(), "GBR".into()), ("A".into(), "GBR".into())])
         );
+        assert_eq!(result[1], MarketSet::Single(("X".into(), "GBR".into())));
     }
 
     #[rstest]
