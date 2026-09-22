@@ -272,7 +272,8 @@ fn order_sccs(
 
         // Record whether any edge inside the original SCC goes from market i to market j; these become penalties.
         let mut penalties = vec![vec![0.0f64; n]; n];
-        let mut has_external_outgoing = vec![false; n];
+        let mut has_external_outgoing: Vec<bool> = vec![false; n];
+        let mut has_external_incoming: Vec<bool> = vec![false; n];
         for (i, &idx) in original_indices.iter().enumerate() {
             // Loop over the edges going out of this node
             for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
@@ -283,6 +284,13 @@ fn order_sccs(
                 // Otherwise, mark that i has an outgoing edge to outside the SCC
                 } else {
                     has_external_outgoing[i] = true;
+                }
+            }
+
+            // Check whether this node has any incoming edges from outside the SCC
+            for edge in original_graph.edges_directed(idx, Direction::Incoming) {
+                if !index_position.contains_key(&edge.source()) {
+                    has_external_incoming[i] = true;
                 }
             }
         }
@@ -343,6 +351,30 @@ fn order_sccs(
                     problem.add_row(..=2.0, [(x_ij, 1.0), (x_jk, 1.0), (x_ki, 1.0)]);
                 }
             }
+        }
+
+        // Every SCC node must retain at least one correctly-ordered incoming edge.
+        for j in 0..n {
+            let mut incoming_terms = Vec::new();
+            for i in 0..n {
+                if i == j {
+                    continue;
+                }
+
+                // We need to know whether the original graph contains i -> j.
+                // If so, x[i][j] represents that edge being retained.
+                if original_graph
+                    .find_edge(original_indices[i], original_indices[j])
+                    .is_some()
+                {
+                    incoming_terms.push((vars[i][j].unwrap(), 1.0));
+                }
+            }
+
+            // If the node has an incoming edge from outside the SCC, then it doesn't need a
+            // correctly-ordered internal incoming edge. Otherwise it does.
+            let required = if has_external_incoming[j] { 0.0 } else { 1.0 };
+            problem.add_row(required.., incoming_terms);
         }
 
         let model = problem.optimise(Sense::Minimise);
