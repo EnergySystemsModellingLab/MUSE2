@@ -14,9 +14,6 @@ use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
-/// Number of iterations to perform when calculating prices for cyclically-dependent markets.
-const N_CYCLE_ITERATIONS: i32 = 1;
-
 /// Weighted average accumulator for `MoneyPerFlow` prices.
 #[derive(Clone, Copy, Debug)]
 struct WeightedAverageAccumulator<W: UnitType> {
@@ -359,7 +356,7 @@ fn price_cycle(
     }
 
     // Iterate over the markets for a fixed number of iterations, updating prices each time
-    for _ in 0..N_CYCLE_ITERATIONS {
+    for _ in 0..model.parameters.price_cycle_iterations {
         // Price markets in reverse order (i.e. upstream markets first)
         for market in markets.iter().rev() {
             price_markets(
