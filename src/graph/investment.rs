@@ -148,6 +148,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 ///   `i` comes before `j`, then `j` cannot be before `i`).
 /// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic (i.e. if
 ///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
+/// * Incoming-edge constraints require every market without an external incoming edge to retain at
+///   least one correctly ordered incoming edge within the SCC.
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
 ///   market to a later one), counted within the original SCC and treated as unit penalties. A small
 ///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
@@ -258,7 +260,8 @@ fn order_sccs(
 
         // Record whether any edge inside the original SCC goes from market i to market j; these become penalties.
         let mut penalties = vec![vec![0.0f64; n]; n];
-        let mut has_external_outgoing = vec![false; n];
+        let mut has_external_outgoing: Vec<bool> = vec![false; n];
+        let mut has_external_incoming: Vec<bool> = vec![false; n];
         for (i, &idx) in original_indices.iter().enumerate() {
             // Loop over the edges going out of this node
             for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
@@ -269,6 +272,13 @@ fn order_sccs(
                 // Otherwise, mark that i has an outgoing edge to outside the SCC
                 } else {
                     has_external_outgoing[i] = true;
+                }
+            }
+
+            // Check whether this node has any incoming edges from outside the SCC
+            for edge in original_graph.edges_directed(idx, Direction::Incoming) {
+                if !index_position.contains_key(&edge.source()) {
+                    has_external_incoming[i] = true;
                 }
             }
         }
@@ -329,6 +339,32 @@ fn order_sccs(
                     problem.add_row(..=2.0, [(x_ij, 1.0), (x_jk, 1.0), (x_ki, 1.0)]);
                 }
             }
+        }
+
+        // Every SCC node must retain at least one correctly-ordered incoming edge.
+        for i in 0..n {
+            let mut incoming_terms = Vec::new();
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+
+                // Check if the original graph contains j -> i.
+                if original_graph
+                    .find_edge(original_indices[j], original_indices[i])
+                    .is_some()
+                {
+                    // Get the variable saying whether i comes before j (i.e. "correct" ordering
+                    // for a j -> i edge) and add it to the terms
+                    incoming_terms.push((vars[i][j].unwrap(), 1.0));
+                }
+            }
+
+            // If the node has an incoming edge from outside the SCC, then it doesn't need a
+            // correctly-ordered internal incoming edge. Otherwise it does (i.e. a least one
+            // variable in `incoming_terms` must be 1.0)
+            let required = if has_external_incoming[i] { 0.0 } else { 1.0 };
+            problem.add_row(required.., incoming_terms);
         }
 
         let model = problem.optimise(Sense::Minimise);
