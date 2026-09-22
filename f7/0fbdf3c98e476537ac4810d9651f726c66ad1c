@@ -1,0 +1,18 @@
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 188-190
+src/simulation/market.rs
+  h_e76403a1cd4bf1 254-255,337,362-365,367-369,373,375
+examples/circularity/processes.csv
+  h_e76403a1cd4bf1 9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f70fbdf3c98e476537ac4810d9651f726c66ad1c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
