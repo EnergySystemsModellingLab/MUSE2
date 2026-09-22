@@ -1,0 +1,15 @@
+src/graph/investment.rs
+  h_e76403a1cd4bf1 186,257-265,313,582-583,586,590-599,608,648,651,655-656,662,669-670,673,675
+  h_e76403a1cd4bf1 311-312,314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "541dc2aa765523601bfb2961e4c86f1dd809b79c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
