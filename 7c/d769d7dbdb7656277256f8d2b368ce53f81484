@@ -1,0 +1,35 @@
+src/simulation/prices.rs
+  h_e76403a1cd4bf1 359
+src/model/parameters.rs
+  h_e76403a1cd4bf1 117,157,270-271,368-369,444,448,450,452,614-615,621
+  s_5e93f4698e45a7::t_d5d3d0b8f0a5bf 116,269,272-275,445-447,449,451,610-613,616-620,623
+  s_5e93f4698e45a7::t_d1918cf725aa42 624
+  h_e76403a1cd4bf1 370,622
+schemas/input/model.yaml
+  h_e76403a1cd4bf1 94
+  s_5e93f4698e45a7::t_d5d3d0b8f0a5bf 95-97
+docs/release_notes/upcoming.md
+  s_5e93f4698e45a7::t_d5d3d0b8f0a5bf 6
+  h_e76403a1cd4bf1 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7cd769d7dbdb7656277256f8d2b368ce53f81484",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_5e93f4698e45a7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "d211824c-efa3-4309-bbc0-578212d6779c",
+        "model": "copilot/gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
