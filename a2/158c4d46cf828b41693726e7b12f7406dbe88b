@@ -1,0 +1,25 @@
+src/graph/investment.rs
+  h_e76403a1cd4bf1 166,366,371-372,378-379
+  s_6c70c01ad69c55::t_43a12a3ee06042 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a2158c4d46cf828b41693726e7b12f7406dbe88b",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_6c70c01ad69c55": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "f4de70f8-3124-4432-8bc0-b16b6d77db58",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
