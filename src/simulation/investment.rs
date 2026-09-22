@@ -56,7 +56,8 @@ pub fn perform_agent_investment(
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Initialise net demand map
-    let mut net_demand = collect_preset_demands_for_year(&model.commodities, year);
+    let preset_demands = collect_preset_demands_for_year(&model.commodities, year);
+    let mut net_demand = preset_demands.clone();
 
     // Keep a list of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -110,7 +111,7 @@ pub fn perform_agent_investment(
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected_assets, year)
+        let solution = DispatchRun::new(model, &all_selected_assets, year, &preset_demands)
             .without_commodity_constraints()
             .with_market_balance_subset(&seen_markets)
             .with_input_prices(&prices.shadow)
@@ -179,10 +180,14 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
                 let selection = level.containing_selection(time_slice);
                 let key = (commodity_id.clone(), asset.region_id().clone(), selection);
                 // Note: we use the negative of the flow as input flows are negative in the flow map.
-                demand
+                let value = demand
                     .entry(key)
                     .and_modify(|value| *value -= *flow)
                     .or_insert(-*flow);
+
+                if *value < Flow(0.0) {
+                    *value = Flow(0.0);
+                }
             }
         }
     }
