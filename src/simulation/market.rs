@@ -341,6 +341,7 @@ pub fn select_assets_for_cycle(
         let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
             .without_commodity_constraints()
             .with_market_balance_subset(std::slice::from_ref(market))
+            .with_input_prices(&prices.shadow)
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1"),
                 writer,
@@ -410,6 +411,7 @@ pub fn select_assets_for_cycle(
         let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
             .without_commodity_constraints()
             .with_market_balance_subset(std::slice::from_ref(market))
+            .with_input_prices(&prices.shadow)
             .run(
                 &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
                 writer,
