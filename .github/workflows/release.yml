@@ -40,7 +40,7 @@ jobs:
         run: |
           apt update
           apt install -y curl build-essential cmake libclang-16-dev
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
       - run: cargo build --release
       - name: Gather release files
         run: |
