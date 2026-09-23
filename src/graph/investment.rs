@@ -312,6 +312,7 @@ fn order_sccs(
             }
 
             // Check whether this node has any incoming edges from outside the SCC
+            // TODO: this does not currently consider SOURCE nodes - it should!
             for edge in original_graph.edges_directed(idx, Direction::Incoming) {
                 if !index_position.contains_key(&edge.source()) {
                     has_external_incoming[i] = true;
