@@ -46,7 +46,7 @@ fn solve_investment_order_for_year(
     let mut investment_graph = init_investment_graph_for_year(graphs, year, commodities);
 
     // Condense strongly connected components
-    investment_graph = compress_cycles(&investment_graph)?;
+    investment_graph = compress_cycles(&investment_graph, graphs, year)?;
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
@@ -115,12 +115,16 @@ fn init_investment_graph_for_year(
 }
 
 /// Compresses cycles into `MarketSet::Cycle` nodes
-fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
+fn compress_cycles(
+    graph: &InvestmentGraph,
+    graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
+    year: u32,
+) -> Result<InvestmentGraph> {
     // Detect strongly connected components
     let mut condensed_graph = condensation(graph.clone(), true);
 
     // Order nodes within each strongly connected component
-    order_sccs(&mut condensed_graph, graph)?;
+    order_sccs(&mut condensed_graph, graph, graphs, year)?;
 
     // Map to a new InvestmentGraph
     Ok(condensed_graph.map(
@@ -250,6 +254,8 @@ fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
 fn order_sccs(
     condensed_graph: &mut Graph<Vec<MarketSet>, GraphEdge>,
     original_graph: &InvestmentGraph,
+    commodity_graphs: &IndexMap<(RegionID, u32), CommoditiesGraph>,
+    year: u32,
 ) -> Result<()> {
     const EXTERNAL_BIAS: f64 = 0.1;
 
@@ -299,6 +305,20 @@ fn order_sccs(
         let mut has_external_outgoing: Vec<bool> = vec![false; n];
         let mut has_external_incoming: Vec<bool> = vec![false; n];
         for (i, &idx) in original_indices.iter().enumerate() {
+            let (commodity_id, region_id) = original_graph
+                .node_weight(idx)
+                .unwrap()
+                .iter_markets()
+                .next()
+                .unwrap();
+            let commodity_graph = commodity_graphs.get(&(region_id.clone(), year));
+            let commodity_node = commodity_graph.and_then(|commodity_graph| {
+                commodity_graph.node_indices().find(|&node| {
+                    commodity_graph.node_weight(node)
+                        == Some(&GraphNode::Commodity(commodity_id.clone()))
+                })
+            });
+
             // Loop over the edges going out of this node
             for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
                 // If the target j is inside this SCC, record a penalty for putting i before j
@@ -311,8 +331,15 @@ fn order_sccs(
                 }
             }
 
-            // Check whether this node has any incoming edges from outside the SCC
-            // TODO: this does not currently consider SOURCE nodes - it should!
+            // Check whether this node has any incoming edges from outside the SCC or from SOURCE.
+            has_external_incoming[i] =
+                commodity_graph
+                    .zip(commodity_node)
+                    .is_some_and(|(commodity_graph, node)| {
+                        commodity_graph
+                            .edges_directed(node, Direction::Incoming)
+                            .any(|edge| commodity_graph[edge.source()] == GraphNode::Source)
+                    });
             for edge in original_graph.edges_directed(idx, Direction::Incoming) {
                 if !index_position.contains_key(&edge.source()) {
                     has_external_incoming[i] = true;
@@ -327,7 +354,7 @@ fn order_sccs(
             "SCC {scc_display} has no inputs"
         );
 
-        // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
+        // Bias: if market j has outgoing edges to nodes outside the SCC, we prefer to place it earlier.
         for (j, has_external) in has_external_outgoing.iter().enumerate() {
             if *has_external {
                 for (row_idx, row) in penalties.iter_mut().enumerate() {
@@ -615,7 +642,7 @@ mod tests {
         let mut condensed: Graph<Vec<MarketSet>, GraphEdge> = Graph::new();
         let component = condensed.add_node(markets.to_vec());
 
-        order_sccs(&mut condensed, &original).unwrap();
+        order_sccs(&mut condensed, &original, &IndexMap::new(), 2020).unwrap();
 
         // Expected order corresponds to the example in the doc comment.
         // Note that C should be first, as it has an outgoing edge to the external market.
