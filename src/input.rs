@@ -1,6 +1,8 @@
 //! Common routines for handling input data.
 use crate::graph::investment::solve_investment_order_for_model;
-use crate::graph::validate::validate_commodity_graphs_for_model;
+use crate::graph::validate::{
+    validate_commodity_graphs_for_model, validate_non_feedback_commodity_graphs_for_model,
+};
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
 use crate::id::{HasID, ID};
 use crate::model::{Model, ModelParameters};
@@ -289,6 +291,12 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
     // Build and validate commodity graphs for all regions and years
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
     validate_commodity_graphs_for_model(
+        &commodity_graphs,
+        &processes,
+        &commodities,
+        &time_slice_info,
+    )?;
+    validate_non_feedback_commodity_graphs_for_model(
         &commodity_graphs,
         &processes,
         &commodities,
