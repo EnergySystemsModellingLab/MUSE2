@@ -48,6 +48,8 @@ At a high level, the user defines:
    rules. Portions of demand for each commodity must be assigned to an agent, and the sum of these
    portions must be one.
 
+The temporal arrangements described above are explained in more detail in [Time](time.md).
+
 ## Framework Overview
 
 The model operates sequentially across a series of milestone years (MSYs). For the base year,
