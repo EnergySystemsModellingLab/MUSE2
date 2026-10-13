@@ -27,10 +27,12 @@ pub type Variable = highs::Col;
 
 /// Map containing optimisation results and coefficients
 pub struct ResultsMap {
-    /// Activity variables in each time slice
-    pub activity: IndexMap<TimeSliceID, Activity>,
+    /// Activity variables in each time slice for the asset of interest
+    pub asset_activity: IndexMap<TimeSliceID, Activity>,
     /// Remaining unmet demand per time slice, computed post-solve
     pub unmet_demand: DemandMap,
+    /// Full solution to the optimisation (activities of all assets)
+    pub solution: IndexMap<(AssetRef, TimeSliceID), Activity>,
 }
 
 /// Adds activity variables to the problem, one per time slice.
@@ -121,6 +123,7 @@ pub fn perform_optimisation(
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
+    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
 ) -> Result<ResultsMap> {
     // Record hypothetical asset selection
     let mut assets = selected_assets.to_vec();
@@ -170,16 +173,23 @@ pub fn perform_optimisation(
         &model.time_slice_info,
     );
 
-    // Collect activity for the asset of interest
-    // TODO: this should be marginal activity
-    let activity = all_activity
+    // Calculate marginal activity for this asset: current - previous
+    let marginal_activity: IndexMap<_, _> = all_activity
         .iter()
         .filter(|&((a, _ts), _value)| a == asset)
-        .map(|((_a, ts), value)| (ts.clone(), *value))
+        .map(|((_a, ts), current_value)| {
+            let previous_value = previous_solution
+                .get(&(asset.clone(), ts.clone()))
+                .copied()
+                .unwrap_or(Activity(0.0));
+
+            (ts.clone(), *current_value - previous_value)
+        })
         .collect();
 
     Ok(ResultsMap {
-        activity,
+        asset_activity: marginal_activity,
         unmet_demand,
+        solution: all_activity,
     })
 }
