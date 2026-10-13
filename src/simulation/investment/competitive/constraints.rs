@@ -18,21 +18,24 @@ use indexmap::IndexMap;
 /// sum of activity in that selection.
 pub fn add_activity_constraints(
     problem: &mut Problem,
-    asset: &AssetRef,
-    activity_vars: &IndexMap<TimeSliceID, Variable>,
+    assets: &[AssetRef],
+    activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
     time_slice_info: &TimeSliceInfo,
 ) {
-    for (ts_selection, limits) in asset.iter_activity_limits() {
-        let limits = limits.start().value()..=limits.end().value();
+    // Create constraints for each asset
+    for asset in assets {
+        for (ts_selection, limits) in asset.iter_activity_limits() {
+            let limits = limits.start().value()..=limits.end().value();
 
-        // Collect activity terms for the time slices in this selection
-        let terms = ts_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| (activity_vars[time_slice], 1.0))
-            .collect::<Vec<_>>();
+            // Collect activity terms for the time slices in this selection
+            let terms = ts_selection
+                .iter(time_slice_info)
+                .map(|(time_slice, _)| (activity_vars[&(asset.clone(), time_slice.clone())], 1.0))
+                .collect::<Vec<_>>();
 
-        // Constraint: sum of activities in selection within limits
-        problem.add_row(limits, &terms);
+            // Constraint: sum of activities in selection within limits
+            problem.add_row(limits, &terms);
+        }
     }
 }
 
@@ -43,20 +46,33 @@ pub fn add_activity_constraints(
 /// flow coefficients) to the total demand for that selection.
 pub fn add_demand_constraints(
     problem: &mut Problem,
-    asset: &AssetRef,
+    assets: &[AssetRef],
     commodity: &Commodity,
     time_slice_info: &TimeSliceInfo,
     demand: &DemandMap,
-    activity_vars: &IndexMap<TimeSliceID, Variable>,
+    activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
 ) {
-    let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
+    // Create a constraint for each ts-selection
     for ts_selection in time_slice_info.iter_selections_at_level(commodity.time_slice_level) {
-        let demand_for_ts_selection = demand[&ts_selection];
-        let terms: Vec<_> = ts_selection
-            .iter(time_slice_info)
-            .map(|(time_slice, _)| (activity_vars[time_slice], flow_coeff.value()))
-            .collect();
-        problem.add_row(0.0..=demand_for_ts_selection.value(), terms);
+        // Collect terms: all assets in all time slices in the selection
+        let terms = assets
+            .iter()
+            .flat_map(|asset| {
+                let coefficient = asset.get_flow(&commodity.id).unwrap().coeff.value();
+
+                ts_selection
+                    .iter(time_slice_info)
+                    .map(move |(time_slice, _)| {
+                        (
+                            activity_vars[&(asset.clone(), time_slice.clone())],
+                            coefficient,
+                        )
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        // Create the constraint
+        problem.add_row(0.0..=demand[&ts_selection].value(), terms);
     }
 }
 
@@ -65,6 +81,7 @@ pub fn add_demand_constraints(
 /// This is almost identical to equivalent constraints in the full-system dispatch, but here we
 /// make the penalties negative as this is a maximise optimisation (whereas dispatch is a minimise
 /// optimisation).
+#[allow(dead_code)]
 pub fn add_utilisation_peak_constraints(
     problem: &mut Problem,
     model: &Model,
