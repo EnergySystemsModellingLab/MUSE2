@@ -32,6 +32,7 @@ use metrics::{
 use output::write_debug_info;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// Select assets for an agent to meet its share of demand for a commodity in a region.
 ///
@@ -274,6 +275,7 @@ pub fn select_best_assets(
     let mut round = 0;
     let mut selected_assets: Vec<AssetRef> = Vec::new();
     let mut unmet_demand = demand.clone();
+    let mut previous_solution = IndexMap::new();
     while is_any_remaining_demand(
         &unmet_demand,
         model.parameters.remaining_demand_absolute_tolerance,
@@ -314,6 +316,7 @@ pub fn select_best_assets(
                     objective_type,
                     &coefficients,
                     demand,
+                    &previous_solution,
                 )?))
             })
             .collect::<Result<Vec<_>>>()? // propagate any solver error
@@ -371,6 +374,7 @@ pub fn select_best_assets(
 
         // Record the selected asset
         record_asset_selection(best_output.asset, &mut selected_assets);
+        previous_solution = best_output.solution;
 
         unmet_demand = best_output.unmet_demand;
         round += 1;
