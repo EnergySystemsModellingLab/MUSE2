@@ -15,6 +15,7 @@ use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod coefficients;
@@ -214,25 +215,33 @@ impl MetricTrait for NPVMetric {}
 /// The returned `metric` is the LCOX value (lower is better).
 fn calculate_lcox(
     model: &Model,
+    selected_assets: &[AssetRef],
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
+    let results = perform_optimisation(
+        model,
+        selected_assets,
+        asset,
+        commodity,
+        coefficients,
+        demand,
+    )?;
 
     let cost_index = lcox(
         asset.total_capacity(),
         annual_fixed_cost(asset),
         &results.activity,
-        &coefficients.market_costs,
+        &coefficients[asset].market_costs,
     );
 
     Ok(AppraisalOutput::new(
         asset.clone(),
         results,
         cost_index.map(LCOXMetric::new),
-        coefficients.clone(),
+        coefficients[asset].clone(),
     ))
 }
 
@@ -243,12 +252,20 @@ fn calculate_lcox(
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 fn calculate_npv(
     model: &Model,
+    selected_assets: &[AssetRef],
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
+    let results = perform_optimisation(
+        model,
+        selected_assets,
+        asset,
+        commodity,
+        coefficients,
+        demand,
+    )?;
 
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
@@ -260,14 +277,14 @@ fn calculate_npv(
         asset.total_capacity(),
         annual_fixed_cost,
         &results.activity,
-        &coefficients.market_costs,
+        &coefficients[asset].market_costs,
     );
 
     Ok(AppraisalOutput::new(
         asset.clone(),
         results,
         snas.map(NPVMetric::new),
-        coefficients.clone(),
+        coefficients[asset].clone(),
     ))
 }
 
@@ -279,17 +296,25 @@ fn calculate_npv(
 /// comparable with other appraisals of the same type (npv/lcox).
 pub fn appraise_investment(
     model: &Model,
+    selected_assets: &[AssetRef],
     asset: &AssetRef,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,
         ObjectiveType::NetPresentValue => calculate_npv,
     };
-    appraisal_method(model, asset, commodity, coefficients, demand)
+    appraisal_method(
+        model,
+        selected_assets,
+        asset,
+        commodity,
+        coefficients,
+        demand,
+    )
 }
 
 /// Compare assets as a fallback if metrics are equal.
