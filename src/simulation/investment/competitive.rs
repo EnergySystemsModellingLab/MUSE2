@@ -23,6 +23,7 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
 use debug::write_debug_info;
+use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use metrics::{
@@ -273,6 +274,7 @@ pub fn select_best_assets(
     let mut round = 0;
     let mut selected_assets: Vec<AssetRef> = Vec::new();
     let mut unmet_demand = demand.clone();
+    let mut previous_solution = IndexMap::new();
     while is_any_remaining_demand(
         &unmet_demand,
         model.parameters.remaining_demand_absolute_tolerance,
@@ -313,6 +315,7 @@ pub fn select_best_assets(
                     objective_type,
                     &coefficients,
                     demand,
+                    &previous_solution,
                 )?))
             })
             .collect::<Result<Vec<_>>>()? // propagate any solver error
@@ -370,6 +373,7 @@ pub fn select_best_assets(
 
         // Record the selected asset
         record_asset_selection(best_output.asset, &mut selected_assets);
+        previous_solution = best_output.solution;
 
         unmet_demand = best_output.unmet_demand;
         round += 1;
