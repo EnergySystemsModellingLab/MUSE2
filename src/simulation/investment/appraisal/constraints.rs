@@ -4,6 +4,7 @@ use super::optimisation::Variable;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::simulation::optimisation::group_dispatch_equivalent_assets;
 use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{MoneyPerCapacityPerYear, Year};
 use highs::RowProblem as Problem;
@@ -203,6 +204,53 @@ fn add_annual_peak_constraints(
                 0.0..,
                 [(annual_peak_variable, 1.0), (*seasonal_peak_variable, -1.0)],
             );
+        }
+    }
+}
+
+/// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
+/// slice.
+///
+/// Flexible-capacity assets are excluded because their maximum activity depends on a decision
+/// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
+/// are not currently used.
+pub fn add_equal_utilisation_constraints(
+    problem: &mut Problem,
+    activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
+    time_slice_info: &TimeSliceInfo,
+    assets: &[AssetRef],
+) {
+    let asset_groups = group_dispatch_equivalent_assets(assets.iter());
+
+    // For each group of assets, add constraints to force equal utilisation in each time slice
+    // This is done by anchoring each asset to the first asset in the group (-> (n-1) constraints
+    // for a group of n assets)
+    for assets in asset_groups {
+        let Some((reference_asset, others)) = assets.split_first() else {
+            continue;
+        };
+
+        let reference_max = reference_asset.max_activity().value();
+
+        for asset in others {
+            let asset_max = asset.max_activity().value();
+
+            for time_slice in time_slice_info.iter_ids() {
+                // Constraint: (act_a * max_b) - (act_b * max_a) = 0
+                problem.add_row(
+                    0.0..=0.0,
+                    [
+                        (
+                            activity_vars[&((*asset).clone(), time_slice.clone())],
+                            reference_max,
+                        ),
+                        (
+                            activity_vars[&((*reference_asset).clone(), time_slice.clone())],
+                            -asset_max,
+                        ),
+                    ],
+                );
+            }
         }
     }
 }

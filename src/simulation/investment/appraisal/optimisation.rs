@@ -2,7 +2,8 @@
 use super::DemandMap;
 use super::ObjectiveCoefficients;
 use super::constraints::{
-    add_activity_constraints, add_demand_constraints, add_utilisation_peak_constraints,
+    add_activity_constraints, add_demand_constraints, add_equal_utilisation_constraints,
+    add_utilisation_peak_constraints,
 };
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
@@ -73,6 +74,7 @@ fn add_constraints(
         demand,
         activity_vars,
     );
+    add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
 }
 
 /// Computes remaining unmet demand per time-slice selection after a solve.
