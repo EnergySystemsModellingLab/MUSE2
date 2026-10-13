@@ -20,6 +20,7 @@ use std::error::Error;
 use std::ops::Range;
 
 mod constraints;
+pub(crate) use constraints::group_dispatch_equivalent_assets;
 use constraints::{ConstraintKeys, add_model_constraints};
 
 /// A map of commodity flows calculated during the optimisation
