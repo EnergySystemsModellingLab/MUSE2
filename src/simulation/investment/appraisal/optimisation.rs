@@ -1,7 +1,9 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
 use super::ObjectiveCoefficients;
-use super::constraints::{add_activity_constraints, add_demand_constraints};
+use super::constraints::{
+    add_activity_constraints, add_demand_constraints, add_utilisation_peak_constraints,
+};
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
@@ -52,6 +54,7 @@ fn add_activity_vars(
 /// Adds constraints to the problem.
 fn add_constraints(
     problem: &mut Problem,
+    model: &Model,
     assets: &[AssetRef],
     commodity: &Commodity,
     activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
@@ -59,6 +62,7 @@ fn add_constraints(
     time_slice_info: &TimeSliceInfo,
 ) {
     add_activity_constraints(problem, assets, activity_vars, time_slice_info);
+    add_utilisation_peak_constraints(problem, model, assets, activity_vars);
     add_demand_constraints(
         problem,
         assets,
@@ -67,7 +71,6 @@ fn add_constraints(
         demand,
         activity_vars,
     );
-    // TODO: peak utilisation constraints
 }
 
 /// Computes remaining unmet demand per time-slice selection after a solve.
@@ -130,6 +133,7 @@ pub fn perform_optimisation(
     // Add constraints
     add_constraints(
         &mut problem,
+        model,
         &assets,
         commodity,
         &activity_vars,
