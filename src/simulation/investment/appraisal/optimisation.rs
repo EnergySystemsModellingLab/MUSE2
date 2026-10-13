@@ -11,6 +11,7 @@ use crate::model::Model;
 use crate::simulation::investment::record_asset_selection;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
+use crate::simulation::optimisation::group_dispatch_equivalent_assets;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow};
@@ -175,19 +176,31 @@ pub fn perform_optimisation(
         &model.time_slice_info,
     );
 
-    // Calculate marginal activity for this asset: current - previous
+    // Collect equivalence group for the asset of interest
+    let equivalence_groups = group_dispatch_equivalent_assets(assets.iter());
+    let asset_group = equivalence_groups
+        .iter()
+        .find(|group| group.contains(&asset))
+        .expect("Asset of interest must be present in an equivalence group");
+
+    // Calculate marginal activity for this asset equivalence group - we attribute this all to the
+    // candidate tranche
     let marginal_activity: IndexMap<_, _> = all_activity
         .iter()
-        .filter(|&((a, _ts), _value)| a == asset)
-        .map(|((_a, ts), current_value)| {
-            let previous_value = previous_solution
-                .get(&(asset.clone(), ts.clone()))
-                .copied()
-                .unwrap_or(Activity(0.0));
+        .filter(|((asset, _ts), _value)| asset_group.contains(&asset))
+        .fold(
+            IndexMap::new(),
+            |mut marginal, ((candidate, ts), current_value)| {
+                let previous_value = previous_solution
+                    .get(&(candidate.clone(), ts.clone()))
+                    .copied()
+                    .unwrap_or(Activity(0.0));
 
-            (ts.clone(), *current_value - previous_value)
-        })
-        .collect();
+                *marginal.entry(ts.clone()).or_insert(Activity(0.0)) +=
+                    *current_value - previous_value;
+                marginal
+            },
+        );
 
     Ok(ResultsMap {
         asset_activity: marginal_activity,
