@@ -1,0 +1,15 @@
+src/simulation/investment/appraisal/optimisation.rs
+  h_e76403a1cd4bf1 14,179-187,190-193,195,199-202
+  h_e76403a1cd4bf1 194,196-198,203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df55ac682d5ae3631dd6c1eed6d4734e7519c7d8",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}

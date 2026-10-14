@@ -1,0 +1,20 @@
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 376,417,474
+src/fixture.rs
+  h_e76403a1cd4bf1 420
+src/simulation/investment/appraisal.rs
+  h_e76403a1cd4bf1 64-65,78,82,226,235,241,265,274,286,304,313,326,502,777
+src/simulation/investment/appraisal/optimisation.rs
+  h_e76403a1cd4bf1 30-31,34-35,126,176-177,180-187,191,193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1c296d02651260b6ff159876449b345648d8496d",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
