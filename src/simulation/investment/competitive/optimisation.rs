@@ -202,6 +202,38 @@ pub fn perform_optimisation(
             },
         );
 
+    // Note, there are some cases where marginal activity in certain timeslices (and overall) can be
+    // negative (i.e. where adding a tranche to the equivalence group actually decreases activity).
+    // Two known cases where this can happen:
+    //
+    // For annually/seasonally balanced commodities, where increasing capacity hits a binding demand
+    // constraint which then gives the asset freedom to choose the best timeslices to meet demand.
+    // Before the demand constraint is met, the asset will serve using all profitable timeslices.
+    // Once the demand constraint is met, not all timeslices need to be active to meet demand, and
+    // the asset will prioritise the _most_ profitable timeslices, at the expense of less profitable
+    // timeslices which will see their activities fall. In these circumstances individual timeslices
+    // can have negative marginal activity, but marginal activity in each balanced time slice
+    // selection (and the year as a whole) cannot be negative (but may be zero). If marginal
+    // activity for the year is zero then LCOX is undefined and the tranche will not be considered,
+    // even if it would be beneficial for the asset as a whole to add that tranche. This is
+    // something we should consider.
+    //
+    // A second scenario is where there are two different (non-equivalent) assets with identical
+    // marginal cost (despite having different VOC and/or flows), and where moving activity between
+    // the assets isn't prevented by constraints (e.g. activity constraints or utilisation peak
+    // constraints). In this case there will be two identical corner solutions, and adding a tranche
+    // to asset A may inadvertently cause it to switch to the equally good solution where asset B
+    // wins, hence resulting in a decrease in activity (the opposite can also happen where adding a
+    // tranche to asset B switches it to a solution where asset B wins, resulting in artificially
+    // inflated marginal activity). For example, in the simple example for 2021 investments RELCHP
+    // and RGASPB have identical marginal cost in autumn.night and autumn.evening. This is a bigger
+    // problem, going back to the issues of degeneracy and non-deterministic results, and something
+    // we should try to understand better and address at the dispatch stage (which ultimately sets
+    // the shadow prices that determine marginal costs). In the case of investment appraisal, this
+    // can artificially decrease/increase marginal activities resulting in nonsensical LCOX. This is
+    // a problem. It may help to seed each model with the previous solution, to reduce the risk of
+    // flip-flopping, but the underlying issue also needs to be addressed.
+
     Ok(ResultsMap {
         asset_activity: marginal_activity,
         unmet_demand,
