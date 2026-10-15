@@ -78,7 +78,6 @@ missing_panics_doc = "allow"
 implicit_hasher = "allow"
 cast_lossless = "allow"
 return_self_not_must_use = "allow"
-from_iter_instead_of_collect = "allow"
 
 [[bench]]
 name = "examples"
