@@ -244,7 +244,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                                     black_box(&agent),
                                     black_box(region_id),
                                     black_box(&prices),
-                                    demand,
+                                    &demand,
                                     black_box(YEAR),
                                     &mut writer,
                                 )

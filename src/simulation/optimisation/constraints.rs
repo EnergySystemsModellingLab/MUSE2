@@ -545,7 +545,7 @@ where
 ///
 /// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
 /// constraints (i.e. flexible-capacity assets have already been filtered out).
-fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
+pub fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
 where
     I: Iterator<Item = &'a AssetRef>,
 {
