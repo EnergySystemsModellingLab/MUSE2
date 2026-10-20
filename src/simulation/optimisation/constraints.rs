@@ -94,15 +94,15 @@ pub struct ConstraintKeys {
 pub fn add_model_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
-    model: &'a Model,
+    model: &Model,
     assets: &I,
-    markets_to_balance: &'a [(CommodityID, RegionID)],
+    markets_to_balance: &[(CommodityID, RegionID)],
     year: u32,
-    candidate_assets: &'a [AssetRef],
+    candidate_assets: &[AssetRef],
     include_commodity_constraints: bool,
 ) -> ConstraintKeys
 where
-    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+    I: Iterator<Item = &'a AssetRef> + Clone,
 {
     let commodity_balance_keys = add_commodity_balance_constraints(
         problem,
@@ -147,11 +147,11 @@ where
 fn add_commodity_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
-    model: &'a Model,
+    model: &Model,
     assets: &I,
     year: u32,
 ) where
-    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+    I: Iterator<Item = &'a AssetRef> + Clone,
 {
     // Commodity constraints are indexed by milestone year, so commodities without a constraint
     // for this year do not contribute any rows.
@@ -347,14 +347,14 @@ fn add_annual_peak_constraints(
 fn add_commodity_balance_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
-    model: &'a Model,
+    model: &Model,
     assets: &I,
-    markets_to_balance: &'a [(CommodityID, RegionID)],
+    markets_to_balance: &[(CommodityID, RegionID)],
     year: u32,
-    candidate_assets: &'a [AssetRef],
+    candidate_assets: &[AssetRef],
 ) -> CommodityBalanceKeys
 where
-    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+    I: Iterator<Item = &'a AssetRef> + Clone,
 {
     // Row offset in problem. This line **must** come before we add more constraints.
     // It denotes the index in the solver's row ordering that corresponds to the first
@@ -488,7 +488,7 @@ fn add_activity_constraints<'a, I>(
     assets: I,
 ) -> ActivityKeys
 where
-    I: Iterator<Item = &'a AssetRef> + 'a,
+    I: Iterator<Item = &'a AssetRef>,
 {
     // Row offset in problem. This line **must** come before we add more constraints.
     // It denotes the index into the solver's row ordering for the first activity constraint
@@ -610,7 +610,7 @@ fn add_equal_utilisation_constraints<'a, I>(
     time_slice_info: &TimeSliceInfo,
     assets: I,
 ) where
-    I: Iterator<Item = &'a AssetRef> + 'a,
+    I: Iterator<Item = &'a AssetRef>,
 {
     // Identify flexible-capacity assets so we can exclude them from the constraints
     let flexible_assets: HashSet<_> = variables
@@ -664,7 +664,7 @@ fn get_or_add_agent_output_variable<'a, I>(
     key: AgentOutputVariableKey,
 ) -> highs::Col
 where
-    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+    I: Iterator<Item = &'a AssetRef> + Clone,
 {
     // Return the variable if it already exists in the map, otherwise unpack the key
     let entry = match output_variables.entry(key) {
@@ -710,13 +710,13 @@ where
 fn add_agent_share_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
-    model: &'a Model,
+    model: &Model,
     assets: &I,
-    markets_to_balance: &'a [(CommodityID, RegionID)],
+    markets_to_balance: &[(CommodityID, RegionID)],
     year: u32,
     output_variables: &mut AgentOutputVariableMap,
 ) where
-    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+    I: Iterator<Item = &'a AssetRef> + Clone,
 {
     // Iterate over markets to balance
     for (commodity_id, region_id) in markets_to_balance {
