@@ -1,0 +1,31 @@
+src/asset.rs
+  h_e76403a1cd4bf1 723-728
+  s_bac915e3858e48::t_3524b48554a745 722,729-732
+src/simulation/optimisation/constraints.rs
+  s_bac915e3858e48::t_c868d200a1f532 827-828,839-840,845-853,858,860-865,867-869
+  s_bac915e3858e48::t_3524b48554a745 128-137,795-815,817-820,823,825,842,859,866,872
+  h_e76403a1cd4bf1 816,821-822,824,826,831-838,843-844,855-857,870
+  s_bac915e3858e48::t_2b0f64d174281c 841
+  h_e76403a1cd4bf1 829-830,854,871
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa1366a7f5b1f56d8ce61caafb8a4f7d361e6215",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_bac915e3858e48": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "c8a9a007-4854-41d3-a7de-a5fe33b6cb0e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
