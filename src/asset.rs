@@ -1172,20 +1172,17 @@ enum AssetCmp<'a> {
 }
 
 /// Additional methods for iterating over assets
-pub trait AssetIterator<'a>: Iterator<Item = &'a AssetRef> + Sized
-where
-    Self: 'a,
-{
+pub trait AssetIterator<'a>: Iterator<Item = &'a AssetRef> + Sized {
     /// Filter assets by the agent that owns them
-    fn filter_agent(self, agent_id: &'a AgentID) -> impl Iterator<Item = &'a AssetRef> + 'a {
+    fn filter_agent(self, agent_id: &AgentID) -> impl Iterator<Item = &'a AssetRef> {
         self.filter(move |asset| asset.agent_id() == Some(agent_id))
     }
 
     /// Iterate over assets that have the given commodity as a primary output
     fn filter_primary_producers_of(
         self,
-        commodity_id: &'a CommodityID,
-    ) -> impl Iterator<Item = &'a AssetRef> + 'a {
+        commodity_id: &CommodityID,
+    ) -> impl Iterator<Item = &'a AssetRef> {
         self.filter(move |asset| {
             asset
                 .primary_output()
@@ -1194,20 +1191,20 @@ where
     }
 
     /// Filter the assets by region
-    fn filter_region(self, region_id: &'a RegionID) -> impl Iterator<Item = &'a AssetRef> + 'a {
+    fn filter_region(self, region_id: &RegionID) -> impl Iterator<Item = &'a AssetRef> {
         self.filter(move |asset| asset.region_id == *region_id)
     }
 
     /// Iterate over process flows affecting the given commodity
     fn flows_for_commodity(
         self,
-        commodity_id: &'a CommodityID,
-    ) -> impl Iterator<Item = (&'a AssetRef, &'a ProcessFlow)> + 'a {
+        commodity_id: &CommodityID,
+    ) -> impl Iterator<Item = (&'a AssetRef, &'a ProcessFlow)> {
         self.filter_map(|asset| Some((asset, asset.get_flow(commodity_id)?)))
     }
 }
 
-impl<'a, I> AssetIterator<'a> for I where I: Iterator<Item = &'a AssetRef> + Sized + 'a {}
+impl<'a, I> AssetIterator<'a> for I where I: Iterator<Item = &'a AssetRef> {}
 
 #[cfg(test)]
 mod tests {

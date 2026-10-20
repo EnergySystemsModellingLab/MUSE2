@@ -1,5 +1,6 @@
 //! Code for adding constraints to the dispatch optimisation problem.
 use super::VariableMap;
+use crate::agent::AgentID;
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
@@ -10,6 +11,7 @@ use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
+use indexmap::map::Entry;
 use std::collections::{HashMap, HashSet};
 
 /// Corresponding variables for a constraint along with the row offset in the solution
@@ -56,6 +58,12 @@ type SeasonalPeakVariableMap = IndexMap<(AssetRef, Season), highs::Col>;
 
 /// Map containing the annual peak variables for each asset
 type AnnualPeakVariableMap = IndexMap<AssetRef, highs::Col>;
+
+/// Key identifying an agent's output variable in a commodity market selection
+type AgentOutputVariableKey = (CommodityID, RegionID, TimeSliceSelection, AgentID);
+
+/// Map of auxiliary output variables for each (commodity, region, time slice selection, agent)
+type AgentOutputVariableMap = IndexMap<AgentOutputVariableKey, highs::Col>;
 
 /// The keys for different constraints
 pub struct ConstraintKeys {
@@ -106,7 +114,16 @@ where
         candidate_assets,
     );
 
-    add_agent_share_constraints(problem, variables, model, assets, markets_to_balance, year);
+    let mut agent_output_variables = AgentOutputVariableMap::new();
+    add_agent_share_constraints(
+        problem,
+        variables,
+        model,
+        assets,
+        markets_to_balance,
+        year,
+        &mut agent_output_variables,
+    );
 
     if include_commodity_constraints {
         add_commodity_constraints(problem, variables, model, assets, year);
@@ -634,14 +651,62 @@ fn add_equal_utilisation_constraints<'a, I>(
     }
 }
 
-/// Add constraints requiring agent-owned assets to abide by agent commodity shares
+/// Get or create the auxiliary variable representing an agent's output in a commodity market selection.
 ///
-/// For each market to balance, and for each time slice selection at the commodity's balance level,
-/// an auxiliary variable is created for each agent serving that market, which is constrained such
-/// that it represents the total production in that market by all assets owned by the agent. These
-/// auxiliary variables are constrained amongst one another according to the agents' demand shares.
-/// For example if there are two agents, one with demand share 1/3 and the other 2/3, the constraint
-/// imposes that output from the second agent is twice that of the first.
+/// The auxiliary variable is constrained to represent the total production in that market by all
+/// assets owned by the agent.
+fn get_or_add_agent_output_variable<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    model: &Model,
+    assets: &I,
+    output_variables: &mut AgentOutputVariableMap,
+    key: AgentOutputVariableKey,
+) -> highs::Col
+where
+    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+{
+    // Return the variable if it already exists in the map, otherwise unpack the key
+    let entry = match output_variables.entry(key) {
+        Entry::Occupied(entry) => return *entry.get(),
+        Entry::Vacant(entry) => entry,
+    };
+    let (commodity_id, region_id, ts_selection, agent_id) = entry.key();
+
+    // Create an auxiliary variable for this key
+    let aux_var = problem.add_column(0.0, 0.0..);
+    let mut terms = vec![(aux_var, 1.0)];
+
+    // Collect relevant activity variables
+    for (asset, flow) in assets
+        .clone()
+        .filter_region(region_id)
+        .filter_agent(agent_id)
+        .flows_for_commodity(commodity_id)
+        .filter(|(_, flow)| flow.direction() == FlowDirection::Output)
+    {
+        for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
+            terms.push((
+                variables.get_activity_var(asset, time_slice),
+                -flow.coeff.value(),
+            ));
+        }
+    }
+
+    // Constrain the auxiliary variable to equal the agent's output.
+    problem.add_row(0.0..=0.0, terms);
+
+    // Insert the auxiliary variable in the map, and return it
+    entry.insert(aux_var);
+    aux_var
+}
+
+/// Add constraints requiring agent-owned assets to abide by agent commodity shares.
+///
+/// The auxiliary variables representing agent output are constrained amongst one another
+/// according to the agents' demand shares. For example if there are two agents, one with demand
+/// share 1/3 and the other 2/3, the constraint imposes that output from the second agent is twice
+/// that of the first.
 fn add_agent_share_constraints<'a, I>(
     problem: &mut Problem,
     variables: &VariableMap,
@@ -649,6 +714,7 @@ fn add_agent_share_constraints<'a, I>(
     assets: &I,
     markets_to_balance: &'a [(CommodityID, RegionID)],
     year: u32,
+    output_variables: &mut AgentOutputVariableMap,
 ) where
     I: Iterator<Item = &'a AssetRef> + Clone + 'a,
 {
@@ -678,37 +744,32 @@ fn add_agent_share_constraints<'a, I>(
             .time_slice_info
             .iter_selections_at_level(commodity.time_slice_level)
         {
-            // Create constrained auxiliary variables representing each agent's output in this
-            // selection.
-            let mut output_vars = Vec::with_capacity(responsible_agents.len());
-            for (agent, commodity_portion) in &responsible_agents {
-                let aux_var = problem.add_column(0.0, 0.0..);
-                let mut terms = vec![(aux_var, 1.0)];
+            // Get or create auxiliary variables representing each agent's output in this
+            // selection. Store each auxiliary variable along with the agent portion
+            let output_vars = responsible_agents
+                .iter()
+                .map(|(agent, commodity_portion)| {
+                    (
+                        *commodity_portion,
+                        get_or_add_agent_output_variable(
+                            problem,
+                            variables,
+                            model,
+                            assets,
+                            output_variables,
+                            (
+                                commodity_id.clone(),
+                                region_id.clone(),
+                                ts_selection.clone(),
+                                agent.id.clone(),
+                            ),
+                        ),
+                    )
+                })
+                .collect::<Vec<_>>();
 
-                // Collect relevant activity variables
-                for (asset, flow) in assets
-                    .clone()
-                    .filter_region(region_id)
-                    .filter_agent(&agent.id)
-                    .flows_for_commodity(commodity_id)
-                    .filter(|(_, flow)| flow.direction() == FlowDirection::Output)
-                {
-                    for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
-                        terms.push((
-                            variables.get_activity_var(asset, time_slice),
-                            -flow.coeff.value(),
-                        ));
-                    }
-                }
-
-                // Constrain the auxiliary variable to equal the agent's output.
-                problem.add_row(0.0..=0.0, terms);
-
-                // Store each auxiliary variable along with the agent portion
-                output_vars.push((*commodity_portion, aux_var));
-            }
-
-            // Constrain all auxiliary variables in relation to the first one
+            // Constrain auxiliary variables according to agent shares. Variables are all anchored
+            // to the first agent (so n-1 constraints are created)
             let ((reference_portion, reference_var), others) = output_vars.split_first().unwrap();
             for (portion, variable) in others {
                 // p_ref * aux_i = p_i * aux_ref
