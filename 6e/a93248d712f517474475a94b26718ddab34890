@@ -1,0 +1,24 @@
+src/simulation/optimisation/constraints.rs
+  s_7f4b9025e53f0e::t_955537d8758287 491
+  s_7f4b9025e53f0e::t_2820b667ca88d0 713,715,719
+  s_7f4b9025e53f0e::t_ee3e503aa433e8 613,667
+  s_7f4b9025e53f0e::t_11282b31336c73 97,99,101,105
+  s_7f4b9025e53f0e::t_63aa99feda4770 150,154
+  s_7f4b9025e53f0e::t_b77ca2c4b798dd 350,352,354,357
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6ea93248d712f517474475a94b26718ddab34890",
+  "prompts": {},
+  "sessions": {
+    "s_7f4b9025e53f0e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "1306d8a2-a99b-4b14-abbd-0d12afd7967a",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
