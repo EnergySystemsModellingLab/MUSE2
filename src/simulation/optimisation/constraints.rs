@@ -125,6 +125,16 @@ where
         &mut agent_output_variables,
     );
 
+    add_asset_share_constraints(
+        problem,
+        variables,
+        model,
+        assets,
+        markets_to_balance,
+        year,
+        &mut agent_output_variables,
+    );
+
     if include_commodity_constraints {
         add_commodity_constraints(problem, variables, model, assets, year);
     }
@@ -780,6 +790,84 @@ fn add_agent_share_constraints<'a, I>(
                         (*reference_var, -portion.value()),
                     ],
                 );
+            }
+        }
+    }
+}
+
+/// Add constraints requiring assets with fixed agent occupancy to follow their agent's output.
+///
+/// For each asset with a fixed occupancy, its output in each time slice selection is constrained
+/// to equal that occupancy times the total output of the owning agent.
+fn add_asset_share_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    model: &Model,
+    assets: &I,
+    markets_to_balance: &[(CommodityID, RegionID)],
+    year: u32,
+    output_variables: &mut AgentOutputVariableMap,
+) where
+    I: Iterator<Item = &'a AssetRef> + Clone,
+{
+    // Iterate over markets to balance
+    for (commodity_id, region_id) in markets_to_balance {
+        let commodity = &model.commodities[commodity_id];
+        // Only apply these constraints to SVD commodities
+        if !matches!(commodity.kind, CommodityType::ServiceDemand) {
+            continue;
+        }
+
+        // Collect agents serving this market along with their shares
+        let responsible_agents =
+            get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
+                .collect::<Vec<_>>();
+
+        // Create constraints for each time slice selection at the commodity's balance level
+        for ts_selection in model
+            .time_slice_info
+            .iter_selections_at_level(commodity.time_slice_level)
+        {
+            for (agent, _) in &responsible_agents {
+                for (asset, flow) in assets
+                    .clone()
+                    .filter_region(region_id)
+                    .filter_agent(&agent.id)
+                    .flows_for_commodity(commodity_id)
+                    .filter(|(_, flow)| flow.direction() == FlowDirection::Output)
+                {
+                    let Some(occupancy) = asset.get_agent_occupancy() else {
+                        continue;
+                    };
+
+                    // Get or create auxiliary variable representing the total output of the agent
+                    // in this time slice selection
+                    let agent_output = get_or_add_agent_output_variable(
+                        problem,
+                        variables,
+                        model,
+                        assets,
+                        output_variables,
+                        (
+                            commodity_id.clone(),
+                            region_id.clone(),
+                            ts_selection.clone(),
+                            agent.id.clone(),
+                        ),
+                    );
+                    let mut terms = vec![(agent_output, -occupancy.value())];
+
+                    // Collect relevant activity variables
+                    for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
+                        terms.push((
+                            variables.get_activity_var(asset, time_slice),
+                            flow.coeff.value(),
+                        ));
+                    }
+
+                    // Constrain the asset's output to its fixed share of the agent's output.
+                    problem.add_row(0.0..=0.0, terms);
+                }
             }
         }
     }

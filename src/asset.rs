@@ -719,6 +719,17 @@ impl Asset {
         }
     }
 
+    /// Get the fixed share of the owning agent's supply allocated to this asset, if any
+    ///
+    /// This is just a placeholder for now. Longer term, this will be used for markets in which
+    /// assets should be constrained to a fixed portion of demand. For example, a residential
+    /// agent may choose to invest in gas boilers to meet 60% of demand. Effectively gas boilers
+    /// are installed in 60% of homes, which receive 60% of demand, so these gas boilers cannot
+    /// contribute to the remaining 40%.
+    pub fn get_agent_occupancy(&self) -> Option<Dimensionless> {
+        None
+    }
+
     /// Get the capacity for this asset
     pub fn capacity(&self) -> AssetCapacity {
         self.capacity
