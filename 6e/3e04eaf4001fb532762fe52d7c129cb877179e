@@ -1,0 +1,44 @@
+src/asset.rs
+  s_7f4b9025e53f0e::t_e5b8af65fc1579 1175,1177,1184-1185,1194,1201-1202,1207
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 669,676,699,747,771-772
+  s_bac915e3858e48::t_ffba56b5e94315 117,120,122,125,654,656-657,661-663,665,677-692,696-698,701,717,754-759,766
+  s_7f4b9025e53f0e::t_0357a1408345a7 63,66
+  s_7f4b9025e53f0e::t_079d6b1d155648 760-765
+  s_bac915e3858e48::t_d2a1e4215bcfdc 3,65,67,118-119,121,123-124,126,666,693-695,702-709,749-753,767-769
+  s_7f4b9025e53f0e::t_b6d92e335fd1b7 658,664,670-674
+  s_bac915e3858e48::t_3a3174cd51be2d 62,64
+  s_7f4b9025e53f0e::t_34bdfd8dcecd18 14
+  s_7f4b9025e53f0e::t_5d7a9fe52505d0 700
+  s_bac915e3858e48::t_9c2250f4e0d1ad 748
+  h_e76403a1cd4bf1 659-660,667-668,675
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6e3e04eaf4001fb532762fe52d7c129cb877179e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_7f4b9025e53f0e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "1306d8a2-a99b-4b14-abbd-0d12afd7967a",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_bac915e3858e48": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "c8a9a007-4854-41d3-a7de-a5fe33b6cb0e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
