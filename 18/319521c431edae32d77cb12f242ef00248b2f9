@@ -1,0 +1,23 @@
+docs/glossary.md
+  h_e76403a1cd4bf1 19-21,180-186
+  h_e76403a1cd4bf1 187
+schemas/input/agents.yaml
+  h_e76403a1cd4bf1 22-26
+docs/SUMMARY.md
+  h_e76403a1cd4bf1 15
+docs/model/README.md
+  h_e76403a1cd4bf1 49,93
+docs/model/agents.md
+  h_e76403a1cd4bf1 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18319521c431edae32d77cb12f242ef00248b2f9",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
