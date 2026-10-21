@@ -1,0 +1,30 @@
+docs/model/agents.md
+  h_e76403a1cd4bf1 136
+  s_3c5709c2bc6293::t_60c69ea65bc7d5 4-12
+  s_3c5709c2bc6293::t_e2a83bc4001209 43-44
+  s_3c5709c2bc6293::t_ca55bdf99fc64d 45
+  s_3c5709c2bc6293::t_663cbbd2348c73 66-135,137-152,155-169
+  s_3c5709c2bc6293::t_db2b7b1f1add40 153-154
+  s_3c5709c2bc6293::t_4efad2db4ee6aa 172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b68503f2705e248a0b04102c2db3fd82682b9cd2",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_3c5709c2bc6293": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "befaf05f-61c9-4f15-b711-03811eb7031f",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": null
+    }
+  }
+}
