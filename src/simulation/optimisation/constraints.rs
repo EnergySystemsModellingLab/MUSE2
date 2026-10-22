@@ -5,6 +5,7 @@ use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
 use crate::process::FlowDirection;
 use crate::region::RegionID;
+use crate::simulation::market::get_responsible_agents;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
@@ -104,6 +105,8 @@ where
         year,
         candidate_assets,
     );
+
+    add_agent_share_constraints(problem, variables, model, assets, markets_to_balance, year);
 
     if include_commodity_constraints {
         add_commodity_constraints(problem, variables, model, assets, year);
@@ -624,6 +627,96 @@ fn add_equal_utilisation_constraints<'a, I>(
                             variables.get_activity_var(reference_asset, time_slice),
                             -asset_max,
                         ),
+                    ],
+                );
+            }
+        }
+    }
+}
+
+/// Add constraints requiring agent-owned assets to abide by agent commodity shares
+///
+/// For each market to balance, and for each time slice selection at the commodity's balance level,
+/// an auxiliary variable is created for each agent serving that market, which is constrained such
+/// that it represents the total production in that market by all assets owned by the agent. These
+/// auxiliary variables are constrained amongst one another according to the agents' demand shares.
+/// For example if there are two agents, one with demand share 1/3 and the other 2/3, the constraint
+/// imposes that output from the second agent is twice that of the first.
+fn add_agent_share_constraints<'a, I>(
+    problem: &mut Problem,
+    variables: &VariableMap,
+    model: &'a Model,
+    assets: &I,
+    markets_to_balance: &'a [(CommodityID, RegionID)],
+    year: u32,
+) where
+    I: Iterator<Item = &'a AssetRef> + Clone + 'a,
+{
+    // Iterate over markets to balance
+    for (commodity_id, region_id) in markets_to_balance {
+        let commodity = &model.commodities[commodity_id];
+        // Only apply these constraints to SED/SVD commodities
+        if !matches!(
+            commodity.kind,
+            CommodityType::SupplyEqualsDemand | CommodityType::ServiceDemand
+        ) {
+            continue;
+        }
+
+        // Collect agents serving this market along with their shares
+        let responsible_agents =
+            get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
+                .collect::<Vec<_>>();
+
+        // If there are fewer than two agents, no need to create any constraints
+        if responsible_agents.len() < 2 {
+            continue;
+        }
+
+        // Create constraints for each time slice selection at the commodity's balance level
+        for ts_selection in model
+            .time_slice_info
+            .iter_selections_at_level(commodity.time_slice_level)
+        {
+            // Create constrained auxiliary variables representing each agent's output in this
+            // selection.
+            let mut output_vars = Vec::with_capacity(responsible_agents.len());
+            for (agent, commodity_portion) in &responsible_agents {
+                let aux_var = problem.add_column(0.0, 0.0..);
+                let mut terms = vec![(aux_var, 1.0)];
+
+                // Collect relevant activity variables
+                for (asset, flow) in assets
+                    .clone()
+                    .filter_region(region_id)
+                    .filter_agent(&agent.id)
+                    .flows_for_commodity(commodity_id)
+                    .filter(|(_, flow)| flow.direction() == FlowDirection::Output)
+                {
+                    for (time_slice, _) in ts_selection.iter(&model.time_slice_info) {
+                        terms.push((
+                            variables.get_activity_var(asset, time_slice),
+                            -flow.coeff.value(),
+                        ));
+                    }
+                }
+
+                // Constrain the auxiliary variable to equal the agent's output.
+                problem.add_row(0.0..=0.0, terms);
+
+                // Store each auxiliary variable along with the agent portion
+                output_vars.push((*commodity_portion, aux_var));
+            }
+
+            // Constrain all auxiliary variables in relation to the first one
+            let ((reference_portion, reference_var), others) = output_vars.split_first().unwrap();
+            for (portion, variable) in others {
+                // p_ref * aux_i = p_i * aux_ref
+                problem.add_row(
+                    0.0..=0.0,
+                    [
+                        (*variable, reference_portion.value()),
+                        (*reference_var, -portion.value()),
                     ],
                 );
             }
