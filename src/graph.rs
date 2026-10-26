@@ -37,7 +37,7 @@ pub enum GraphNode {
 impl Display for GraphNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GraphNode::Commodity(id, region) => write!(f, "{id}|{region}"),
+            GraphNode::Commodity(id, region) => write!(f, "{id} | {region}"),
             GraphNode::Source => write!(f, "SOURCE"),
             GraphNode::Sink => write!(f, "SINK"),
             GraphNode::Demand => write!(f, "DEMAND"),
@@ -60,7 +60,7 @@ impl Display for GraphEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GraphEdge::Primary(id, region) | GraphEdge::Secondary(id, region) => {
-                write!(f, "{id}|{region}")
+                write!(f, "{id} | {region}")
             }
             GraphEdge::Demand => write!(f, "DEMAND"),
         }
