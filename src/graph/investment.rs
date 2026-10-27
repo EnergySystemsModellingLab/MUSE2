@@ -10,7 +10,7 @@ use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{Directed, Direction};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 
@@ -19,7 +19,7 @@ type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 ///
 /// Steps:
 /// 1. Initialise an `InvestmentGraph` from the `CommodityGraph` for the given year, filtering to
-///    only include SVD/SED commodities and primary edges.
+///    only include SVD/SED commodities.
 /// 2. Condense strongly connected components (cycles) into `MarketSet::Cycle` nodes.
 /// 3. Perform a topological sort on the condensed graph.
 /// 4. Compute layers for investment based on the topological order, grouping independent sets into
@@ -39,8 +39,11 @@ fn solve_investment_order_for_year(
     // Initialise InvestmentGraph from the commodity graph for this year
     let mut investment_graph = init_investment_graph(graph, commodities);
 
+    // Find markets supplied by SOURCE nodes, which are not part of the investment graph
+    let sourced_markets = find_sourced_markets(graph);
+
     // Condense strongly connected components
-    investment_graph = compress_cycles(&investment_graph)?;
+    investment_graph = compress_cycles(&investment_graph, &sourced_markets)?;
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
@@ -100,13 +103,34 @@ fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -
     investment_graph
 }
 
+/// Find the markets that are supplied by a `GraphNode::Source` (i.e. an output of a process with
+/// no inputs).
+///
+/// `Source` nodes are dropped from the `InvestmentGraph`, but markets supplied by them must still
+/// be treated as having an external input when ordering cycles.
+fn find_sourced_markets(graph: &CommoditiesGraph) -> HashSet<MarketSet> {
+    graph
+        .edge_references()
+        .filter(|e| matches!(graph[e.source()], GraphNode::Source))
+        .filter_map(|e| match &graph[e.target()] {
+            GraphNode::Commodity(cid, region_id) => {
+                Some(MarketSet::Single((cid.clone(), region_id.clone())))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// Compresses cycles into `MarketSet::Cycle` nodes
-fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
+fn compress_cycles(
+    graph: &InvestmentGraph,
+    sourced_markets: &HashSet<MarketSet>,
+) -> Result<InvestmentGraph> {
     // Detect strongly connected components
     let mut condensed_graph = condensation(graph.clone(), true);
 
     // Order nodes within each strongly connected component
-    order_sccs(&mut condensed_graph, graph)?;
+    order_sccs(&mut condensed_graph, graph, sourced_markets)?;
 
     // Map to a new InvestmentGraph
     Ok(condensed_graph.map(
@@ -236,6 +260,7 @@ fn compress_cycles(graph: &InvestmentGraph) -> Result<InvestmentGraph> {
 fn order_sccs(
     condensed_graph: &mut Graph<Vec<MarketSet>, GraphEdge>,
     original_graph: &InvestmentGraph,
+    sourced_markets: &HashSet<MarketSet>,
 ) -> Result<()> {
     const EXTERNAL_BIAS: f64 = 0.1;
 
@@ -297,8 +322,11 @@ fn order_sccs(
                 }
             }
 
-            // Check whether this node has any incoming edges from outside the SCC
-            // TODO: this does not currently consider SOURCE nodes - it should!
+            // Check whether this node has any incoming edges from outside the SCC, including from
+            // SOURCE nodes
+            if sourced_markets.contains(&original_graph[idx]) {
+                has_external_incoming[i] = true;
+            }
             for edge in original_graph.edges_directed(idx, Direction::Incoming) {
                 if !index_position.contains_key(&edge.source()) {
                     has_external_incoming[i] = true;
@@ -602,7 +630,7 @@ mod tests {
         let mut condensed: Graph<Vec<MarketSet>, GraphEdge> = Graph::new();
         let component = condensed.add_node(markets.to_vec());
 
-        order_sccs(&mut condensed, &original).unwrap();
+        order_sccs(&mut condensed, &original, &HashSet::new()).unwrap();
 
         // Expected order corresponds to the example in the doc comment.
         // Note that C should be first, as it has an outgoing edge to the external market.
