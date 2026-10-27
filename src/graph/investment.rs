@@ -57,7 +57,7 @@ fn solve_investment_order_for_year(
 /// Each commodity node (carrying both `CommodityID` and `RegionID`) is added to the investment
 /// graph as an `MarketSet::Single`, with edges preserved.
 fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -> InvestmentGraph {
-    // Filter to only SVD/SED commodities and primary edges
+    // Filter to only SVD/SED commodities
     let filtered = graph.filter_map(
         |_, n| match n {
             GraphNode::Commodity(cid, region_id) => {
@@ -66,11 +66,11 @@ fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -
                     kind,
                     CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
                 )
-                .then_some(GraphNode::Commodity(cid.clone(), region_id.clone()))
+                .then(|| GraphNode::Commodity(cid.clone(), region_id.clone()))
             }
             _ => None,
         },
-        |_, e| matches!(e, GraphEdge::Primary(..)).then_some(e.clone()),
+        |_, e| Some(e.clone()),
     );
 
     // Add nodes to the graph
