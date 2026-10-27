@@ -1,0 +1,28 @@
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+tests/data/circularity/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+tests/data/circularity_npv/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "948f1b7801aa995555a4001cbbba56b70005dd31",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
