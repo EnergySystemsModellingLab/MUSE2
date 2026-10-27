@@ -1,0 +1,33 @@
+src/graph/investment.rs
+  s_30df774c9b18fd::t_8f166bbc8f9987 46
+  s_30df774c9b18fd::t_e61c627378b82c 106-121
+  s_30df774c9b18fd::t_aeda50dd8a2e66 42-43
+  s_30df774c9b18fd::t_2d17c82f45ec00 13,633
+  s_30df774c9b18fd::t_9c910ff7b1000e 125-128,133
+  s_30df774c9b18fd::t_7727fc7782f698 263
+  s_30df774c9b18fd::t_a85f3543e41a62 325-329
+  s_30df774c9b18fd::t_59420b7a542edf 44
+  s_30df774c9b18fd::t_0663fb70b258dc 122-123
+  s_30df774c9b18fd::t_104ca1fd5ffbf1 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6e85144cf46d8c5a3fd4a743623f18b70857743",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_30df774c9b18fd": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "0faa7414-583e-44c3-9a53-15bb5cb75e1e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
