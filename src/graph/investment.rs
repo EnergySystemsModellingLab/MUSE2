@@ -53,9 +53,9 @@ fn solve_investment_order_for_year(
 
 /// Initialise an `InvestmentGraph` from a `CommoditiesGraph`.
 ///
-/// The commodity graph is filtered to only include SVD/SED commodity nodes and primary edges.
-/// Each commodity node (carrying both `CommodityID` and `RegionID`) is added to the investment
-/// graph as an `MarketSet::Single`, with edges preserved.
+/// The commodity graph is filtered to only include SVD/SED commodity nodes. Each commodity node
+/// (carrying both `CommodityID` and `RegionID`) is added to the investment graph as a
+/// `MarketSet::Single`, with edges preserved.
 fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -> InvestmentGraph {
     // Filter to only SVD/SED commodities
     let filtered = graph.filter_map(
