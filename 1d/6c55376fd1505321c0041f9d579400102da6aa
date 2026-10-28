@@ -1,0 +1,14 @@
+Cargo.toml
+  h_e76403a1cd4bf1 20,23,25,32,34,48,50,53,57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1d6c55376fd1505321c0041f9d579400102da6aa",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
