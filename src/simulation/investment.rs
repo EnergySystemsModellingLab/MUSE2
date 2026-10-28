@@ -861,7 +861,7 @@ mod tests {
         // Check all assets are removed when `only_candidates` is false
         opt_assets.push(candidate_asset.clone().into());
         remove_assets_exceeding_agent_limits(&mut opt_assets, &limits, false);
-        assert!(opt_assets.is_empty());
+        assert_eq!(opt_assets, []);
     }
 
     #[rstest]

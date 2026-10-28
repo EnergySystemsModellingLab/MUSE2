@@ -124,7 +124,7 @@ impl VariableMap {
         model: &Model,
         markets_to_allow_unmet_demand: &[(CommodityID, RegionID)],
     ) {
-        assert!(!markets_to_allow_unmet_demand.is_empty());
+        assert_ne!(markets_to_allow_unmet_demand, []);
 
         // This line **must** come before we add more variables
         let start = problem.num_cols();
@@ -499,7 +499,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         self,
         markets_to_balance: &'run [(CommodityID, RegionID)],
     ) -> Self {
-        assert!(!markets_to_balance.is_empty());
+        assert_ne!(markets_to_balance, []);
 
         Self {
             markets_to_balance,
