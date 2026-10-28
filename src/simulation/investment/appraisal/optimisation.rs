@@ -34,6 +34,21 @@ pub struct ResultsMap {
     pub unmet_demand: DemandMap,
 }
 
+/// Adds capacity variables to the problem, one per asset.
+///
+/// For now these are fixed to the (active) capacity of each asset
+fn add_capacity_vars(problem: &mut Problem, assets: &[AssetRef]) -> IndexMap<AssetRef, Variable> {
+    assets
+        .iter()
+        .map(|asset| {
+            let capacity = asset.active_capacity().value();
+            // Zero cost coefficient: capacity is not yet part of the objective
+            let var = problem.add_column(0.0, capacity..=capacity);
+            (asset.clone(), var)
+        })
+        .collect()
+}
+
 /// Adds activity variables to the problem, one per time slice.
 ///
 /// Returns a map from time slice to the corresponding decision variable.
@@ -53,16 +68,24 @@ fn add_activity_vars(
 }
 
 /// Adds constraints to the problem.
+#[allow(clippy::too_many_arguments)]
 fn add_constraints(
     problem: &mut Problem,
     model: &Model,
     assets: &[AssetRef],
     commodity: &Commodity,
     activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
+    capacity_vars: &IndexMap<AssetRef, Variable>,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
 ) {
-    add_activity_constraints(problem, assets, activity_vars, time_slice_info);
+    add_activity_constraints(
+        problem,
+        assets,
+        activity_vars,
+        capacity_vars,
+        time_slice_info,
+    );
     add_utilisation_peak_constraints(problem, model, assets, activity_vars);
     add_demand_constraints(
         problem,
@@ -131,6 +154,7 @@ pub fn perform_optimisation(
     // Create problem
     let mut problem = Problem::default();
     let activity_vars = add_activity_vars(&mut problem, &assets, coefficients);
+    let capacity_vars = add_capacity_vars(&mut problem, &assets); // must come after activity vars
 
     // Add constraints
     add_constraints(
@@ -139,6 +163,7 @@ pub fn perform_optimisation(
         &assets,
         commodity,
         &activity_vars,
+        &capacity_vars,
         demand,
         &model.time_slice_info,
     );

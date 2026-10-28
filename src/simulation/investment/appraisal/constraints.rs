@@ -12,30 +12,34 @@ use indexmap::IndexMap;
 
 /// Adds activity constraints to the problem.
 ///
-/// Constrains the activity variables to be within the asset's activity limits.
-///
-/// The asset's per-capacity activity limits are scaled by the asset's capacity to give
-/// absolute bounds, and a single bounded constraint is added per time-slice selection covering the
-/// sum of activity in that selection.
+/// Constrains the activity variables to be within the asset's per-capacity activity limits,
+/// scaled by the asset's capacity variable. Two rows (upper and lower bound) are added per
+/// time-slice selection.
 pub fn add_activity_constraints(
     problem: &mut Problem,
     assets: &[AssetRef],
     activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
+    capacity_vars: &IndexMap<AssetRef, Variable>,
     time_slice_info: &TimeSliceInfo,
 ) {
-    // Create constraints for each asset
     for asset in assets {
-        for (ts_selection, limits) in asset.iter_activity_limits() {
-            let limits = limits.start().value()..=limits.end().value();
+        let capacity_var = capacity_vars[asset];
 
-            // Collect activity terms for the time slices in this selection
-            let terms = ts_selection
+        for (ts_selection, limits) in asset.iter_activity_per_capacity_limits() {
+            let activity_terms = ts_selection
                 .iter(time_slice_info)
                 .map(|(time_slice, _)| (activity_vars[&(asset.clone(), time_slice.clone())], 1.0))
                 .collect::<Vec<_>>();
 
-            // Constraint: sum of activities in selection within limits
-            problem.add_row(limits, &terms);
+            // Upper bound: sum(activity) - capacity * upper_limit_per_capacity ≤ 0
+            let mut upper_terms = activity_terms.clone();
+            upper_terms.push((capacity_var, -limits.end().value()));
+            problem.add_row(..=0.0, &upper_terms);
+
+            // Lower bound: sum(activity) - capacity * lower_limit_per_capacity ≥ 0
+            let mut lower_terms = activity_terms;
+            lower_terms.push((capacity_var, -limits.start().value()));
+            problem.add_row(0.0.., &lower_terms);
         }
     }
 }
