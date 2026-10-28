@@ -1,0 +1,29 @@
+src/simulation/optimisation/constraints.rs
+  h_e76403a1cd4bf1 686-688
+  h_e76403a1cd4bf1 689
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 864
+src/asset/pool.rs
+  h_e76403a1cd4bf1 234,266,268,277,279,286,301,694
+src/settings.rs
+  h_e76403a1cd4bf1 168
+src/example.rs
+  h_e76403a1cd4bf1 79
+src/simulation/optimisation.rs
+  h_e76403a1cd4bf1 127,502
+Cargo.toml
+  h_e76403a1cd4bf1 20,23,25,32,34,48,50,53,57-58
+tests/cli.rs
+  h_e76403a1cd4bf1 103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8526bbf46a105b2486d06cd3e6bf804733d30e07",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
