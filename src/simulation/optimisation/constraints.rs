@@ -683,7 +683,10 @@ mod tests {
 
     #[test]
     fn groups_no_assets() {
-        assert!(group_dispatch_equivalent_assets(std::iter::empty()).is_empty());
+        assert_eq!(
+            group_dispatch_equivalent_assets(std::iter::empty()),
+            [] as [std::vec::Vec<&AssetRef>; 0]
+        );
     }
 
     #[rstest]
