@@ -227,7 +227,7 @@ pub fn select_assets_for_single_market(
             agent,
             region_id,
             prices,
-            demand_portion_for_market,
+            &demand_portion_for_market,
             year,
             writer,
         )?;
