@@ -100,7 +100,7 @@ fn check_example_list_command(#[case] patch: bool) {
 /// Test the `example info` command
 #[test]
 fn check_example_info_command() {
-    assert!(!get_muse2_stdout(&["example", "info", EXAMPLE_NAME]).is_empty());
+    assert_ne!(get_muse2_stdout(&["example", "info", EXAMPLE_NAME]), "");
 }
 
 #[test]

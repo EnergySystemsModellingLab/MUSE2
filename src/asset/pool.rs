@@ -231,7 +231,7 @@ mod tests {
 
     #[rstest]
     fn asset_pool_new() {
-        assert!(AssetPool::new().assets.is_empty());
+        assert_eq!(AssetPool::new().assets, []);
     }
 
     #[rstest]
@@ -263,9 +263,9 @@ mod tests {
         let commission_year = multi_tranche_asset.commission_year;
         let mut asset_pool = AssetPool::new();
         let mut user_assets = vec![multi_tranche_asset.into()];
-        assert!(asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets, []);
         asset_pool.commission_new(commission_year, &mut user_assets);
-        assert!(user_assets.is_empty());
+        assert_eq!(user_assets, []);
         assert_eq!(asset_pool.assets.len(), 1);
         assert_eq!(asset_pool.next_id, 1);
     }
@@ -274,16 +274,16 @@ mod tests {
     fn asset_pool_commission_already_decommissioned(asset: Asset) {
         let year = asset.max_decommission_year();
         let mut asset_pool = AssetPool::new();
-        assert!(asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets, []);
         asset_pool.commission_new(year, &mut vec![asset.into()]);
-        assert!(asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets, []);
     }
 
     #[rstest]
     fn asset_pool_decommission_old(mut user_assets: Vec<UserAsset>) {
         let mut asset_pool = AssetPool::new();
         asset_pool.commission_new(2020, &mut user_assets);
-        assert!(user_assets.is_empty());
+        assert_eq!(user_assets, []);
         assert_eq!(asset_pool.assets.len(), 2);
 
         // should decommission first asset (lifetime == 5)
@@ -298,7 +298,7 @@ mod tests {
 
         // should decommission second asset
         asset_pool.decommission_old(2040);
-        assert!(asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets, []);
     }
 
     #[rstest]
@@ -691,6 +691,6 @@ mod tests {
 
         asset_pool.decommission_mothballed(2025, 10);
 
-        assert!(asset_pool.assets.is_empty());
+        assert_eq!(asset_pool.assets, []);
     }
 }
