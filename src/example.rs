@@ -76,7 +76,7 @@ mod tests {
                 .with_context(|| format!("Could not load readme for {example}"))
                 .unwrap();
 
-            assert!(!readme.trim().is_empty());
+            assert_ne!(readme.trim(), "");
         }
     }
 }

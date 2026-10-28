@@ -165,6 +165,6 @@ mod tests {
 
     #[test]
     fn default_file_contents() {
-        assert!(!Settings::default_file_contents().is_empty());
+        assert_ne!(Settings::default_file_contents(), "");
     }
 }
