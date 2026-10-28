@@ -3,17 +3,18 @@ use super::DemandMap;
 use super::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_demand_constraints, add_equal_utilisation_constraints,
-    add_utilisation_peak_constraints,
+    add_total_capacity_constraints, add_utilisation_peak_constraints,
 };
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::process::ProcessID;
 use crate::simulation::investment::record_asset_selection;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Flow};
+use crate::units::{Activity, Capacity, Flow};
 use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
@@ -37,11 +38,28 @@ pub struct ResultsMap {
 /// Adds capacity variables to the problem, one per asset.
 ///
 /// For now these are fixed to the (active) capacity of each asset
-fn add_capacity_vars(problem: &mut Problem, assets: &[AssetRef]) -> IndexMap<AssetRef, Variable> {
+fn add_capacity_vars(
+    problem: &mut Problem,
+    assets: &[AssetRef],
+    addition_limits: &HashMap<ProcessID, Capacity>,
+) -> IndexMap<AssetRef, Variable> {
     assets
         .iter()
         .map(|asset| {
             let capacity = asset.active_capacity().value();
+
+            // Upper bound to apply once capacity is no longer fixed. Candidates are
+            // limited by the process addition limit, if any. Existing assets are capped to their
+            // current total capacity
+            let _upper_bound = if asset.is_candidate() {
+                addition_limits.get(asset.process_id()).map(Capacity::value)
+            } else {
+                Some(capacity)
+            };
+
+            // TODO: when capacity is no longer fixed, use `0.0..=upper`
+            // (or `0.0..` if `_upper_bound` is `None`)
+
             // Zero cost coefficient: capacity is not yet part of the objective
             let var = problem.add_column(0.0, capacity..=capacity);
             (asset.clone(), var)
@@ -76,9 +94,11 @@ fn add_constraints(
     commodity: &Commodity,
     activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
     capacity_vars: &IndexMap<AssetRef, Variable>,
+    total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
 ) {
+    add_total_capacity_constraints(problem, assets, capacity_vars, total_limits);
     add_activity_constraints(
         problem,
         assets,
@@ -145,6 +165,8 @@ pub fn perform_optimisation(
     asset: &AssetRef,
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    addition_limits: &HashMap<ProcessID, Capacity>,
+    total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
 ) -> Result<ResultsMap> {
     // Record hypothetical asset selection
@@ -154,7 +176,7 @@ pub fn perform_optimisation(
     // Create problem
     let mut problem = Problem::default();
     let activity_vars = add_activity_vars(&mut problem, &assets, coefficients);
-    let capacity_vars = add_capacity_vars(&mut problem, &assets); // must come after activity vars
+    let capacity_vars = add_capacity_vars(&mut problem, &assets, addition_limits); // must come after activity vars
 
     // Add constraints
     add_constraints(
@@ -164,6 +186,7 @@ pub fn perform_optimisation(
         commodity,
         &activity_vars,
         &capacity_vars,
+        total_limits,
         demand,
         &model.time_slice_info,
     );

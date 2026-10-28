@@ -4,11 +4,39 @@ use super::optimisation::Variable;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::process::ProcessID;
 use crate::simulation::optimisation::group_dispatch_equivalent_assets;
 use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
-use crate::units::{MoneyPerCapacityPerYear, Year};
+use crate::units::{Capacity, MoneyPerCapacityPerYear, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
+use std::collections::HashMap;
+
+/// Adds total capacity limit constraints to the problem.
+///
+/// For each limited process, the sum of capacity variables across all of its assets (candidate
+/// and commissioned) must not exceed the agent's total capacity limit for that process.
+pub fn add_total_capacity_constraints(
+    problem: &mut Problem,
+    assets: &[AssetRef],
+    capacity_vars: &IndexMap<AssetRef, Variable>,
+    total_limits: &HashMap<ProcessID, Capacity>,
+) {
+    // IndexMap keeps row order deterministic
+    let mut terms_by_process: IndexMap<&ProcessID, Vec<(Variable, f64)>> = IndexMap::new();
+    for asset in assets {
+        if total_limits.contains_key(asset.process_id()) {
+            terms_by_process
+                .entry(asset.process_id())
+                .or_default()
+                .push((capacity_vars[asset], 1.0));
+        }
+    }
+
+    for (process_id, terms) in terms_by_process {
+        problem.add_row(..=total_limits[process_id].value(), terms);
+    }
+}
 
 /// Adds activity constraints to the problem.
 ///

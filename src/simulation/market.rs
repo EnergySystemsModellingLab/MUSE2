@@ -221,8 +221,8 @@ pub fn select_assets_for_single_market(
         let best_assets = select_best_assets(
             model,
             opt_assets,
-            agent_addition_limits,
-            agent_total_limits,
+            &agent_addition_limits,
+            &agent_total_limits,
             commodity,
             agent,
             region_id,

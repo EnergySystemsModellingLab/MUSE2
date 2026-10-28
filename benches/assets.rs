@@ -240,8 +240,8 @@ fn criterion_benchmark(c: &mut Criterion) {
                                 select_best_assets(
                                     black_box(&model),
                                     opt_assets,
-                                    agent_addition_limits,
-                                    agent_total_limits,
+                                    &agent_addition_limits,
+                                    &agent_total_limits,
                                     black_box(commodity),
                                     black_box(&agent),
                                     black_box(region_id),

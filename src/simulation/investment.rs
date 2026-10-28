@@ -341,8 +341,8 @@ fn log_on_equal_appraisal_outputs(
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
-    agent_addition_limits: HashMap<ProcessID, Capacity>,
-    agent_total_limits: HashMap<ProcessID, Capacity>,
+    agent_addition_limits: &HashMap<ProcessID, Capacity>,
+    agent_total_limits: &HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
@@ -355,11 +355,11 @@ pub fn select_best_assets(
 
     // Remaining addition limits for candidate processes
     // Initialised as the full agent addition limits, and reduced as candidate assets are selected
-    let mut remaining_agent_addition_limits = agent_addition_limits;
+    let mut remaining_agent_addition_limits = agent_addition_limits.clone();
 
     // Remaining total capacity for all assets
     // Initialised as full agent total limits, and reduced as each asset is selection
-    let mut remaining_agent_total_limits = agent_total_limits;
+    let mut remaining_agent_total_limits = agent_total_limits.clone();
 
     // Store commissioned tranches available for retention and replace assets with single tranches
     let mut available_retention_tranches =
@@ -412,6 +412,8 @@ pub fn select_best_assets(
                     commodity,
                     objective_type,
                     &coefficients,
+                    agent_addition_limits,
+                    agent_total_limits,
                     demand,
                 )?))
             })

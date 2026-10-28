@@ -5,8 +5,9 @@ use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, snas};
 use crate::model::Model;
+use crate::process::ProcessID;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
 use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
@@ -219,6 +220,8 @@ fn calculate_lcox(
     asset: &AssetRef,
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    addition_limits: &HashMap<ProcessID, Capacity>,
+    total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
@@ -227,6 +230,8 @@ fn calculate_lcox(
         asset,
         commodity,
         coefficients,
+        addition_limits,
+        total_limits,
         demand,
     )?;
 
@@ -256,6 +261,8 @@ fn calculate_npv(
     asset: &AssetRef,
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    addition_limits: &HashMap<ProcessID, Capacity>,
+    total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
@@ -264,6 +271,8 @@ fn calculate_npv(
         asset,
         commodity,
         coefficients,
+        addition_limits,
+        total_limits,
         demand,
     )?;
 
@@ -301,6 +310,8 @@ pub fn appraise_investment(
     commodity: &Commodity,
     objective_type: &ObjectiveType,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    addition_limits: &HashMap<ProcessID, Capacity>,
+    total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
     let appraisal_method = match objective_type {
@@ -313,6 +324,8 @@ pub fn appraise_investment(
         asset,
         commodity,
         coefficients,
+        addition_limits,
+        total_limits,
         demand,
     )
 }
