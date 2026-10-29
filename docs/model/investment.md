@@ -105,13 +105,14 @@ The annualised fixed cost (AFC) per unit of capacity differs between the two cat
 
 ## Asset Capacities
 
-Every asset consists of one or more equal-capacity tranches. A single-tranche asset is retained or
-mothballed as a whole, while the tranches of a multi-tranche asset can be retained or mothballed
-independently (see [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
+Every asset consists of either a continuous capacity or one or more equal-capacity tranches. A
+continuous-capacity asset, like a single-tranche asset, is retained or mothballed as a whole, while
+the tranches of a multi-tranche asset can be retained or mothballed independently (see
+[Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
 - For assets defined in `assets.csv`, an explicitly supplied `num_tranches` determines the tranche size.
   Otherwise, a process `tranche_size` determines the tranche size. If neither is supplied, the asset
-  consists of one tranche with its full capacity.
+  has continuous capacity.
 - Assets invested in _by MUSE_ are commissioned one tranche at a time, using the process
   `tranche_size` if defined, or a tranche size inferred from demand at the time of investment (see
   "trial capacity" below).
