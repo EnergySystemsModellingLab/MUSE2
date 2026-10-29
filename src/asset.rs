@@ -993,11 +993,9 @@ impl AssetRef {
             self.num_tranches() > 0,
             "Cannot convert an asset with zero tranches to a single tranche"
         );
-        let tranche_size = self.capacity().tranche_size();
+        let capacity = self.capacity().with_num_tranches(1);
         let mut asset = self.with_no_mothballed_tranches();
-        asset
-            .make_mut()
-            .set_capacity(AssetCapacity::new(1, tranche_size));
+        asset.make_mut().set_capacity(capacity);
         asset
     }
 
@@ -1038,13 +1036,11 @@ impl AssetRef {
 
         // Retain the newest mothball events, discarding the oldest events that have just been
         // decommissioned. The capacity is reduced after trimming the event history.
-        let tranche_size = self.capacity().tranche_size();
+        let capacity = self.capacity().with_num_tranches(new_num_tranches);
         let new_num_mothballed =
             new_num_tranches.saturating_sub(self.get_num_nonmothballed_tranches());
         let mut asset = self.with_mothballed_tranches(new_num_mothballed, None);
-        asset
-            .make_mut()
-            .set_capacity(AssetCapacity::new(new_num_tranches, tranche_size));
+        asset.make_mut().set_capacity(capacity);
         Some(asset)
     }
 
