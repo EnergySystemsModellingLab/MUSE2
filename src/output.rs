@@ -715,10 +715,7 @@ mod tests {
             .next()
             .unwrap()
             .clone()
-            .with_mothballed_capacity(
-                AssetCapacity::discrete(1, Capacity(4.0)),
-                Some(milestone_year),
-            );
+            .with_mothballed_capacity(AssetCapacity::discrete(1, Capacity(4.0)), milestone_year);
 
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), false).unwrap();
