@@ -1,0 +1,47 @@
+src/simulation/market.rs
+  h_e76403a1cd4bf1 222
+  s_b83d3f1c8741c3::t_cacd5707621d3d 514-516,528-530,532-534
+src/output.rs
+  h_e76403a1cd4bf1 701
+  h_e76403a1cd4bf1 9,702
+src/simulation/investment/appraisal/coefficients.rs
+  h_e76403a1cd4bf1 45,65
+src/asset/capacity.rs
+  s_b83d3f1c8741c3::t_d4796f8ac20924 83-96
+src/simulation/investment/appraisal.rs
+  h_e76403a1cd4bf1 1-2
+src/simulation/investment/appraisal/optimisation.rs
+  s_b83d3f1c8741c3::t_38e0939b0a5bf3 56
+  h_e76403a1cd4bf1 121
+  s_b83d3f1c8741c3::t_1ae2d47e6f74ae 42-43
+  h_e76403a1cd4bf1 15,134-136,142
+benches/assets.rs
+  h_e76403a1cd4bf1 239,242
+src/simulation/investment.rs
+  s_b83d3f1c8741c3::t_3d38c71c945031 227-234,237-241,243-244,246-247
+  h_e76403a1cd4bf1 197,202,206,210
+  h_e76403a1cd4bf1 213,218
+src/fixture.rs
+  h_e76403a1cd4bf1 7,18,20-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "91aeaa8b47d094a01b2ad09cd6ce04baf9bfdff0",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_b83d3f1c8741c3": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "89939c34-ff40-4ed5-accf-1ddc085303a1",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
