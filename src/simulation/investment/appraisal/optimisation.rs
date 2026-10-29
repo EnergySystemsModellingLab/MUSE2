@@ -1,6 +1,5 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
-use super::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_demand_constraints, add_equal_utilisation_constraints,
     add_total_capacity_constraints, add_utilisation_peak_constraints,
@@ -9,12 +8,11 @@ use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
 use crate::process::ProcessID;
-use crate::simulation::investment::record_asset_selection;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Capacity, Flow};
+use crate::units::{Activity, Capacity, Flow, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
@@ -29,39 +27,39 @@ pub type Variable = highs::Col;
 
 /// Map containing optimisation results and coefficients
 pub struct ResultsMap {
+    /// Capacities
+    pub capacities: IndexMap<AssetRef, Capacity>,
     /// Activity variables in each time slice
-    pub activity: IndexMap<TimeSliceID, Activity>,
-    /// Remaining unmet demand per time slice, computed post-solve
-    pub unmet_demand: DemandMap,
+    pub activities: IndexMap<(AssetRef, TimeSliceID), Activity>,
 }
 
 /// Adds capacity variables to the problem, one per asset.
 ///
-/// For now these are fixed to the (active) capacity of each asset
+/// Each variable is continuous and represents the asset's absolute capacity, with a cost
+/// coefficient taken from `coefficients`. Bounds are `0..=upper`, where `upper` is:
+/// - for candidates (at most one per process), the process addition limit, if any (otherwise
+///   unbounded)
+/// - for existing assets, their current capacity (they can be reduced, but not increased)
 fn add_capacity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
+    coefficients: &HashMap<AssetRef, MoneyPerCapacity>,
     addition_limits: &HashMap<ProcessID, Capacity>,
 ) -> IndexMap<AssetRef, Variable> {
     assets
         .iter()
         .map(|asset| {
-            let capacity = asset.active_capacity().value();
-
-            // Upper bound to apply once capacity is no longer fixed. Candidates are
-            // limited by the process addition limit, if any. Existing assets are capped to their
-            // current total capacity
-            let _upper_bound = if asset.is_candidate() {
-                addition_limits.get(asset.process_id()).map(Capacity::value)
+            let upper_bound = if asset.is_candidate() {
+                addition_limits.get(asset.process_id()).copied()
             } else {
-                Some(capacity)
+                Some(asset.active_capacity())
             };
 
-            // TODO: when capacity is no longer fixed, use `0.0..=upper`
-            // (or `0.0..` if `_upper_bound` is `None`)
-
-            // Zero cost coefficient: capacity is not yet part of the objective
-            let var = problem.add_column(0.0, capacity..=capacity);
+            let cost = coefficients[asset].value();
+            let var = match upper_bound {
+                Some(upper) => problem.add_column(cost, 0.0..=upper.value()),
+                None => problem.add_column(cost, 0.0..),
+            };
             (asset.clone(), var)
         })
         .collect()
@@ -73,11 +71,11 @@ fn add_capacity_vars(
 fn add_activity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
-    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    coefficients: &HashMap<AssetRef, Arc<IndexMap<TimeSliceID, MoneyPerActivity>>>,
 ) -> IndexMap<(AssetRef, TimeSliceID), Variable> {
     let mut activity_vars = IndexMap::new();
     for asset in assets {
-        for (time_slice, cost) in &coefficients[asset].activity_coefficients {
+        for (time_slice, cost) in coefficients[asset].iter() {
             let var = problem.add_column(cost.value(), 0.0..);
             activity_vars.insert((asset.clone(), time_slice.clone()), var);
         }
@@ -161,22 +159,23 @@ fn compute_unmet_demand(
 /// Performs optimisation for an asset, given the coefficients and demand.
 pub fn perform_optimisation(
     model: &Model,
-    selected_assets: &[AssetRef],
-    asset: &AssetRef,
+    assets: &[AssetRef],
     commodity: &Commodity,
-    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    activity_coefficients: &HashMap<AssetRef, Arc<IndexMap<TimeSliceID, MoneyPerActivity>>>,
+    capacity_coefficients: &HashMap<AssetRef, MoneyPerCapacity>,
     addition_limits: &HashMap<ProcessID, Capacity>,
     total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
 ) -> Result<ResultsMap> {
-    // Record hypothetical asset selection
-    let mut assets = selected_assets.to_vec();
-    record_asset_selection(asset.clone(), &mut assets);
-
     // Create problem
     let mut problem = Problem::default();
-    let activity_vars = add_activity_vars(&mut problem, &assets, coefficients);
-    let capacity_vars = add_capacity_vars(&mut problem, &assets, addition_limits); // must come after activity vars
+    let activity_vars = add_activity_vars(&mut problem, &assets, activity_coefficients);
+    let capacity_vars = add_capacity_vars(
+        &mut problem,
+        &assets,
+        capacity_coefficients,
+        addition_limits,
+    ); // must come after activity vars
 
     // Add constraints
     add_constraints(
@@ -192,7 +191,7 @@ pub fn perform_optimisation(
     );
 
     // Solve model
-    let mut highs_model = problem.optimise(Sense::Maximise);
+    let mut highs_model = problem.optimise(Sense::Minimise);
     apply_highs_options_from_toml(&mut highs_model, &model.parameters.highs.appraisal_options)
         .context("Failed to apply custom HiGHS options to appraisal optimisation")?;
     // Enforce single-threaded solving: when appraisals run in parallel via Rayon each HiGHS
@@ -205,31 +204,25 @@ pub fn perform_optimisation(
         .map_err(ModelError::into_anyhow)?
         .get_solution();
 
-    // Extract asset activities and calculate unmet demand
+    // Extract asset activities and capacities. Columns are in the order they were added to the
+    // problem: activity variables, then capacity variables.
     let solution_values = solution.columns();
-    let all_activity = activity_vars
+    let (activity_values, remaining_values) = solution_values.split_at(activity_vars.len());
+    let capacity_values = &remaining_values[..capacity_vars.len()];
+
+    let activities: IndexMap<_, _> = activity_vars
         .keys()
-        .zip(solution_values.iter())
+        .zip(activity_values)
         .map(|(key, &value)| (key.clone(), Activity::new(value)))
         .collect();
-    let unmet_demand = compute_unmet_demand(
-        demand,
-        &assets,
-        &all_activity,
-        commodity,
-        &model.time_slice_info,
-    );
-
-    // Collect activity for the asset of interest
-    // TODO: this should be marginal activity
-    let activity = all_activity
-        .iter()
-        .filter(|&((a, _ts), _value)| a == asset)
-        .map(|((_a, ts), value)| (ts.clone(), *value))
+    let capacities: IndexMap<_, _> = capacity_vars
+        .keys()
+        .zip(capacity_values)
+        .map(|(asset, &value)| (asset.clone(), Capacity::new(value)))
         .collect();
 
     Ok(ResultsMap {
-        activity,
-        unmet_demand,
+        capacities,
+        activities,
     })
 }

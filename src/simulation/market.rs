@@ -8,8 +8,7 @@ use crate::output::DataWriter;
 use crate::process::{FlowDirection, Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
-    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
-    update_net_demand_map,
+    AllDemandMap, DemandMap, select_best_assets, update_net_demand_map,
 };
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
@@ -519,33 +518,33 @@ pub fn get_asset_options<'a>(
 ///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
 ///   `capacity_tranche_fraction` to infer the tranche size.
 fn get_candidate_assets<'a>(
-    demand: &'a DemandMap,
+    _demand: &'a DemandMap,
     agent: &'a Agent,
     region_id: &'a RegionID,
     commodity: &'a Commodity,
     year: u32,
-    capacity_tranche_fraction: Dimensionless,
+    _capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
         .iter_search_space(region_id, &commodity.id, year)
         .map(move |process| {
             // Create asset with zero capacity, which will be updated below
-            let mut asset =
+            let asset =
                 Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
                     .unwrap();
 
-            // Set capacity of the candidate for investment appraisal
-            let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
-                // For processes with a defined tranche size, take this
-                tranche_size
-            } else {
-                // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
-                let capacity_scale =
-                    calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                capacity_scale * capacity_tranche_fraction
-            };
-            let asset_capacity = AssetCapacity::single(tranche_size);
-            asset.set_capacity(asset_capacity);
+            // // Set capacity of the candidate for investment appraisal
+            // let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
+            //     // For processes with a defined tranche size, take this
+            //     tranche_size
+            // } else {
+            //     // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
+            //     let capacity_scale =
+            //         calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
+            //     capacity_scale * capacity_tranche_fraction
+            // };
+            // let asset_capacity = AssetCapacity::single(tranche_size);
+            // asset.set_capacity(asset_capacity);
             asset.into()
         })
 }
