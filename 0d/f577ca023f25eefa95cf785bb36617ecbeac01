@@ -1,0 +1,19 @@
+src/simulation/investment/appraisal/constraints.rs
+  h_e76403a1cd4bf1 15-17,22,26,28-29,34-42
+src/simulation/investment/appraisal/optimisation.rs
+  h_e76403a1cd4bf1 37-51,71,78,86-87,157,166
+  h_e76403a1cd4bf1 82-85,88
+Cargo.toml
+  h_e76403a1cd4bf1 20,23,25,32,34,50,53,57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0df577ca023f25eefa95cf785bb36617ecbeac01",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
