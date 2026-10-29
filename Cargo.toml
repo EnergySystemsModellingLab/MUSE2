@@ -17,21 +17,21 @@ csv = "1.4.0"
 log = "0.4.32"
 float-cmp = "0.10.0"
 itertools = "0.15.0"
-serde = {version = "1.0.228", features = ["derive", "rc"]}
+serde = { version = "1.0.228", features = ["derive", "rc"] }
 tempfile = "3.27.0"
 toml = "1.1.2"
-fern = {version = "0.7.1", features = ["chrono", "colored"]}
+fern = { version = "0.7.1", features = ["chrono", "colored"] }
 chrono = "0.4"
-clap = {version = "4.6.1", features = ["cargo", "derive"]}
+clap = { version = "4.6.1", features = ["cargo", "derive"] }
 include_dir = "0.7.4"
 highs = "2.4.0"
 indexmap = "2.14.0"
 human-panic = "2.0.8"
 clap-markdown = "0.1.5"
 platform-info = "2.1.0"
-derive_more = {version = "2.1", features = ["add", "add_assign", "not", "deref", "display", "sum", "from_str", "from", "into"]}
+derive_more = { version = "2.1", features = ["add", "add_assign", "not", "deref", "display", "sum", "from_str", "from", "into"] }
 petgraph = "0.8.3"
-strum = {version = "0.28.0", features = ["derive"]}
+strum = { version = "0.28.0", features = ["derive"] }
 documented = "0.10.0"
 dirs = "7.0.0"
 edit = "0.1.5"
@@ -45,17 +45,17 @@ assert_cmd = "2.2.2"
 colored = "3.0.0"
 criterion = "0.8.2"
 ordered-float = "5.1.0"
-rstest = {version = "0.27.0", default-features = false, features = ["crate-name"]}
+rstest = { version = "0.27.0", default-features = false, features = ["crate-name"] }
 similar = "3.1.0"
-yaml-rust2 = {version = "0.13.0", default-features = false}
+yaml-rust2 = { version = "0.13.0", default-features = false }
 
 [build-dependencies]
-built = {version = "0.8.1", features = ["chrono", "git2"]}
+built = { version = "0.8.1", features = ["chrono", "git2"] }
 
 [lints.clippy]
 # Disallow lints from "all" and "pedantic" groups by default
-all = {level = "deny", priority = -1}
-pedantic = {level = "deny", priority = -1}
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
 # Extra lints to disallow
 redundant_test_prefix = "deny"
 assertions_on_result_states = "deny"
