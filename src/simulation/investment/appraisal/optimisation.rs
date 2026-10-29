@@ -1,8 +1,8 @@
 //! Optimisation problem for investment tools.
 use super::DemandMap;
 use super::constraints::{
-    add_activity_constraints, add_demand_constraints, add_equal_utilisation_constraints,
-    add_total_capacity_constraints, add_utilisation_peak_constraints,
+    add_activity_constraints, add_demand_constraints, add_total_capacity_constraints,
+    add_utilisation_peak_constraints,
 };
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
@@ -114,7 +114,8 @@ fn add_constraints(
         demand,
         activity_vars,
     );
-    add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
+    // TODO: equal utilisation constraints do not work with flexible capacities
+    // add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
 }
 
 /// Performs optimisation for an asset, given the coefficients and demand.
