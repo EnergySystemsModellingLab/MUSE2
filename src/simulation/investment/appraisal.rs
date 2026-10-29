@@ -1,3 +1,5 @@
+//! Appraisal
+
 use super::DemandMap;
 
 pub mod coefficients;

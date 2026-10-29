@@ -12,7 +12,7 @@ use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Capacity, Flow, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
@@ -39,7 +39,8 @@ pub struct ResultsMap {
 /// coefficient taken from `coefficients`. Bounds are `0..=upper`, where `upper` is:
 /// - for candidates (at most one per process), the process addition limit, if any (otherwise
 ///   unbounded)
-/// - for existing assets, their current capacity (they can be reduced, but not increased)
+/// - for existing assets, their total capacity, including any mothballed capacity (they can be
+///   reduced, but not increased)
 fn add_capacity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
@@ -52,7 +53,7 @@ fn add_capacity_vars(
             let upper_bound = if asset.is_candidate() {
                 addition_limits.get(asset.process_id()).copied()
             } else {
-                Some(asset.active_capacity())
+                Some(asset.total_capacity())
             };
 
             let cost = coefficients[asset].value();
@@ -116,47 +117,8 @@ fn add_constraints(
     add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
 }
 
-/// Computes remaining unmet demand per time-slice selection after a solve.
-///
-/// For each time-slice selection at the commodity's balance level, the selection-level residual
-/// (`demand - supply`, clamped to zero) is stored directly. Downstream consumers operate at the
-/// selection level (e.g. the next round's demand constraint and `is_any_remaining_demand`), so
-/// there is no need to distribute values across individual time slices.
-fn compute_unmet_demand(
-    demand: &DemandMap,
-    assets: &[AssetRef],
-    activity: &IndexMap<(AssetRef, TimeSliceID), Activity>,
-    commodity: &Commodity,
-    time_slice_info: &TimeSliceInfo,
-) -> DemandMap {
-    time_slice_info
-        .iter_selections_at_level(commodity.time_slice_level)
-        .map(|ts_selection| {
-            let demand_for_selection = demand[&ts_selection];
-
-            // Calculate supply for selection: sum output over all assets over all time slices in
-            // the selection
-            let supply_for_selection: Flow = assets
-                .iter()
-                .flat_map(|asset| {
-                    let coefficient = asset.get_flow(&commodity.id).unwrap().coeff;
-
-                    ts_selection
-                        .iter(time_slice_info)
-                        .map(move |(time_slice, _)| {
-                            let value = activity[&(asset.clone(), time_slice.clone())];
-                            value * coefficient
-                        })
-                })
-                .sum();
-
-            let unmet = (demand_for_selection - supply_for_selection).max(Flow(0.0));
-            (ts_selection, unmet)
-        })
-        .collect()
-}
-
 /// Performs optimisation for an asset, given the coefficients and demand.
+#[allow(clippy::too_many_arguments)]
 pub fn perform_optimisation(
     model: &Model,
     assets: &[AssetRef],
@@ -169,19 +131,15 @@ pub fn perform_optimisation(
 ) -> Result<ResultsMap> {
     // Create problem
     let mut problem = Problem::default();
-    let activity_vars = add_activity_vars(&mut problem, &assets, activity_coefficients);
-    let capacity_vars = add_capacity_vars(
-        &mut problem,
-        &assets,
-        capacity_coefficients,
-        addition_limits,
-    ); // must come after activity vars
+    let activity_vars = add_activity_vars(&mut problem, assets, activity_coefficients);
+    let capacity_vars =
+        add_capacity_vars(&mut problem, assets, capacity_coefficients, addition_limits); // must come after activity vars
 
     // Add constraints
     add_constraints(
         &mut problem,
         model,
-        &assets,
+        assets,
         commodity,
         &activity_vars,
         &capacity_vars,

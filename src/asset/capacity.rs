@@ -80,6 +80,20 @@ impl AssetCapacity {
             AssetCapacity::Discrete { tranche_size, .. } => Self::single(tranche_size),
         }
     }
+    /// Returns a capacity of the same kind holding `total`, rounded up to a whole number of
+    /// tranches if discrete.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    pub fn with_total_rounded_up(self, total: Capacity) -> Self {
+        match self {
+            AssetCapacity::Continuous(_) => AssetCapacity::continuous(total),
+            AssetCapacity::Discrete { tranche_size, .. } => {
+                // The small offset stops solver noise (e.g. 3.0000000001) adding a whole tranche
+                let ratio = (total / tranche_size).value();
+                AssetCapacity::new((ratio - 1e-6).ceil() as u32, tranche_size)
+            }
+        }
+    }
+
     /// Returns a zero capacity of the same kind (and tranche size) as this one.
     pub fn zero(&self) -> Self {
         match self {

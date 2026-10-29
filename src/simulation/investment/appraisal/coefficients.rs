@@ -42,7 +42,7 @@ pub fn calculate_activity_coefficients_for_assets(
         .collect()
 }
 
-/// Calculates cost coefficients for a single asset
+/// Calculates activity coefficients for a single asset
 pub fn calculate_activity_coefficients_for_asset(
     asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
@@ -62,6 +62,7 @@ pub fn calculate_activity_coefficients_for_asset(
     activity_coefficients
 }
 
+/// Calculate capacity coefficients for all assets
 pub fn calculate_capacity_coefficients_for_assets(
     assets: &[AssetRef],
 ) -> HashMap<AssetRef, MoneyPerCapacity> {
