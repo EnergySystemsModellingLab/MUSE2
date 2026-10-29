@@ -23,8 +23,8 @@ fields:
       `capacity / num_tranches` (taking precedence over the process's `tranche_size`). If omitted and the
       process has a `tranche_size`, the asset is divided into `ceil(capacity / tranche_size)` tranches
       (note that rounding up the number of tranches can result in a total capacity greater than the
-      specified capacity). If both values are omitted, the asset is represented as one tranche with
-      the full asset capacity. Must be >0 if provided.
+      specified capacity). If both values are omitted, the asset has continuous capacity (it is not
+      divided into tranches). Must be >0 if provided.
   - name: commission_year
     type: integer
     description: The year in which to commission this asset
