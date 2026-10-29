@@ -3,6 +3,9 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
+/// Continuous capacities with an absolute value within this tolerance are considered to be zero
+const CONTINUOUS_ZERO_TOLERANCE: Capacity = Capacity(1e-9);
+
 /// Capacity of an asset, which may be continuous or a number of discrete tranches of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub enum AssetCapacity {
@@ -59,41 +62,43 @@ impl AssetCapacity {
         }
     }
 
-    /// Returns the number of tranches in this `AssetCapacity`.
-    ///
-    /// A continuous capacity is a single tranche.
-    pub fn num_tranches(&self) -> u32 {
+    /// Returns the number of tranches if this capacity is discrete, or `None` if continuous.
+    pub fn num_tranches(&self) -> Option<u32> {
         match self {
-            AssetCapacity::Continuous(_) => 1,
-            AssetCapacity::Discrete { num_tranches, .. } => *num_tranches,
+            AssetCapacity::Continuous(_) => None,
+            AssetCapacity::Discrete { num_tranches, .. } => Some(*num_tranches),
         }
     }
 
-    /// Returns the tranche size of this `AssetCapacity`.
+    /// Returns a capacity consisting of a single tranche of the same size.
     ///
-    /// For a continuous capacity, this is the full capacity.
-    pub fn tranche_size(&self) -> Capacity {
+    /// A continuous capacity is already treated as a single indivisible tranche, so is returned
+    /// unchanged.
+    pub fn single_tranche(self) -> Self {
         match self {
-            AssetCapacity::Continuous(capacity) => *capacity,
-            AssetCapacity::Discrete { tranche_size, .. } => *tranche_size,
+            AssetCapacity::Continuous(_) => self,
+            AssetCapacity::Discrete { tranche_size, .. } => Self::single(tranche_size),
+        }
+    }
+    /// Returns a zero capacity of the same kind (and tranche size) as this one.
+    pub fn zero(&self) -> Self {
+        match self {
+            AssetCapacity::Continuous(_) => AssetCapacity::Continuous(Capacity(0.0)),
+            AssetCapacity::Discrete { tranche_size, .. } => AssetCapacity::Discrete {
+                num_tranches: 0,
+                tranche_size: *tranche_size,
+            },
         }
     }
 
-    /// Returns a copy of this `AssetCapacity` with the given number of tranches.
+    /// Whether this capacity is zero.
     ///
-    /// # Panics
-    ///
-    /// Panics if this capacity is continuous and `num_tranches` is not one.
-    pub fn with_num_tranches(self, num_tranches: u32) -> Self {
+    /// Continuous capacities are treated as zero if they are within a small tolerance of zero, to
+    /// allow for floating-point error (e.g. after subtracting almost-equal capacities).
+    pub fn is_zero(&self) -> bool {
         match self {
-            AssetCapacity::Continuous(_) => {
-                assert_eq!(
-                    num_tranches, 1,
-                    "Cannot change the number of tranches of a continuous capacity"
-                );
-                self
-            }
-            AssetCapacity::Discrete { tranche_size, .. } => Self::new(num_tranches, tranche_size),
+            AssetCapacity::Continuous(capacity) => capacity.abs() <= CONTINUOUS_ZERO_TOLERANCE,
+            AssetCapacity::Discrete { num_tranches, .. } => *num_tranches == 0,
         }
     }
 
@@ -217,8 +222,7 @@ mod tests {
     ) {
         let capacity = AssetCapacity::new(num_tranches, tranche_size);
 
-        assert_eq!(capacity.num_tranches(), num_tranches);
-        assert_eq!(capacity.tranche_size(), tranche_size);
+        assert_eq!(capacity.num_tranches(), Some(num_tranches));
         assert_eq!(capacity.total_capacity(), expected_total_capacity);
     }
 

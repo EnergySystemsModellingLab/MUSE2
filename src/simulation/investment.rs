@@ -606,7 +606,7 @@ fn record_asset_selection(best_asset: AssetRef, best_assets: &mut Vec<AssetRef>)
             .increase_capacity(best_asset.capacity());
     } else {
         // Otherwise add it to the list of best assets. Selected assets are unmothballed.
-        best_assets.push(best_asset.with_no_mothballed_tranches());
+        best_assets.push(best_asset.with_no_mothballed_capacity());
     }
 }
 
@@ -841,7 +841,7 @@ mod tests {
         Asset::new_candidate(
             Arc::new(asset.process().clone()),
             asset.region_id().clone(),
-            asset.capacity().tranche_size(),
+            asset.total_capacity(),
             asset.commission_year(),
         )
         .unwrap()
