@@ -74,9 +74,9 @@ pub fn add_activity_constraints(
 
 /// Adds demand constraints to the problem.
 ///
-/// Constrains supply to be less than or equal to demand. One inequality constraint is added per
-/// time-slice selection at the commodity's balance level, capping the sum of activity (scaled by
-/// flow coefficients) to the total demand for that selection.
+/// Constrains supply to be greater than or equal to demand. One inequality constraint is added per
+/// time-slice selection at the commodity's balance level, requiring the sum of activity (scaled by
+/// flow coefficients) to be at least the total demand for that selection.
 pub fn add_demand_constraints(
     problem: &mut Problem,
     assets: &[AssetRef],
@@ -105,15 +105,13 @@ pub fn add_demand_constraints(
             .collect::<Vec<_>>();
 
         // Create the constraint
-        problem.add_row(0.0..=demand[&ts_selection].value(), terms);
+        problem.add_row(demand[&ts_selection].value().., terms);
     }
 }
 
 /// Add seasonal and annual utilisation peak constraints to the problem.
 ///
-/// This is almost identical to equivalent constraints in the full-system dispatch, but here we
-/// make the penalties negative as this is a maximise optimisation (whereas dispatch is a minimise
-/// optimisation).
+/// These are identical to the equivalent constraints in the full-system dispatch.
 pub fn add_utilisation_peak_constraints(
     problem: &mut Problem,
     model: &Model,
@@ -161,8 +159,7 @@ fn add_seasonal_peak_variables(
     for asset in assets {
         for (season, duration) in &model.time_slice_info.seasons {
             // Scale penalty by season duration
-            // We make the penalty negative as we're doing a max optimisation
-            let col_factor = -(model.parameters.seasonal_utilisation_penalty * *duration);
+            let col_factor = model.parameters.seasonal_utilisation_penalty * *duration;
             let variable = problem.add_column(col_factor.value(), 0.0..);
             seasonal_peak_vars.insert((asset.clone(), season.clone()), variable);
         }
@@ -177,8 +174,7 @@ fn add_annual_peak_variables(
     assets: &[AssetRef],
 ) -> IndexMap<AssetRef, Variable> {
     // Penalty is applied over the whole year, so scale by 1 year
-    // We make the penalty negative as we're doing a max optimisation
-    let col_factor = -(model.parameters.annual_utilisation_penalty * Year(1.0));
+    let col_factor = model.parameters.annual_utilisation_penalty * Year(1.0);
     assets
         .iter()
         .map(|asset| {
