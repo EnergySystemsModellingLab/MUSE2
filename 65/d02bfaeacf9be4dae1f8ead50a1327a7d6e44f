@@ -1,0 +1,21 @@
+src/simulation/investment/appraisal/constraints.rs
+  s_ac5a4c1722d95a::t_44353cda73c516 77-79,114
+  s_ac5a4c1722d95a::t_570120bf4ac9c9 108
+  s_ac5a4c1722d95a::t_2e1b7082ac74db 162,177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "65d02bfaeacf9be4dae1f8ead50a1327a7d6e44f",
+  "prompts": {},
+  "sessions": {
+    "s_ac5a4c1722d95a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "b86f9fbe-3a5f-4e12-a72b-a44aa50ffc7a",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
