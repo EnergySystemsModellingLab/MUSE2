@@ -39,4 +39,4 @@ fields:
       Optional (defaults to None). If present, must be >0. If no tranche size is specified, the tranche
       size for a MUSE2 investment is inferred from demand at the time of investment and
       `capacity_tranche_fraction`. For a user-provided asset, `num_tranches` in `assets.csv` can instead
-      determine the tranche size.
+      determine the tranche size; if neither is given, the asset has continuous capacity.
