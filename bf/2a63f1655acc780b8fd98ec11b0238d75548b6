@@ -1,0 +1,56 @@
+tests/data/simple_shadow/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/simple_ironing_out/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/circularity_npv/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-23,34-35
+tests/data/simple_tranche_size/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-5,7-11,13,16-19
+tests/data/simple_marginal_average/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/simple_npv/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/two_outputs/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-21,30-32
+tests/data/circularity/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-23,34-35
+schemas/input/processes.yaml
+  s_135dd534e72d7a::t_2349c3dbb7dc11 42
+schemas/input/assets.yaml
+  s_135dd534e72d7a::t_6382e602bfea29 26-27
+tests/data/muse1_default/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-3
+tests/data/two_regions/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,13-14,23-24,37-38,55-56,77-78
+tests/data/simple/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/missing_commodity/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-13
+tests/data/simple_marginal/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+src/input/asset.rs
+  s_135dd534e72d7a::t_d0e652b85a34b3 142-143,228-250
+  s_135dd534e72d7a::t_f490ead7875d55 251-252
+docs/model/investment.md
+  s_135dd534e72d7a::t_574138b75e3de9 108-111,115
+tests/data/simple_mothball/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-13,17-19
+tests/data/simple_full/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf2a63f1655acc780b8fd98ec11b0238d75548b6",
+  "prompts": {},
+  "sessions": {
+    "s_135dd534e72d7a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4bd373c3-aa68-4848-a5da-06ee538826c5",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
