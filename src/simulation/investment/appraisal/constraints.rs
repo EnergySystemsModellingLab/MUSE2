@@ -1,6 +1,5 @@
 //! Constraints for the optimisation problem.
-use super::DemandMap;
-use super::optimisation::Variable;
+use super::{DemandMap, Variable};
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;

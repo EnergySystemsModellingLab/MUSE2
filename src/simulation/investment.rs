@@ -19,7 +19,7 @@ use log::debug;
 use std::collections::HashMap;
 
 pub mod appraisal;
-use appraisal::optimisation::perform_optimisation;
+use appraisal::perform_optimisation;
 
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
