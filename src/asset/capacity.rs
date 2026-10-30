@@ -80,6 +80,7 @@ impl AssetCapacity {
             AssetCapacity::Discrete { tranche_size, .. } => Self::single(tranche_size),
         }
     }
+
     /// Returns a capacity of the same kind holding `total`, rounded up to a whole number of
     /// tranches if discrete.
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
