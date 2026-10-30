@@ -1,0 +1,35 @@
+src/simulation/investment/appraisal.rs
+  h_e76403a1cd4bf1 3,9,17-18,21,23,25-27,29-30,33-37,39,41-44,46,48-55,57-66,68-76,78
+  s_4a0d922c0f49ad::t_d3e1e13f81c707 7
+  h_e76403a1cd4bf1 11-12,19
+src/simulation/investment/appraisal/constraints.rs
+  h_e76403a1cd4bf1 2
+  s_4a0d922c0f49ad::t_f50a8034d0238c 7
+src/simulation/investment/appraisal/optimisation.rs
+  h_e76403a1cd4bf1 2-5,7-194
+  s_4a0d922c0f49ad::t_86d9a22ce7fb72 1,6
+src/simulation/investment.rs
+  s_4a0d922c0f49ad::t_5b68e1ebdef8a8 19
+  s_4a0d922c0f49ad::t_e994f451dfeae0 4,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0e51dc66f87e02d3126db0462662bef43a94a506",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_4a0d922c0f49ad": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3f5cd6fd-2383-4e43-8719-1fbe99386fa1",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
