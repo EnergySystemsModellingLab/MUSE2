@@ -1,0 +1,14 @@
+src/asset/capacity.rs
+  h_e76403a1cd4bf1 83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "39662000de5e9b3702f3f6b17c50e4e579bc1f26",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
