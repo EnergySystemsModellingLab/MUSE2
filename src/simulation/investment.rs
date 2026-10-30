@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use log::debug;
 
-pub mod portfolio;
+mod portfolio;
 pub use portfolio::select_best_assets;
 
 /// A map of demand across time-slice selections for a specific market

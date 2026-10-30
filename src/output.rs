@@ -4,7 +4,6 @@ use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
-use crate::simulation::investment::portfolio::ResultsMap;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
@@ -13,6 +12,8 @@ use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -43,12 +44,6 @@ const UNMET_DEMAND_FILE_NAME: &str = "debug_unmet_demand.csv";
 
 /// The output file name for extra solver output values
 const SOLVER_VALUES_FILE_NAME: &str = "debug_solver.csv";
-
-/// The output file name for appraisal results
-const APPRAISAL_RESULTS_FILE_NAME: &str = "debug_appraisal_results.csv";
-
-/// The output file name for appraisal time slice results
-const APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME: &str = "debug_appraisal_results_time_slices.csv";
 
 /// Get the default output directory for the model
 pub fn get_output_dir(model_dir: &Path, results_root: PathBuf) -> Result<PathBuf> {
@@ -228,29 +223,6 @@ struct UnmetDemandRow {
     value: Flow,
 }
 
-/// Represents the capacity of an asset in a row of the appraisal results CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct AppraisalResultsRow {
-    milestone_year: u32,
-    run_description: String,
-    asset_id: Option<AssetID>,
-    process_id: ProcessID,
-    region_id: RegionID,
-    capacity: Capacity,
-}
-
-/// Represents the activity of an asset in a row of the appraisal time slice results CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct AppraisalResultsTimeSliceRow {
-    milestone_year: u32,
-    run_description: String,
-    asset_id: Option<AssetID>,
-    process_id: ProcessID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    activity: Activity,
-}
-
 /// Represents solver output values
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SolverValuesRow {
@@ -262,13 +234,14 @@ struct SolverValuesRow {
 /// For writing extra debug information about the model
 struct DebugDataWriter {
     context: Option<String>,
+    output_path: PathBuf,
     unmet_demand_file_path: PathBuf,
     commodity_balance_duals_writer: csv::Writer<File>,
     unmet_demand_writer: Option<csv::Writer<File>>,
     solver_values_writer: csv::Writer<File>,
-    appraisal_results_writer: csv::Writer<File>,
-    appraisal_results_time_slice_writer: csv::Writer<File>,
     dispatch_asset_writer: csv::Writer<File>,
+    /// Writers for debug files owned by other modules, created on first use
+    custom_writers: HashMap<&'static str, csv::Writer<File>>,
 }
 
 impl DebugDataWriter {
@@ -285,15 +258,13 @@ impl DebugDataWriter {
 
         Ok(Self {
             context: None,
+            output_path: output_path.to_path_buf(),
             unmet_demand_file_path: output_path.join(UNMET_DEMAND_FILE_NAME),
             commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
             unmet_demand_writer: None,
             solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
-            appraisal_results_writer: new_writer(APPRAISAL_RESULTS_FILE_NAME)?,
-            appraisal_results_time_slice_writer: new_writer(
-                APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME,
-            )?,
             dispatch_asset_writer: new_writer(ACTIVITY_ASSET_DISPATCH)?,
+            custom_writers: HashMap::new(),
         })
     }
 
@@ -471,48 +442,22 @@ impl DebugDataWriter {
         Ok(())
     }
 
-    /// Write the capacities from the appraisal optimisation to file
-    fn write_appraisal_capacities(
+    /// Write rows to a debug file owned by another module
+    ///
+    /// The file is created on first use, even if `rows` is empty.
+    fn write_custom_rows<R: Serialize>(
         &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        results: &ResultsMap,
+        file_name: &'static str,
+        rows: impl IntoIterator<Item = R>,
     ) -> Result<()> {
-        let run_description = self.with_context(run_description);
-        for (asset, capacity) in &results.capacities {
-            let row = AppraisalResultsRow {
-                milestone_year,
-                run_description: run_description.clone(),
-                asset_id: asset.id(),
-                process_id: asset.process_id().clone(),
-                region_id: asset.region_id().clone(),
-                capacity: *capacity,
-            };
-            self.appraisal_results_writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
-    /// Write the activities from the appraisal optimisation to file
-    fn write_appraisal_activities(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        results: &ResultsMap,
-    ) -> Result<()> {
-        let run_description = self.with_context(run_description);
-        for ((asset, time_slice), activity) in &results.activities {
-            let row = AppraisalResultsTimeSliceRow {
-                milestone_year,
-                run_description: run_description.clone(),
-                asset_id: asset.id(),
-                process_id: asset.process_id().clone(),
-                region_id: asset.region_id().clone(),
-                time_slice: time_slice.clone(),
-                activity: *activity,
-            };
-            self.appraisal_results_time_slice_writer.serialize(row)?;
+        let writer = match self.custom_writers.entry(file_name) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                entry.insert(csv::Writer::from_path(self.output_path.join(file_name))?)
+            }
+        };
+        for row in rows {
+            writer.serialize(row)?;
         }
 
         Ok(())
@@ -525,9 +470,10 @@ impl DebugDataWriter {
         }
         self.commodity_balance_duals_writer.flush()?;
         self.solver_values_writer.flush()?;
-        self.appraisal_results_writer.flush()?;
-        self.appraisal_results_time_slice_writer.flush()?;
         self.dispatch_asset_writer.flush()?;
+        for wrt in self.custom_writers.values_mut() {
+            wrt.flush()?;
+        }
 
         Ok(())
     }
@@ -588,16 +534,30 @@ impl DataWriter {
         Ok(())
     }
 
-    /// Write debug info about the investment appraisal
-    pub fn write_appraisal_debug_info(
+    /// Whether debug files are being written
+    pub fn debug_enabled(&self) -> bool {
+        self.debug.is_some()
+    }
+
+    /// Prepend the current debug context (if any) to a run description
+    pub fn debug_run_description(&self, run_description: &str) -> String {
+        match &self.debug {
+            Some(wtr) => wtr.with_context(run_description),
+            None => run_description.to_string(),
+        }
+    }
+
+    /// Write rows to a custom debug CSV file in the output directory
+    ///
+    /// This allows other modules to write their own debug files. The file is created the first time
+    /// it is written to (even if `rows` is empty). Does nothing if debug output is disabled.
+    pub fn write_debug_rows<R: Serialize>(
         &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        results: &ResultsMap,
+        file_name: &'static str,
+        rows: impl IntoIterator<Item = R>,
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug {
-            wtr.write_appraisal_capacities(milestone_year, run_description, results)?;
-            wtr.write_appraisal_activities(milestone_year, run_description, results)?;
+            wtr.write_custom_rows(file_name, rows)?;
         }
 
         Ok(())
@@ -1032,68 +992,6 @@ mod tests {
                 .try_collect()
                 .unwrap();
         assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_appraisal_results(assets: AssetPool, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let capacity = Capacity(12.5);
-        let activity = Activity(100.5);
-        let dir = tempdir().unwrap();
-        let asset = assets.iter().next().unwrap();
-        let results = ResultsMap {
-            capacities: indexmap! { asset.clone() => capacity },
-            activities: indexmap! { (asset.clone(), time_slice.clone()) => activity },
-        };
-
-        // Write appraisal results
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer.context = Some("context".to_string());
-            writer
-                .write_appraisal_capacities(milestone_year, &run_description, &results)
-                .unwrap();
-            writer
-                .write_appraisal_activities(milestone_year, &run_description, &results)
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let run_description = "context; test_run".to_string();
-        let expected_capacity = AppraisalResultsRow {
-            milestone_year,
-            run_description: run_description.clone(),
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            capacity,
-        };
-        let records: Vec<AppraisalResultsRow> =
-            csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected_capacity));
-
-        let expected_activity = AppraisalResultsTimeSliceRow {
-            milestone_year,
-            run_description,
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            time_slice,
-            activity,
-        };
-        let records: Vec<AppraisalResultsTimeSliceRow> =
-            csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected_activity));
     }
 
     #[rstest]

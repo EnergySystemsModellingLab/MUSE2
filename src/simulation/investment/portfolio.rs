@@ -14,8 +14,9 @@ use std::collections::HashMap;
 
 mod constraints;
 mod costs;
+mod debug;
 mod optimisation;
-pub use optimisation::ResultsMap;
+use debug::write_debug_info;
 use optimisation::perform_optimisation;
 
 /// Get the best assets for meeting demand for the given commodity
@@ -48,7 +49,8 @@ pub fn select_best_assets(
     // Write optimisation results
     let commodity_id = &commodity.id;
     let agent_id = &agent.id;
-    writer.write_appraisal_debug_info(
+    write_debug_info(
+        writer,
         year,
         &format!("{commodity_id} {region_id} {agent_id}"),
         &results,
