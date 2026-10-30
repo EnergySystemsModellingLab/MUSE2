@@ -15,6 +15,7 @@ use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod coefficients;
@@ -60,6 +61,8 @@ pub struct AppraisalOutput {
     pub metric: Option<Box<dyn MetricTrait>>,
     /// Activity coefficients and market costs used in the appraisal
     pub coefficients: Arc<ObjectiveCoefficients>,
+    /// Full solution to the optimisation
+    pub solution: IndexMap<(AssetRef, TimeSliceID), Activity>,
 }
 
 impl AppraisalOutput {
@@ -72,10 +75,11 @@ impl AppraisalOutput {
     ) -> Self {
         Self {
             asset,
-            activity: results.activity,
+            activity: results.asset_activity,
             unmet_demand: results.unmet_demand,
             metric: metric.map(|m| Box::new(m) as Box<dyn MetricTrait>),
             coefficients,
+            solution: results.solution,
         }
     }
     /// Compare this appraisal to another on the basis of the comparison metric.
@@ -214,25 +218,35 @@ impl MetricTrait for NPVMetric {}
 /// The returned `metric` is the LCOX value (lower is better).
 fn calculate_lcox(
     model: &Model,
+    selected_assets: &[AssetRef],
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
+    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
+    let results = perform_optimisation(
+        model,
+        selected_assets,
+        asset,
+        commodity,
+        coefficients,
+        demand,
+        previous_solution,
+    )?;
 
     let cost_index = lcox(
         asset.total_capacity(),
         annual_fixed_cost(asset),
-        &results.activity,
-        &coefficients.market_costs,
+        &results.asset_activity,
+        &coefficients[asset].market_costs,
     );
 
     Ok(AppraisalOutput::new(
         asset.clone(),
         results,
         cost_index.map(LCOXMetric::new),
-        coefficients.clone(),
+        coefficients[asset].clone(),
     ))
 }
 
@@ -243,12 +257,22 @@ fn calculate_lcox(
 /// An `AppraisalOutput` containing the hypothetical capacity, activity profile and unmet demand.
 fn calculate_npv(
     model: &Model,
+    selected_assets: &[AssetRef],
     asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
+    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
 ) -> Result<AppraisalOutput> {
-    let results = perform_optimisation(model, asset, commodity, coefficients, demand)?;
+    let results = perform_optimisation(
+        model,
+        selected_assets,
+        asset,
+        commodity,
+        coefficients,
+        demand,
+        previous_solution,
+    )?;
 
     let annual_fixed_cost = annual_fixed_cost(asset);
     assert!(
@@ -259,15 +283,15 @@ fn calculate_npv(
     let snas = snas(
         asset.total_capacity(),
         annual_fixed_cost,
-        &results.activity,
-        &coefficients.market_costs,
+        &results.asset_activity,
+        &coefficients[asset].market_costs,
     );
 
     Ok(AppraisalOutput::new(
         asset.clone(),
         results,
         snas.map(NPVMetric::new),
-        coefficients.clone(),
+        coefficients[asset].clone(),
     ))
 }
 
@@ -277,19 +301,30 @@ fn calculate_npv(
 ///
 /// The `AppraisalOutput` produced by the selected appraisal method. The `metric` field is
 /// comparable with other appraisals of the same type (npv/lcox).
+#[allow(clippy::too_many_arguments)]
 pub fn appraise_investment(
     model: &Model,
+    selected_assets: &[AssetRef],
     asset: &AssetRef,
     commodity: &Commodity,
     objective_type: &ObjectiveType,
-    coefficients: &Arc<ObjectiveCoefficients>,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
+    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
 ) -> Result<AppraisalOutput> {
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,
         ObjectiveType::NetPresentValue => calculate_npv,
     };
-    appraisal_method(model, asset, commodity, coefficients, demand)
+    appraisal_method(
+        model,
+        selected_assets,
+        asset,
+        commodity,
+        coefficients,
+        demand,
+        previous_solution,
+    )
 }
 
 /// Compare assets as a fallback if metrics are equal.
@@ -464,6 +499,7 @@ mod tests {
                 activity: IndexMap::new(),
                 unmet_demand: IndexMap::new(),
                 metric: Some(metric),
+                solution: IndexMap::new(),
             })
             .collect()
     }
@@ -738,6 +774,7 @@ mod tests {
             activity: IndexMap::new(),
             unmet_demand: IndexMap::new(),
             metric: None,
+            solution: IndexMap::new(),
         };
         let mut outputs = vec![output];
 
