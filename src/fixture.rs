@@ -4,7 +4,7 @@ use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
     DecisionRule,
 };
-use crate::asset::{Asset, AssetCapacity, AssetPool, AssetRef};
+use crate::asset::{Asset, AssetCapacity, AssetPool};
 use crate::commodity::{
     Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityType, DemandMap,
     PricingStrategy,
@@ -15,14 +15,10 @@ use crate::process::{
     ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
-use crate::simulation::investment::appraisal::LCOXMetric;
-use crate::simulation::investment::appraisal::{
-    AppraisalOutput, coefficients::ObjectiveCoefficients,
-};
-use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
 use crate::units::{
-    Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
-    MoneyPerCapacity, MoneyPerCapacityPerYear, Year,
+    ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity,
+    MoneyPerCapacityPerYear, Year,
 };
 use anyhow::Result;
 use indexmap::indexmap;
@@ -398,24 +394,6 @@ pub fn time_slice_info2() -> TimeSliceInfo {
         ]
         .into_iter()
         .collect(),
-    }
-}
-
-#[fixture]
-pub fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
-    let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
-    let market_costs = indexmap! { time_slice.clone() => MoneyPerActivity(0.4) };
-    let activity = indexmap! { time_slice.clone() => Activity(10.0) };
-    let unmet_demand = indexmap! { TimeSliceSelection::Single(time_slice.clone()) => Flow(5.0) };
-    AppraisalOutput {
-        asset: AssetRef::from(asset),
-        coefficients: Arc::new(ObjectiveCoefficients {
-            activity_coefficients,
-            market_costs,
-        }),
-        activity,
-        unmet_demand,
-        metric: Some(Box::new(LCOXMetric::new(MoneyPerActivity(4.14)))),
     }
 }
 

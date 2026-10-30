@@ -8,8 +8,7 @@ use crate::output::DataWriter;
 use crate::process::{FlowDirection, Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
-    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
-    update_net_demand_map,
+    AllDemandMap, DemandMap, select_best_assets, update_net_demand_map,
 };
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
@@ -220,14 +219,14 @@ pub fn select_assets_for_single_market(
         // Choose assets from among existing pool and candidates
         let best_assets = select_best_assets(
             model,
-            opt_assets,
-            agent_addition_limits,
-            agent_total_limits,
+            &opt_assets,
+            &agent_addition_limits,
+            &agent_total_limits,
             commodity,
             agent,
             region_id,
             prices,
-            demand_portion_for_market,
+            &demand_portion_for_market,
             year,
             writer,
         )?;
@@ -512,40 +511,27 @@ pub fn get_asset_options<'a>(
 
 /// Get candidate assets which produce a particular commodity for a given agent
 ///
-/// Each candidate represents one investment tranche with a defined capacity.
-/// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
-/// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
-///   demand for the commodity and the asset's maximum annual production per unit capacity
-///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
-///   `capacity_tranche_fraction` to infer the tranche size.
+/// Candidates have zero capacity, as the investment optimisation determines how much to build.
+/// Capacity is discrete (in tranches of `tranche_size`) for processes with a defined
+/// `tranche_size` and continuous otherwise.
 fn get_candidate_assets<'a>(
-    demand: &'a DemandMap,
+    _demand: &'a DemandMap,
     agent: &'a Agent,
     region_id: &'a RegionID,
     commodity: &'a Commodity,
     year: u32,
-    capacity_tranche_fraction: Dimensionless,
+    _capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     agent
         .iter_search_space(region_id, &commodity.id, year)
         .map(move |process| {
-            // Create asset with zero capacity, which will be updated below
+            let tranche_size = process.tranche_size.unwrap_or(Capacity(0.0));
             let mut asset =
-                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
+                Asset::new_candidate(process.clone(), region_id.clone(), tranche_size, year)
                     .unwrap();
-
-            // Set capacity of the candidate for investment appraisal
-            let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
-                // For processes with a defined tranche size, take this
-                tranche_size
-            } else {
-                // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
-                let capacity_scale =
-                    calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                capacity_scale * capacity_tranche_fraction
-            };
-            let asset_capacity = AssetCapacity::single(tranche_size);
-            asset.set_capacity(asset_capacity);
+            if process.tranche_size.is_none() {
+                asset.set_capacity(AssetCapacity::continuous(Capacity(0.0)));
+            }
             asset.into()
         })
 }

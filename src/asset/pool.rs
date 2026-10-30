@@ -102,14 +102,14 @@ impl AssetPool {
                 // At least some of the asset's capacity has made it back into the pool. Increase the
                 // capacity back to what it was before, with the unselected capacity set as mothballed.
                 let mothballed = old_asset.capacity() - new_asset.capacity();
-                *new_asset = old_asset.with_mothballed_capacity(mothballed, Some(year));
+                *new_asset = old_asset.with_mothballed_capacity(mothballed, year);
             } else {
                 // None of this asset's capacity was selected. We mothball _all_ of it and return to
                 // the pool.
                 self.assets.push(
                     old_asset
                         .clone()
-                        .with_mothballed_capacity(old_asset.capacity(), Some(year)),
+                        .with_mothballed_capacity(old_asset.capacity(), year),
                 );
             }
         }
@@ -545,10 +545,9 @@ mod tests {
 
         // Make an asset unused for a few years
         let mothball_years: u32 = 10;
-        asset_pool.assets[0] = asset_pool[0].clone().with_mothballed_capacity(
-            AssetCapacity::single(Capacity(1.0)),
-            Some(2025 - mothball_years),
-        );
+        asset_pool.assets[0] = asset_pool[0]
+            .clone()
+            .with_mothballed_capacity(AssetCapacity::single(Capacity(1.0)), 2025 - mothball_years);
 
         assert_equal(
             asset_pool.assets[0].get_mothball_events().unwrap().iter(),
@@ -660,8 +659,8 @@ mod tests {
     fn asset_pool_decommission_mothballed_partial(commissioned_multi_tranche: AssetRef) {
         // Mothball one tranche in 2010 and one in 2020, leaving one active
         let asset = commissioned_multi_tranche
-            .with_mothballed_capacity(AssetCapacity::new(1, Capacity(4.0)), Some(2010))
-            .with_mothballed_capacity(AssetCapacity::new(2, Capacity(4.0)), Some(2020));
+            .with_mothballed_capacity(AssetCapacity::new(1, Capacity(4.0)), 2010)
+            .with_mothballed_capacity(AssetCapacity::new(2, Capacity(4.0)), 2020);
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(asset);
@@ -691,7 +690,7 @@ mod tests {
     ) {
         // All three tranches mothballed long enough ago: the whole asset is removed from the pool
         let asset = commissioned_multi_tranche
-            .with_mothballed_capacity(AssetCapacity::new(3, Capacity(4.0)), Some(2010));
+            .with_mothballed_capacity(AssetCapacity::new(3, Capacity(4.0)), 2010);
 
         let mut asset_pool = AssetPool::new();
         asset_pool.assets.push(asset);
