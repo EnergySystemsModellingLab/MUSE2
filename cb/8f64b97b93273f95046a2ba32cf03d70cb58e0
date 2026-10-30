@@ -1,0 +1,18 @@
+src/output.rs
+  h_e76403a1cd4bf1 7
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 18-19
+src/simulation/investment/portfolio.rs
+  h_e76403a1cd4bf1 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb8f64b97b93273f95046a2ba32cf03d70cb58e0",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
