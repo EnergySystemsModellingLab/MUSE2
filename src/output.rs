@@ -4,6 +4,7 @@ use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
+use crate::simulation::investment::appraisal::ResultsMap;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
@@ -227,6 +228,29 @@ struct UnmetDemandRow {
     value: Flow,
 }
 
+/// Represents the capacity of an asset in a row of the appraisal results CSV file
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct AppraisalResultsRow {
+    milestone_year: u32,
+    run_description: String,
+    asset_id: Option<AssetID>,
+    process_id: ProcessID,
+    region_id: RegionID,
+    capacity: Capacity,
+}
+
+/// Represents the activity of an asset in a row of the appraisal time slice results CSV file
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct AppraisalResultsTimeSliceRow {
+    milestone_year: u32,
+    run_description: String,
+    asset_id: Option<AssetID>,
+    process_id: ProcessID,
+    region_id: RegionID,
+    time_slice: TimeSliceID,
+    activity: Activity,
+}
+
 /// Represents solver output values
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SolverValuesRow {
@@ -447,69 +471,52 @@ impl DebugDataWriter {
         Ok(())
     }
 
-    // /// Write appraisal results to file
-    // fn write_appraisal_results(
-    //     &mut self,
-    //     milestone_year: u32,
-    //     run_description: &str,
-    //     appraisal_results: &[AppraisalOutput],
-    // ) -> Result<()> {
-    //     for result in appraisal_results {
-    //         let row = AppraisalResultsRow {
-    //             milestone_year,
-    //             run_description: self.with_context(run_description),
-    //             asset_id: result.asset.id(),
-    //             process_id: result.asset.process_id().clone(),
-    //             region_id: result.asset.region_id().clone(),
-    //             capacity: result.asset.total_capacity(),
-    //             metric: result.metric.as_ref().map(|m| m.value()),
-    //         };
-    //         self.appraisal_results_writer.serialize(row)?;
-    //     }
+    /// Write the capacities from the appraisal optimisation to file
+    fn write_appraisal_capacities(
+        &mut self,
+        milestone_year: u32,
+        run_description: &str,
+        results: &ResultsMap,
+    ) -> Result<()> {
+        let run_description = self.with_context(run_description);
+        for (asset, capacity) in &results.capacities {
+            let row = AppraisalResultsRow {
+                milestone_year,
+                run_description: run_description.clone(),
+                asset_id: asset.id(),
+                process_id: asset.process_id().clone(),
+                region_id: asset.region_id().clone(),
+                capacity: *capacity,
+            };
+            self.appraisal_results_writer.serialize(row)?;
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
-    // /// Write appraisal results to file
-    // fn write_appraisal_time_slice_results(
-    //     &mut self,
-    //     milestone_year: u32,
-    //     run_description: &str,
-    //     appraisal_results: &[AppraisalOutput],
-    //     demand: &IndexMap<TimeSliceSelection, Flow>,
-    //     time_slice_level: TimeSliceLevel,
-    // ) -> Result<()> {
-    //     for result in appraisal_results {
-    //         for (time_slice, activity) in &result.activity {
-    //             let activity_coefficient = result.coefficients.activity_coefficients[time_slice];
-    //             // Map the individual time slice back to its containing selection so we can look
-    //             // up selection-level demand and unmet demand.
-    //             let selection = match time_slice_level {
-    //                 TimeSliceLevel::Annual => TimeSliceSelection::Annual,
-    //                 TimeSliceLevel::Season => TimeSliceSelection::Season(time_slice.season.clone()),
-    //                 TimeSliceLevel::DayNight => TimeSliceSelection::Single(time_slice.clone()),
-    //             };
-    //             let demand = demand[&selection];
-    //             let unmet_demand = result.unmet_demand[&selection];
-    //             let row = AppraisalResultsTimeSliceRow {
-    //                 milestone_year,
-    //                 run_description: self.with_context(run_description),
-    //                 asset_id: result.asset.id(),
-    //                 process_id: result.asset.process_id().clone(),
-    //                 region_id: result.asset.region_id().clone(),
-    //                 time_slice: time_slice.clone(),
-    //                 activity: *activity,
-    //                 activity_coefficient,
-    //                 time_slice_level,
-    //                 demand_for_selection: demand,
-    //                 unmet_demand_for_selection: unmet_demand,
-    //             };
-    //             self.appraisal_results_time_slice_writer.serialize(row)?;
-    //         }
-    //     }
+    /// Write the activities from the appraisal optimisation to file
+    fn write_appraisal_activities(
+        &mut self,
+        milestone_year: u32,
+        run_description: &str,
+        results: &ResultsMap,
+    ) -> Result<()> {
+        let run_description = self.with_context(run_description);
+        for ((asset, time_slice), activity) in &results.activities {
+            let row = AppraisalResultsTimeSliceRow {
+                milestone_year,
+                run_description: run_description.clone(),
+                asset_id: asset.id(),
+                process_id: asset.process_id().clone(),
+                region_id: asset.region_id().clone(),
+                time_slice: time_slice.clone(),
+                activity: *activity,
+            };
+            self.appraisal_results_time_slice_writer.serialize(row)?;
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
@@ -581,28 +588,20 @@ impl DataWriter {
         Ok(())
     }
 
-    // /// Write debug info about the investment appraisal
-    // pub fn write_appraisal_debug_info(
-    //     &mut self,
-    //     milestone_year: u32,
-    //     run_description: &str,
-    //     appraisal_results: &[AppraisalOutput],
-    //     demand: &IndexMap<TimeSliceSelection, Flow>,
-    //     time_slice_level: TimeSliceLevel,
-    // ) -> Result<()> {
-    //     if let Some(wtr) = &mut self.debug {
-    //         wtr.write_appraisal_results(milestone_year, run_description, appraisal_results)?;
-    //         wtr.write_appraisal_time_slice_results(
-    //             milestone_year,
-    //             run_description,
-    //             appraisal_results,
-    //             demand,
-    //             time_slice_level,
-    //         )?;
-    //     }
+    /// Write debug info about the investment appraisal
+    pub fn write_appraisal_debug_info(
+        &mut self,
+        milestone_year: u32,
+        run_description: &str,
+        results: &ResultsMap,
+    ) -> Result<()> {
+        if let Some(wtr) = &mut self.debug {
+            wtr.write_appraisal_capacities(milestone_year, run_description, results)?;
+            wtr.write_appraisal_activities(milestone_year, run_description, results)?;
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     /// Append newly commissioned asset definitions to the assets CSV file
     pub fn write_assets(&mut self, assets: &[AssetRef]) -> Result<()> {
@@ -1033,6 +1032,68 @@ mod tests {
                 .try_collect()
                 .unwrap();
         assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    fn write_appraisal_results(assets: AssetPool, time_slice: TimeSliceID) {
+        let milestone_year = 2020;
+        let run_description = "test_run".to_string();
+        let capacity = Capacity(12.5);
+        let activity = Activity(100.5);
+        let dir = tempdir().unwrap();
+        let asset = assets.iter().next().unwrap();
+        let results = ResultsMap {
+            capacities: indexmap! { asset.clone() => capacity },
+            activities: indexmap! { (asset.clone(), time_slice.clone()) => activity },
+        };
+
+        // Write appraisal results
+        {
+            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
+            writer.context = Some("context".to_string());
+            writer
+                .write_appraisal_capacities(milestone_year, &run_description, &results)
+                .unwrap();
+            writer
+                .write_appraisal_activities(milestone_year, &run_description, &results)
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read back and compare
+        let run_description = "context; test_run".to_string();
+        let expected_capacity = AppraisalResultsRow {
+            milestone_year,
+            run_description: run_description.clone(),
+            asset_id: asset.id(),
+            process_id: asset.process_id().clone(),
+            region_id: asset.region_id().clone(),
+            capacity,
+        };
+        let records: Vec<AppraisalResultsRow> =
+            csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected_capacity));
+
+        let expected_activity = AppraisalResultsTimeSliceRow {
+            milestone_year,
+            run_description,
+            asset_id: asset.id(),
+            process_id: asset.process_id().clone(),
+            region_id: asset.region_id().clone(),
+            time_slice,
+            activity,
+        };
+        let records: Vec<AppraisalResultsTimeSliceRow> =
+            csv::Reader::from_path(dir.path().join(APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME))
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+        assert_equal(records, iter::once(expected_activity));
     }
 
     #[rstest]

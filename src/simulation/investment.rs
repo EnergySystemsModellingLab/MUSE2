@@ -196,11 +196,11 @@ pub fn select_best_assets(
     agent_total_limits: &HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
-    _region_id: &RegionID,
+    region_id: &RegionID,
     prices: &Prices,
     demand: &DemandMap,
     year: u32,
-    _writer: &mut DataWriter,
+    writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Perform optimisation
     let results = perform_optimisation(
@@ -214,6 +214,16 @@ pub fn select_best_assets(
         demand,
     )?;
 
+    // Write optimisation results
+    let commodity_id = &commodity.id;
+    let agent_id = &agent.id;
+    writer.write_appraisal_debug_info(
+        year,
+        &format!("{commodity_id} {region_id} {agent_id}"),
+        &results,
+    )?;
+
+    // Assemble assets from optimisation result
     let mut selected_assets = Vec::new();
     for (asset, result) in results.capacities {
         // Solver noise can give tiny negative values
