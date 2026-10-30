@@ -1,25 +1,22 @@
 //! Code for performing agent investment.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::Agent;
 use crate::asset::AssetRef;
-use crate::commodity::{Commodity, CommodityID, CommodityMap};
+use crate::commodity::{CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceSelection;
 use crate::timeit::InvestmentTimer;
-use crate::units::{Capacity, Flow};
+use crate::units::Flow;
 use anyhow::Result;
 use context_manager;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::debug;
-use std::collections::HashMap;
 
 pub mod appraisal;
-use appraisal::perform_optimisation;
+pub use appraisal::select_best_assets;
 
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
@@ -185,64 +182,4 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
             }
         }
     }
-}
-
-/// Get the best assets for meeting demand for the given commodity
-#[allow(clippy::too_many_arguments)]
-pub fn select_best_assets(
-    model: &Model,
-    opt_assets: &[AssetRef],
-    agent_addition_limits: &HashMap<ProcessID, Capacity>,
-    agent_total_limits: &HashMap<ProcessID, Capacity>,
-    commodity: &Commodity,
-    agent: &Agent,
-    region_id: &RegionID,
-    prices: &Prices,
-    demand: &DemandMap,
-    year: u32,
-    writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
-    // Perform optimisation
-    let results = perform_optimisation(
-        model,
-        opt_assets,
-        commodity,
-        prices,
-        year,
-        agent_addition_limits,
-        agent_total_limits,
-        demand,
-    )?;
-
-    // Write optimisation results
-    let commodity_id = &commodity.id;
-    let agent_id = &agent.id;
-    writer.write_appraisal_debug_info(
-        year,
-        &format!("{commodity_id} {region_id} {agent_id}"),
-        &results,
-    )?;
-
-    // Assemble assets from optimisation result
-    let mut selected_assets = Vec::new();
-    for (asset, result) in results.capacities {
-        // Solver noise can give tiny negative values
-        let capacity = asset
-            .capacity()
-            .with_total_rounded_up(result.max(Capacity(0.0)));
-        if capacity.is_zero() {
-            continue; // existing assets left out here are mothballed by the pool
-        }
-
-        // Selected assets are unmothballed. This must happen before `set_capacity`.
-        let mut selected = asset.with_no_mothballed_capacity();
-        let inner = selected.make_mut();
-        if inner.is_candidate() {
-            inner.select_candidate_for_investment(agent.id.clone());
-        }
-        inner.set_capacity(capacity);
-        selected_assets.push(selected);
-    }
-
-    Ok(selected_assets)
 }
