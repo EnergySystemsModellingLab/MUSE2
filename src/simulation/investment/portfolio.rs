@@ -1,4 +1,4 @@
-//! Appraisal
+//! Asset selection for portfolio agents
 use super::DemandMap;
 use crate::agent::Agent;
 use crate::asset::AssetRef;

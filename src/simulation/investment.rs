@@ -15,8 +15,8 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use log::debug;
 
-pub mod appraisal;
-pub use appraisal::select_best_assets;
+pub mod portfolio;
+pub use portfolio::select_best_assets;
 
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
