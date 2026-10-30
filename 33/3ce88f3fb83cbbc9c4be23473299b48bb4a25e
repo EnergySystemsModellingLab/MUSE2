@@ -1,0 +1,35 @@
+src/output.rs
+  s_4a0d922c0f49ad::t_2f1708f57e9ae4 537-554,556-557,560
+  s_4a0d922c0f49ad::t_45c20e85b48c08 15-16
+  s_4a0d922c0f49ad::t_553de8a2f6eae8 261,267
+  s_4a0d922c0f49ad::t_b6ebfe1120ea2c 237,243-244
+  s_4a0d922c0f49ad::t_b97c0139089faf 445-448,450-451,453-460,474-476
+src/simulation/investment/portfolio/debug.rs
+  s_4a0d922c0f49ad::t_b6d2451ab030da 1-150
+src/simulation/investment.rs
+  s_4a0d922c0f49ad::t_0f27b683d6f77b 18
+src/simulation/investment/portfolio.rs
+  s_4a0d922c0f49ad::t_f32f1897d31152 17,19
+  s_4a0d922c0f49ad::t_b1063c51b3b9d3 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "333ce88f3fb83cbbc9c4be23473299b48bb4a25e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_4a0d922c0f49ad": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3f5cd6fd-2383-4e43-8719-1fbe99386fa1",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
