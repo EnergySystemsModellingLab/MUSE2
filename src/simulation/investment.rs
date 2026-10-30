@@ -19,9 +19,6 @@ use log::debug;
 use std::collections::HashMap;
 
 pub mod appraisal;
-use appraisal::coefficients::{
-    calculate_activity_coefficients_for_assets, calculate_capacity_coefficients_for_assets,
-};
 use appraisal::optimisation::perform_optimisation;
 
 /// A map of demand across time-slice selections for a specific market
@@ -205,20 +202,13 @@ pub fn select_best_assets(
     year: u32,
     _writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    // Calculate activity coefficients for all asset options according to the agent's objective
-    let activity_coefficients =
-        calculate_activity_coefficients_for_assets(model, opt_assets, prices, year);
-
-    // Calculate capacity coefficients for all asset options according to the agent's objective
-    let capacity_coefficients = calculate_capacity_coefficients_for_assets(opt_assets);
-
     // Perform optimisation
     let results = perform_optimisation(
         model,
         opt_assets,
         commodity,
-        &activity_coefficients,
-        &capacity_coefficients,
+        prices,
+        year,
         agent_addition_limits,
         agent_total_limits,
         demand,

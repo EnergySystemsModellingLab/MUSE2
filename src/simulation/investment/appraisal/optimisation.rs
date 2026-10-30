@@ -4,6 +4,7 @@ use super::constraints::{
     add_activity_constraints, add_demand_constraints, add_total_capacity_constraints,
     add_utilisation_peak_constraints,
 };
+use super::costs::annual_fixed_cost;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
@@ -11,13 +12,13 @@ use crate::process::ProcessID;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
+use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-use crate::units::{Activity, Capacity, MoneyPerActivity, MoneyPerCapacity};
+use crate::units::{Activity, Capacity};
 use anyhow::{Context, Result};
 use highs::{RowProblem as Problem, Sense};
 use indexmap::IndexMap;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// A decision variable in the optimisation
 ///
@@ -36,7 +37,7 @@ pub struct ResultsMap {
 /// Adds capacity variables to the problem, one per asset.
 ///
 /// Each variable is continuous and represents the asset's absolute capacity, with a cost
-/// coefficient taken from `coefficients`. Bounds are `0..=upper`, where `upper` is:
+/// coefficient equal to the asset's annual fixed cost. Bounds are `0..=upper`, where `upper` is:
 /// - for candidates (at most one per process), the process addition limit, if any (otherwise
 ///   unbounded)
 /// - for existing assets, their total capacity, including any mothballed capacity (they can be
@@ -44,7 +45,6 @@ pub struct ResultsMap {
 fn add_capacity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
-    coefficients: &HashMap<AssetRef, MoneyPerCapacity>,
     addition_limits: &HashMap<ProcessID, Capacity>,
 ) -> IndexMap<AssetRef, Variable> {
     assets
@@ -56,7 +56,7 @@ fn add_capacity_vars(
                 Some(asset.total_capacity())
             };
 
-            let cost = coefficients[asset].value();
+            let cost = annual_fixed_cost(asset).value();
             let var = match upper_bound {
                 Some(upper) => problem.add_column(cost, 0.0..=upper.value()),
                 None => problem.add_column(cost, 0.0..),
@@ -68,15 +68,22 @@ fn add_capacity_vars(
 
 /// Adds activity variables to the problem, one per time slice.
 ///
-/// Returns a map from time slice to the corresponding decision variable.
+/// The cost coefficient of each variable is the asset's operating cost (variable operating cost,
+/// levies and flow costs) plus the cost of its inputs at shadow prices.
+///
+/// Returns a map from (asset, time slice) to the corresponding decision variable.
 fn add_activity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
-    coefficients: &HashMap<AssetRef, Arc<IndexMap<TimeSliceID, MoneyPerActivity>>>,
+    time_slice_info: &TimeSliceInfo,
+    prices: &Prices,
+    year: u32,
 ) -> IndexMap<(AssetRef, TimeSliceID), Variable> {
     let mut activity_vars = IndexMap::new();
     for asset in assets {
-        for (time_slice, cost) in coefficients[asset].iter() {
+        for time_slice in time_slice_info.iter_ids() {
+            let cost = asset.get_operating_cost(year, time_slice)
+                + asset.get_input_cost_from_prices(&prices.shadow, time_slice);
             let var = problem.add_column(cost.value(), 0.0..);
             activity_vars.insert((asset.clone(), time_slice.clone()), var);
         }
@@ -118,23 +125,23 @@ fn add_constraints(
     // add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
 }
 
-/// Performs optimisation for an asset, given the coefficients and demand.
+/// Performs optimisation for an asset, given the prices and demand.
 #[allow(clippy::too_many_arguments)]
 pub fn perform_optimisation(
     model: &Model,
     assets: &[AssetRef],
     commodity: &Commodity,
-    activity_coefficients: &HashMap<AssetRef, Arc<IndexMap<TimeSliceID, MoneyPerActivity>>>,
-    capacity_coefficients: &HashMap<AssetRef, MoneyPerCapacity>,
+    prices: &Prices,
+    year: u32,
     addition_limits: &HashMap<ProcessID, Capacity>,
     total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
 ) -> Result<ResultsMap> {
     // Create problem
     let mut problem = Problem::default();
-    let activity_vars = add_activity_vars(&mut problem, assets, activity_coefficients);
-    let capacity_vars =
-        add_capacity_vars(&mut problem, assets, capacity_coefficients, addition_limits); // must come after activity vars
+    let activity_vars =
+        add_activity_vars(&mut problem, assets, &model.time_slice_info, prices, year);
+    let capacity_vars = add_capacity_vars(&mut problem, assets, addition_limits); // must come after activity vars
 
     // Add constraints
     add_constraints(
