@@ -1,0 +1,63 @@
+docs/glossary.md
+  s_314c69b2714ce9::t_f0fb1b718bccfd 85-86,88
+  h_e76403a1cd4bf1 87
+schemas/input/commodities.yaml
+  s_314c69b2714ce9::t_195ecf5854b18d 6-7
+docs/model/commodity_graphs.md
+  s_314c69b2714ce9::t_293ce773c8e392 128-130
+  s_314c69b2714ce9::t_10000843c40e44 1-53,56,63,68-74,79-94,99,101-114,117-119,127,131-133,140-160,162,166-169,171-201,204,206,208-231
+  s_314c69b2714ce9::t_408b4158368eb3 75-78
+  s_314c69b2714ce9::t_621cd0c6c064e7 54-55
+  s_314c69b2714ce9::t_d15e830ba263b0 163-165,170
+  s_314c69b2714ce9::t_f57507e75c503a 115-116
+  s_314c69b2714ce9::t_3a06d86c9b045f 57-62,64-67,95-98,100
+  s_314c69b2714ce9::t_0468abaf166fbf 120-126
+  s_314c69b2714ce9::t_cb7dac204ea913 134-139
+  s_314c69b2714ce9::t_1f4e293baa4b51 161,202-203,205,207
+docs/model/prices.md
+  s_314c69b2714ce9::t_01e7a054d3fc7c 114-115
+docs/model/investment.md
+  s_314c69b2714ce9::t_9563a8b7fd84c7 37-39
+docs/images/save_graphs_simple.svg
+  s_314c69b2714ce9::t_f5b66933f0aac1 1-125
+docs/images/commodity_graph_example.svg
+  s_314c69b2714ce9::t_29147de3c62b28 1-174
+docs/images/commodity_graph_example.dot
+  s_314c69b2714ce9::t_4ba385e16d3617 1-41
+docs/images/investment_order_example.svg
+  s_314c69b2714ce9::t_f5b66933f0aac1 7-8,11,14-15,19-20,25-27,32-34,39-40,45-47,52-53,58-59,64-65,70-72,77-78,83-84,89-90,95-96,101-102
+  s_314c69b2714ce9::t_1ed9de335fc5f7 9
+  s_314c69b2714ce9::t_29147de3c62b28 1-6,10,12-13,16-18,21-24,28-31,35-38,41-44,48-51,54-57,60-63,66-69,73-76,79-82,85-88,91-94,97-100,103-105
+docs/SUMMARY.md
+  s_314c69b2714ce9::t_a759dfbc88b1ed 14
+docs/images/investment_order_example.dot
+  s_314c69b2714ce9::t_4b1100d2a48e67 1-11,14-15,17-22,24-36
+  s_314c69b2714ce9::t_99af420901c9db 12-13,16,23
+docs/model/README.md
+  s_314c69b2714ce9::t_22db464657afc7 65-67,94
+docs/user_guide.md
+  s_314c69b2714ce9::t_77d0afde107ca9 128-130,135
+docs/images/save_graphs_simple.dot
+  s_314c69b2714ce9::t_f5b66933f0aac1 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b857310efc2290e8cdbbbaa3c1f78b52def81a98",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_314c69b2714ce9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "663d2cfc-8dfc-4a26-b1dd-7283dc67ec3f",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
