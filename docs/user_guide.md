@@ -125,10 +125,14 @@ with [Graphviz online].
 Dashed lines are used to indicate flows for non-primary outputs of a process (as defined in the
 `processes.csv` input file).
 
+For more information on commodity graphs, including how to read them and how MUSE2 uses them to
+validate your model and decide the order of investments, see [Commodity Graphs].
+
 [`muse2 save-graphs` command]: command_line_help.md#muse2-save-graphs
 [DOT format]: https://graphviz.org/doc/info/lang.html
 [Graphviz]: https://graphviz.org/
 [Graphviz online]: https://dreampuf.github.io/GraphvizOnline
+[Commodity Graphs]: model/commodity_graphs.md
 
 ## Modifying the program settings
 

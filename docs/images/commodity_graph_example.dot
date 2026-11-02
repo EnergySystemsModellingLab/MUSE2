@@ -1,0 +1,41 @@
+// Example commodity graph for docs/model/commodity_graphs.md
+// Render with: dot -Tsvg commodity_graph_example.dot -o commodity_graph_example.svg
+digraph commodity_graph {
+    rankdir=LR;
+    nodesep=0.4;
+    ranksep=0.8;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=12];
+    edge [fontname="Helvetica", fontsize=10];
+
+    SOURCE [shape=ellipse, style=dashed];
+
+    GASPRD [label="GASPRD\n(gas produced)", fillcolor="#B3CDE3"];
+    GASNAT [label="GASNAT\n(natural gas)", fillcolor="#B3CDE3"];
+    ELCTRI [label="ELCTRI\n(electricity)", fillcolor="#B3CDE3"];
+    H2YPRD [label="H2YPRD\n(hydrogen)", fillcolor="#B3CDE3"];
+    RSHEAT [label="RSHEAT\n(residential heat)", fillcolor="#CCEBC5"];
+    TPASKM [label="TPASKM\n(passenger km)", fillcolor="#CCEBC5"];
+    CO2EMT [label="CO2EMT\n(CO₂ emitted)", fillcolor="#FED9A6"];
+
+    SOURCE -> GASPRD [label="GASDRV"];
+    SOURCE -> ELCTRI [label="WNDFRM"];
+    GASPRD -> GASNAT [label="GASPRC"];
+    GASNAT -> ELCTRI [label="GASCGT"];
+    GASNAT -> CO2EMT [label="GASCGT", style=dashed];
+    GASNAT -> RSHEAT [label="RGASBR"];
+    GASNAT -> CO2EMT [label="RGASBR", style=dashed];
+    ELCTRI -> H2YPRD [label="H2YPRO"];
+    H2YPRD -> ELCTRI [label="H2YGEN"];
+    ELCTRI -> RSHEAT [label="RELCHP"];
+    ELCTRI -> TPASKM [label="TELCCR"];
+
+    legend [shape=plain, style="", fontsize=11, label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+        <tr><td colspan="2"><b>Key</b></td></tr>
+        <tr><td bgcolor="#CCEBC5">SVD</td><td align="left">service demand</td></tr>
+        <tr><td bgcolor="#B3CDE3">SED</td><td align="left">supply equals demand</td></tr>
+        <tr><td bgcolor="#FED9A6">OTH</td><td align="left">other</td></tr>
+        <tr><td>───</td><td align="left">primary output</td></tr>
+        <tr><td>- - -</td><td align="left">secondary output</td></tr>
+      </table>>];
+}

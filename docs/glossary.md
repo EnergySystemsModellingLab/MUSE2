@@ -82,6 +82,10 @@ electricity.
 produced and/or consumed by *Processes* in the model. A *Service Demand* is a type of *Commodity* that
 is defined at the end point of the system.
 
+**Commodity Graph:** A directed graph built by MUSE2 for each *Milestone Year*, in which nodes are
+*Commodity Markets* and edges are *Processes*. It is used to validate the model, determine the
+*Investment Order* and identify *Circular Commodity Dependencies*.
+
 **Commodity Levy:** Represents a tax, levy or other external cost on a *Commodity*. Levies can be
 applied to all *Commodity* production (sum of output of all *Assets* for that *Commodity*), net
 production (sum of output and input for all *Assets*), or all consumption (sum of input for all

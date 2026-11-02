@@ -1,0 +1,22 @@
+// Unmodified output of `muse2 save-graphs examples/simple` (2020.dot)
+// Used in docs/model/commodity_graphs.md
+// Render with: dot -Tsvg save_graphs_simple.dot -o save_graphs_simple.svg
+digraph {
+    0 [ label = "SOURCE" ]
+    1 [ label = "GASPRD | GBR" ]
+    2 [ label = "CO2EMT | GBR" ]
+    3 [ label = "GASNAT | GBR" ]
+    4 [ label = "ELCTRI | GBR" ]
+    5 [ label = "RSHEAT | GBR" ]
+    0 -> 1 [ label = "GASDRV | GBR" ]
+    0 -> 2 [ label = "GASDRV | GBR" style=dashed]
+    1 -> 3 [ label = "GASPRC | GBR" ]
+    1 -> 2 [ label = "GASPRC | GBR" style=dashed]
+    0 -> 4 [ label = "WNDFRM | GBR" ]
+    3 -> 4 [ label = "GASCGT | GBR" ]
+    3 -> 2 [ label = "GASCGT | GBR" style=dashed]
+    3 -> 5 [ label = "RGASBR | GBR" ]
+    3 -> 2 [ label = "RGASBR | GBR" style=dashed]
+    4 -> 5 [ label = "RELCHP | GBR" ]
+    0 -> 4 [ label = "SLRFRM | GBR" ]
+}

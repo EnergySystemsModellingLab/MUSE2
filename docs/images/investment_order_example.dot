@@ -1,0 +1,36 @@
+// Investment order example for docs/model/commodity_graphs.md
+// Render with: dot -Tsvg investment_order_example.dot -o investment_order_example.svg
+digraph investment_order {
+    rankdir=LR;
+    nodesep=0.4;
+    ranksep=0.8;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=12];
+    edge [fontname="Helvetica", fontsize=10];
+    fontname="Helvetica";
+    fontsize=12;
+
+    GASPRD [label="GASPRD\n(invested 4th)", fillcolor="#B3CDE3"];
+    GASNAT [label="GASNAT\n(invested 3rd)", fillcolor="#B3CDE3"];
+
+    subgraph cluster_cycle {
+        label="Circularity (invested 2nd)";
+        style="rounded,dashed";
+        ELCTRI [label="ELCTRI\n(2a)", fillcolor="#B3CDE3"];
+        H2YPRD [label="H2YPRD\n(2b)", fillcolor="#B3CDE3"];
+    }
+
+    subgraph cluster_layer {
+        label="Layer (invested 1st)";
+        style="rounded,dashed";
+        TPASKM [fillcolor="#CCEBC5"];
+        RSHEAT [fillcolor="#CCEBC5"];
+    }
+
+    GASPRD -> GASNAT;
+    GASNAT -> ELCTRI;
+    GASNAT -> RSHEAT;
+    ELCTRI -> H2YPRD;
+    H2YPRD -> ELCTRI;
+    ELCTRI -> RSHEAT;
+    ELCTRI -> TPASKM;
+}

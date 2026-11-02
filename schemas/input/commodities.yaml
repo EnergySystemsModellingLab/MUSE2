@@ -3,8 +3,8 @@ description: |
   Describes commodities in the system.
 
 notes:
-  - Every SED (supply equals demand) commodity must have both producer and consumer processes for
-    every region and milestone year.
+  - Every SED (supply equals demand) commodity that can be consumed by a process must also have a
+    producer process, for every region and milestone year.
   - Every SVD (service demand) commodity must have a producer for every region and milestone year.
 
 fields:
