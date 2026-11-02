@@ -1,0 +1,28 @@
+docs/user_guide.md
+  s_3ef49b931ede83::t_ff95980de2ab46 121-122
+src/graph/investment.rs
+  s_3ef49b931ede83::t_5500aeb365e7bf 22
+src/graph.rs
+  s_3ef49b931ede83::t_4386dadb354cc7 88-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44a754e6944b9247062bf7c5a9b4d909bff3cf99",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_3ef49b931ede83": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "0190e70d-4933-4053-946a-03bd848feb0f",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
