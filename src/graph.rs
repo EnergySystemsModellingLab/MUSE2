@@ -9,7 +9,6 @@ use petgraph::Directed;
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
@@ -21,50 +20,35 @@ pub mod validate;
 /// A graph of commodity flows for a given region and year
 pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
 
-#[derive(Eq, PartialEq, Clone, Hash)]
+#[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
 /// A node in the commodity graph
 pub enum GraphNode {
     /// A node representing a commodity in a specific region
+    #[display("{_0} | {_1}")]
     Commodity(CommodityID, RegionID),
     /// A source node for processes that have no inputs
+    #[display("SOURCE")]
     Source,
     /// A sink node for processes that have no outputs
+    #[display("SINK")]
     Sink,
     /// A demand node for commodities with service demands
+    #[display("DEMAND")]
     Demand,
 }
 
-impl Display for GraphNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GraphNode::Commodity(id, region) => write!(f, "{id} | {region}"),
-            GraphNode::Source => write!(f, "SOURCE"),
-            GraphNode::Sink => write!(f, "SINK"),
-            GraphNode::Demand => write!(f, "DEMAND"),
-        }
-    }
-}
-
-#[derive(Eq, PartialEq, Clone, Hash)]
+#[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
 /// An edge in the commodity graph
 pub enum GraphEdge {
     /// An edge representing a primary flow of a process installed in the given region
+    #[display("{_0} | {_1}")]
     Primary(ProcessID, RegionID),
     /// An edge representing a secondary (non-primary) flow of a process installed in the given region
+    #[display("{_0} | {_1}")]
     Secondary(ProcessID, RegionID),
     /// An edge representing a service demand
+    #[display("DEMAND")]
     Demand,
-}
-
-impl Display for GraphEdge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GraphEdge::Primary(id, region) | GraphEdge::Secondary(id, region) => {
-                write!(f, "{id} | {region}")
-            }
-            GraphEdge::Demand => write!(f, "DEMAND"),
-        }
-    }
 }
 
 /// Helper function to return a possible flow operating in the requested year
@@ -101,8 +85,8 @@ fn get_flow_for_year(
 ///
 /// The graph contains nodes for all `(commodity, region)` pairs that may be consumed/produced
 /// by processes in the specified year across all regions. There will be an edge from node
-/// `(A, Ra)` to `(B, Rb)` if there exists a process installed in some region that consumes
-/// commodity A in region Ra and produces commodity B in region Rb.
+/// `(A, Ra)` to `(B, Rb)` if there exists a process that consumes commodity A in region Ra and
+/// produces commodity B in region Rb.
 ///
 /// There are also special `Source` and `Sink` nodes, which are used for processes that have no
 /// inputs or outputs.

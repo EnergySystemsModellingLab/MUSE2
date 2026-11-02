@@ -28,22 +28,28 @@ fn prepare_commodities_graph_for_validation(
 ) -> CommoditiesGraph {
     let mut filtered_graph = base_graph.clone();
 
-    // Filter by process availability.
+    // Filter by process availability
+    // We keep edges if the process has availability > 0 in any time slice in the selection
     // Each edge carries the asset's installing region, so we can look up the correct
     // ActivityLimits for that (process, region, year) combination.
     filtered_graph.retain_edges(|graph, edge_idx| {
+        // Get the process/region for the edge
         let (process_id, region_id) = match graph.edge_weight(edge_idx).unwrap() {
             GraphEdge::Primary(process_id, region_id)
             | GraphEdge::Secondary(process_id, region_id) => (process_id, region_id),
             GraphEdge::Demand => panic!("Demand edges should not be present in the base graph"),
         };
         let process = &processes[process_id];
+
+        // Check if the process in this region has availability > 0 in any time slice in the
+        // selection
         can_be_active(process, &(region_id.clone(), year), time_slice_selection)
     });
 
-    // Add demand edges.
+    // Add demand edges
     // We add an edge to the `Demand` node for each (commodity, region) pair that has positive
-    // demand for this year and time slice selection.
+    // demand for this year and time slice selection
+    // NOTE: we only do this for commodities with the same time_slice_level as the selection
     let demand_node_index = filtered_graph.add_node(GraphNode::Demand);
     for (commodity_id, commodity) in commodities {
         for ((region_id, dem_year, dem_ts_sel), &flow) in &commodity.demand {
