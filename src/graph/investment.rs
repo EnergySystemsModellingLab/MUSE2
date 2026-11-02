@@ -19,7 +19,7 @@ type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 ///
 /// Steps:
 /// 1. Initialise an `InvestmentGraph` from the `CommodityGraph` for the given year, filtering to
-///    only include SVD/SED commodities and primary edges.
+///    only include SVD/SED commodities (all edges between them, primary and secondary, are kept).
 /// 2. Condense strongly connected components (cycles) into `MarketSet::Cycle` nodes.
 /// 3. Perform a topological sort on the condensed graph.
 /// 4. Compute layers for investment based on the topological order, grouping independent sets into

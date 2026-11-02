@@ -85,8 +85,9 @@ fn get_flow_for_year(
 ///
 /// The graph contains nodes for all `(commodity, region)` pairs that may be consumed/produced
 /// by processes in the specified year across all regions. There will be an edge from node
-/// `(A, Ra)` to `(B, Rb)` if there exists a process that consumes commodity A in region Ra and
-/// produces commodity B in region Rb.
+/// `(A, R)` to `(B, R)` if there exists a process in region R that consumes commodity A and
+/// produces commodity B. Processes currently only consume and produce commodities in their own
+/// region, so there are no edges between nodes in different regions.
 ///
 /// There are also special `Source` and `Sink` nodes, which are used for processes that have no
 /// inputs or outputs.
