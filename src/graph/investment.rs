@@ -5,15 +5,15 @@ use crate::simulation::market::MarketSet;
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
 use log::warn;
-use petgraph::Direction;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
+use petgraph::{Directed, Direction};
 use std::collections::HashMap;
 
 /// A graph of the market sets to invest in, with no cycles
-type InvestmentGraph = Graph<MarketSet, GraphEdge>;
+type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 
 /// Analyse the commodity graph for a given year to determine the order in which investment
 /// decisions should be made.
@@ -84,12 +84,16 @@ fn is_market(node: &GraphNode, commodities: &CommodityMap) -> bool {
 /// Components with one market become `MarketSet::Single`, and those with multiple markets become
 /// `MarketSet::Cycle`.
 fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
+    // Function to look up a node in the commodity graph and get its (commodity, region) pair.
+    // All nodes are commodities, because `filter_map` only kept SVD/SED commodity nodes.
     let market = |&idx: &NodeIndex| match &graph[idx] {
         GraphNode::Commodity(commodity_id, region_id) => (commodity_id.clone(), region_id.clone()),
         _ => unreachable!("Strongly connected components should only contain commodities"),
     };
     match scc {
+        // Exactly one member: a single market that isn't part of a cycle
         [idx] => MarketSet::Single(market(idx)),
+        // Several members: a cycle, already in investment order (from `order_scc`)
         _ => MarketSet::Cycle(scc.iter().map(market).collect()),
     }
 }
