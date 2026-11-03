@@ -1,0 +1,71 @@
+src/graph/investment.rs
+  h_e76403a1cd4bf1 7,21,34,41,43,71,248,376,417-418,522,525,526,529,624,635,689,725,740,746
+  h_e76403a1cd4bf1 510,519,614,664,722
+  s_30df774c9b18fd::t_e61c627378b82c 128-130,133
+  s_30df774c9b18fd::t_59420b7a542edf 60
+  s_30df774c9b18fd::t_0663fb70b258dc 134-135
+src/graph.rs
+  h_e76403a1cd4bf1 26,28,43,45-46,48,84,86-87,97,99,103,105-110,113-155,161,163,166,173,175,183-184,194,202,214
+  h_e76403a1cd4bf1 104,156-160,162,164-165,180-182,185,204,207
+src/graph/validate.rs
+  h_e76403a1cd4bf1 14,33-34,37-39,46,50,55-59,63,116,118,148,158,166,173,191,202,208,215,219,251-253,255-264,286-298,303,316,323,337-343,348,366-378,383
+src/input.rs
+  h_e76403a1cd4bf1 321-322,328
+tests/cli.rs
+  h_e76403a1cd4bf1 75
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+tests/data/circularity/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+tests/data/circularity_npv/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+src/asset.rs
+  s_9c82011db8f22b::t_b317d6fca77a3c 996,998
+  s_9c82011db8f22b::t_1b5966bd7262f5 1039,1043
+src/asset/capacity.rs
+  s_9c82011db8f22b::t_f7d36d053fe874 339
+  s_9c82011db8f22b::t_b1a6b03cc3ce4d 237-251,267
+  s_9c82011db8f22b::t_ab6bd976daeb39 277-280,285-287
+  s_9c82011db8f22b::t_5ac16cae4fb6c6 63-64,66-69,73-74,76-79,82-101,103-104,110-116,125-145,155-179,186-199
+  s_9c82011db8f22b::t_ac081b695e9e4a 6,8-17,21-30,36,42,51-53
+  s_9c82011db8f22b::t_29f65bf8fafee3 288,298-302,317-320
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6862fd80e7291d3c2a63d49d04b16b0d8c13691e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_30df774c9b18fd": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "0faa7414-583e-44c3-9a53-15bb5cb75e1e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_9c82011db8f22b": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "ca163686-6d41-4dad-b5ca-6ff7e89590ab",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
