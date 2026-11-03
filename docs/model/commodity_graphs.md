@@ -155,7 +155,7 @@ The investment order is worked out from the commodity graph for each year as fol
 
 Markets within a circularity cannot be put into an order that respects every dependency, as each
 market in the loop depends on the others. MUSE2 chooses an order for them by solving a small
-optimisation problem; see the [API documentation for `order_sccs`][order-sccs] for details. For how
+optimisation problem; see the [API documentation for `order_scc`][order-scc] for details. For how
 investment then proceeds within a circularity, see [Circularities][investment-circularities].
 
 ### Example investment order
@@ -222,7 +222,7 @@ When reading these graphs, note that:
 [prices]: ./prices.md
 [topological sort]: https://en.wikipedia.org/wiki/Topological_sorting
 [partial-dispatch]: ./investment.md#partial-system-dispatch
-[order-sccs]: ../api/muse2/graph/investment/fn.order_sccs.html
+[order-scc]: ../api/muse2/graph/investment/fn.order_scc.html
 [investment-circularities]: ./investment.md#circularities
 [log level]: ../user_guide.md#setting-the-log-level
 [save-graphs]: ../command_line_help.md#muse2-save-graphs
