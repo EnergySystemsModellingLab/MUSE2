@@ -5,22 +5,24 @@ use crate::simulation::market::MarketSet;
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
 use log::warn;
+use petgraph::Direction;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
-use petgraph::{Directed, Direction};
 use std::collections::HashMap;
 
-type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
+/// A graph of the market sets to invest in, with no cycles
+type InvestmentGraph = Graph<MarketSet, GraphEdge>;
 
 /// Analyse the commodity graph for a given year to determine the order in which investment
 /// decisions should be made.
 ///
 /// Steps:
-/// 1. Initialise an `InvestmentGraph` from the `CommodityGraph` for the given year, filtering to
-///    only include SVD/SED commodities (all edges between them, primary and secondary, are kept).
-/// 2. Condense strongly connected components (cycles) into `MarketSet::Cycle` nodes.
+/// 1. Filter the commodity graph to only include SVD/SED commodities (all edges between them,
+///    primary and secondary, are kept).
+/// 2. Condense strongly connected components (cycles) into single nodes, and order the markets
+///    within each one (see [`order_scc`]). These become `MarketSet::Cycle`s.
 /// 3. Perform a topological sort on the condensed graph.
 /// 4. Compute layers for investment based on the topological order, grouping independent sets into
 ///    `MarketSet::Layer`s.
@@ -36,107 +38,70 @@ fn solve_investment_order_for_year(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
 ) -> Vec<MarketSet> {
-    // Initialise InvestmentGraph from the commodity graph for this year
-    let mut investment_graph = init_investment_graph(graph, commodities);
+    // Filter to only SVD/SED commodities. Each node's weight is its index in the commodity graph.
+    let market_graph = graph.filter_map(
+        |idx, node| is_market(node, commodities).then_some(idx),
+        |_, edge| Some(edge.clone()),
+    );
 
-    // Condense strongly connected components
-    investment_graph = compress_cycles(&investment_graph);
+    // Condense strongly connected components, so that each node holds the commodity graph indices
+    // of one or more markets
+    let mut condensed_graph = condensation(market_graph, true);
+
+    // Order the markets within each strongly connected component
+    for scc in condensed_graph.node_weights_mut() {
+        if scc.len() > 1 {
+            order_scc(graph, commodities, scc);
+        }
+    }
+
+    // Convert each node to a `MarketSet`
+    let investment_graph =
+        condensed_graph.map(|_, scc| to_market_set(graph, scc), |_, edge| edge.clone());
 
     // Perform a topological sort on the condensed graph
     // We can safely unwrap because `toposort` will only return an error in case of cycles, which
-    // should have been detected and compressed with `compress_cycles`
+    // have been condensed
     let order = toposort(&investment_graph, None).unwrap();
 
     // Compute layers for investment
     compute_layers(&investment_graph, &order)
 }
 
-/// Initialise an `InvestmentGraph` from a `CommoditiesGraph`.
-///
-/// The commodity graph is filtered to only include SVD/SED commodity nodes. Each commodity node
-/// (carrying both `CommodityID` and `RegionID`) is added to the investment graph as a
-/// `MarketSet::Single`, with edges preserved.
-fn init_investment_graph(graph: &CommoditiesGraph, commodities: &CommodityMap) -> InvestmentGraph {
-    // Filter to only SVD/SED commodities
-    let filtered = graph.filter_map(
-        |_, n| match n {
-            GraphNode::Commodity(cid, region_id) => {
-                let kind = &commodities[cid].kind;
-                matches!(
-                    kind,
-                    CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
-                )
-                .then(|| GraphNode::Commodity(cid.clone(), region_id.clone()))
-            }
-            _ => None,
-        },
-        |_, e| Some(e.clone()),
-    );
-
-    // Add nodes to the graph
-    let mut investment_graph = InvestmentGraph::new();
-    let node_map: HashMap<_, _> = filtered
-        .node_indices()
-        .map(|ni| {
-            let GraphNode::Commodity(cid, region_id) = filtered.node_weight(ni).unwrap() else {
-                unreachable!()
-            };
-            (
-                ni,
-                investment_graph.add_node(MarketSet::Single((cid.clone(), region_id.clone()))),
-            )
-        })
-        .collect();
-
-    // Add edges to the graph
-    for e in filtered.edge_references() {
-        investment_graph.add_edge(
-            node_map[&e.source()],
-            node_map[&e.target()],
-            e.weight().clone(),
-        );
+/// Whether a commodity graph node is an SVD/SED commodity (i.e. one that is invested in)
+fn is_market(node: &GraphNode, commodities: &CommodityMap) -> bool {
+    match node {
+        GraphNode::Commodity(commodity_id, _) => matches!(
+            commodities[commodity_id].kind,
+            CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
+        ),
+        _ => false,
     }
-
-    investment_graph
 }
 
-/// Compresses cycles into `MarketSet::Cycle` nodes
-fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
-    // Detect strongly connected components
-    let mut condensed_graph = condensation(graph.clone(), true);
-
-    // Order nodes within each strongly connected component
-    order_sccs(&mut condensed_graph, graph);
-
-    // Map to a new InvestmentGraph
-    condensed_graph.map(
-        // Map nodes to MarketSet
-        // If only one member, keep as-is; if multiple members, create Cycle
-        |_, node_weight| match node_weight.len() {
-            0 => unreachable!("Condensed graph node must have at least one member"),
-            1 => node_weight[0].clone(),
-            _ => MarketSet::Cycle(
-                node_weight
-                    .iter()
-                    .flat_map(|s| s.iter_markets())
-                    .cloned()
-                    .collect(),
-            ),
-        },
-        // Keep edges the same
-        |_, edge_weight| edge_weight.clone(),
-    )
+/// Convert the commodity graph indices of a strongly connected component into a `MarketSet`
+///
+/// Components with one market become `MarketSet::Single`, and those with multiple markets become
+/// `MarketSet::Cycle`.
+fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
+    let market = |&idx: &NodeIndex| match &graph[idx] {
+        GraphNode::Commodity(commodity_id, region_id) => (commodity_id.clone(), region_id.clone()),
+        _ => unreachable!("Strongly connected components should only contain commodities"),
+    };
+    match scc {
+        [idx] => MarketSet::Single(market(idx)),
+        _ => MarketSet::Cycle(scc.iter().map(market).collect()),
+    }
 }
 
-/// Order the members of each strongly connected component using a mixed-integer linear program.
+/// Order the markets in a strongly connected component (SCC) using a mixed-integer linear program.
 ///
-/// `condensed_graph` contains the SCCs detected in the original investment graph, stored as
-/// `Vec<MarketSet>` node weights. Single-element components are already acyclic, but components
-/// with multiple members require an internal ordering so that the investment algorithm can treat
-/// them as near-acyclic chains, minimising potential disruption.
+/// The markets in an SCC (i.e. a cycle) depend on one another, so they cannot be put in an order
+/// that respects every dependency. They still require an internal ordering so that the investment
+/// algorithm can treat them as near-acyclic chains, minimising potential disruption.
 ///
-/// To rank the members of each multi-node component, we construct a mixed integer linear program
-/// (MILP). This MILP is adapted from the classical Linear Ordering Problem:
+/// To rank the markets, we construct a mixed integer linear program (MILP). This MILP is adapted
+/// from the classical Linear Ordering Problem:
 ///
 /// Marti, Rafael, and G Reinelt.
 /// The Linear Ordering Problem: Exact and Heuristic Methods in Combinatorial Optimization.
@@ -215,162 +180,132 @@ fn compress_cycles(graph: &InvestmentGraph) -> InvestmentGraph {
 /// * As with any SCC, at least one pairwise violation is guaranteed. In this ordering, the only
 ///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
 ///
-/// The resulting order replaces the original `MarketSet::Cycle` entry inside the condensed
-/// graph, providing a deterministic processing sequence for downstream logic.
-#[allow(clippy::too_many_lines)]
-fn order_sccs(
-    condensed_graph: &mut Graph<Vec<MarketSet>, GraphEdge>,
-    original_graph: &InvestmentGraph,
-) {
+/// `scc` holds the commodity graph indices of the SCC's markets, and is sorted in place into the
+/// final order. If the MILP cannot be solved, a warning is logged and the order is left unchanged.
+fn order_scc(graph: &CommoditiesGraph, commodities: &CommodityMap, scc: &mut [NodeIndex]) {
     const EXTERNAL_BIAS: f64 = 0.1;
+    let n = scc.len();
 
-    // Map each market set back to the node index in the original graph so we can inspect edges.
-    let node_lookup: HashMap<MarketSet, NodeIndex> = original_graph
-        .node_indices()
-        .map(|idx| (original_graph.node_weight(idx).unwrap().clone(), idx))
+    // Build a fast lookup from commodity graph index to position in the SCC slice.
+    let index_position: HashMap<_, _> = scc
+        .iter()
+        .enumerate()
+        .map(|(pos, &idx)| (idx, pos))
         .collect();
 
-    // Work through each SCC; groups with just one market set don't need to be ordered.
-    for group in condensed_graph.node_indices() {
-        let scc = condensed_graph.node_weight_mut(group).unwrap();
-        let n = scc.len();
-        if n <= 1 {
-            continue;
+    // Record whether any edge inside the SCC goes from market i to market j; these become penalties.
+    let mut penalties = vec![vec![0.0f64; n]; n];
+    let mut has_external_outgoing = vec![false; n];
+    for (i, &idx) in scc.iter().enumerate() {
+        // Loop over the edges going out of this node
+        for edge in graph.edges_directed(idx, Direction::Outgoing) {
+            // If the target j is inside this SCC, record a penalty for putting i before j
+            if let Some(&j) = index_position.get(&edge.target()) {
+                penalties[i][j] = 1.0;
+
+            // Otherwise, if the target is a market outside the SCC, mark that i has an outgoing
+            // edge to outside the SCC
+            } else if is_market(&graph[edge.target()], commodities) {
+                has_external_outgoing[i] = true;
+            }
         }
+    }
 
-        // Capture current order and resolve each market set back to its original graph index.
-        let original_order = scc.clone();
-        let original_indices = original_order
-            .iter()
-            .map(|set| {
-                node_lookup
-                    .get(set)
-                    .copied()
-                    .expect("Condensed SCC node must exist in the original graph")
-            })
-            .collect::<Vec<_>>();
-
-        // Build a fast lookup from original node index to its position in the SCC slice.
-        let mut index_position = HashMap::new();
-        for (pos, idx) in original_indices.iter().copied().enumerate() {
-            index_position.insert(idx, pos);
-        }
-
-        // Record whether any edge inside the original SCC goes from market i to market j; these become penalties.
-        let mut penalties = vec![vec![0.0f64; n]; n];
-        let mut has_external_outgoing = vec![false; n];
-        for (i, &idx) in original_indices.iter().enumerate() {
-            // Loop over the edges going out of this node
-            for edge in original_graph.edges_directed(idx, Direction::Outgoing) {
-                // If the target j is inside this SCC, record a penalty for putting i before j
-                if let Some(&j) = index_position.get(&edge.target()) {
-                    penalties[i][j] = 1.0;
-
-                // Otherwise, mark that i has an outgoing edge to outside the SCC
-                } else {
-                    has_external_outgoing[i] = true;
+    // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
+    for (j, has_external) in has_external_outgoing.iter().enumerate() {
+        if *has_external {
+            for (row_idx, row) in penalties.iter_mut().enumerate() {
+                // Add a small bias to all entries in column j, except the diagonal
+                // i.e. penalise putting any other market before market j
+                if row_idx != j {
+                    row[j] += EXTERNAL_BIAS;
                 }
             }
         }
+    }
 
-        // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
-        for (j, has_external) in has_external_outgoing.iter().enumerate() {
-            if *has_external {
-                for (row_idx, row) in penalties.iter_mut().enumerate() {
-                    // Add a small bias to all entries in column j, except the diagonal
-                    // i.e. penalise putting any other market before market j
-                    if row_idx != j {
-                        row[j] += EXTERNAL_BIAS;
-                    }
-                }
-            }
-        }
-
-        // Build a MILP whose binary variables x[i][j] indicate "i is ordered before j".
-        // Objective: minimise Σ penalty[i][j] · x[i][j], so forward edges (and the export bias) add cost.
-        let mut problem = RowProblem::default();
-        let mut vars: Vec<Vec<Option<Col>>> = vec![vec![None; n]; n];
-        for (i, row) in vars.iter_mut().enumerate() {
-            for (j, slot) in row.iter_mut().enumerate() {
-                if i == j {
-                    continue;
-                }
-                let cost = penalties[i][j];
-
-                // Create binary variable x[i][j]
-                *slot = Some(problem.add_integer_column(cost, 0..=1));
-            }
-        }
-
-        // Enforce antisymmetry: for each pair (i, j), exactly one of x[i][j] and x[j][i] is 1.
-        // i.e. if i comes before j, then j cannot come before i.
-        for (i, row) in vars.iter().enumerate() {
-            for (j, _) in row.iter().enumerate().skip(i + 1) {
-                let Some(x_ij) = vars[i][j] else { continue };
-                let Some(x_ji) = vars[j][i] else { continue };
-                problem.add_row(1.0..=1.0, [(x_ij, 1.0), (x_ji, 1.0)]);
-            }
-        }
-
-        // Enforce transitivity to avoid 3-cycles: x[i][j] + x[j][k] + x[k][i] ≤ 2.
-        // i.e. if i comes before j and j comes before k, then k cannot come before i.
-        for (i, row) in vars.iter().enumerate() {
-            for (j, _) in row.iter().enumerate() {
-                if i == j {
-                    continue;
-                }
-                for (k, _) in vars.iter().enumerate() {
-                    if i == k || j == k {
-                        continue;
-                    }
-                    let Some(x_ij) = vars[i][j] else { continue };
-                    let Some(x_jk) = vars[j][k] else { continue };
-                    let Some(x_ki) = vars[k][i] else { continue };
-                    problem.add_row(..=2.0, [(x_ij, 1.0), (x_jk, 1.0), (x_ki, 1.0)]);
-                }
-            }
-        }
-
-        let model = problem.optimise(Sense::Minimise);
-        let solved = match model.try_solve() {
-            Ok(solved) => solved,
-            Err(status) => {
-                warn!("HiGHS failed while ordering an SCC: {status:?}");
+    // Build a MILP whose binary variables x[i][j] indicate "i is ordered before j".
+    // Objective: minimise Σ penalty[i][j] · x[i][j], so forward edges (and the export bias) add cost.
+    let mut problem = RowProblem::default();
+    let mut vars: Vec<Vec<Option<Col>>> = vec![vec![None; n]; n];
+    for (i, row) in vars.iter_mut().enumerate() {
+        for (j, slot) in row.iter_mut().enumerate() {
+            if i == j {
                 continue;
             }
-        };
+            let cost = penalties[i][j];
 
-        if solved.status() != HighsModelStatus::Optimal {
-            let status = solved.status();
-            warn!("HiGHS returned a non-optimal status while ordering an SCC: {status:?}");
-            continue;
+            // Create binary variable x[i][j]
+            *slot = Some(problem.add_integer_column(cost, 0..=1));
         }
+    }
 
-        let solution = solved.get_solution();
-        // Score each market by the number of "wins" it achieves (times it must precede another).
-        let mut wins = vec![0usize; n];
-        for (i, row) in vars.iter().enumerate() {
-            for (j, var) in row.iter().enumerate() {
-                if i == j {
+    // Enforce antisymmetry: for each pair (i, j), exactly one of x[i][j] and x[j][i] is 1.
+    // i.e. if i comes before j, then j cannot come before i.
+    for (i, row) in vars.iter().enumerate() {
+        for (j, _) in row.iter().enumerate().skip(i + 1) {
+            let Some(x_ij) = vars[i][j] else { continue };
+            let Some(x_ji) = vars[j][i] else { continue };
+            problem.add_row(1.0..=1.0, [(x_ij, 1.0), (x_ji, 1.0)]);
+        }
+    }
+
+    // Enforce transitivity to avoid 3-cycles: x[i][j] + x[j][k] + x[k][i] ≤ 2.
+    // i.e. if i comes before j and j comes before k, then k cannot come before i.
+    for (i, row) in vars.iter().enumerate() {
+        for (j, _) in row.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            for (k, _) in vars.iter().enumerate() {
+                if i == k || j == k {
                     continue;
                 }
-                if var.is_some_and(|col| solution[col] > 0.5) {
-                    wins[i] += 1;
-                }
+                let Some(x_ij) = vars[i][j] else { continue };
+                let Some(x_jk) = vars[j][k] else { continue };
+                let Some(x_ki) = vars[k][i] else { continue };
+                problem.add_row(..=2.0, [(x_ij, 1.0), (x_jk, 1.0), (x_ki, 1.0)]);
             }
         }
-
-        // Sort by descending win count; break ties on the original index so equal-score nodes keep
-        // their relative order.
-        let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by(|&a, &b| wins[b].cmp(&wins[a]).then_with(|| a.cmp(&b)));
-
-        // Rewrite the SCC in the new order
-        *scc = order
-            .into_iter()
-            .map(|idx| original_order[idx].clone())
-            .collect();
     }
+
+    let model = problem.optimise(Sense::Minimise);
+    let solved = match model.try_solve() {
+        Ok(solved) => solved,
+        Err(status) => {
+            warn!("HiGHS failed while ordering an SCC: {status:?}");
+            return;
+        }
+    };
+
+    if solved.status() != HighsModelStatus::Optimal {
+        let status = solved.status();
+        warn!("HiGHS returned a non-optimal status while ordering an SCC: {status:?}");
+        return;
+    }
+
+    let solution = solved.get_solution();
+    // Score each market by the number of "wins" it achieves (times it must precede another).
+    let mut wins = vec![0usize; n];
+    for (i, row) in vars.iter().enumerate() {
+        for (j, var) in row.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            if var.is_some_and(|col| solution[col] > 0.5) {
+                wins[i] += 1;
+            }
+        }
+    }
+
+    // Sort by descending win count; break ties on the original index so equal-score nodes keep
+    // their relative order.
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| wins[b].cmp(&wins[a]).then_with(|| a.cmp(&b)));
+
+    // Rewrite the SCC in the new order
+    let ordered: Vec<_> = order.into_iter().map(|i| scc[i]).collect();
+    scc.copy_from_slice(&ordered);
 }
 
 /// Compute layers of market sets from the topological order
@@ -487,247 +422,146 @@ pub fn solve_investment_order_for_model(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::Commodity;
     use crate::fixture::{sed_commodity, svd_commodity};
-    use petgraph::graph::Graph;
-    use rstest::rstest;
     use std::sync::Arc;
 
-    #[test]
-    fn order_sccs_simple_cycle() {
-        let markets = ["A", "B", "C"].map(|id| MarketSet::Single((id.into(), "GBR".into())));
-
-        // Create graph with cycle edges plus an extra dependency B ← D (see doc comment)
-        let mut original = InvestmentGraph::new();
-        let node_indices: Vec<_> = markets
-            .iter()
-            .map(|set| original.add_node(set.clone()))
-            .collect();
-        for &(src, dst) in &[(1, 0), (2, 1), (0, 2)] {
-            original.add_edge(
-                node_indices[src],
-                node_indices[dst],
-                GraphEdge::Primary("process1".into(), "GBR".into()),
+    /// Add `(input, output)` edges between commodities in a region to a commodity graph, with a
+    /// separate process for each edge. Commodity nodes are added as needed.
+    fn add_edges(graph: &mut CommoditiesGraph, region_id: &str, edges: &[(&str, &str)]) {
+        for &(input, output) in edges {
+            let [source, target] = [input, output].map(|commodity_id| {
+                let node = GraphNode::Commodity(commodity_id.into(), region_id.into());
+                graph
+                    .node_indices()
+                    .find(|&idx| graph[idx] == node)
+                    .unwrap_or_else(|| graph.add_node(node))
+            });
+            let process_id = format!("{input}_to_{output}");
+            graph.add_edge(
+                source,
+                target,
+                GraphEdge::Primary(process_id.into(), region_id.into()),
             );
         }
-        // External market receiving exports from C; encourages C to appear early.
-        let external = original.add_node(MarketSet::Single(("X".into(), "GBR".into())));
-        original.add_edge(
-            node_indices[2],
-            external,
-            GraphEdge::Primary("process2".into(), "GBR".into()),
-        );
-
-        // Single SCC containing all markets.
-        let mut condensed: Graph<Vec<MarketSet>, GraphEdge> = Graph::new();
-        let component = condensed.add_node(markets.to_vec());
-
-        order_sccs(&mut condensed, &original);
-
-        // Expected order corresponds to the example in the doc comment.
-        // Note that C should be first, as it has an outgoing edge to the external market.
-        let expected = ["C", "A", "B"]
-            .map(|id| MarketSet::Single((id.into(), "GBR".into())))
-            .to_vec();
-
-        assert_eq!(condensed.node_weight(component).unwrap(), &expected);
     }
 
-    #[rstest]
-    fn solve_investment_order_linear_graph(sed_commodity: Commodity, svd_commodity: Commodity) {
+    /// Create a commodity map with the given SED and SVD commodities
+    fn commodity_map(sed_ids: &[&str], svd_ids: &[&str]) -> CommodityMap {
+        let sed = Arc::new(sed_commodity());
+        let svd = Arc::new(svd_commodity());
+        let sed_entries = sed_ids.iter().map(|&id| (id.into(), sed.clone()));
+        let svd_entries = svd_ids.iter().map(|&id| (id.into(), svd.clone()));
+        sed_entries.chain(svd_entries).collect()
+    }
+
+    /// A `MarketSet::Single` for a commodity in GBR
+    fn single(commodity_id: &str) -> MarketSet {
+        MarketSet::Single((commodity_id.into(), "GBR".into()))
+    }
+
+    /// A `MarketSet::Cycle` for commodities in GBR
+    fn cycle(commodity_ids: &[&str]) -> MarketSet {
+        MarketSet::Cycle(
+            commodity_ids
+                .iter()
+                .map(|&id| (id.into(), "GBR".into()))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn order_scc_simple_cycle() {
+        // Create a cycle A ← B ← C ← A (see doc comment for `order_scc`), where C is also consumed
+        // to produce X, which is outside the cycle
+        let mut graph = CommoditiesGraph::new();
+        add_edges(
+            &mut graph,
+            "GBR",
+            &[("B", "A"), ("C", "B"), ("A", "C"), ("C", "X")],
+        );
+        let commodities = commodity_map(&["A", "B", "C", "X"], &[]);
+
+        let result = solve_investment_order_for_year(&graph, &commodities);
+
+        // X is downstream of the cycle, so comes first. The order within the cycle corresponds to
+        // the example in the doc comment. Note that C should be first, as it has an outgoing edge
+        // to the external market.
+        assert_eq!(result, [single("X"), cycle(&["C", "A", "B"])]);
+    }
+
+    #[test]
+    fn solve_investment_order_linear_graph() {
         // Create a simple linear graph: A -> B -> C
-        let mut graph = Graph::new();
-
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
-        let node_c = graph.add_node(GraphNode::Commodity("C".into(), "GBR".into()));
-
-        // Add edges: A -> B -> C
-        graph.add_edge(
-            node_a,
-            node_b,
-            GraphEdge::Primary("process1".into(), "GBR".into()),
-        );
-        graph.add_edge(
-            node_b,
-            node_c,
-            GraphEdge::Primary("process2".into(), "GBR".into()),
-        );
-
-        // Create commodities map using fixtures
-        let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Arc::new(sed_commodity));
-        commodities.insert("C".into(), Arc::new(svd_commodity));
+        let mut graph = CommoditiesGraph::new();
+        add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "C")]);
+        let commodities = commodity_map(&["A", "B"], &["C"]);
 
         let result = solve_investment_order_for_year(&graph, &commodities);
 
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all market sets should be `Single`
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0], MarketSet::Single(("C".into(), "GBR".into())));
-        assert_eq!(result[1], MarketSet::Single(("B".into(), "GBR".into())));
-        assert_eq!(result[2], MarketSet::Single(("A".into(), "GBR".into())));
+        assert_eq!(result, [single("C"), single("B"), single("A")]);
     }
 
-    #[rstest]
-    fn solve_investment_order_cyclic_graph(sed_commodity: Commodity) {
+    #[test]
+    fn solve_investment_order_cyclic_graph() {
         // Create a simple cyclic graph: A -> B -> A
-        let mut graph = Graph::new();
-
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
-
-        // Add edges creating a cycle: A -> B -> A
-        graph.add_edge(
-            node_a,
-            node_b,
-            GraphEdge::Primary("process1".into(), "GBR".into()),
-        );
-        graph.add_edge(
-            node_b,
-            node_a,
-            GraphEdge::Primary("process2".into(), "GBR".into()),
-        );
-
-        // Create commodities map using fixtures
-        let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Arc::new(sed_commodity));
+        let mut graph = CommoditiesGraph::new();
+        add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "A")]);
+        let commodities = commodity_map(&["A", "B"], &[]);
 
         let result = solve_investment_order_for_year(&graph, &commodities);
 
         // Should be a single `Cycle` market set containing both commodities
-        assert_eq!(result.len(), 1);
-        assert_eq!(
-            result[0],
-            MarketSet::Cycle(vec![("A".into(), "GBR".into()), ("B".into(), "GBR".into())])
-        );
+        assert_eq!(result, [cycle(&["A", "B"])]);
     }
 
-    #[rstest]
-    fn solve_investment_order_layered_graph(sed_commodity: Commodity, svd_commodity: Commodity) {
+    #[test]
+    fn solve_investment_order_layered_graph() {
         // Create a graph with layers:
         //     A
         //    / \
         //   B   C
         //    \ /
         //     D
-        let mut graph = Graph::new();
-
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
-        let node_c = graph.add_node(GraphNode::Commodity("C".into(), "GBR".into()));
-        let node_d = graph.add_node(GraphNode::Commodity("D".into(), "GBR".into()));
-
-        // Add edges
-        graph.add_edge(
-            node_a,
-            node_b,
-            GraphEdge::Primary("process1".into(), "GBR".into()),
+        let mut graph = CommoditiesGraph::new();
+        add_edges(
+            &mut graph,
+            "GBR",
+            &[("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")],
         );
-        graph.add_edge(
-            node_a,
-            node_c,
-            GraphEdge::Primary("process2".into(), "GBR".into()),
-        );
-        graph.add_edge(
-            node_b,
-            node_d,
-            GraphEdge::Primary("process3".into(), "GBR".into()),
-        );
-        graph.add_edge(
-            node_c,
-            node_d,
-            GraphEdge::Primary("process4".into(), "GBR".into()),
-        );
-
-        // Create commodities map using fixtures
-        let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Arc::new(sed_commodity.clone()));
-        commodities.insert("C".into(), Arc::new(sed_commodity));
-        commodities.insert("D".into(), Arc::new(svd_commodity));
+        let commodities = commodity_map(&["A", "B", "C"], &["D"]);
 
         let result = solve_investment_order_for_year(&graph, &commodities);
 
         // Expected order: D, Layer(B, C), A
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0], MarketSet::Single(("D".into(), "GBR".into())));
         assert_eq!(
-            result[1],
-            MarketSet::Layer(vec![
-                MarketSet::Single(("B".into(), "GBR".into())),
-                MarketSet::Single(("C".into(), "GBR".into()))
-            ])
+            result,
+            [
+                single("D"),
+                MarketSet::Layer(vec![single("B"), single("C")]),
+                single("A")
+            ]
         );
-        assert_eq!(result[2], MarketSet::Single(("A".into(), "GBR".into())));
     }
 
-    #[rstest]
-    fn solve_investment_order_multiple_regions(sed_commodity: Commodity, svd_commodity: Commodity) {
+    #[test]
+    fn solve_investment_order_multiple_regions() {
         // Create a single graph spanning two regions, each with a linear chain A -> B -> C
-        let mut graph = Graph::new();
-
-        let node_a_gbr = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b_gbr = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
-        let node_c_gbr = graph.add_node(GraphNode::Commodity("C".into(), "GBR".into()));
-        let node_a_fra = graph.add_node(GraphNode::Commodity("A".into(), "FRA".into()));
-        let node_b_fra = graph.add_node(GraphNode::Commodity("B".into(), "FRA".into()));
-        let node_c_fra = graph.add_node(GraphNode::Commodity("C".into(), "FRA".into()));
-
-        // Add edges: A -> B -> C for each region
-        graph.add_edge(
-            node_a_gbr,
-            node_b_gbr,
-            GraphEdge::Primary("process1".into(), "GBR".into()),
-        );
-        graph.add_edge(
-            node_b_gbr,
-            node_c_gbr,
-            GraphEdge::Primary("process2".into(), "GBR".into()),
-        );
-        graph.add_edge(
-            node_a_fra,
-            node_b_fra,
-            GraphEdge::Primary("process1".into(), "FRA".into()),
-        );
-        graph.add_edge(
-            node_b_fra,
-            node_c_fra,
-            GraphEdge::Primary("process2".into(), "FRA".into()),
-        );
-
-        // Create commodities map using fixtures
-        let mut commodities = CommodityMap::new();
-        commodities.insert("A".into(), Arc::new(sed_commodity.clone()));
-        commodities.insert("B".into(), Arc::new(sed_commodity));
-        commodities.insert("C".into(), Arc::new(svd_commodity));
+        let mut graph = CommoditiesGraph::new();
+        add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "C")]);
+        add_edges(&mut graph, "FRA", &[("A", "B"), ("B", "C")]);
+        let commodities = commodity_map(&["A", "B"], &["C"]);
 
         let result = solve_investment_order_for_year(&graph, &commodities);
 
         // Expected order: Should have three layers, each with two commodities (one per region)
-        assert_eq!(result.len(), 3);
-        assert_eq!(
-            result[0],
+        let layer = |commodity_id: &str| {
             MarketSet::Layer(vec![
-                MarketSet::Single(("C".into(), "GBR".into())),
-                MarketSet::Single(("C".into(), "FRA".into()))
+                MarketSet::Single((commodity_id.into(), "GBR".into())),
+                MarketSet::Single((commodity_id.into(), "FRA".into())),
             ])
-        );
-        assert_eq!(
-            result[1],
-            MarketSet::Layer(vec![
-                MarketSet::Single(("B".into(), "GBR".into())),
-                MarketSet::Single(("B".into(), "FRA".into()))
-            ])
-        );
-        assert_eq!(
-            result[2],
-            MarketSet::Layer(vec![
-                MarketSet::Single(("A".into(), "GBR".into())),
-                MarketSet::Single(("A".into(), "FRA".into()))
-            ])
-        );
+        };
+        assert_eq!(result, [layer("C"), layer("B"), layer("A")]);
     }
 }
