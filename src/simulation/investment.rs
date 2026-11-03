@@ -77,16 +77,8 @@ pub fn perform_agent_investment(
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selected_assets = market_set.select_assets(
-            model,
-            year,
-            &net_demand,
-            existing_assets,
-            prices,
-            &seen_markets,
-            &all_selected_assets,
-            writer,
-        )?;
+        let selected_assets =
+            market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
 
         // Update our list of seen markets
         for market in market_set.iter_markets() {
