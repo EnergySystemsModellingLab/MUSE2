@@ -180,14 +180,11 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
                 let selection = level.containing_selection(time_slice);
                 let key = (commodity_id.clone(), asset.region_id().clone(), selection);
                 // Note: we use the negative of the flow as input flows are negative in the flow map.
-                let value = demand
+                // Net demand may become negative, representing a surplus.
+                demand
                     .entry(key)
                     .and_modify(|value| *value -= *flow)
                     .or_insert(-*flow);
-
-                if *value < Flow(0.0) {
-                    *value = Flow(0.0);
-                }
             }
         }
     }
