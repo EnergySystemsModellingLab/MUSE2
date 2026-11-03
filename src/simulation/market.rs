@@ -5,7 +5,7 @@ use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::process::{FlowDirection, Process, ProcessID};
+use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
     AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
@@ -28,7 +28,12 @@ pub enum MarketSet {
     /// Assets are selected for a group of markets which forms a cycle.
     /// Experimental: handled by [`select_assets_for_cycle`] and guarded by the broken options
     /// parameter.
-    Cycle(Vec<(CommodityID, RegionID)>),
+    Cycle {
+        /// The markets in the cycle, in investment order
+        markets: Vec<(CommodityID, RegionID)>,
+        /// Producers of cycle markets which consume a market from earlier in the investment order
+        feedback_processes: Vec<(ProcessID, RegionID)>,
+    },
     /// Assets are selected for a layer of independent [`MarketSet`]s
     Layer(Vec<MarketSet>),
 }
@@ -40,7 +45,7 @@ impl MarketSet {
     ) -> Box<dyn Iterator<Item = &'a (CommodityID, RegionID)> + 'a> {
         match self {
             MarketSet::Single(market) => Box::new(std::iter::once(market)),
-            MarketSet::Cycle(markets) => Box::new(markets.iter()),
+            MarketSet::Cycle { markets, .. } => Box::new(markets.iter()),
             MarketSet::Layer(set) => Box::new(set.iter().flat_map(|s| s.iter_markets())),
         }
     }
@@ -82,11 +87,15 @@ impl MarketSet {
                 &[],
                 writer,
             ),
-            MarketSet::Cycle(markets) => {
+            MarketSet::Cycle {
+                markets,
+                feedback_processes,
+            } => {
                 debug!("Starting investment for cycle '{self}'");
                 select_assets_for_cycle(
                     model,
                     markets,
+                    feedback_processes,
                     year,
                     demand,
                     existing_assets,
@@ -133,7 +142,7 @@ impl Display for MarketSet {
             MarketSet::Single((commodity_id, region_id)) => {
                 write!(f, "{commodity_id}|{region_id}")
             }
-            MarketSet::Cycle(markets) => {
+            MarketSet::Cycle { markets, .. } => {
                 write!(
                     f,
                     "({})",
@@ -243,10 +252,15 @@ pub fn select_assets_for_single_market(
 /// Dispatch optimisation is performed after each market is visited.
 ///
 /// Dispatch may fail at any point if new demands are encountered for previously visited markets.
+///
+/// `feedback_processes` are producers of cycle markets which consume a market from earlier in the
+/// investment order. Assets for these are selected in a first pass over the markets and retained,
+/// then the remaining assets are reselected in a second pass excluding feedback processes.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_assets_for_cycle(
     model: &Model,
     markets: &[(CommodityID, RegionID)],
+    feedback_processes: &[(ProcessID, RegionID)],
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
@@ -257,44 +271,6 @@ pub fn select_assets_for_cycle(
 ) -> Result<Vec<AssetRef>> {
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
-
-    // Collect feedback process/region pairs. These are process-region combinations that are the
-    // wrong way around in the investment order (i.e. any incoming commodity appears before the
-    // primary output commodity in that region)
-    let market_order: HashMap<_, _> = markets.iter().enumerate().map(|(i, m)| (m, i)).collect();
-    let mut feedback_processes: Vec<(ProcessID, RegionID)> = Vec::new();
-    for (process_id, process) in &model.processes {
-        if !process.active_for_year(year) {
-            continue;
-        }
-        let Some(primary_output) = &process.primary_output else {
-            continue;
-        };
-
-        // Iterate over the regions the process operates in and assess feedback status.
-        // For now, we assume that all incoming/outgoing flows occur in the region that the
-        // process operates in - this will need to be revisited when we implement trade
-        for region in &process.regions {
-            let primary_market = (primary_output.clone(), region.clone());
-            let Some(&primary_order) = market_order.get(&primary_market) else {
-                continue;
-            };
-
-            // For any (input, primary output) pair, mark (process, region) as feedback if both
-            // input and primary output are part of the SCC (in the market_order), and input
-            // comes before primary output in the market order
-            let flows = &process.flows[&(region.clone(), year)];
-            let is_feedback = flows.iter().any(|(commodity_id, flow)| {
-                flow.direction() == FlowDirection::Input
-                    && market_order
-                        .get(&(commodity_id.clone(), region.clone()))
-                        .is_some_and(|&input_order| input_order < primary_order)
-            });
-            if is_feedback {
-                feedback_processes.push((process_id.clone(), region.clone()));
-            }
-        }
-    }
 
     // STEP 1
     // Iterate over the markets in order1, considering all processes
@@ -434,6 +410,8 @@ pub fn select_assets_for_cycle(
 }
 
 /// Get a portion of the demand profile for this market
+///
+/// Negative net demand (i.e. a surplus) is treated as zero demand.
 pub fn get_demand_portion_for_market(
     time_slice_info: &TimeSliceInfo,
     demand: &AllDemandMap,
@@ -451,7 +429,10 @@ pub fn get_demand_portion_for_market(
                     ts_selection.clone(),
                 ))
                 .unwrap_or(&Flow(0.0));
-            (ts_selection, commodity_portion * demand_for_selection)
+            (
+                ts_selection,
+                commodity_portion * demand_for_selection.max(Flow(0.0)),
+            )
         })
         .collect()
 }

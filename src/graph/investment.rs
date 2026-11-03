@@ -1,10 +1,13 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
+use crate::process::ProcessID;
+use crate::region::RegionID;
 use crate::simulation::market::MarketSet;
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, bail};
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
+use itertools::Itertools;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
@@ -94,8 +97,40 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
         // Exactly one member: a single market that isn't part of a cycle
         [idx] => MarketSet::Single(market(idx)),
         // Several members: a cycle, already in investment order (from `order_scc`)
-        _ => MarketSet::Cycle(scc.iter().map(market).collect()),
+        _ => MarketSet::Cycle {
+            markets: scc.iter().map(market).collect(),
+            feedback_processes: find_feedback_processes(graph, scc),
+        },
     }
+}
+
+/// Find the feedback processes for an ordered strongly connected component (SCC).
+///
+/// A feedback process is a primary producer of an SCC market which consumes another SCC market
+/// that appears earlier in the investment order, so its demand for that input is not known when
+/// the earlier market is invested in.
+fn find_feedback_processes(
+    graph: &CommoditiesGraph,
+    scc: &[NodeIndex],
+) -> Vec<(ProcessID, RegionID)> {
+    scc.iter()
+        .enumerate()
+        // Get edges into each market from markets earlier in the order
+        .flat_map(|(i, &idx)| {
+            graph
+                .edges_directed(idx, Direction::Incoming)
+                .filter(move |edge| scc[..i].contains(&edge.source()))
+        })
+        // Keep the processes for which these are primary outputs
+        .filter_map(|edge| match edge.weight() {
+            GraphEdge::Primary(process_id, region_id) => {
+                Some((process_id.clone(), region_id.clone()))
+            }
+            _ => None,
+        })
+        // A process may consume several earlier markets
+        .unique()
+        .collect()
 }
 
 /// Order the markets in a strongly connected component (SCC) using a mixed-integer linear program.
@@ -117,8 +152,11 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 ///   `i` comes before `j`, then `j` cannot be before `i`).
 /// * Transitivity constraints prevent 3-cycles, ensuring the resulting relation is acyclic (i.e. if
 ///   `i` comes before `j` and `j` comes before `k`, then `k` cannot come before `i`).
-/// * Incoming-edge constraints require every SCC node to retain at least one correctly-ordered
-///   incoming edge within the SCC unless it has an external incoming edge.
+/// * Producer constraints require every market to keep at least one primary producer that is not a
+///   feedback process, i.e. one whose inputs from within the SCC all appear after the market in the
+///   order. Producers with no inputs from within the SCC always qualify. This ensures that every
+///   market still has a producer when feedback processes are excluded in the second investment
+///   pass (see `select_assets_for_cycle`).
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
 ///   market to a later one), counted within the original SCC and treated as unit penalties. A small
 ///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
@@ -162,14 +200,13 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 ///    | C | 0 | 1 | 0     |
 /// ```
 ///
-/// Additionally, each node must retain at least one incoming edge from a node that appears after it
-/// in the final investment order. This includes edges within the SCC and any external incoming
-/// edges. In this example, since B has an incoming edge from outside the SCC, this constraint
-/// implies that only A and C must retain a correctly-ordered incoming edge from within the SCC:
+/// Additionally, each market must keep at least one primary producer whose inputs from within the
+/// SCC all appear after it in the final investment order. Suppose that each edge represents a
+/// separate process. Since B has a producer supplied from upstream of the SCC, B needs no
+/// constraint. A's only producer consumes B, and C's only producer consumes A, so:
 ///
 /// ```text
 ///    x[A][B] >= 1
-///    x[B][C] >= 0
 ///    x[C][A] >= 1
 /// ```
 ///
@@ -198,9 +235,10 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 /// * As with any SCC, at least one pairwise violation is guaranteed. In this ordering, the only
 ///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
 /// * This pairwise violation is permitted because B has an additional producer upstream of the SCC.
+///   B's producer that consumes C is a feedback process.
 ///
 /// `scc` holds the commodity graph indices of the SCC's markets, and is sorted in place into the
-/// final order. An error is returned if the MILP cannot be solved (e.g. if the SCC has no inputs
+/// final order. An error is returned if the MILP cannot be solved (e.g. if the SCC has no supply
 /// from outside it).
 #[allow(clippy::too_many_lines)]
 fn order_scc(
@@ -221,7 +259,6 @@ fn order_scc(
     // Record whether any edge inside the SCC goes from market i to market j; these become penalties.
     let mut penalties = vec![vec![0.0f64; n]; n];
     let mut has_external_outgoing = vec![false; n];
-    let mut has_external_incoming = vec![false; n];
     for (i, &idx) in scc.iter().enumerate() {
         // Loop over the edges going out of this node
         for edge in graph.edges_directed(idx, Direction::Outgoing) {
@@ -235,20 +272,7 @@ fn order_scc(
                 has_external_outgoing[i] = true;
             }
         }
-
-        // Check whether this node has any incoming edges from outside the SCC, including from
-        // SOURCE nodes
-        has_external_incoming[i] = graph
-            .neighbors_directed(idx, Direction::Incoming)
-            .any(|source| !index_position.contains_key(&source));
     }
-
-    // Make sure the SCC has at least one external incoming edge
-    ensure!(
-        has_external_incoming.contains(&true),
-        "SCC {} has no inputs",
-        to_market_set(graph, scc)
-    );
 
     // Bias: if market j has outgoing edges to nodes outside this SCC, we prefer to place it earlier.
     for (j, has_external) in has_external_outgoing.iter().enumerate() {
@@ -308,27 +332,40 @@ fn order_scc(
         }
     }
 
-    // Every SCC node must retain at least one correctly-ordered incoming edge.
-    for i in 0..n {
-        let mut incoming_terms = Vec::new();
-        for j in 0..n {
-            if i == j {
-                continue;
-            }
-
-            // Check if the commodity graph contains j -> i.
-            if graph.contains_edge(scc[j], scc[i]) {
-                // Get the variable saying whether i comes before j (i.e. "correct" ordering
-                // for a j -> i edge) and add it to the terms
-                incoming_terms.push((vars[i][j].unwrap(), 1.0));
+    // Every market must keep at least one primary producer which isn't a feedback process, i.e.
+    // whose inputs from within the SCC all come after the market in the order
+    for (i, &idx) in scc.iter().enumerate() {
+        // Group the market's primary producers by process, collecting the positions of each
+        // producer's inputs from within the SCC (excluding the market itself)
+        let mut producers: IndexMap<&GraphEdge, Vec<usize>> = IndexMap::new();
+        for edge in graph.edges_directed(idx, Direction::Incoming) {
+            if matches!(edge.weight(), GraphEdge::Primary(..)) {
+                let input_position = index_position.get(&edge.source()).filter(|&&j| j != i);
+                producers
+                    .entry(edge.weight())
+                    .or_default()
+                    .extend(input_position);
             }
         }
 
-        // If the node has an incoming edge from outside the SCC, then it doesn't need a
-        // correctly-ordered internal incoming edge. Otherwise it does (i.e. a least one
-        // variable in `incoming_terms` must be 1.0)
-        let required = if has_external_incoming[i] { 0.0 } else { 1.0 };
-        problem.add_row(required.., incoming_terms);
+        // Skip markets with a producer that has no inputs from within the SCC (as it can never be a
+        // feedback process), or with no primary producers at all
+        if producers.is_empty() || producers.values().any(Vec::is_empty) {
+            continue;
+        }
+
+        // Add a binary variable y for each producer, which can only be 1 if market i comes before
+        // all of the producer's inputs. At least one y must be 1.
+        let mut producer_terms = Vec::new();
+        for inputs in producers.values() {
+            let y = problem.add_integer_column(0.0, 0..=1);
+            for &j in inputs {
+                // y <= x[i][j]
+                problem.add_row(0.0.., [(vars[i][j].unwrap(), 1.0), (y, -1.0)]);
+            }
+            producer_terms.push((y, 1.0));
+        }
+        problem.add_row(1.0.., producer_terms);
     }
 
     // Solve model
@@ -343,11 +380,14 @@ fn order_scc(
         }
     };
 
-    // Check status
+    // Check status. The problem will be infeasible if there is no order in which every market
+    // keeps a non-feedback producer (e.g. if the SCC has no supply from outside it).
     if solved.status() != HighsModelStatus::Optimal {
         let status = solved.status();
         bail!(
-            "HiGHS returned a non-optimal status while ordering SCC {}: {status:?}",
+            "Could not find a valid investment order for circular dependency {} (HiGHS status: \
+             {status:?}). Check that the markets in this cycle can be supplied by processes that \
+             do not depend on the cycle.",
             to_market_set(graph, scc)
         );
     }
@@ -492,7 +532,9 @@ pub fn solve_investment_order_for_model(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{sed_commodity, svd_commodity};
+    use crate::commodity::Commodity;
+    use crate::fixture::{assert_error, sed_commodity, svd_commodity};
+    use rstest::rstest;
     use std::sync::Arc;
 
     /// Add `(input, output)` edges between commodities in a region to a commodity graph, with a
@@ -529,14 +571,18 @@ mod tests {
         MarketSet::Single((commodity_id.into(), "GBR".into()))
     }
 
-    /// A `MarketSet::Cycle` for commodities in GBR
-    fn cycle(commodity_ids: &[&str]) -> MarketSet {
-        MarketSet::Cycle(
-            commodity_ids
+    /// A `MarketSet::Cycle` for commodities and feedback processes in GBR
+    fn cycle(commodity_ids: &[&str], feedback_process_ids: &[&str]) -> MarketSet {
+        MarketSet::Cycle {
+            markets: commodity_ids
                 .iter()
                 .map(|&id| (id.into(), "GBR".into()))
                 .collect(),
-        )
+            feedback_processes: feedback_process_ids
+                .iter()
+                .map(|&id| (id.into(), "GBR".into()))
+                .collect(),
+        }
     }
 
     #[test]
@@ -557,8 +603,15 @@ mod tests {
         // X is downstream of the cycle, so comes first, and Y is upstream, so comes last. The order
         // within the cycle corresponds to the example in the doc comment. Note that C should be
         // first, as it has an outgoing edge to the external market. B is last because it receives
-        // inputs from upstream.
-        assert_eq!(result, [single("X"), cycle(&["C", "A", "B"]), single("Y")]);
+        // inputs from upstream, so its producer that consumes C is a feedback process.
+        assert_eq!(
+            result,
+            [
+                single("X"),
+                cycle(&["C", "A", "B"], &["C_to_B"]),
+                single("Y")
+            ]
+        );
     }
 
     #[test]
@@ -575,17 +628,82 @@ mod tests {
         assert_eq!(result, [single("C"), single("B"), single("A")]);
     }
 
-    #[test]
-    fn solve_investment_order_cyclic_graph() {
+    #[rstest]
+    #[case::sed_input(CommodityType::SupplyEqualsDemand)]
+    #[case::oth_input(CommodityType::Other)]
+    fn solve_investment_order_cyclic_graph(#[case] x_kind: CommodityType) {
         // Create a simple cyclic graph: X -> A -> B -> A
         let mut graph = CommoditiesGraph::new();
         add_edges(&mut graph, "GBR", &[("X", "A"), ("A", "B"), ("B", "A")]);
-        let commodities = commodity_map(&["X", "A", "B"], &[]);
+        let mut commodities = commodity_map(&["A", "B"], &[]);
+        let x = Commodity {
+            kind: x_kind,
+            ..sed_commodity()
+        };
+        commodities.insert("X".into(), Arc::new(x));
 
         let result = solve_investment_order_for_year(&graph, &commodities).unwrap();
 
-        // Should be a `Cycle` market set containing both commodities, followed by a `Single`
-        assert_eq!(result, [cycle(&["B", "A"]), single("X")]);
+        // The first market set should be a `Cycle` containing both commodities. B must come first,
+        // as its only producer consumes A, so A's producer that consumes B is a feedback process.
+        assert_eq!(result[0], cycle(&["B", "A"], &["B_to_A"]));
+    }
+
+    #[test]
+    fn solve_investment_order_closed_cycle() {
+        // Create a cyclic graph with no supply from outside the cycle: A -> B -> A
+        let mut graph = CommoditiesGraph::new();
+        add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "A")]);
+        let commodities = commodity_map(&["A", "B"], &[]);
+
+        assert_error!(
+            solve_investment_order_for_year(&graph, &commodities),
+            "Could not find a valid investment order for circular dependency (A|GBR, B|GBR) \
+             (HiGHS status: Infeasible). Check that the markets in this cycle can be supplied by \
+             processes that do not depend on the cycle."
+        );
+    }
+
+    #[test]
+    fn solve_investment_order_multi_input_producer() {
+        // Create a cycle where A is produced from B and C by a single process, B and C are produced
+        // from A, and B and C are also produced from X (outside the cycle)
+        let mut graph = CommoditiesGraph::new();
+        add_edges(
+            &mut graph,
+            "GBR",
+            &[("A", "B"), ("A", "C"), ("X", "B"), ("X", "C")],
+        );
+        let [a, b, c] = ["A", "B", "C"].map(|id| {
+            let node = GraphNode::Commodity(id.into(), "GBR".into());
+            graph
+                .node_indices()
+                .find(|&idx| graph[idx] == node)
+                .unwrap()
+        });
+        for input in [b, c] {
+            graph.add_edge(input, a, GraphEdge::Primary("BC_to_A".into(), "GBR".into()));
+        }
+        let commodities = commodity_map(&["A", "B", "C", "X"], &[]);
+
+        let result = solve_investment_order_for_year(&graph, &commodities).unwrap();
+
+        // A must come before both B and C, so that its only producer is not a feedback process
+        let MarketSet::Cycle {
+            markets,
+            feedback_processes,
+        } = &result[0]
+        else {
+            panic!("Expected a cycle");
+        };
+        assert_eq!(markets[0], ("A".into(), "GBR".into()));
+        assert_eq!(
+            feedback_processes,
+            &[
+                ("A_to_B".into(), "GBR".into()),
+                ("A_to_C".into(), "GBR".into())
+            ]
+        );
     }
 
     #[test]
