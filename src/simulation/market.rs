@@ -71,8 +71,6 @@ impl MarketSet {
         demand: &AllDemandMap,
         existing_assets: &[AssetRef],
         prices: &Prices,
-        seen_markets: &[(CommodityID, RegionID)],
-        previously_selected_assets: &[AssetRef],
         writer: &mut DataWriter,
     ) -> Result<Vec<AssetRef>> {
         match self {
@@ -100,8 +98,6 @@ impl MarketSet {
                     demand,
                     existing_assets,
                     prices,
-                    seen_markets,
-                    previously_selected_assets,
                     writer,
                 )
                 .with_context(|| {
@@ -123,8 +119,6 @@ impl MarketSet {
                         demand,
                         existing_assets,
                         prices,
-                        seen_markets,
-                        previously_selected_assets,
                         writer,
                     )?;
                     all_assets.extend(assets);
@@ -265,8 +259,6 @@ pub fn select_assets_for_cycle(
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &Prices,
-    _seen_markets: &[(CommodityID, RegionID)],
-    _previously_selected_assets: &[AssetRef],
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     // Precompute a joined string for logging
