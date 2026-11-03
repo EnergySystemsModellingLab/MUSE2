@@ -160,7 +160,7 @@ fn price_market_set(
                 strategy_override,
             );
         }
-        MarketSet::Cycle(markets) => {
+        MarketSet::Cycle { markets, .. } => {
             price_cycle(
                 model,
                 solution_without_candidates,
