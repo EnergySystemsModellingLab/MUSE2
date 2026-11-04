@@ -1,0 +1,154 @@
+src/graph/investment.rs
+  h_e76403a1cd4bf1 7,21,34,41,43,71,248,376,417-418,522,525,526,529,624,635,689,725,740,746
+  h_e76403a1cd4bf1 510,519,614,664,722
+  s_30df774c9b18fd::t_e61c627378b82c 128-130,133
+  s_30df774c9b18fd::t_59420b7a542edf 60
+  s_30df774c9b18fd::t_0663fb70b258dc 134-135
+src/graph.rs
+  h_e76403a1cd4bf1 26,28,43,45-46,48,84,86-87,97,99,103,105-110,113-155,161,163,166,173,175,183-184,194,202,214
+  h_e76403a1cd4bf1 104,156-160,162,164-165,180-182,185,204,207
+src/graph/validate.rs
+  h_e76403a1cd4bf1 14,33-34,37-39,46,50,55-59,63,116,118,148,158,166,173,191,202,208,215,219,251-253,255-264,286-298,303,316,323,337-343,348,366-378,383
+src/input.rs
+  h_e76403a1cd4bf1 321-322,328
+tests/cli.rs
+  h_e76403a1cd4bf1 75
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+  s_135dd534e72d7a::t_88403f2e0675ce 2-23,34-35
+tests/data/circularity/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+  s_135dd534e72d7a::t_88403f2e0675ce 2-23,34-35
+tests/data/circularity_npv/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+src/asset.rs
+  s_9c82011db8f22b::t_b317d6fca77a3c 997
+  s_9c82011db8f22b::t_70cbcc4eb26189 828
+  s_9c82011db8f22b::t_99383e725d3c81 841-842
+  s_9c82011db8f22b::t_81db92617636d6 995-996,1003,1006,1008,1012,1014-1015,1020-1021,1029-1030,1041,1048,1056-1059,1063,1065,1068-1069,1075-1076,1080-1085,1087-1088,1091-1092,1094-1099
+  s_9c82011db8f22b::t_ae7a72e38ac96e 49
+  s_9c82011db8f22b::t_c40fa438e8aca3 1019,1035,1047,1051,1060,1129
+  s_9c82011db8f22b::t_fd0b6f2097bb25 1052
+  s_9c82011db8f22b::t_0ee9dff81e8681 829,836-837
+  s_9c82011db8f22b::t_370a60d93b60a2 848,855,1126,1251,1576-1577,1579-1581,1583,1586-1590,1595,1601-1603,1608,1610,1615,1620,1626,1630,1637,1642-1643,1653,1660-1661,1666,1672-1677,1682-1684,1686-1688,1693,1699,1701-1703,1707-1708,1711,1715-1716,1722-1723,1727-1731,1735,1738,1782
+  s_9c82011db8f22b::t_4d34aadf878044 1649
+  s_9c82011db8f22b::t_54998a405a7d11 12-13
+  s_9c82011db8f22b::t_738e3ad96f063b 1692
+  s_9c82011db8f22b::t_e4f91321c9e42a 838-840
+  s_9c82011db8f22b::t_225ab61e912634 843
+  s_9c82011db8f22b::t_8e973fa9dae925 1018
+  s_9c82011db8f22b::t_80a58efe49eacd 1039-1040
+  s_9c82011db8f22b::t_7c7be9dce9f96b 1045-1046
+  s_9c82011db8f22b::t_a7f01748b44313 1049
+  s_9c82011db8f22b::t_4bdbe8fa377ee1 1061-1062
+  s_9c82011db8f22b::t_ec06b8b0edf325 1127-1128
+  s_9c82011db8f22b::t_46deed9973a13e 1249-1250
+  s_9c82011db8f22b::t_8b0ec6f17488cd 1252-1253
+  s_9c82011db8f22b::t_be7cf6963b017c 1574-1575
+  s_9c82011db8f22b::t_a2af805716d7ad 1694
+  s_9c82011db8f22b::t_ec5bb2f98f8f62 1736
+  s_9c82011db8f22b::t_1ced528dd91dd3 1781
+src/asset/capacity.rs
+  s_9c82011db8f22b::t_f7d36d053fe874 358
+  s_9c82011db8f22b::t_b1a6b03cc3ce4d 256-270,286
+  s_9c82011db8f22b::t_ab6bd976daeb39 296-299,304-306
+  s_9c82011db8f22b::t_5ac16cae4fb6c6 67,70,74,78,81,88,94,117-121,123-124,130-136,145-165,175-199,206-219
+  s_9c82011db8f22b::t_ac081b695e9e4a 9,11-20,24-33,39,45,54-56
+  s_9c82011db8f22b::t_29f65bf8fafee3 307,317-321,336-339
+  s_9c82011db8f22b::t_842476b2c1022a 65,68-69
+  s_9c82011db8f22b::t_7a3e4628ac6bcf 66,73,75-77,79-80
+  s_9c82011db8f22b::t_7ec9caa2ab2b9c 81,109
+  s_9c82011db8f22b::t_45720f419e6696 98-105
+  s_9c82011db8f22b::t_7e406da99ef22f 82
+src/output.rs
+  s_9c82011db8f22b::t_4f8b2c345cccf4 765
+  s_9c82011db8f22b::t_69ef9586a8a0d7 628-629
+  s_9c82011db8f22b::t_dc59c8325aaa05 775
+  s_9c82011db8f22b::t_522fa03ebc5834 167-168,170-171,751,753,789,791
+src/asset/pool.rs
+  s_9c82011db8f22b::t_dfe9aee6f78cbe 102-103,105,107
+  s_9c82011db8f22b::t_e1c8fc7ddc8713 104,109-111
+  s_9c82011db8f22b::t_26e770b7b12c0f 112-113
+tests/data/simple_shadow/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/simple_ironing_out/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/simple_tranche_size/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-5,7-11,13,16-19
+tests/data/simple_marginal_average/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/simple_npv/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/two_outputs/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-21,30-32
+schemas/input/processes.yaml
+  s_135dd534e72d7a::t_2349c3dbb7dc11 42
+schemas/input/assets.yaml
+  s_135dd534e72d7a::t_6382e602bfea29 26-27
+tests/data/muse1_default/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-3
+tests/data/two_regions/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,13-14,23-24,37-38,55-56,77-78
+tests/data/simple/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+tests/data/missing_commodity/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-13
+tests/data/simple_marginal/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+src/input/asset.rs
+  s_135dd534e72d7a::t_d0e652b85a34b3 142-143,228-250
+  s_135dd534e72d7a::t_f490ead7875d55 251-252
+docs/model/investment.md
+  s_135dd534e72d7a::t_574138b75e3de9 111-114,118
+tests/data/simple_mothball/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-13,17-19
+tests/data/simple_full/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1da836b6f7144a19f070a95eb92df2c01fd3656",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_135dd534e72d7a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4bd373c3-aa68-4848-a5da-06ee538826c5",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_30df774c9b18fd": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "0faa7414-583e-44c3-9a53-15bb5cb75e1e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_9c82011db8f22b": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "ca163686-6d41-4dad-b5ca-6ff7e89590ab",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
