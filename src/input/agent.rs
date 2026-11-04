@@ -165,6 +165,9 @@ where
 mod tests {
     use super::*;
     use crate::agent::DecisionRule;
+    use crate::fixture::assert_patched_runs_ok_simple;
+    use crate::patch::FilePatch;
+    use itertools::Itertools;
     use rstest::rstest;
     use std::{fs, iter};
     use tempfile::tempdir;
@@ -242,6 +245,10 @@ mod tests {
         Some(AgentType::Competitive)
     )]
     #[case(
+        "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,portfolio\n",
+        Some(AgentType::Portfolio)
+    )]
+    #[case(
         "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,invalid\n",
         None
     )]
@@ -257,5 +264,25 @@ mod tests {
                 result.unwrap_err();
             }
         }
+    }
+
+    #[rstest]
+    #[case::all_competitive(["competitive"; 4])]
+    #[case::all_portfolio(["portfolio"; 4])]
+    #[case::mixed(["competitive", "portfolio", "competitive", "portfolio"])]
+    fn model_runs_with_agent_types(#[case] agent_types: [&str; 4]) {
+        let mut lines = vec![
+            "id,description,regions,decision_rule,decision_lexico_tolerance,agent_type".to_string(),
+        ];
+        for (id, agent_type) in ["A0_GEX", "A0_GPR", "A0_ELC", "A0_RES"]
+            .iter()
+            .zip(agent_types)
+        {
+            lines.push(format!("{id},,all,single,,{agent_type}"));
+        }
+        let lines = lines.iter().map(String::as_str).collect_vec();
+        assert_patched_runs_ok_simple!(vec![
+            FilePatch::new(AGENT_FILE_NAME).with_replacement(&lines)
+        ]);
     }
 }
