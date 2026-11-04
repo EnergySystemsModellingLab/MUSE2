@@ -1,0 +1,22 @@
+src/asset/capacity.rs
+  s_378dcf4051c8b4::t_c6498f4a843ab9 263-264,271-282
+  s_378dcf4051c8b4::t_a7f7fb37c162cc 83-97
+  s_378dcf4051c8b4::t_9a841a310a88bd 245-262,265-270
+  s_378dcf4051c8b4::t_697de47fae0081 244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "08ef0a20f0a2b669aa689e3024e3603fe4bc4b24",
+  "prompts": {},
+  "sessions": {
+    "s_378dcf4051c8b4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
