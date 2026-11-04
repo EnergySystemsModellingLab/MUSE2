@@ -4,7 +4,7 @@ use crate::asset::{Asset, AssetID, AssetRef};
 use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
-use crate::simulation::investment::appraisal::AppraisalOutput;
+use crate::simulation::investment::competitive::metrics::AppraisalOutput;
 use crate::simulation::optimisation::{FlowMap, Solution};
 use crate::simulation::prices::PriceMap;
 use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
@@ -728,7 +728,7 @@ mod tests {
     use crate::fixture::{
         appraisal_output, asset, assets, commodity_id, multi_tranche_asset, region_id, time_slice,
     };
-    use crate::simulation::investment::appraisal::AppraisalOutput;
+    use crate::simulation::investment::competitive::metrics::AppraisalOutput;
     use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};

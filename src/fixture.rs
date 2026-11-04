@@ -15,10 +15,9 @@ use crate::process::{
     ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
-use crate::simulation::investment::appraisal::LCOXMetric;
-use crate::simulation::investment::appraisal::{
-    AppraisalOutput, coefficients::ObjectiveCoefficients,
-};
+use crate::simulation::investment::competitive::coefficients::ObjectiveCoefficients;
+use crate::simulation::investment::competitive::metrics::AppraisalOutput;
+use crate::simulation::investment::competitive::metrics::LCOXMetric;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{
     Activity, ActivityPerCapacity, Capacity, Dimensionless, Flow, MoneyPerActivity,
