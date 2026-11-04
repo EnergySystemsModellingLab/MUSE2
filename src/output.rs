@@ -13,6 +13,8 @@ use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -265,6 +267,7 @@ struct AppraisalResultsTimeSliceRow {
 /// For writing extra debug information about the model
 struct DebugDataWriter {
     context: Option<String>,
+    output_path: PathBuf,
     unmet_demand_file_path: PathBuf,
     commodity_balance_duals_writer: csv::Writer<File>,
     unmet_demand_writer: Option<csv::Writer<File>>,
@@ -272,6 +275,8 @@ struct DebugDataWriter {
     appraisal_results_writer: csv::Writer<File>,
     appraisal_results_time_slice_writer: csv::Writer<File>,
     dispatch_asset_writer: csv::Writer<File>,
+    /// Writers for debug files owned by other modules, created on first use
+    custom_writers: HashMap<&'static str, csv::Writer<File>>,
 }
 
 impl DebugDataWriter {
@@ -288,6 +293,7 @@ impl DebugDataWriter {
 
         Ok(Self {
             context: None,
+            output_path: output_path.to_path_buf(),
             unmet_demand_file_path: output_path.join(UNMET_DEMAND_FILE_NAME),
             commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
             unmet_demand_writer: None,
@@ -297,6 +303,7 @@ impl DebugDataWriter {
                 APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME,
             )?,
             dispatch_asset_writer: new_writer(ACTIVITY_ASSET_DISPATCH)?,
+            custom_writers: HashMap::new(),
         })
     }
 
@@ -538,6 +545,27 @@ impl DebugDataWriter {
         Ok(())
     }
 
+    /// Write rows to a debug file owned by another module
+    ///
+    /// The file is created on first use, even if `rows` is empty.
+    fn write_custom_rows<R: Serialize>(
+        &mut self,
+        file_name: &'static str,
+        rows: impl IntoIterator<Item = R>,
+    ) -> Result<()> {
+        let writer = match self.custom_writers.entry(file_name) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                entry.insert(csv::Writer::from_path(self.output_path.join(file_name))?)
+            }
+        };
+        for row in rows {
+            writer.serialize(row)?;
+        }
+
+        Ok(())
+    }
+
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
         if let Some(wrt) = &mut self.unmet_demand_writer {
@@ -548,6 +576,9 @@ impl DebugDataWriter {
         self.appraisal_results_writer.flush()?;
         self.appraisal_results_time_slice_writer.flush()?;
         self.dispatch_asset_writer.flush()?;
+        for wrt in self.custom_writers.values_mut() {
+            wrt.flush()?;
+        }
 
         Ok(())
     }
@@ -603,6 +634,39 @@ impl DataWriter {
     ) -> Result<()> {
         if let Some(wtr) = &mut self.debug {
             wtr.write_dispatch_debug_info(milestone_year, run_description, solution)?;
+        }
+
+        Ok(())
+    }
+
+    /// Whether debug files are being written
+    pub fn debug_enabled(&self) -> bool {
+        self.debug.is_some()
+    }
+
+    /// Prepend the current debug context (if any) to a run description
+    pub fn debug_run_description(&self, run_description: &str) -> String {
+        match &self.debug {
+            Some(wtr) => wtr.with_context(run_description),
+            None => run_description.to_string(),
+        }
+    }
+
+    /// Write rows to a custom debug CSV file in the output directory
+    ///
+    /// This allows other modules (e.g. asset selection algorithms) to own their debug files. The
+    /// file is created the first time it is written to (even if `rows` is empty). Does nothing if
+    /// debug output is disabled.
+    ///
+    /// Files for asset selection algorithms should be named
+    /// `debug_asset_selection_<agent_type>[_<suffix>].csv`.
+    pub fn write_debug_rows<R: Serialize>(
+        &mut self,
+        file_name: &'static str,
+        rows: impl IntoIterator<Item = R>,
+    ) -> Result<()> {
+        if let Some(wtr) = &mut self.debug {
+            wtr.write_custom_rows(file_name, rows)?;
         }
 
         Ok(())
@@ -1128,6 +1192,52 @@ mod tests {
                 .try_collect()
                 .unwrap();
         assert_equal(records, iter::once(expected));
+    }
+
+    #[rstest]
+    #[case(true)]
+    #[case(false)]
+    fn write_debug_rows(#[case] debug: bool) {
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct TestRow {
+            run_description: String,
+            value: u32,
+        }
+
+        let dir = tempdir().unwrap();
+        let file_name = "debug_test.csv";
+        let rows = [
+            TestRow {
+                run_description: "a".into(),
+                value: 1,
+            },
+            TestRow {
+                run_description: "b".into(),
+                value: 2,
+            },
+        ];
+
+        {
+            let mut writer = DataWriter::create(dir.path(), dir.path(), debug).unwrap();
+            assert_eq!(writer.debug_enabled(), debug);
+
+            // Rows written across multiple calls end up in the same file
+            writer.write_debug_rows(file_name, &rows[..1]).unwrap();
+            writer.write_debug_rows(file_name, &rows[1..]).unwrap();
+            writer.flush().unwrap();
+        }
+
+        let path = dir.path().join(file_name);
+        if debug {
+            let records: Vec<TestRow> = csv::Reader::from_path(path)
+                .unwrap()
+                .into_deserialize()
+                .try_collect()
+                .unwrap();
+            assert_equal(records, rows);
+        } else {
+            assert!(!path.exists());
+        }
     }
 
     #[rstest]
