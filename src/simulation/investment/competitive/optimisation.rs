@@ -1,12 +1,12 @@
 //! Optimisation problem for investment tools.
-use super::DemandMap;
-use super::ObjectiveCoefficients;
+use super::coefficients::ObjectiveCoefficients;
 use super::constraints::{
     add_activity_constraints, add_demand_constraints, add_utilisation_peak_constraints,
 };
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::simulation::investment::DemandMap;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
 use crate::simulation::optimisation::solve_optimal;
