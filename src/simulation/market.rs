@@ -7,7 +7,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
-use crate::simulation::investment::competitive::{get_asset_options, select_best_assets};
+use crate::simulation::investment::competitive::select_assets;
 use crate::simulation::investment::{AllDemandMap, DemandMap, update_net_demand_map};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
@@ -183,21 +183,6 @@ pub fn select_assets_for_single_market(
             commodity_portion,
         );
 
-        // Existing and candidate assets from which to choose
-        let mut opt_assets = get_asset_options(
-            existing_assets,
-            &demand_portion_for_market,
-            agent,
-            commodity,
-            region_id,
-            year,
-            model.parameters.capacity_tranche_fraction,
-        )
-        .collect::<Vec<_>>();
-
-        // Exclude certain processes from the options
-        opt_assets.retain(|asset| !excluded_processes.contains(asset.process_id()));
-
         // Calculate the agent's share of addition limits for candidate processes
         let agent_addition_limits = collect_agent_limits(
             agent,
@@ -219,16 +204,17 @@ pub fn select_assets_for_single_market(
         );
 
         // Choose assets from among existing pool and candidates
-        let best_assets = select_best_assets(
+        let best_assets = select_assets(
             model,
-            opt_assets,
+            agent,
+            commodity,
+            region_id,
+            demand_portion_for_market,
+            existing_assets,
+            excluded_processes,
             agent_addition_limits,
             agent_total_limits,
-            commodity,
-            agent,
-            region_id,
             prices,
-            demand_portion_for_market,
             year,
             writer,
         )?;
