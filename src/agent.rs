@@ -38,6 +38,8 @@ pub struct Agent {
     pub commodity_portions: AgentCommodityPortionsMap,
     /// The processes that the agent will consider investing in.
     pub search_space: AgentSearchSpaceMap,
+    /// The algorithm that the agent uses to select assets.
+    pub agent_type: AgentType,
     /// The decision rule that the agent uses to decide investment.
     pub decision_rule: DecisionRule,
     /// The regions in which this agent operates.
@@ -62,6 +64,16 @@ impl Agent {
     ) -> impl Iterator<Item = &Arc<Process>> {
         self.search_space[&(commodity_id.clone(), region_id.clone(), year)].iter()
     }
+}
+
+/// The type of an agent, which determines the asset selection algorithm that it uses
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentType {
+    /// Existing and candidate assets compete in rounds, with the best option according to the
+    /// agent's objective selected in each round
+    #[default]
+    Competitive,
 }
 
 /// The decision rule for a particular objective

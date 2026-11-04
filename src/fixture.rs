@@ -2,7 +2,7 @@
 
 use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
-    DecisionRule,
+    AgentType, DecisionRule,
 };
 use crate::asset::{Asset, AssetCapacity, AssetPool};
 use crate::commodity::{
@@ -338,6 +338,7 @@ pub fn agents(region_ids: IndexSet<RegionID>) -> AgentMap {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            agent_type: AgentType::default(),
             decision_rule: DecisionRule::Single,
             regions: region_ids,
             objectives: AgentObjectiveMap::new(),
