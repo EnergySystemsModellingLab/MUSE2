@@ -3,29 +3,46 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
-/// Capacity of an asset, expressed in terms of a number of discrete tranches of a given size.
+/// Continuous capacities with an absolute value within this tolerance are considered to be zero
+const CONTINUOUS_ZERO_TOLERANCE: Capacity = Capacity(1e-9);
+
+/// Capacity of an asset, which may be continuous or a number of discrete tranches of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
-pub struct AssetCapacity {
-    /// Number of tranches
-    num_tranches: u32,
-    /// Size of each tranche
-    tranche_size: Capacity,
+pub enum AssetCapacity {
+    /// Continuous capacity, which is treated as a single indivisible tranche
+    Continuous(Capacity),
+    /// Capacity expressed as a number of equally sized tranches
+    Discrete {
+        /// Number of tranches
+        num_tranches: u32,
+        /// Size of each tranche
+        tranche_size: Capacity,
+    },
 }
 
 impl AssetCapacity {
-    /// Create a new `AssetCapacity` with the given number of tranches and tranche size
+    /// Create a new continuous `AssetCapacity` with the given capacity
+    pub fn continuous(capacity: Capacity) -> Self {
+        assert!(
+            capacity.is_finite() && capacity >= Capacity(0.0),
+            "Capacity must be a finite non-negative number"
+        );
+        AssetCapacity::Continuous(capacity)
+    }
+
+    /// Create a new discrete `AssetCapacity` with the given number of tranches and tranche size
     pub fn new(num_tranches: u32, tranche_size: Capacity) -> Self {
         assert!(
             tranche_size.is_finite() && tranche_size >= Capacity(0.0),
             "Tranche size must be a finite non-negative number"
         );
-        AssetCapacity {
+        AssetCapacity::Discrete {
             num_tranches,
             tranche_size,
         }
     }
 
-    /// Create a new `AssetCapacity` with a single tranche of the given size
+    /// Create a new discrete `AssetCapacity` with a single tranche of the given size
     pub fn single(tranche_size: Capacity) -> Self {
         Self::new(1, tranche_size)
     }
@@ -34,7 +51,9 @@ impl AssetCapacity {
     ///
     /// # Panics
     ///
-    /// Panics if the tranche size differs.
+    /// Panics if the comparison is not meaningful. This happens if either `AssetCapacity` contains
+    /// a NaN value, one is discrete and the other continuous or if both are discrete and the
+    /// tranche size differs.
     pub fn min(self, other: AssetCapacity) -> AssetCapacity {
         match self.partial_cmp(&other) {
             None => panic!("Comparing invalid AssetCapacity values ({self:?} and {other:?})"),
@@ -43,28 +62,63 @@ impl AssetCapacity {
         }
     }
 
-    /// Returns the number of tranches in this `AssetCapacity`.
-    pub fn num_tranches(&self) -> u32 {
-        self.num_tranches
+    /// Returns the number of tranches if this capacity is discrete, or `None` if continuous.
+    pub fn num_tranches(&self) -> Option<u32> {
+        match self {
+            AssetCapacity::Continuous(_) => None,
+            AssetCapacity::Discrete { num_tranches, .. } => Some(*num_tranches),
+        }
     }
 
-    /// Returns the tranche size of this `AssetCapacity`.
-    pub fn tranche_size(&self) -> Capacity {
-        self.tranche_size
+    /// Returns a capacity consisting of a single tranche of the same size.
+    ///
+    /// A continuous capacity is already treated as a single indivisible tranche, so is returned
+    /// unchanged.
+    pub fn single_tranche(self) -> Self {
+        match self {
+            AssetCapacity::Continuous(_) => self,
+            AssetCapacity::Discrete { tranche_size, .. } => Self::single(tranche_size),
+        }
+    }
+    /// Returns a zero capacity of the same kind (and tranche size) as this one.
+    pub fn zero(&self) -> Self {
+        match self {
+            AssetCapacity::Continuous(_) => AssetCapacity::Continuous(Capacity(0.0)),
+            AssetCapacity::Discrete { tranche_size, .. } => AssetCapacity::Discrete {
+                num_tranches: 0,
+                tranche_size: *tranche_size,
+            },
+        }
     }
 
-    /// Validates that two capacities have the same tranche size.
-    fn check_same_tranche_size(&self, other: AssetCapacity) {
+    /// Whether this capacity is zero.
+    ///
+    /// Continuous capacities are treated as zero if they are within a small tolerance of zero, to
+    /// allow for floating-point error (e.g. after subtracting almost-equal capacities).
+    pub fn is_zero(&self) -> bool {
+        match self {
+            AssetCapacity::Continuous(capacity) => capacity.abs() <= CONTINUOUS_ZERO_TOLERANCE,
+            AssetCapacity::Discrete { num_tranches, .. } => *num_tranches == 0,
+        }
+    }
+
+    /// Validates that two discrete capacities have the same tranche size.
+    fn check_same_tranche_size(size1: Capacity, size2: Capacity) {
         assert_eq!(
-            self.tranche_size, other.tranche_size,
-            "Can't perform operation on capacities with different tranche sizes ({} and {})",
-            self.tranche_size, other.tranche_size,
+            size1, size2,
+            "Can't perform operation on capacities with different tranche sizes ({size1} and {size2})",
         );
     }
 
     /// Returns the total capacity represented by this `AssetCapacity`.
     pub fn total_capacity(&self) -> Capacity {
-        self.tranche_size * Dimensionless(self.num_tranches as f64)
+        match self {
+            AssetCapacity::Continuous(capacity) => *capacity,
+            AssetCapacity::Discrete {
+                num_tranches,
+                tranche_size,
+            } => *tranche_size * Dimensionless(*num_tranches as f64),
+        }
     }
 }
 
@@ -73,10 +127,27 @@ impl Add for AssetCapacity {
 
     // Add two AssetCapacity values together
     fn add(self, rhs: AssetCapacity) -> Self {
-        self.check_same_tranche_size(rhs);
-        AssetCapacity {
-            num_tranches: self.num_tranches + rhs.num_tranches,
-            tranche_size: self.tranche_size,
+        match (self, rhs) {
+            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
+                AssetCapacity::Continuous(cap1 + cap2)
+            }
+            (
+                AssetCapacity::Discrete {
+                    num_tranches: n1,
+                    tranche_size: size1,
+                },
+                AssetCapacity::Discrete {
+                    num_tranches: n2,
+                    tranche_size: size2,
+                },
+            ) => {
+                Self::check_same_tranche_size(size1, size2);
+                AssetCapacity::Discrete {
+                    num_tranches: n1 + n2,
+                    tranche_size: size1,
+                }
+            }
+            _ => panic!("Cannot add different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 }
@@ -86,23 +157,51 @@ impl Sub for AssetCapacity {
 
     // Subtract rhs from self, ensuring that the result is non-negative
     fn sub(self, rhs: AssetCapacity) -> Self {
-        self.check_same_tranche_size(rhs);
-        assert!(
-            self.num_tranches >= rhs.num_tranches,
-            "Cannot subtract a larger AssetCapacity ({rhs:?}) from a smaller one ({self:?})"
-        );
-        AssetCapacity {
-            num_tranches: self.num_tranches - rhs.num_tranches,
-            tranche_size: self.tranche_size,
+        match (self, rhs) {
+            (AssetCapacity::Continuous(cap1), AssetCapacity::Continuous(cap2)) => {
+                AssetCapacity::Continuous((cap1 - cap2).max(Capacity(0.0)))
+            }
+            (
+                AssetCapacity::Discrete {
+                    num_tranches: n1,
+                    tranche_size: size1,
+                },
+                AssetCapacity::Discrete {
+                    num_tranches: n2,
+                    tranche_size: size2,
+                },
+            ) => {
+                Self::check_same_tranche_size(size1, size2);
+                assert!(
+                    n1 >= n2,
+                    "Cannot subtract a larger AssetCapacity ({rhs:?}) from a smaller one ({self:?})"
+                );
+                AssetCapacity::Discrete {
+                    num_tranches: n1 - n2,
+                    tranche_size: size1,
+                }
+            }
+            _ => panic!("Cannot subtract different types of AssetCapacity ({self:?} and {rhs:?})"),
         }
     }
 }
 
 impl PartialOrd for AssetCapacity {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let size1 = self.tranche_size;
-        let size2 = other.tranche_size;
-        (size1 == size2).then(|| self.num_tranches.cmp(&other.num_tranches))
+        match (self, other) {
+            (AssetCapacity::Continuous(a), AssetCapacity::Continuous(b)) => a.partial_cmp(b),
+            (
+                AssetCapacity::Discrete {
+                    num_tranches: n1,
+                    tranche_size: size1,
+                },
+                AssetCapacity::Discrete {
+                    num_tranches: n2,
+                    tranche_size: size2,
+                },
+            ) => (size1 == size2).then(|| n1.cmp(n2)),
+            _ => None,
+        }
     }
 }
 
@@ -123,8 +222,7 @@ mod tests {
     ) {
         let capacity = AssetCapacity::new(num_tranches, tranche_size);
 
-        assert_eq!(capacity.num_tranches(), num_tranches);
-        assert_eq!(capacity.tranche_size(), tranche_size);
+        assert_eq!(capacity.num_tranches(), Some(num_tranches));
         assert_eq!(capacity.total_capacity(), expected_total_capacity);
     }
 
@@ -140,6 +238,21 @@ mod tests {
     }
 
     #[rstest]
+    #[case::continuous_less(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(6.0)),
+        Some(Ordering::Less)
+    )]
+    #[case::continuous_equal(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(4.0)),
+        Some(Ordering::Equal)
+    )]
+    #[case::continuous_greater(
+        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::Continuous(Capacity(4.0)),
+        Some(Ordering::Greater)
+    )]
     #[case::less(
         AssetCapacity::new(2, Capacity(3.0)),
         AssetCapacity::new(4, Capacity(3.0)),
@@ -155,7 +268,7 @@ mod tests {
         AssetCapacity::new(4, Capacity(3.0)),
         Some(Ordering::Greater)
     )]
-    fn partial_cmp_with_matching_tranche_size(
+    fn partial_cmp_with_valid_comparisons(
         #[case] left: AssetCapacity,
         #[case] right: AssetCapacity,
         #[case] expected: Option<Ordering>,
@@ -165,9 +278,17 @@ mod tests {
     }
 
     #[rstest]
+    #[case::mixed_types(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::new(4, Capacity(1.0))
+    )]
     #[case::different_tranche_sizes(
         AssetCapacity::new(4, Capacity(1.0)),
         AssetCapacity::new(4, Capacity(2.0))
+    )]
+    #[case::nan_continuous(
+        AssetCapacity::Continuous(Capacity(f64::NAN)),
+        AssetCapacity::Continuous(Capacity(4.0))
     )]
     fn partial_cmp_returns_none_for_invalid_comparisons(
         #[case] left: AssetCapacity,
@@ -178,6 +299,11 @@ mod tests {
     }
 
     #[rstest]
+    #[case::continuous(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::Continuous(Capacity(6.0)),
+        AssetCapacity::Continuous(Capacity(4.0))
+    )]
     #[case::discrete(
         AssetCapacity::new(2, Capacity(3.0)),
         AssetCapacity::new(4, Capacity(3.0)),
@@ -192,6 +318,10 @@ mod tests {
     }
 
     #[rstest]
+    #[case::mixed_types(
+        AssetCapacity::Continuous(Capacity(4.0)),
+        AssetCapacity::new(4, Capacity(1.0))
+    )]
     #[case::different_tranche_sizes(
         AssetCapacity::new(4, Capacity(1.0)),
         AssetCapacity::new(4, Capacity(2.0))
@@ -210,7 +340,7 @@ mod tests {
 
         assert_eq!(
             capacity - capacity,
-            AssetCapacity {
+            AssetCapacity::Discrete {
                 num_tranches: 0,
                 tranche_size: Capacity(3.0),
             }
