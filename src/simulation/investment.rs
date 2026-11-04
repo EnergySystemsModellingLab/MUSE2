@@ -20,9 +20,9 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-pub mod appraisal;
-use appraisal::coefficients::calculate_coefficients_for_assets;
-use appraisal::{
+pub mod competitive;
+use competitive::coefficients::calculate_coefficients_for_assets;
+use competitive::metrics::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
     sort_and_filter_appraisal_outputs,
 };
