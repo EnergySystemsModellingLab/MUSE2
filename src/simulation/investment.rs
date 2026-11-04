@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 pub mod competitive;
+pub mod portfolio;
 
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;

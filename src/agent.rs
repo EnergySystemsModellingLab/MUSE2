@@ -74,6 +74,9 @@ pub enum AgentType {
     /// agent's objective selected in each round
     #[default]
     Competitive,
+    /// The capacities of all existing and candidate assets are chosen together in a single
+    /// optimisation
+    Portfolio,
 }
 
 /// The decision rule for a particular objective
