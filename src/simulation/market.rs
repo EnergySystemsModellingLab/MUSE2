@@ -1,21 +1,19 @@
 //! Code for creating sets of markets.
 use super::optimisation::{DispatchRun, FlowMap};
 use crate::agent::Agent;
-use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
+use crate::asset::AssetRef;
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
-use crate::simulation::investment::{
-    AllDemandMap, DemandMap, calculate_candidate_asset_capacity_scale, select_best_assets,
-    update_net_demand_map,
-};
+use crate::simulation::investment::competitive::{get_asset_options, select_best_assets};
+use crate::simulation::investment::{AllDemandMap, DemandMap, update_net_demand_map};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result};
-use itertools::{Itertools, chain};
+use itertools::Itertools;
 use log::debug;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -450,77 +448,6 @@ where
 
         Some((agent, *portion))
     })
-}
-
-/// Get options from existing and potential assets for the given parameters
-pub fn get_asset_options<'a>(
-    all_existing_assets: &'a [AssetRef],
-    demand: &'a DemandMap,
-    agent: &'a Agent,
-    commodity: &'a Commodity,
-    region_id: &'a RegionID,
-    year: u32,
-    capacity_tranche_fraction: Dimensionless,
-) -> impl Iterator<Item = AssetRef> + 'a {
-    // Get existing assets which produce the commodity of interest
-    let existing_assets = all_existing_assets
-        .iter()
-        .filter_agent(&agent.id)
-        .filter_region(region_id)
-        .filter_primary_producers_of(&commodity.id)
-        .cloned();
-
-    // Get candidates assets which produce the commodity of interest
-    let candidate_assets = get_candidate_assets(
-        demand,
-        agent,
-        region_id,
-        commodity,
-        year,
-        capacity_tranche_fraction,
-    );
-
-    chain(existing_assets, candidate_assets)
-}
-
-/// Get candidate assets which produce a particular commodity for a given agent
-///
-/// Each candidate represents one investment tranche with a defined capacity.
-/// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
-/// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
-///   demand for the commodity and the asset's maximum annual production per unit capacity
-///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
-///   `capacity_tranche_fraction` to infer the tranche size.
-fn get_candidate_assets<'a>(
-    demand: &'a DemandMap,
-    agent: &'a Agent,
-    region_id: &'a RegionID,
-    commodity: &'a Commodity,
-    year: u32,
-    capacity_tranche_fraction: Dimensionless,
-) -> impl Iterator<Item = AssetRef> + 'a {
-    agent
-        .iter_search_space(region_id, &commodity.id, year)
-        .map(move |process| {
-            // Create asset with zero capacity, which will be updated below
-            let mut asset =
-                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
-                    .unwrap();
-
-            // Set capacity of the candidate for investment appraisal
-            let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
-                // For processes with a defined tranche size, take this
-                tranche_size
-            } else {
-                // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
-                let capacity_scale =
-                    calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                capacity_scale * capacity_tranche_fraction
-            };
-            let asset_capacity = AssetCapacity::single(tranche_size);
-            asset.set_capacity(asset_capacity);
-            asset.into()
-        })
 }
 
 /// Collects capacity limits for all processes in the agent's search space for a given market.

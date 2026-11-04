@@ -9,9 +9,10 @@ use muse2::model::Model;
 use muse2::output::DataWriter;
 use muse2::process::{Process, ProcessID};
 use muse2::simulation::candidate_assets_for_next_year;
-use muse2::simulation::investment::{collect_preset_demands_for_year, select_best_assets};
+use muse2::simulation::investment::collect_preset_demands_for_year;
+use muse2::simulation::investment::competitive::{get_asset_options, select_best_assets};
 use muse2::simulation::market::{
-    collect_agent_limits, get_asset_options, get_demand_portion_for_market, get_responsible_agents,
+    collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
 };
 use muse2::simulation::optimisation::DispatchRun;
 use muse2::simulation::prices::{Prices, calculate_prices};
