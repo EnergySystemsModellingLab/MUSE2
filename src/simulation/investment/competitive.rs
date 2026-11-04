@@ -30,6 +30,74 @@ use metrics::{
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+/// Select assets for an agent to meet its share of demand for a commodity in a region.
+///
+/// Existing assets of the agent which produce the commodity compete with candidate assets from the
+/// agent's search space. Processes in `excluded_processes` are not considered.
+///
+/// # Arguments
+///
+/// * `model` - The model
+/// * `agent` - The agent selecting assets
+/// * `commodity` - The commodity for which demand must be met
+/// * `region_id` - The region
+/// * `demand` - The agent's share of demand for the commodity in the region
+/// * `existing_assets` - The asset pool (commissioned and otherwise)
+/// * `excluded_processes` - Processes which may not be selected
+/// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
+/// * `agent_total_limits` - The agent's share of total capacity limits for processes
+/// * `prices` - Commodity prices from the previous full system dispatch
+/// * `year` - Current milestone year
+/// * `writer` - Data writer
+///
+/// # Returns
+///
+/// The assets selected (including retained commissioned assets), or an error.
+#[allow(clippy::too_many_arguments)]
+pub fn select_assets(
+    model: &Model,
+    agent: &Agent,
+    commodity: &Commodity,
+    region_id: &RegionID,
+    demand: DemandMap,
+    existing_assets: &[AssetRef],
+    excluded_processes: &[ProcessID],
+    agent_addition_limits: HashMap<ProcessID, Capacity>,
+    agent_total_limits: HashMap<ProcessID, Capacity>,
+    prices: &Prices,
+    year: u32,
+    writer: &mut DataWriter,
+) -> Result<Vec<AssetRef>> {
+    // Existing and candidate assets from which to choose
+    let mut opt_assets = get_asset_options(
+        existing_assets,
+        &demand,
+        agent,
+        commodity,
+        region_id,
+        year,
+        model.parameters.capacity_tranche_fraction,
+    )
+    .collect::<Vec<_>>();
+
+    // Exclude certain processes from the options
+    opt_assets.retain(|asset| !excluded_processes.contains(asset.process_id()));
+
+    select_best_assets(
+        model,
+        opt_assets,
+        agent_addition_limits,
+        agent_total_limits,
+        commodity,
+        agent,
+        region_id,
+        prices,
+        demand,
+        year,
+        writer,
+    )
+}
+
 /// Get options from existing and potential assets for the given parameters
 pub fn get_asset_options<'a>(
     all_existing_assets: &'a [AssetRef],
