@@ -35,16 +35,24 @@ src/output.rs
   s_9c82011db8f22b::t_69ef9586a8a0d7 591-592
   s_9c82011db8f22b::t_dc59c8325aaa05 738
   s_9c82011db8f22b::t_522fa03ebc5834 163-164,166-167,714,716,752,754
+  h_e76403a1cd4bf1 663
 src/asset/pool.rs
   s_9c82011db8f22b::t_dfe9aee6f78cbe 102-103,105,107
   s_9c82011db8f22b::t_e1c8fc7ddc8713 104,109-111
   s_9c82011db8f22b::t_26e770b7b12c0f 112-113
+src/simulation/investment/competitive.rs
+  h_e76403a1cd4bf1 510,598
 ---
 {
   "schema_version": "authorship/3.0.0",
   "git_ai_version": "1.7.5",
   "base_commit_sha": "ec2ea1599c93b323355fb52950fcbefda39dfb9d",
   "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
   "sessions": {
     "s_9c82011db8f22b": {
       "agent_id": {
