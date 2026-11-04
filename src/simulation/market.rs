@@ -7,8 +7,8 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
-use crate::simulation::investment::competitive;
 use crate::simulation::investment::{AllDemandMap, DemandMap, update_net_demand_map};
+use crate::simulation::investment::{competitive, portfolio};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
@@ -208,17 +208,18 @@ pub fn select_assets_for_single_market(
         // Choose assets from among existing pool and candidates
         let select_assets = match agent.agent_type {
             AgentType::Competitive => competitive::select_assets,
+            AgentType::Portfolio => portfolio::select_assets,
         };
         let best_assets = select_assets(
             model,
             agent,
             commodity,
             region_id,
-            demand_portion_for_market,
+            &demand_portion_for_market,
             existing_assets,
             excluded_processes,
-            agent_addition_limits,
-            agent_total_limits,
+            &agent_addition_limits,
+            &agent_total_limits,
             prices,
             year,
             writer,
