@@ -1,13 +1,13 @@
 //! Code for creating sets of markets.
 use super::optimisation::{DispatchRun, FlowMap};
-use crate::agent::Agent;
+use crate::agent::{Agent, AgentType};
 use crate::asset::AssetRef;
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
-use crate::simulation::investment::competitive::select_assets;
+use crate::simulation::investment::competitive;
 use crate::simulation::investment::{AllDemandMap, DemandMap, update_net_demand_map};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
@@ -204,6 +204,9 @@ pub fn select_assets_for_single_market(
         );
 
         // Choose assets from among existing pool and candidates
+        let select_assets = match agent.agent_type {
+            AgentType::Competitive => competitive::select_assets,
+        };
         let best_assets = select_assets(
             model,
             agent,
@@ -471,7 +474,9 @@ pub fn collect_agent_limits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{Agent, AgentCommodityPortionsMap, AgentObjectiveMap, DecisionRule};
+    use crate::agent::{
+        Agent, AgentCommodityPortionsMap, AgentObjectiveMap, AgentType, DecisionRule,
+    };
     use crate::fixture::{process, region_id};
     use crate::process::{Process, ProcessInvestmentConstraint};
     use crate::region::RegionID;
@@ -495,6 +500,7 @@ mod tests {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space,
+            agent_type: AgentType::default(),
             decision_rule: DecisionRule::Single,
             regions: [region_id.clone()].into(),
             objectives: AgentObjectiveMap::new(),
