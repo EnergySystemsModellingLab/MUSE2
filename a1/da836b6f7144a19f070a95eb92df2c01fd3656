@@ -114,6 +114,8 @@ tests/data/simple_mothball/asset_capacities.csv
   s_135dd534e72d7a::t_88403f2e0675ce 2-13,17-19
 tests/data/simple_full/asset_capacities.csv
   s_135dd534e72d7a::t_88403f2e0675ce 2-12,16-17
+src/simulation/investment.rs
+  h_e76403a1cd4bf1 3-4,11,13-14,18,22,183-185,188,190,192,194-195,197-213,216-220,222-223,226
 ---
 {
   "schema_version": "authorship/3.0.0",
