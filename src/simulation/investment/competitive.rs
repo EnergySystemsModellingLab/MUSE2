@@ -5,6 +5,7 @@
 pub mod coefficients;
 mod constraints;
 mod costs;
+mod debug;
 pub mod metrics;
 mod optimisation;
 
@@ -21,6 +22,7 @@ use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
+use debug::write_debug_info;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use metrics::{
@@ -316,7 +318,8 @@ pub fn select_best_assets(
             .collect();
 
         // Save appraisal results
-        writer.write_appraisal_debug_info(
+        write_debug_info(
+            writer,
             year,
             &format!("{} {} round {}", commodity.id, agent.id, round),
             &outputs,
