@@ -1,7 +1,7 @@
 //! Command-line interface for the MUSE2 simulation.
 use crate::graph::save_commodity_graphs_for_model;
 use crate::input::{load_commodity_graphs, load_model};
-use crate::log;
+use crate::log::{DefaultLogger, Logger};
 use crate::output::{copy_input_files, create_output_directory, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
 use crate::timeit::{DispatchContext, InvestmentContext, TimeContext};
@@ -106,7 +106,7 @@ impl Commands {
     /// Execute the supplied CLI command
     fn execute(self) -> Result<()> {
         match self {
-            Self::Run { model_dir, opts } => handle_run_command(&model_dir, &opts),
+            Self::Run { model_dir, opts } => handle_run_command::<DefaultLogger>(&model_dir, &opts),
             Self::Example { subcommand } => subcommand.execute(),
             Self::Validate { model_dir } => handle_validate_command(&model_dir),
             Self::SaveGraphs { model_dir, opts } => handle_save_graphs_command(&model_dir, &opts),
@@ -136,7 +136,7 @@ pub fn run_cli() -> Result<()> {
 }
 
 /// Handle the `run` command.
-pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
+pub fn handle_run_command<Log: Logger>(model_path: &Path, opts: &RunOpts) -> Result<()> {
     let start = Instant::now();
     let mut settings = Settings::load_or_default().context("Failed to load settings.")?;
 
@@ -187,11 +187,8 @@ pub fn handle_run_command(model_path: &Path, opts: &RunOpts) -> Result<()> {
             .context("Failed to copy input files to output directory.")?;
     }
     // Initialise program logger
-    if !cfg!(feature = "bench") {
-        // Don't initialise logging when running bench, as it will interfere with the process
-        log::init(&settings.log_level, Some(output_path))
-            .context("Failed to initialise logging.")?;
-    }
+    Log::initialise(&settings.log_level, Some(output_path))
+        .context("Failed to initialise logging.")?;
     info!("Starting MUSE2 v{}", env!("CARGO_PKG_VERSION"));
 
     // Load the model to run
@@ -230,7 +227,8 @@ pub fn handle_validate_command(model_path: &Path) -> Result<()> {
     let settings = Settings::load_or_default().context("Failed to load settings.")?;
 
     // Initialise program logger (we won't save log files when running the validate command)
-    log::init(&settings.log_level, None).context("Failed to initialise logging.")?;
+    DefaultLogger::initialise(&settings.log_level, None)
+        .context("Failed to initialise logging.")?;
 
     // Load/validate the model
     load_model(model_path).context("Failed to validate model.")?;
@@ -265,7 +263,8 @@ pub fn handle_save_graphs_command(model_path: &Path, opts: &GraphOpts) -> Result
         })?;
 
     // Initialise program logger (we won't save log files when running this command)
-    log::init(&settings.log_level, None).context("Failed to initialise logging.")?;
+    DefaultLogger::initialise(&settings.log_level, None)
+        .context("Failed to initialise logging.")?;
 
     // NB: We have to wait until the logger is initialised to display this warning
     if overwrite {
