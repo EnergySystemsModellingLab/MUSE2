@@ -1408,6 +1408,7 @@ mod tests {
             capacity_to_activity: ActivityPerCapacity(1.0),
             investment_constraints: HashMap::new(),
             tranche_size: None,
+            feedback_process: false,
         }
     }
 

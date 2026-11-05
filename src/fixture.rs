@@ -325,6 +325,7 @@ pub fn process(
         capacity_to_activity: ActivityPerCapacity(1.0),
         investment_constraints: process_investment_constraints,
         tranche_size: None,
+        feedback_process: false,
     }
 }
 
