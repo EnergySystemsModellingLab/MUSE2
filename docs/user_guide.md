@@ -118,8 +118,8 @@ have a question, feel free to [open an issue].
 
 To visualise the structure of your model, you can use the [`muse2 save-graphs` command] to
 create graphs of commodity/process relationships.
-This command will output a graph for each region/year in the simulation, where nodes are commodities
-and edges are processes.
+This command will output a graph for each year in the simulation, where nodes
+are commodity markets (commodity-region pairs) and edges are processes.
 Graphs will be saved in [DOT format], which can be visualised locally with [Graphviz], or online
 with [Graphviz online].
 Dashed lines are used to indicate flows for non-primary outputs of a process (as defined in the
