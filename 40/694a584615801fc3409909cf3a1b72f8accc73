@@ -1,0 +1,32 @@
+docs/model/prices.md
+  s_e3618010bfe6e6::t_d8688c9dcc8d72 237-238
+  s_e3618010bfe6e6::t_db8b2ef8fca008 119-135
+docs/model/investment.md
+  h_e76403a1cd4bf1 44-45
+  s_e3618010bfe6e6::t_71fed1b33ddc83 477-480
+  s_e3618010bfe6e6::t_89cb38af335dfc 516
+  s_e3618010bfe6e6::t_0f66a3bd289351 42-43,46-60
+docs/model/commodity_graphs.md
+  h_e76403a1cd4bf1 178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "40694a584615801fc3409909cf3a1b72f8accc73",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_e3618010bfe6e6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "8bd37d8a-eb51-4605-8b07-75765390502c",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
