@@ -22,7 +22,7 @@ that work, and to work out what has gone wrong when they don't.
   [Investment and price order](#investment-and-price-order)).
 - **To identify circularities**, where commodities depend on one another in a loop (e.g.
   electricity is used to make hydrogen, which is used to generate electricity). These need special
-  treatment during investment and pricing.
+  treatment during [investment][investment-circularities] and [pricing][pricing-circularities].
 - **To help you visualise your model**, via the `muse2 save-graphs` command (see
   [Visualising your model](#visualising-your-model)).
 - **For performance.** The graph shows which markets are independent of one another. MUSE2 already
@@ -43,11 +43,8 @@ that work, and to work out what has gone wrong when they don't.
   - a **secondary** edge leads to any other output, such as CO₂ emitted as a by-product.
 
 MUSE2 builds a separate graph for each milestone year, as the available processes can change over
-time. A process is included in a year's graph if an asset of that process could be operating in
+time. A process is included in a year's graph if an asset of that process *could* be operating in
 that year, taking into account the process's start and end years and its lifetime.
-
-Each graph covers all regions in the model. As processes currently only consume and produce
-commodities in their own region, each region forms its own separate part of the graph.
 
 ### Example
 
@@ -92,12 +89,11 @@ For each check, any process that cannot operate during that period (i.e. its ava
 `process_availabilities.csv` is zero throughout the period) is removed from the graph, and the
 service demand for that period is taken into account. The rules are:
 
-| Commodity type | Rule                                                                |
-| -------------- | ------------------------------------------------------------------- |
-| `svd`          | Cannot be an input to any process                                   |
-| `svd`          | If there is demand in the period, it must have a producer           |
-| `sed`          | If any process can consume it, a process must be able to produce it |
-| `oth`          | Can be produced or consumed, but not both                           |
+| Commodity type | Rule |
+| --- | --- |
+| `svd` | Cannot be an input to any process; if demanded, it must have a producer. |
+| `sed` | If any process can consume it, a process must be able to produce it. |
+| `oth` | Can be produced or consumed, but not both. |
 
 ### Diagnosing validation errors
 
@@ -224,6 +220,7 @@ When reading these graphs, note that:
 [partial-dispatch]: ./investment.md#partial-system-dispatch
 [order-sccs]: ../api/muse2/graph/investment/fn.order_sccs.html
 [investment-circularities]: ./investment.md#circularities
+[pricing-circularities]: ./prices.md#circularities
 [log level]: ../user_guide.md#setting-the-log-level
 [save-graphs]: ../command_line_help.md#muse2-save-graphs
 [DOT format]: https://graphviz.org/doc/info/lang.html
