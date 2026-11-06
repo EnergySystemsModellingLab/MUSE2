@@ -34,6 +34,9 @@ investment decisions. Other commodity types (e.g. `OTH`) are excluded.
 > Note: the investment order is the reverse of the [price calculation order][prices], where prices
 > are computed upstream first.
 
+For details of how the investment order is determined from the commodity graph, including a worked
+example, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-order).
+
 ### Circularities
 
 When commodity markets form a cycle (e.g. electricity → hydrogen → electricity), the markets in

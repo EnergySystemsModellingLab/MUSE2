@@ -11,6 +11,7 @@
   - [Output Files](file_formats/output_files.md)
 - [Model Description](model/README.md)
   - [Units and Dimensions](model/units_and_dimensions.md)
+  - [Commodity Graphs](model/commodity_graphs.md)
   - [Dispatch Optimisation](model/dispatch_optimisation.md)
   - [Investment Appraisal](model/investment.md)
   - [Commodity Prices](model/prices.md)

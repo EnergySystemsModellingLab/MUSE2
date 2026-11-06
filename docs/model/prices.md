@@ -111,7 +111,8 @@ downstream to intermediate energy carriers and final service demands.
 
 This sequence is the **reverse** of the investment order. This ensures that the prices of input
 commodities (from upstream markets) are calculated and known before they are consumed as inputs by
-downstream processes evaluating marginal or full cost pricing.
+downstream processes evaluating marginal or full cost pricing. For details of how this order is
+determined, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-order).
 
 ## Circularities
 

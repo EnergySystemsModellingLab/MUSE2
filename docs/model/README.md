@@ -62,9 +62,9 @@ Assets whose scheduled decommissioning year has been reached are removed from th
 ### 2. Agent investment
 
 Agents select assets to meet commodity demand for the current MSY. Investment decisions follow a
-pre-computed **investment order** derived from the topology of the commodity graph: markets are
-processed deepest-first (most downstream to most upstream), grouped into **layers** of independent
-markets at the same depth. See [Investment Appraisal][investment] for full details.
+pre-computed **investment order** derived from the topology of the [commodity graph][commodity-graphs]:
+markets are processed deepest-first (most downstream to most upstream), grouped into **layers** of
+independent markets at the same depth. See [Investment Appraisal][investment] for full details.
 
 After all markets in each layer are settled, a **partial system dispatch** is run over all assets
 selected so far. This propagates demand upstream: input commodity flows consumed by newly committed
@@ -91,6 +91,7 @@ resulting flows and commodity prices are written to the output files and carried
 price basis for the next MSY's investment appraisal.
 
 [investment]: ./investment.md
+[commodity-graphs]: ./commodity_graphs.md
 [dispatch-optimisation]: ./dispatch_optimisation.md
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
