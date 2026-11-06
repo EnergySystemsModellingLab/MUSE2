@@ -25,9 +25,8 @@ use std::fmt::Display;
 pub enum MarketSet {
     /// Assets are selected for a single market using [`select_assets_for_single_market`]
     Single((CommodityID, RegionID)),
-    /// Assets are selected for a group of markets which forms a cycle.
-    /// Experimental: handled by [`select_assets_for_cycle`] and guarded by the broken options
-    /// parameter.
+    /// Assets are selected for a group of markets which forms a cycle using
+    /// [`select_assets_for_cycle`]
     Cycle {
         /// The markets in the cycle, in investment order
         markets: Vec<(CommodityID, RegionID)>,
@@ -60,10 +59,7 @@ impl MarketSet {
     /// * `demand` – Net demand profiles available to all markets before selection.
     /// * `existing_assets` – Assets already commissioned in the system.
     /// * `prices` – Commodity price assumptions to use when valuing investments.
-    /// * `seen_markets` – Markets for which investments have already been settled.
-    /// * `previously_selected_assets` – Assets chosen in earlier market sets.
     /// * `writer` – Data sink used to log optimisation artefacts.
-    #[allow(clippy::too_many_arguments)]
     pub fn select_assets(
         &self,
         model: &Model,
@@ -89,7 +85,13 @@ impl MarketSet {
                 markets,
                 feedback_processes,
             } => {
-                debug!("Starting investment for cycle '{self}'");
+                debug!(
+                    "Starting investment for cycle '{self}' with feedback processes: [{}]",
+                    feedback_processes
+                        .iter()
+                        .map(|(process_id, region_id)| format!("{process_id}|{region_id}"))
+                        .join(", ")
+                );
                 select_assets_for_cycle(
                     model,
                     markets,
@@ -243,13 +245,11 @@ pub fn select_assets_for_single_market(
 /// Iterates through a pre-ordered set of markets forming a cycle, selecting assets for each
 /// market in turn.
 ///
-/// Dispatch optimisation is performed after each market is visited.
-///
-/// Dispatch may fail at any point if new demands are encountered for previously visited markets.
-///
 /// `feedback_processes` are producers of cycle markets which consume a market from earlier in the
 /// investment order. Assets for these are selected in a first pass over the markets and retained,
-/// then the remaining assets are reselected in a second pass excluding feedback processes.
+/// then the remaining assets are reselected in a second pass excluding feedback processes. A
+/// dispatch optimisation is performed after each market is visited in each pass, to calculate the
+/// demand which the selected assets place on other markets.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_assets_for_cycle(
     model: &Model,
@@ -264,8 +264,7 @@ pub fn select_assets_for_cycle(
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
 
-    // STEP 1
-    // Iterate over the markets in order1, considering all processes
+    // First pass: iterate over the markets in order, considering all processes
     let mut net_demand = demand.clone();
     let mut assets_for_first_pass = Vec::new();
     let mut retained_first_pass_assets = Vec::new();
@@ -331,8 +330,8 @@ pub fn select_assets_for_cycle(
         update_net_demand_map(&mut net_demand, &flows, &selected_assets);
     }
 
-    // STEP 2
-    // Iterate over the markets in order2, excluding feedback processes
+    // Second pass: iterate over the markets in the same order, excluding feedback processes, with
+    // demand updated to account for the flows of feedback assets retained from the first pass
     let mut net_demand = demand.clone();
     update_net_demand_map(&mut net_demand, &excluded_flows, &assets_for_first_pass);
     let mut assets_for_second_pass = Vec::new();
@@ -364,15 +363,6 @@ pub fn select_assets_for_cycle(
             continue;
         }
         assets_for_second_pass.extend(selected_assets.iter().cloned());
-
-        // // Assemble full list of assets for dispatch (previously selected + all chosen so far)
-        // let mut all_assets = previously_selected_assets.to_vec();
-        // all_assets.extend(assets_for_first_pass.iter().cloned());
-        // all_assets.extend(assets_for_second_pass.iter().cloned());
-
-        // // We balance all previously seen markets plus all cycle markets up to and including this one
-        // let mut markets_to_balance = seen_markets.to_vec();
-        // markets_to_balance.extend_from_slice(&investment_order[0..=idx]);
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
