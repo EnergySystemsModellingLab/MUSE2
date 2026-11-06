@@ -331,7 +331,7 @@ fn price_markets(
 /// Calculate prices for a set of cyclically-dependent markets, updating `market_prices`.
 ///
 /// Markets should be ordered in the input slice according to the direction of dependencies
-/// (downstream markets first) as solved by `order_sccs`.  Prices are calculated in the reverse of
+/// (downstream markets first) as solved by `order_scc`.  Prices are calculated in the reverse of
 /// this order (i.e. upstream markets first), with an iterative loop to allow for feedback between
 /// markets.
 #[allow(clippy::too_many_arguments)]
