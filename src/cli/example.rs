@@ -2,7 +2,7 @@
 use super::{RunOpts, handle_run_command};
 use crate::example::patches::{get_patch_names, get_patches};
 use crate::example::{Example, get_example_names};
-use crate::log::{DefaultLogger, Logger};
+use crate::log::SetLogger;
 use crate::patch::ModelPatch;
 use anyhow::{Context, Result};
 use clap::Subcommand;
@@ -59,7 +59,7 @@ impl ExampleSubcommands {
                 new_path,
             } => handle_example_extract_command(&name, new_path.as_deref(), patch)?,
             Self::Run { name, patch, opts } => {
-                handle_example_run_command::<DefaultLogger>(&name, patch, &opts)?;
+                handle_example_run_command(&name, patch, &opts, SetLogger::Enabled)?;
             }
         }
 
@@ -132,13 +132,14 @@ fn extract_example(name: &str, patch: bool, dest: &Path) -> Result<()> {
 }
 
 /// Handle the `example run` command.
-pub fn handle_example_run_command<Log: Logger>(
+pub fn handle_example_run_command(
     name: &str,
     patch: bool,
     opts: &RunOpts,
+    logger: SetLogger,
 ) -> Result<()> {
     let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
     let model_path = temp_dir.path().join(name);
     extract_example(name, patch, &model_path)?;
-    handle_run_command::<Log>(&model_path, opts)
+    handle_run_command(&model_path, opts, logger)
 }

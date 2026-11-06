@@ -35,65 +35,36 @@ pub fn is_logger_initialised() -> bool {
     LOGGER_INIT.get().is_some()
 }
 
-/// A logging backend for the program.
-pub trait Logger {
-    /// Initialise the logger.
+/// Whether the program logger should be enabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetLogger {
+    /// Initialise the logger so that messages are written to the console and, optionally, log files.
+    Enabled,
+    /// Discard all messages and leave the global logger uninitialised.
     ///
-    /// # Arguments
-    ///
-    /// * `log_level_from_settings`: The log level specified in `settings.toml`
-    /// * `log_file_path`: The location to save log files (if Some, log files will be created)
-    fn initialise(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Result<()>;
+    /// Used in tests so that output is not produced and the global logger is not initialised.
+    Disabled,
 }
 
-/// A logger which discards all messages.
+/// Initialise the program logger using the `fern` logging library with colourised output.
 ///
-/// Used in tests so that output is not produced and the global logger is not initialised.
-pub struct NullLogger;
-
-impl Logger for NullLogger {
-    fn initialise(_log_level_from_settings: &str, _log_file_path: Option<&Path>) -> Result<()> {
-        Ok(())
-    }
-}
-
-/// A logger which writes messages to the console and, optionally, to log files.
-pub struct ConsoleAndFileSystemLogger;
-
-impl Logger for ConsoleAndFileSystemLogger {
-    /// Initialise the program logger using the `fern` logging library with colourised output.
-    ///
-    /// The user can specify their preferred logging level via the `settings.toml` file (defaulting to
-    /// `info` if not present) or with the `MUSE2_LOG_LEVEL` environment variable. If both are provided,
-    /// the environment variable takes precedence.
-    ///
-    /// Possible log level options are:
-    ///
-    /// * `error`
-    /// * `warn`
-    /// * `info`
-    /// * `debug`
-    /// * `trace`
-    ///
-    /// # Arguments
-    ///
-    /// * `log_level_from_settings`: The log level specified in `settings.toml`
-    /// * `log_file_path`: The location to save log files (if Some, log files will be created)
-    fn initialise(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Result<()> {
-        init(log_level_from_settings, log_file_path)
-    }
-}
-
-/// The logger used by default, depending on the build configuration.
+/// The user can specify their preferred logging level via the `settings.toml` file (defaulting to
+/// `info` if not present) or with the `MUSE2_LOG_LEVEL` environment variable. If both are provided,
+/// the environment variable takes precedence.
 ///
-/// A [`NullLogger`] is used in tests and a [`ConsoleAndFileSystemLogger`] otherwise.
-pub type DefaultLogger = cfg_select! {
-    test => { NullLogger }
-    _ => { ConsoleAndFileSystemLogger }
-};
-
-/// The inner logic for [`ConsoleAndFileSystemLogger::initialise`]
-fn init(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Result<()> {
+/// Possible log level options are:
+///
+/// * `error`
+/// * `warn`
+/// * `info`
+/// * `debug`
+/// * `trace`
+///
+/// # Arguments
+///
+/// * `log_level_from_settings`: The log level specified in `settings.toml`
+/// * `log_file_path`: The location to save log files (if Some, log files will be created)
+pub fn init(log_level_from_settings: &str, log_file_path: Option<&Path>) -> Result<()> {
     // Retrieve the log level from the environment variable or settings, or use the default
     let log_level =
         env::var("MUSE2_LOG_LEVEL").unwrap_or_else(|_| log_level_from_settings.to_string());
