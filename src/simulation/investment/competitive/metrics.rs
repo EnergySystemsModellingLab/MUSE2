@@ -1,29 +1,23 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
-use super::DemandMap;
+use super::coefficients::ObjectiveCoefficients;
+use super::costs::annual_fixed_cost;
+use super::optimisation::{ResultsMap, perform_optimisation};
 use crate::agent::ObjectiveType;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, snas};
 use crate::model::Model;
+use crate::simulation::investment::DemandMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
-use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
+use float_cmp::{ApproxEq, F64Margin};
 use indexmap::IndexMap;
-use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
 use std::sync::Arc;
-
-pub mod coefficients;
-mod constraints;
-mod costs;
-mod optimisation;
-use coefficients::ObjectiveCoefficients;
-use float_cmp::{ApproxEq, F64Margin};
-use optimisation::perform_optimisation;
 
 /// Compares two values with approximate equality checking.
 ///
