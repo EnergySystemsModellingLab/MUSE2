@@ -1,0 +1,25 @@
+docs/model/commodity_graphs.md
+  s_16b4822af5a4b2::t_93ecb6978af19a 92
+  h_e76403a1cd4bf1 25,46,93-96,223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e7946630bed60c62bbe380a6d142af6f1d3a4dc9",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_16b4822af5a4b2": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "aa3d5ce2-3bac-4f08-b1d9-cbc1877db677",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
