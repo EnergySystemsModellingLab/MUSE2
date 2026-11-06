@@ -171,7 +171,7 @@ markets in the loop, and identifies the processes that cause conflicts, called
 #### Choosing an order
 
 A **feedback process** is a process which consumes any market in the cycle that comes *earlier* in
-the investment order.
+the investment order than the market(s) it supplies.
 
 When the model is loaded, MUSE2 chooses the order for each circularity by solving a small
 optimisation problem (a mixed-integer linear program, or MILP) which must satisfy the following
