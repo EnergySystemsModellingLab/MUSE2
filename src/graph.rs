@@ -25,7 +25,7 @@ pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
 pub enum GraphNode {
     /// A node representing a commodity in a specific region
     #[display("{_0} | {_1}")]
-    Commodity(CommodityID, RegionID),
+    CommodityMarket(CommodityID, RegionID),
     /// A source node for processes that have no inputs
     #[display("SOURCE")]
     Source,
@@ -115,7 +115,9 @@ fn create_commodities_graph_for_year(
             let mut outputs: Vec<_> = flows
                 .values()
                 .filter(|flow| flow.direction() == FlowDirection::Output)
-                .map(|flow| GraphNode::Commodity(flow.commodity.id.clone(), region_id.clone()))
+                .map(|flow| {
+                    GraphNode::CommodityMarket(flow.commodity.id.clone(), region_id.clone())
+                })
                 .collect();
 
             // Get input nodes for the process
@@ -123,7 +125,9 @@ fn create_commodities_graph_for_year(
             let mut inputs: Vec<_> = flows
                 .values()
                 .filter(|flow| flow.direction() == FlowDirection::Input)
-                .map(|flow| GraphNode::Commodity(flow.commodity.id.clone(), region_id.clone()))
+                .map(|flow| {
+                    GraphNode::CommodityMarket(flow.commodity.id.clone(), region_id.clone())
+                })
                 .collect();
 
             // Use `Source` node if no inputs, `Sink` node if no outputs
@@ -148,7 +152,7 @@ fn create_commodities_graph_for_year(
                     .entry(output.clone())
                     .or_insert_with(|| graph.add_node(output.clone()));
                 let is_primary = match &output {
-                    GraphNode::Commodity(commodity_id, _) => {
+                    GraphNode::CommodityMarket(commodity_id, _) => {
                         primary_output.as_ref() == Some(commodity_id)
                     }
                     _ => false,

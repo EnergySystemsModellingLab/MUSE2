@@ -15,8 +15,7 @@ use std::collections::HashMap;
 /// A graph of the market sets to invest in, with no cycles
 type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 
-/// Analyse the commodity graph for a given year to determine the order in which investment
-/// decisions should be made.
+/// Analyse a commodity graph to determine the order in which investment decisions should be made.
 ///
 /// Steps:
 /// 1. Filter the commodity graph to only include SVD/SED commodities (all edges between them,
@@ -28,16 +27,13 @@ type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 ///    `MarketSet::Layer`s.
 ///
 /// Arguments:
-/// * `graph` - Commodity graph for this year, from `build_commodity_graphs_for_model`
+/// * `graph` - Commodity graph
 /// * `commodities` - All commodities with their types and demand specifications
 ///
 /// # Returns
 /// A Vec of `MarketSet`s in the order they should be solved, with cycles grouped into
 /// `MarketSet::Cycle`s and independent sets grouped into `MarketSet::Layer`s.
-fn solve_investment_order_for_year(
-    graph: &CommoditiesGraph,
-    commodities: &CommodityMap,
-) -> Vec<MarketSet> {
+fn solve_investment_order(graph: &CommoditiesGraph, commodities: &CommodityMap) -> Vec<MarketSet> {
     // Filter to only SVD/SED commodities. Each node's weight is its index in the commodity graph.
     let market_graph = graph.filter_map(
         |idx, node| is_market(node, commodities).then_some(idx),
@@ -71,7 +67,7 @@ fn solve_investment_order_for_year(
 /// Whether a commodity graph node is an SVD/SED commodity (i.e. one that is invested in)
 fn is_market(node: &GraphNode, commodities: &CommodityMap) -> bool {
     match node {
-        GraphNode::Commodity(commodity_id, _) => matches!(
+        GraphNode::CommodityMarket(commodity_id, _) => matches!(
             commodities[commodity_id].kind,
             CommodityType::ServiceDemand | CommodityType::SupplyEqualsDemand
         ),
@@ -87,7 +83,9 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
     // Function to look up a node in the commodity graph and get its (commodity, region) pair.
     // All nodes are commodities, because `filter_map` only kept SVD/SED commodity nodes.
     let market = |&idx: &NodeIndex| match &graph[idx] {
-        GraphNode::Commodity(commodity_id, region_id) => (commodity_id.clone(), region_id.clone()),
+        GraphNode::CommodityMarket(commodity_id, region_id) => {
+            (commodity_id.clone(), region_id.clone())
+        }
         _ => unreachable!("Strongly connected components should only contain commodities"),
     };
     match scc {
@@ -401,7 +399,7 @@ fn compute_layers(graph: &InvestmentGraph, order: &[NodeIndex]) -> Vec<MarketSet
 ///
 /// # Arguments
 ///
-/// * `commodity_graphs` - Commodity graphs for each year, from `build_commodity_graphs_for_model`
+/// * `commodity_graphs` - Commodity graphs for each year
 /// * `commodities` - All commodities with their types and demand specifications
 ///
 /// # Returns
@@ -417,7 +415,7 @@ pub fn solve_investment_order_for_model(
     let mut investment_orders = HashMap::new();
     for year in years {
         let graph = &commodity_graphs[year];
-        let order = solve_investment_order_for_year(graph, commodities);
+        let order = solve_investment_order(graph, commodities);
         investment_orders.insert(*year, order);
     }
     investment_orders
@@ -434,7 +432,7 @@ mod tests {
     fn add_edges(graph: &mut CommoditiesGraph, region_id: &str, edges: &[(&str, &str)]) {
         for &(input, output) in edges {
             let [source, target] = [input, output].map(|commodity_id| {
-                let node = GraphNode::Commodity(commodity_id.into(), region_id.into());
+                let node = GraphNode::CommodityMarket(commodity_id.into(), region_id.into());
                 graph
                     .node_indices()
                     .find(|&idx| graph[idx] == node)
@@ -485,7 +483,7 @@ mod tests {
         );
         let commodities = commodity_map(&["A", "B", "C", "X"], &[]);
 
-        let result = solve_investment_order_for_year(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities);
 
         // X is downstream of the cycle, so comes first. The order within the cycle corresponds to
         // the example in the doc comment. Note that C should be first, as it has an outgoing edge
@@ -500,7 +498,7 @@ mod tests {
         add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "C")]);
         let commodities = commodity_map(&["A", "B"], &["C"]);
 
-        let result = solve_investment_order_for_year(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities);
 
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all market sets should be `Single`
@@ -514,7 +512,7 @@ mod tests {
         add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "A")]);
         let commodities = commodity_map(&["A", "B"], &[]);
 
-        let result = solve_investment_order_for_year(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities);
 
         // Should be a single `Cycle` market set containing both commodities
         assert_eq!(result, [cycle(&["A", "B"])]);
@@ -536,7 +534,7 @@ mod tests {
         );
         let commodities = commodity_map(&["A", "B", "C"], &["D"]);
 
-        let result = solve_investment_order_for_year(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities);
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(
@@ -557,7 +555,7 @@ mod tests {
         add_edges(&mut graph, "FRA", &[("A", "B"), ("B", "C")]);
         let commodities = commodity_map(&["A", "B"], &["C"]);
 
-        let result = solve_investment_order_for_year(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities);
 
         // Expected order: Should have three layers, each with two commodities (one per region)
         let layer = |commodity_id: &str| {
