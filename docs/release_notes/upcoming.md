@@ -5,8 +5,7 @@
 - Seasonal/annual utilisation penalties are now included in the investment mini-dispatch ([#1548])
 - The number of price calculation iterations for cyclically-dependent markets can now be configured
  with `price_cycle_iterations` in `model.toml` (default: 1)
-- Circular commodity dependencies are now handled with a two-pass investment algorithm, which
-  automatically identifies feedback processes ([#1557])
+- Circular commodity dependencies are now handled with a two-pass investment algorithm ([#1557])
 
 ## Breaking changes
 
