@@ -39,13 +39,25 @@ example, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-order
 
 ### Circularities
 
-When commodity markets form a cycle (e.g. electricity → hydrogen → electricity), the markets in
-the cycle are resolved in sequence within one pass. After each market in the cycle is visited, a
-[partial system dispatch](#partial-system-dispatch) is run to rebalance demand. Newly committed
-assets within the cycle are given limited capacity flexibility, controlled by the `capacity_margin`
-parameter (defined in [`model.toml`][model-toml]), to absorb small demand shifts caused by later
-markets in the cycle. If these shifts exceed `capacity_margin`, the simulation terminates with an
-error, and the user should increase this parameter.
+When markets form a circularity (e.g. electricity → hydrogen → electricity), there is always at
+least one **feedback process**: a process that consumes a market which is invested in *before* the
+market it supplies.
+
+When the model is loaded, MUSE2 chooses an order for the markets in each circularity and identifies
+its feedback processes (see [Commodity Graphs][graph-circularities]). MUSE2 then invests in the
+circularity in two passes over its markets, running a
+[partial system dispatch](#partial-system-dispatch) after each market in each pass:
+
+1. **First pass (provisional).** The markets are visited in order, with all processes available.
+   Only the assets selected for feedback processes are kept; all other selections are discarded.
+2. **Second pass (final).** Starting again, the kept feedback assets are added to the system: their
+   inputs add to the demand for the markets they consume, and their output reduces the demand for
+   the market they produce. The markets are visited in the same order again, but this time
+   feedback processes are excluded, so the demand for each market is fully known when it is
+   invested in.
+
+The final selection is the feedback assets from the first pass plus all assets from the second
+pass.
 
 ## Commodity Prices Used in Appraisal
 
@@ -462,8 +474,10 @@ available options.
 ## Partial System Dispatch
 
 After each layer of commodity markets is settled during the investment loop, a **partial system
-dispatch** is run over all assets selected so far. This is a standard
-[dispatch optimisation][dispatch-optimisation] solve, with three key modifications described below.
+dispatch** is run over all assets selected so far. Within a [circularity](#circularities), a partial
+dispatch is instead run after each market in each pass, over the assets just selected for that
+market. This is a standard [dispatch optimisation][dispatch-optimisation] solve, with two key
+modifications described below.
 
 ### Market subset
 
@@ -484,33 +498,6 @@ cost penalties on any input flows corresponding to upstream, unconstrained commo
 the dispatch correctly accounts for the cost of consuming upstream resources, even before those
 markets have been invested in.
 
-### Capacity flexibility in circularities
-
-When markets form a cycle, the partial dispatch after each market in the cycle uses **flexible
-capacity variables** for all newly committed assets in the cycle. Rather than fixing the capacity of
-these assets at their committed value, the solver may adjust the number of selected tranches within
-the bounds:
-
-\\[
-  \bigl[(1 - \mathrm{capacity\_margin}) \cdot \mathrm{NumTranches}_a, \space
-        (1 + \mathrm{capacity\_margin}) \cdot \mathrm{NumTranches}_a\bigr]
-\\]
-
-where \\( \mathrm{NumTranches}\_a \\) is the initially committed number of tranches of asset
-\\( a \\). The upper bound is additionally capped by the process's `MaxInstallableCapacity`.
-
-> Note: Total capacity limits are not yet accounted for - this is a known bug which will be
-> addressed in future versions.
-
-Each flexible capacity variable enters the dispatch as an integer variable, with a cost coefficient
-equal to the asset's AFC (annualised capital cost plus fixed O&M) multiplied by the tranche size.
-This flexibility allows the dispatch to absorb small demand shifts caused by subsequent markets in
-the cycle.
-
-If the demand shift for a previously settled market in the cycle exceeds what the flexible capacity
-can accommodate, the simulation terminates with an error. The user should increase the
-`capacity_margin` parameter (defined in [`model.toml`][model-toml]) in this case.
-
 ### Using the partial dispatch result
 
 The flow map from the partial dispatch is used to update the **net demand** seen by each upstream
@@ -526,4 +513,5 @@ assets shaping the demand seen by those upstream.
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
 [process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
 [dispatch-optimisation]: ./dispatch_optimisation.md
+[graph-circularities]: ./commodity_graphs.md#circularities
 [dispatch-utilisation-penalties]: ./dispatch_optimisation.md#seasonalannual-utilisation-penalties
