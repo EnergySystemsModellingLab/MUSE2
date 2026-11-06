@@ -35,6 +35,17 @@ pub fn is_logger_initialised() -> bool {
     LOGGER_INIT.get().is_some()
 }
 
+/// Whether the program logger should be enabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetLogger {
+    /// Initialise the logger so that messages are written to the console and, optionally, log files.
+    Enabled,
+    /// Discard all messages and leave the global logger uninitialised.
+    ///
+    /// Used in tests so that output is not produced and the global logger is not initialised.
+    Disabled,
+}
+
 /// Initialise the program logger using the `fern` logging library with colourised output.
 ///
 /// The user can specify their preferred logging level via the `settings.toml` file (defaulting to

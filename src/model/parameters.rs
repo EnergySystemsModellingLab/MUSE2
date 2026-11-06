@@ -48,17 +48,18 @@ pub fn dangerous_model_options_enabled() -> bool {
 
 /// Set the global flag indicating whether potentially dangerous model options are enabled.
 ///
-/// Can only be called once; subsequent calls will panic (except in tests, where it can be called
-/// multiple times so long as the value is the same).
+/// This function can be called more than once, provided the value of `enabled` is the same in both
+/// cases; it cannot be changed during runtime. (This should not happen during normal program
+/// execution, but may happen during tests etc.)
 fn set_dangerous_model_options_flag(enabled: bool) {
-    let result = DANGEROUS_OPTIONS_ENABLED.set(enabled);
-    if result.is_err() {
-        if cfg!(test) || cfg!(feature = "bench") {
-            // Sanity check
-            assert_eq!(enabled, dangerous_model_options_enabled());
-        } else {
-            panic!("Attempted to set DANGEROUS_OPTIONS_ENABLED twice");
-        }
+    if DANGEROUS_OPTIONS_ENABLED.set(enabled).is_err() {
+        assert_eq!(
+            enabled,
+            dangerous_model_options_enabled(),
+            "Attempted to change DANGEROUS_OPTIONS_ENABLED during runtime"
+        );
+
+        warn!("set_dangerous_model_options_flag called more than once");
     }
 }
 
@@ -390,6 +391,7 @@ mod tests {
     use std::fmt::Display;
     use std::fs::File;
     use std::io::Write;
+    use std::panic::catch_unwind;
     use tempfile::tempdir;
 
     /// Helper function to assert validation result based on expected validity
@@ -417,6 +419,23 @@ mod tests {
                 "Error message should mention the validation constraint, got: {error_message}",
             );
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "Attempted to change DANGEROUS_OPTIONS_ENABLED during runtime")]
+    fn check_set_dangerous_model_options_flag() {
+        // Other tests may already have set this flag, but they **must** set it to false. Ensure
+        // it's set.
+        assert!(!DANGEROUS_OPTIONS_ENABLED.get_or_init(|| false));
+
+        // Setting to false again should be fine
+        catch_unwind(|| set_dangerous_model_options_flag(false)).expect("Unexpected panic");
+
+        // Double check the value is set
+        assert!(!dangerous_model_options_enabled());
+
+        // Should panic when trying to **change** value
+        set_dangerous_model_options_flag(true);
     }
 
     #[test]

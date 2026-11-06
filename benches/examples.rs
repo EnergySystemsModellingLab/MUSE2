@@ -2,6 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use muse2::cli::RunOpts;
 use muse2::cli::example::handle_example_run_command;
 use muse2::example::get_example_names;
+use muse2::log::SetLogger;
 use std::hint::black_box;
 
 /// Benchmark the example run command for all examples
@@ -24,8 +25,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     for name in example_names {
         group.bench_function(format!("{name} example"), |b| {
             b.iter(|| {
-                handle_example_run_command(black_box(name), black_box(false), black_box(&options))
-                    .unwrap_or(());
+                handle_example_run_command(
+                    black_box(name),
+                    black_box(false),
+                    black_box(&options),
+                    SetLogger::Disabled,
+                )
+                .unwrap_or(());
             });
         });
     }

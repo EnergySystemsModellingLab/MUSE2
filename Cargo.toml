@@ -86,6 +86,3 @@ harness = false
 [[bench]]
 name = "assets"
 harness = false
-
-[features]
-bench = []
