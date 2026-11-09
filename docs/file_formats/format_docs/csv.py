@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-#
-# A script to generate markdown documentation from table schemas.
+"""Module for generating docs from table (CSV) schemas."""
 
 from typing import Iterable
 import yaml
