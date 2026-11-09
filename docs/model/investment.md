@@ -39,22 +39,25 @@ example, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-order
 
 ### Circularities
 
-When markets form a circularity (e.g. electricity → hydrogen → electricity), there is always at
-least one **feedback process**: a process that consumes a market which is invested in *before* the
-market it supplies.
+When markets form a circularity (e.g. electricity → hydrogen → electricity), they can't be put in an
+order that respects every dependency. When the model is loaded, MUSE2 chooses an order for the
+markets in each circularity, which determines its **feedback processes**: processes that consume a
+market which is invested in *before* the market they supply (see
+[Commodity Graphs][graph-circularities]). If assets are selected for a feedback process, they create
+extra demand for a market that has already been invested in.
 
-When the model is loaded, MUSE2 chooses an order for the markets in each circularity and identifies
-its feedback processes (see [Commodity Graphs][graph-circularities]). MUSE2 then invests in the
-circularity in two passes over its markets, running a
+To deal with this, MUSE2 invests in the circularity in two passes over its markets, running a
 [partial system dispatch](#partial-system-dispatch) after each market in each pass:
 
-1. **First pass (provisional).** The markets are visited in order, with all processes available.
-   Only the assets selected for feedback processes are kept; all other selections are discarded.
-2. **Second pass (final).** Starting again, the kept feedback assets are added to the system: their
-   inputs add to the demand for the markets they consume, and their output reduces the demand for
-   the market they produce. The markets are visited in the same order again, but this time
-   feedback processes are excluded, so the demand for each market is fully known when it is
-   invested in.
+1. **First pass (provisional).** The markets are visited in order, with all processes available,
+   including feedback processes. Any feedback assets selected will leave some demand for earlier
+   markets unmet. Only the assets selected for feedback processes are kept; all other selections
+   are discarded.
+2. **Second pass (final).** The kept feedback assets are added to the system: their inputs add to
+   the demand for the markets they consume, and their outputs reduce the demand for the markets
+   they supply. The markets are then visited in the same order again, but this time feedback
+   processes are excluded. Without them, demand only flows upstream, so the demand for each market
+   is fully known when it is invested in.
 
 The final selection is the feedback assets from the first pass plus all assets from the second
 pass.
