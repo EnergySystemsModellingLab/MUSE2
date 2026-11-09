@@ -6,8 +6,10 @@ repos:
       - id: check-merge-conflict
       - id: trailing-whitespace
       - id: end-of-file-fixer
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.37.4
+    rev: 0.39.0
     hooks:
       - id: check-dependabot
       - id: check-github-actions
@@ -31,7 +33,7 @@ repos:
         files: /settings\.toml$
         types_or: [toml]
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.49.0
+    rev: v0.50.0
     hooks:
       - id: markdownlint-fix
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -53,7 +55,7 @@ repos:
       - id: clippy
         args: ["--all-targets", "--", "-D", "warnings"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    rev: v0.17.4
     hooks:
       - id: ruff-check
         types_or: [python]
@@ -61,7 +63,7 @@ repos:
       - id: ruff-format
         types_or: [python]
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.2
+    rev: v2.4.3
     hooks:
       - id: codespell
         args: [--ignore-words, .codespell_ignore.txt]
@@ -71,6 +73,6 @@ repos:
     hooks:
       - id: validate-cff
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.28
+    rev: 0.13.7
     hooks:
       - id: uv-lock

@@ -2,9 +2,10 @@
 #
 # A script to generate documentation for the different examples from README.txt files.
 
-from pathlib import Path
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
+from pathlib import Path
+
 from jinja2 import Environment, FileSystemLoader
 
 DOCS_DIR = Path(__file__).parent

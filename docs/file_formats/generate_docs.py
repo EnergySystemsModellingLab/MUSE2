@@ -4,9 +4,9 @@
 # it will generate all file format documentation. Alternatively, you can specify one or more type
 # (e.g. "input") as an argument and just those files will be written.
 
-from pathlib import Path
 import sys
-from typing import Iterable
+from collections.abc import Iterable
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -34,7 +34,7 @@ OUTPUT_FILE_ORDER = {
 }
 
 sys.path.append(str(FILE_FORMAT_DOCS_DIR))
-from format_docs import generate_for_csv, generate_for_toml  # noqa: E402
+from format_docs import generate_for_csv, generate_for_toml
 
 
 def generate_settings_docs(env: Environment) -> tuple[str, str]:
