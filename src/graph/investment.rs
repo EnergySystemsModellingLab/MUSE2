@@ -244,6 +244,7 @@ fn find_feedback_processes(
 /// `scc` holds the commodity graph indices of the SCC's markets, and is sorted in place into the
 /// final order. An error is returned if the MILP cannot be solved (e.g. if the SCC has no supply
 /// from outside it).
+#[allow(clippy::too_many_lines)]
 fn order_scc(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
