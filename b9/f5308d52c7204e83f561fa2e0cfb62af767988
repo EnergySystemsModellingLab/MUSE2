@@ -15,6 +15,7 @@ src/graph/investment.rs
   s_83fb8d859a105f::t_067aa272bd4dc5 4-5,7,10
   s_83fb8d859a105f::t_5b97fda6ee478a 341-353,355,357-360,363-374,389-390,394-396
   s_83fb8d859a105f::t_0302535f8cb496 137-138
+  h_e76403a1cd4bf1 101,666,684
 ---
 {
   "schema_version": "authorship/3.0.0",
