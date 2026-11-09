@@ -10,6 +10,7 @@
   - [Input Files](file_formats/input_files.md)
   - [Output Files](file_formats/output_files.md)
 - [Model Description](model/README.md)
+  - [Time](model/time.md)
   - [Units and Dimensions](model/units_and_dimensions.md)
   - [Commodity Graphs](model/commodity_graphs.md)
   - [Dispatch Optimisation](model/dispatch_optimisation.md)
