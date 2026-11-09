@@ -2,8 +2,9 @@
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::simulation::market::MarketSet;
-use anyhow::{Result, bail};
-use highs::{Col, HighsModelStatus, RowProblem, Sense};
+use crate::simulation::optimisation::{ModelError, solve_optimal};
+use anyhow::{Context, Result};
+use highs::{Col, RowProblem, Sense};
 use indexmap::IndexMap;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
@@ -188,7 +189,7 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 ///   pairwise violation is between B and C, as C is solved before B, but B may consume C.
 ///
 /// `scc` holds the commodity graph indices of the SCC's markets, and is sorted in place into the
-/// final order. If the MILP cannot be solved, a warning is logged and the order is left unchanged.
+/// final order. If the MILP cannot be solved, an error is returned.
 fn order_scc(
     graph: &CommoditiesGraph,
     commodities: &CommodityMap,
@@ -285,26 +286,16 @@ fn order_scc(
 
     // Solve model
     let model = problem.optimise(Sense::Minimise);
-    let solved = match model.try_solve() {
-        Ok(solved) => solved,
-        Err(status) => {
-            bail!(
-                "HiGHS failed while ordering SCC {}: {status:?}",
+    let solved = solve_optimal(model)
+        .map_err(ModelError::into_anyhow)
+        .with_context(|| {
+            format!(
+                "Could not find a valid investment order for circular dependency {}",
                 to_market_set(graph, scc)
-            );
-        }
-    };
-
-    if solved.status() != HighsModelStatus::Optimal {
-        let status = solved.status();
-        bail!(
-            "Could not find a valid investment order for circular dependency {} (HiGHS status: \
-             {status:?}).",
-            to_market_set(graph, scc)
-        );
-    }
-
+            )
+        })?;
     let solution = solved.get_solution();
+
     // Score each market by the number of "wins" it achieves (times it must precede another).
     let mut wins = vec![0usize; n];
     for (i, row) in vars.iter().enumerate() {
