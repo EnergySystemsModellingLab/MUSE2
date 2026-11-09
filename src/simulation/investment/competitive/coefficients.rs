@@ -39,7 +39,7 @@ pub struct ObjectiveCoefficients {
 /// excluded.
 pub fn calculate_coefficients_for_assets(
     model: &Model,
-    objective_type: &ObjectiveType,
+    objective_type: ObjectiveType,
     assets: &[AssetRef],
     prices: &Prices,
     year: u32,
@@ -60,9 +60,9 @@ pub fn calculate_coefficients_for_assets(
 }
 
 /// Calculates cost coefficients for a single asset
-pub fn calculate_coefficients_for_asset(
+fn calculate_coefficients_for_asset(
     asset: &AssetRef,
-    objective_type: &ObjectiveType,
+    objective_type: ObjectiveType,
     time_slice_info: &TimeSliceInfo,
     prices: &Prices,
     year: u32,
