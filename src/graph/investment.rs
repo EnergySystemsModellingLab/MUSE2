@@ -381,7 +381,9 @@ fn order_scc(
         .map_err(ModelError::into_anyhow)
         .with_context(|| {
             format!(
-                "Could not find a valid investment order for circular dependency {}",
+                "Could not find a valid investment order for circular dependency {}. \
+                Check that at least one market in this cycle can be supplied by a process that \
+                does not depend on the cycle.",
                 to_market_set(graph, scc)
             )
         })?;
@@ -652,9 +654,9 @@ mod tests {
 
         assert_error!(
             solve_investment_order(&graph, &commodities),
-            "Could not find a valid investment order for circular dependency (A|GBR, B|GBR) \
-             (HiGHS status: Infeasible). Check that the markets in this cycle can be supplied by \
-             processes that do not depend on the cycle."
+            "Could not find a valid investment order for circular dependency (A|GBR, B|GBR). \
+             Check that at least one market in this cycle can be supplied by a process that does \
+             not depend on the cycle."
         );
     }
 
