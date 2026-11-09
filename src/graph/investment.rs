@@ -2,9 +2,9 @@
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
 use crate::simulation::market::MarketSet;
+use anyhow::{Result, bail};
 use highs::{Col, HighsModelStatus, RowProblem, Sense};
 use indexmap::IndexMap;
-use log::warn;
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
@@ -33,7 +33,10 @@ type InvestmentGraph = Graph<MarketSet, GraphEdge, Directed>;
 /// # Returns
 /// A Vec of `MarketSet`s in the order they should be solved, with cycles grouped into
 /// `MarketSet::Cycle`s and independent sets grouped into `MarketSet::Layer`s.
-fn solve_investment_order(graph: &CommoditiesGraph, commodities: &CommodityMap) -> Vec<MarketSet> {
+fn solve_investment_order(
+    graph: &CommoditiesGraph,
+    commodities: &CommodityMap,
+) -> Result<Vec<MarketSet>> {
     // Filter to only SVD/SED commodities. Each node's weight is its index in the commodity graph.
     let market_graph = graph.filter_map(
         |idx, node| is_market(node, commodities).then_some(idx),
@@ -47,7 +50,7 @@ fn solve_investment_order(graph: &CommoditiesGraph, commodities: &CommodityMap) 
     // Order the markets within each strongly connected component
     for scc in condensed_graph.node_weights_mut() {
         if scc.len() > 1 {
-            order_scc(graph, commodities, scc);
+            order_scc(graph, commodities, scc)?;
         }
     }
 
@@ -61,7 +64,7 @@ fn solve_investment_order(graph: &CommoditiesGraph, commodities: &CommodityMap) 
     let order = toposort(&investment_graph, None).unwrap();
 
     // Compute layers for investment
-    compute_layers(&investment_graph, &order)
+    Ok(compute_layers(&investment_graph, &order))
 }
 
 /// Whether a commodity graph node is an SVD/SED commodity (i.e. one that is invested in)
@@ -186,11 +189,15 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 ///
 /// `scc` holds the commodity graph indices of the SCC's markets, and is sorted in place into the
 /// final order. If the MILP cannot be solved, a warning is logged and the order is left unchanged.
-fn order_scc(graph: &CommoditiesGraph, commodities: &CommodityMap, scc: &mut [NodeIndex]) {
+fn order_scc(
+    graph: &CommoditiesGraph,
+    commodities: &CommodityMap,
+    scc: &mut [NodeIndex],
+) -> Result<()> {
     const EXTERNAL_BIAS: f64 = 0.1;
     let n = scc.len();
     if n < 2 {
-        return;
+        return Ok(());
     }
 
     // Build a fast lookup from commodity graph index to position in the SCC slice.
@@ -276,19 +283,25 @@ fn order_scc(graph: &CommoditiesGraph, commodities: &CommodityMap, scc: &mut [No
         }
     }
 
+    // Solve model
     let model = problem.optimise(Sense::Minimise);
     let solved = match model.try_solve() {
         Ok(solved) => solved,
         Err(status) => {
-            warn!("HiGHS failed while ordering an SCC: {status:?}");
-            return;
+            bail!(
+                "HiGHS failed while ordering SCC {}: {status:?}",
+                to_market_set(graph, scc)
+            );
         }
     };
 
     if solved.status() != HighsModelStatus::Optimal {
         let status = solved.status();
-        warn!("HiGHS returned a non-optimal status while ordering an SCC: {status:?}");
-        return;
+        bail!(
+            "Could not find a valid investment order for circular dependency {} (HiGHS status: \
+             {status:?}).",
+            to_market_set(graph, scc)
+        );
     }
 
     let solution = solved.get_solution();
@@ -313,6 +326,8 @@ fn order_scc(graph: &CommoditiesGraph, commodities: &CommodityMap, scc: &mut [No
     // Rewrite the SCC in the new order
     let ordered: Vec<_> = order.into_iter().map(|i| scc[i]).collect();
     scc.copy_from_slice(&ordered);
+
+    Ok(())
 }
 
 /// Compute layers of market sets from the topological order
@@ -416,14 +431,14 @@ pub fn solve_investment_order_for_model(
     commodity_graphs: &IndexMap<u32, CommoditiesGraph>,
     commodities: &CommodityMap,
     years: &[u32],
-) -> HashMap<u32, Vec<MarketSet>> {
+) -> Result<HashMap<u32, Vec<MarketSet>>> {
     let mut investment_orders = HashMap::new();
     for year in years {
         let graph = &commodity_graphs[year];
-        let order = solve_investment_order(graph, commodities);
+        let order = solve_investment_order(graph, commodities)?;
         investment_orders.insert(*year, order);
     }
-    investment_orders
+    Ok(investment_orders)
 }
 
 #[cfg(test)]
@@ -488,7 +503,7 @@ mod tests {
         );
         let commodities = commodity_map(&["A", "B", "C", "X"], &[]);
 
-        let result = solve_investment_order(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities).unwrap();
 
         // X is downstream of the cycle, so comes first. The order within the cycle corresponds to
         // the example in the doc comment. Note that C should be first, as it has an outgoing edge
@@ -503,7 +518,7 @@ mod tests {
         add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "C")]);
         let commodities = commodity_map(&["A", "B"], &["C"]);
 
-        let result = solve_investment_order(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities).unwrap();
 
         // Expected order: C, B, A (leaf nodes first)
         // No cycles or layers, so all market sets should be `Single`
@@ -517,7 +532,7 @@ mod tests {
         add_edges(&mut graph, "GBR", &[("A", "B"), ("B", "A")]);
         let commodities = commodity_map(&["A", "B"], &[]);
 
-        let result = solve_investment_order(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities).unwrap();
 
         // Should be a single `Cycle` market set containing both commodities
         assert_eq!(result, [cycle(&["A", "B"])]);
@@ -539,7 +554,7 @@ mod tests {
         );
         let commodities = commodity_map(&["A", "B", "C"], &["D"]);
 
-        let result = solve_investment_order(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities).unwrap();
 
         // Expected order: D, Layer(B, C), A
         assert_eq!(
@@ -560,7 +575,7 @@ mod tests {
         add_edges(&mut graph, "FRA", &[("A", "B"), ("B", "C")]);
         let commodities = commodity_map(&["A", "B"], &["C"]);
 
-        let result = solve_investment_order(&graph, &commodities);
+        let result = solve_investment_order(&graph, &commodities).unwrap();
 
         // Expected order: Should have three layers, each with two commodities (one per region)
         let layer = |commodity_id: &str| {
