@@ -56,7 +56,8 @@ fn prepare_commodities_graph_for_validation(
             if *dem_year != year || dem_ts_sel != time_slice_selection || flow <= Flow(0.0) {
                 continue;
             }
-            let commodity_node = GraphNode::Commodity(commodity_id.clone(), region_id.clone());
+            let commodity_node =
+                GraphNode::CommodityMarket(commodity_id.clone(), region_id.clone());
             let commodity_node_index = filtered_graph
                 .node_indices()
                 .find(|&idx| filtered_graph.node_weight(idx) == Some(&commodity_node))
@@ -115,7 +116,7 @@ fn validate_commodities_graph(
     for node_idx in graph.node_indices() {
         // Get the commodity ID and region for the node
         let graph_node = graph.node_weight(node_idx).unwrap();
-        let GraphNode::Commodity(commodity_id, region_id) = graph_node else {
+        let GraphNode::CommodityMarket(commodity_id, region_id) = graph_node else {
             // Skip special nodes
             continue;
         };
@@ -248,9 +249,9 @@ mod tests {
         commodities.insert("C".into(), Arc::new(svd_commodity));
 
         // Build valid graph: A(OTH) -> B(SED) -> C(SVD) ->D(DEMAND)
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
-        let node_c = graph.add_node(GraphNode::Commodity("C".into(), "GBR".into()));
+        let node_a = graph.add_node(GraphNode::CommodityMarket("A".into(), "GBR".into()));
+        let node_b = graph.add_node(GraphNode::CommodityMarket("B".into(), "GBR".into()));
+        let node_c = graph.add_node(GraphNode::CommodityMarket("C".into(), "GBR".into()));
         let node_d = graph.add_node(GraphNode::Demand);
         graph.add_edge(
             node_a,
@@ -283,9 +284,9 @@ mod tests {
         commodities.insert("C".into(), Arc::new(other_commodity));
 
         // Build invalid graph: C(OTH) -> A(SVD) -> B(SED) - SVD cannot be consumed
-        let node_c = graph.add_node(GraphNode::Commodity("C".into(), "GBR".into()));
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
+        let node_c = graph.add_node(GraphNode::CommodityMarket("C".into(), "GBR".into()));
+        let node_a = graph.add_node(GraphNode::CommodityMarket("A".into(), "GBR".into()));
+        let node_b = graph.add_node(GraphNode::CommodityMarket("B".into(), "GBR".into()));
         graph.add_edge(
             node_c,
             node_a,
@@ -313,7 +314,7 @@ mod tests {
         commodities.insert("A".into(), Arc::new(svd_commodity));
 
         // Build invalid graph: A(SVD) -> B(DEMAND) - SVD must be produced
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
+        let node_a = graph.add_node(GraphNode::CommodityMarket("A".into(), "GBR".into()));
         let node_b = graph.add_node(GraphNode::Demand);
         graph.add_edge(node_a, node_b, GraphEdge::Demand);
 
@@ -334,8 +335,8 @@ mod tests {
         commodities.insert("B".into(), Arc::new(sed_commodity));
 
         // Build invalid graph: B(SED) -> A(SED)
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
+        let node_a = graph.add_node(GraphNode::CommodityMarket("A".into(), "GBR".into()));
+        let node_b = graph.add_node(GraphNode::CommodityMarket("B".into(), "GBR".into()));
         graph.add_edge(
             node_b,
             node_a,
@@ -363,9 +364,9 @@ mod tests {
         commodities.insert("C".into(), Arc::new(sed_commodity));
 
         // Build invalid graph: B(SED) -> A(OTH) -> C(SED)
-        let node_a = graph.add_node(GraphNode::Commodity("A".into(), "GBR".into()));
-        let node_b = graph.add_node(GraphNode::Commodity("B".into(), "GBR".into()));
-        let node_c = graph.add_node(GraphNode::Commodity("C".into(), "GBR".into()));
+        let node_a = graph.add_node(GraphNode::CommodityMarket("A".into(), "GBR".into()));
+        let node_b = graph.add_node(GraphNode::CommodityMarket("B".into(), "GBR".into()));
+        let node_c = graph.add_node(GraphNode::CommodityMarket("C".into(), "GBR".into()));
         graph.add_edge(
             node_b,
             node_a,
