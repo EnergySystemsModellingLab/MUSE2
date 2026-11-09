@@ -116,7 +116,7 @@ where
             ensure!(num_tranches > 0, "num_tranches must be positive");
 
             let tranche_size = Capacity(asset.capacity.value() / num_tranches as f64);
-            AssetCapacity::new(num_tranches, tranche_size)
+            AssetCapacity::discrete(num_tranches, tranche_size)
         } else if let Some(tranche_size) = process.tranche_size {
             // No tranche count was provided, so use the process tranche_size to determine
             // how many tranches are needed to cover the asset's capacity.
@@ -137,7 +137,7 @@ where
             }
 
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            AssetCapacity::new(num_tranches as u32, tranche_size)
+            AssetCapacity::discrete(num_tranches as u32, tranche_size)
         } else {
             // Without a process tranche_size or num_tranches, capacity is continuous
             AssetCapacity::continuous(asset.capacity)
@@ -222,7 +222,10 @@ mod tests {
         let assets =
             read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
 
-        assert_eq!(assets[0].capacity(), AssetCapacity::new(3, Capacity(2.0)));
+        assert_eq!(
+            assets[0].capacity(),
+            AssetCapacity::discrete(3, Capacity(2.0))
+        );
     }
 
     #[rstest]
@@ -272,7 +275,10 @@ mod tests {
         let assets =
             read_assets_from_iter(iter::once(asset), &agent_ids, &processes, &region_ids).unwrap();
 
-        assert_eq!(assets[0].capacity(), AssetCapacity::new(3, Capacity(4.0)));
+        assert_eq!(
+            assets[0].capacity(),
+            AssetCapacity::discrete(3, Capacity(4.0))
+        );
     }
 
     #[rstest]
