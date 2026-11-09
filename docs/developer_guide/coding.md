@@ -81,23 +81,19 @@ MUSE2 includes a benchmarking framework to measure the performance of various co
 [Criterion.rs] library. To run all the available benchmarks, use the following command:
 
 ```sh
-cargo bench --features bench
+cargo bench
 ```
-
-The `--features bench` flag disables some aspects of the code that are incompatible with the
-benchmarking, like singleton objects that can be only instantiated once and throw an error otherwise.
-See `rust` documentation for more information about [features].
 
 You can also run specific benchmarks by specifying their names:
 
 ```sh
-cargo bench --features bench --bench <benchmark_name>
+cargo bench --bench <benchmark_name>
 ```
 
 For example, to run the `examples` benchmark, you would use:
 
 ```sh
-cargo bench --features bench --bench examples
+cargo bench --bench examples
 ```
 
 If run more than once, the benchmarking framework will compare the results of the current run with the
@@ -127,4 +123,3 @@ your performance tests using the Criterion.rs API. Check `benches/examples.rs` f
 to do this. More information about writing benchmarks can be found in the [Criterion.rs] documentation.
 
 [Criterion.rs]: https://bheisler.github.io/criterion.rs/book/index.html
-[features]: https://doc.rust-lang.org/cargo/reference/features.html
