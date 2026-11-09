@@ -2,11 +2,11 @@
 //!
 //! Candidate and existing assets compete in rounds: each round every option is appraised with a
 //! mini dispatch optimisation, and the best option according to the agent's objective is selected.
-pub mod coefficients;
+mod coefficients;
 mod constraints;
 mod costs;
 mod debug;
-pub mod metrics;
+mod metrics;
 mod optimisation;
 
 use crate::agent::{Agent, AgentID};
@@ -182,7 +182,7 @@ fn get_candidate_assets<'a>(
 ///
 /// If the asset has zero maximum annual supply, zero capacity is returned. This indicates that the
 /// asset is non-feasible, and will be excluded from consideration by `select_best_assets`.
-pub fn calculate_candidate_asset_capacity_scale(
+fn calculate_candidate_asset_capacity_scale(
     asset: &Asset,
     commodity: &Commodity,
     demand: &DemandMap,
@@ -251,7 +251,7 @@ pub fn select_best_assets(
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
-    let objective_type = &agent.objectives[&year];
+    let objective_type = agent.objectives[&year];
 
     // Remaining addition limits for candidate processes
     // Initialised as the full agent addition limits, and reduced as candidate assets are selected
