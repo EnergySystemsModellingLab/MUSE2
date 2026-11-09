@@ -3,9 +3,6 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
-/// Continuous capacities with an absolute value within this tolerance are considered to be zero
-const CONTINUOUS_ZERO_TOLERANCE: Capacity = Capacity(1e-9);
-
 /// Capacity of an asset, which may be continuous or a number of discrete tranches of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub enum AssetCapacity {
@@ -31,7 +28,7 @@ impl AssetCapacity {
     }
 
     /// Create a new discrete `AssetCapacity` with the given number of tranches and tranche size
-    pub fn new(num_tranches: u32, tranche_size: Capacity) -> Self {
+    pub fn discrete(num_tranches: u32, tranche_size: Capacity) -> Self {
         assert!(
             tranche_size.is_finite() && tranche_size >= Capacity(0.0),
             "Tranche size must be a finite non-negative number"
@@ -44,7 +41,7 @@ impl AssetCapacity {
 
     /// Create a new discrete `AssetCapacity` with a single tranche of the given size
     pub fn single(tranche_size: Capacity) -> Self {
-        Self::new(1, tranche_size)
+        Self::discrete(1, tranche_size)
     }
 
     /// Return the smaller of `self` or `other`.
@@ -80,6 +77,7 @@ impl AssetCapacity {
             AssetCapacity::Discrete { tranche_size, .. } => Self::single(tranche_size),
         }
     }
+
     /// Returns a zero capacity of the same kind (and tranche size) as this one.
     pub fn zero(&self) -> Self {
         match self {
@@ -97,7 +95,7 @@ impl AssetCapacity {
     /// allow for floating-point error (e.g. after subtracting almost-equal capacities).
     pub fn is_zero(&self) -> bool {
         match self {
-            AssetCapacity::Continuous(capacity) => capacity.abs() <= CONTINUOUS_ZERO_TOLERANCE,
+            AssetCapacity::Continuous(capacity) => capacity.abs() <= Capacity(1e-9),
             AssetCapacity::Discrete { num_tranches, .. } => *num_tranches == 0,
         }
     }
@@ -220,7 +218,7 @@ mod tests {
         #[case] tranche_size: Capacity,
         #[case] expected_total_capacity: Capacity,
     ) {
-        let capacity = AssetCapacity::new(num_tranches, tranche_size);
+        let capacity = AssetCapacity::discrete(num_tranches, tranche_size);
 
         assert_eq!(capacity.num_tranches(), Some(num_tranches));
         assert_eq!(capacity.total_capacity(), expected_total_capacity);
@@ -234,7 +232,7 @@ mod tests {
     #[should_panic(expected = "Tranche size must be a finite non-negative number")]
     fn new_rejects_non_finite_tranche_size(#[case] tranche_size: Capacity) {
         let num_tranches = 1;
-        let _ = AssetCapacity::new(num_tranches, tranche_size);
+        let _ = AssetCapacity::discrete(num_tranches, tranche_size);
     }
 
     #[rstest]
@@ -254,18 +252,18 @@ mod tests {
         Some(Ordering::Greater)
     )]
     #[case::less(
-        AssetCapacity::new(2, Capacity(3.0)),
-        AssetCapacity::new(4, Capacity(3.0)),
+        AssetCapacity::discrete(2, Capacity(3.0)),
+        AssetCapacity::discrete(4, Capacity(3.0)),
         Some(Ordering::Less)
     )]
     #[case::equal(
-        AssetCapacity::new(4, Capacity(3.0)),
-        AssetCapacity::new(4, Capacity(3.0)),
+        AssetCapacity::discrete(4, Capacity(3.0)),
+        AssetCapacity::discrete(4, Capacity(3.0)),
         Some(Ordering::Equal)
     )]
     #[case::greater(
-        AssetCapacity::new(5, Capacity(3.0)),
-        AssetCapacity::new(4, Capacity(3.0)),
+        AssetCapacity::discrete(5, Capacity(3.0)),
+        AssetCapacity::discrete(4, Capacity(3.0)),
         Some(Ordering::Greater)
     )]
     fn partial_cmp_with_valid_comparisons(
@@ -280,11 +278,11 @@ mod tests {
     #[rstest]
     #[case::mixed_types(
         AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::new(4, Capacity(1.0))
+        AssetCapacity::discrete(4, Capacity(1.0))
     )]
     #[case::different_tranche_sizes(
-        AssetCapacity::new(4, Capacity(1.0)),
-        AssetCapacity::new(4, Capacity(2.0))
+        AssetCapacity::discrete(4, Capacity(1.0)),
+        AssetCapacity::discrete(4, Capacity(2.0))
     )]
     #[case::nan_continuous(
         AssetCapacity::Continuous(Capacity(f64::NAN)),
@@ -305,9 +303,9 @@ mod tests {
         AssetCapacity::Continuous(Capacity(4.0))
     )]
     #[case::discrete(
-        AssetCapacity::new(2, Capacity(3.0)),
-        AssetCapacity::new(4, Capacity(3.0)),
-        AssetCapacity::new(2, Capacity(3.0))
+        AssetCapacity::discrete(2, Capacity(3.0)),
+        AssetCapacity::discrete(4, Capacity(3.0)),
+        AssetCapacity::discrete(2, Capacity(3.0))
     )]
     fn min_returns_smaller_capacity(
         #[case] left: AssetCapacity,
@@ -320,11 +318,11 @@ mod tests {
     #[rstest]
     #[case::mixed_types(
         AssetCapacity::Continuous(Capacity(4.0)),
-        AssetCapacity::new(4, Capacity(1.0))
+        AssetCapacity::discrete(4, Capacity(1.0))
     )]
     #[case::different_tranche_sizes(
-        AssetCapacity::new(4, Capacity(1.0)),
-        AssetCapacity::new(4, Capacity(2.0))
+        AssetCapacity::discrete(4, Capacity(1.0)),
+        AssetCapacity::discrete(4, Capacity(2.0))
     )]
     #[should_panic(expected = "Comparing invalid AssetCapacity values")]
     fn min_panics_for_invalid_comparisons(
@@ -336,7 +334,7 @@ mod tests {
 
     #[test]
     fn subtracting_equal_capacities_returns_zero_tranches() {
-        let capacity = AssetCapacity::new(2, Capacity(3.0));
+        let capacity = AssetCapacity::discrete(2, Capacity(3.0));
 
         assert_eq!(
             capacity - capacity,

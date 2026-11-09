@@ -216,7 +216,7 @@ pub fn multi_tranche_asset(process: Process) -> Asset {
         "agent1".into(),
         Arc::new(process),
         "GBR".into(),
-        AssetCapacity::new(3, Capacity(4.0)),
+        AssetCapacity::discrete(3, Capacity(4.0)),
         2010,
     )
     .unwrap()

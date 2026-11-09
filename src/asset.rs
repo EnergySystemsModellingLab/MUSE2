@@ -1248,7 +1248,7 @@ mod tests {
 
     /// Capacity made up of `num_tranches` tranches of the same size as the multi-tranche asset
     fn tranches(num_tranches: u32) -> AssetCapacity {
-        AssetCapacity::new(num_tranches, Capacity(4.0))
+        AssetCapacity::discrete(num_tranches, Capacity(4.0))
     }
 
     #[rstest]
