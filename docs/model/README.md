@@ -13,7 +13,8 @@ context of climate change mitigation.
 
 MUSE2 is a bottom-up engineering-economic modelling framework that computes a price-induced
 supply-demand equilibrium on a set of user-defined commodities.
-It does this for each milestone time period within a user-defined time horizon.
+It does this for each milestone time period within a user-defined time horizon (see documentation on
+[Time](time.md)).
 This is a "partial equilibrium" in the sense that the framework equilibrates only the user-defined
 commodities, as opposed to a whole economy.
 
@@ -47,8 +48,6 @@ At a high level, the user defines:
 5) The agents that choose between processes by applying search spaces, objectives and decision
    rules. Portions of demand for each commodity must be assigned to an agent, and the sum of these
    portions must be one.
-
-The temporal arrangements described above are explained in more detail in [Time](time.md).
 
 ## Framework Overview
 
