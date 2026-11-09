@@ -1,11 +1,13 @@
 """Module for generating docs from table (CSV) schemas."""
 
-from typing import Iterable
-import yaml
-from .table import fields2table
-from pathlib import Path
+from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
 from jinja2 import Environment
+
+from .table import fields2table
 
 
 @dataclass

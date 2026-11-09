@@ -1,10 +1,11 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
-from .table import fields2table
 from jinja2 import Environment
-from dataclasses import dataclass
+
+from .table import fields2table
 
 
 @dataclass
