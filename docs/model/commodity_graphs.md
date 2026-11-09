@@ -152,49 +152,52 @@ The investment order is worked out from the commodity graph for each year as fol
 
 ### Circularities
 
-In a circularity, each market in the loop is both upstream and downstream of the others, so at
-least one conflict is unavoidable, whatever the order. In the [example model](#example):
+In a circularity, each market in the loop is both upstream and downstream of the others, so whatever
+order the markets are put in, at least one of them will be invested in before all of its demand is
+known. In the [example model](#example):
 
-- if electricity is invested in first, any potential electricity demand from hydrogen electrolysers
- (H2YPRO) isn't yet known;
-- if hydrogen is invested in first, any potential hydrogen demand from hydrogen turbines (H2YGEN)
- isn't yet known.
+- if electricity is invested in first, any electricity demand from hydrogen electrolysers (H2YPRO)
+  isn't yet known;
+- if hydrogen is invested in first, any hydrogen demand from hydrogen turbines (H2YGEN) isn't yet
+  known.
 
-The investment and pricing algorithms deal with these conflicts using iterative algorithms that
-visit the markets multiple times.
+The processes that cause this are called **feedback processes**. A feedback process is one that
+consumes a market in the circularity which comes *earlier* in the investment order than the market
+it supplies, i.e. it flows the wrong way through the investment order. For example, if hydrogen is
+invested in before electricity, H2YGEN is a feedback process.
 
 Circularities may be small, like this one, or much larger, involving many commodities and covering
 a large part of your model. MUSE2 handles them all in the same way: it chooses an order for the
-markets in the loop, and identifies the processes that cause conflicts, called
-**feedback processes**.
+markets in the circularity, which in turn determines its feedback processes. These are then treated
+specially during [investment][investment-circularities] and [pricing][pricing-circularities].
 
 #### Choosing an order
 
-A **feedback process** is a process which consumes any market in the cycle that comes *earlier* in
-the investment order than the market(s) it supplies.
+The order for each circularity must satisfy the following rule:
 
-When the model is loaded, MUSE2 chooses the order for each circularity by solving a small
-optimisation problem (a mixed-integer linear program, or MILP) which must satisfy the following
-rule:
+- **Every market must keep at least one producer that isn't a feedback process.** Without its
+  feedback processes, a circularity is no longer a loop, and this rule ensures that the demand for
+  every market can still be met, either from outside the circularity or from markets later in the
+  order. This allows MUSE2 to invest in the circularity without feedback processes, following the
+  normal downstream-to-upstream rules (see [Investment Appraisal][investment-circularities]).
 
-- **Every market must keep at least one producer that isn't a feedback process.** This is
-  necessary so that any demand incurred by feedback processes can later be resolved by non-feedback
-  processes (see [investment algorithm][investment-circularities]). Any ordering that does not
-  satisfy this rule could potentially propagate demand infinitely through the cycle.
+In the example model, this means that hydrogen must be invested in first. If electricity came
+first, the electrolyser (H2YPRO) would be a feedback process, leaving hydrogen with no other
+producer.
 
 Of the orders that satisfy this rule, MUSE2 chooses the one with the **fewest conflicts** (i.e.
-market pairs linked by one or more feedback processes). If several orders are equally good, it
-prefers to put markets that supply markets outside the loop first.
+pairs of markets linked by one or more feedback processes). If several orders are equally good, it
+prefers to put markets that supply markets downstream of the circularity first.
 
-If no order satisfies the rule, MUSE2 stops with an error when the model is loaded.
+MUSE2 finds this order when the model is loaded by solving a small optimisation problem (a
+mixed-integer linear program, or MILP); for details, see the
+[API documentation for `order_scc`][order-scc]. If no order satisfies the rule, MUSE2 stops with an
+error.
 
-> **Note:** sometimes several orders are equally good. In this case, MUSE2 will then pick one of
-> them, and the choice may depend arbitrarily on factors such as the order of rows in the input data
-> or the machine that the model is running on. This may affect your results. You can see which order
+> **Note:** sometimes several orders are equally good. In this case, MUSE2 will pick one of them,
+> and the choice may depend arbitrarily on factors such as the order of rows in the input data or
+> the machine that the model is running on. This may affect your results. You can see which order
 > and feedback processes were chosen in the [log](#checking-the-investment-order-for-your-model).
-
-For details of the optimisation problem, see the
-[API documentation for `order_scc`][order-scc].
 
 ### Example investment order
 

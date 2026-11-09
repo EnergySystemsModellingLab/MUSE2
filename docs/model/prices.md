@@ -117,9 +117,9 @@ determined, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-or
 ## Circularities
 
 Within a [circularity][graph-circularities], markets are priced in the reverse of their investment
-order. As with investment, at least one process will need the price of an input that hasn't been
-calculated yet. This happens for exactly the [feedback processes][graph-circularities]. For these
-inputs, MUSE2 uses the shadow price from dispatch as an estimate.
+order. As with investment, some processes need the price of an input that hasn't been calculated
+yet: these are exactly the [feedback processes][graph-circularities]. For these inputs, MUSE2 uses
+the shadow price from dispatch as an estimate.
 
 In the [example model][graph-example], hydrogen is invested in before electricity, so prices are
 calculated in this order:
