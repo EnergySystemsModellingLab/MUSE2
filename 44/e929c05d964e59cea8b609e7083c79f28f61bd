@@ -1,0 +1,14 @@
+src/graph/investment.rs
+  h_e76403a1cd4bf1 247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44e929c05d964e59cea8b609e7083c79f28f61bd",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
