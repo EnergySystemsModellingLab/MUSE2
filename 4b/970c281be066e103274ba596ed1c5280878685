@@ -1,0 +1,19 @@
+docs/release_notes/upcoming.md
+  s_e3618010bfe6e6::t_7bb626473e1260 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b970c281be066e103274ba596ed1c5280878685",
+  "prompts": {},
+  "sessions": {
+    "s_e3618010bfe6e6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "8bd37d8a-eb51-4605-8b07-75765390502c",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
