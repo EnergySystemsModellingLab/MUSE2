@@ -1,0 +1,25 @@
+src/graph/investment.rs
+  h_e76403a1cd4bf1 298
+  s_9dc726de8ab2d2::t_57dbea820852d9 5-7,192,289-293,295-296
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb2826fdc481b078d1a4157ab950b438df0c583f",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_9dc726de8ab2d2": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "9006d86d-44c4-40ec-994f-65f23071e4c7",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
