@@ -1,0 +1,45 @@
+src/simulation/investment/portfolio/costs.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-33
+src/simulation/investment/portfolio/debug.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-12,14-15,17-150
+  s_378dcf4051c8b4::t_a645a420a0bde7 13,16
+src/simulation/investment/portfolio/optimisation.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-194
+src/simulation/investment.rs
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 21
+src/input/agent.rs
+  s_378dcf4051c8b4::t_8f032a35e0d018 167-169,267-285
+  s_378dcf4051c8b4::t_9ccb6ab8042fcc 247-249
+  s_378dcf4051c8b4::t_d355dc0faeedf7 246
+  s_378dcf4051c8b4::t_0804cc41fba174 286
+src/simulation/investment/portfolio/constraints.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-236
+src/simulation/investment/portfolio.rs
+  s_378dcf4051c8b4::t_b30311315bae3e 1-55,57-58,61-78,82-163
+  s_378dcf4051c8b4::t_d3eb4e7346b078 56,59-60,79-81
+schemas/input/agents.yaml
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 16,19-22
+src/simulation/market.rs
+  s_378dcf4051c8b4::t_d3eb4e7346b078 218,221-222
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 11,211
+src/simulation/investment/competitive.rs
+  s_378dcf4051c8b4::t_d3eb4e7346b078 64,67-68,76,91-92,97
+src/agent.rs
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6f36a6a6011897142633852be45bcc6c5fe1ec4f",
+  "prompts": {},
+  "sessions": {
+    "s_378dcf4051c8b4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
