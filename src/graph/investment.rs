@@ -86,13 +86,15 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
         GraphNode::CommodityMarket(commodity_id, region_id) => {
             (commodity_id.clone(), region_id.clone())
         }
-        _ => unreachable!("Strongly connected components should only contain commodities"),
+        _ => panic!("Strongly connected components should only contain commodities"),
     };
     match scc {
         // Exactly one member: a single market that isn't part of a cycle
         [idx] => MarketSet::Single(market(idx)),
         // Several members: a cycle, already in investment order (from `order_scc`)
-        _ => MarketSet::Cycle(scc.iter().map(market).collect()),
+        [_, _, ..] => MarketSet::Cycle(scc.iter().map(market).collect()),
+        // An SCC must never be empty
+        [] => panic!("unexpected empty SCC"),
     }
 }
 
@@ -187,6 +189,9 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 fn order_scc(graph: &CommoditiesGraph, commodities: &CommodityMap, scc: &mut [NodeIndex]) {
     const EXTERNAL_BIAS: f64 = 0.1;
     let n = scc.len();
+    if n < 2 {
+        return;
+    }
 
     // Build a fast lookup from commodity graph index to position in the SCC slice.
     let index_position: HashMap<_, _> = scc
@@ -255,11 +260,11 @@ fn order_scc(graph: &CommoditiesGraph, commodities: &CommodityMap, scc: &mut [No
     // Enforce transitivity to avoid 3-cycles: x[i][j] + x[j][k] + x[k][i] ≤ 2.
     // i.e. if i comes before j and j comes before k, then k cannot come before i.
     for (i, row) in vars.iter().enumerate() {
-        for (j, _) in row.iter().enumerate() {
+        for j in 0..row.len() {
             if i == j {
                 continue;
             }
-            for (k, _) in vars.iter().enumerate() {
+            for k in 0..vars.len() {
                 if i == k || j == k {
                     continue;
                 }
