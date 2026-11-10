@@ -1,4 +1,4 @@
-//! The competitive asset selection algorithm.
+//! The competitive agent algorithm.
 //!
 //! Candidate and existing assets compete in rounds: each round every option is appraised with a
 //! mini dispatch optimisation, and the best option according to the agent's objective is selected.
@@ -33,7 +33,8 @@ use metrics::{
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-/// Select assets for an agent to meet its share of demand for a commodity in a region.
+/// Run the competitive algorithm for an agent to meet its share of demand for a commodity in a
+/// region.
 ///
 /// Existing assets of the agent which produce the commodity compete with candidate assets from the
 /// agent's search space. Processes in `excluded_processes` are not considered.
@@ -58,7 +59,7 @@ use std::collections::HashMap;
 /// The assets selected (including retained commissioned assets) along with their activities from
 /// the final appraisal round, or an error.
 #[allow(clippy::too_many_arguments)]
-pub fn select_assets(
+pub fn run_agent(
     model: &Model,
     agent: &Agent,
     commodity: &Commodity,

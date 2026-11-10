@@ -160,7 +160,7 @@ fn find_feedback_processes(
 ///   feedback process, i.e. one whose inputs from within the SCC all appear after the market in the
 ///   order. Producers with no inputs from within the SCC always qualify. This ensures that every
 ///   market still has a producer when feedback processes are excluded in the second investment
-///   pass (see `select_assets_for_cycle`).
+///   pass (see `run_agents_for_cycle`).
 /// * The objective minimises the number of “forward” edges (edges that would point from an earlier
 ///   market to a later one), counted within the original SCC and treated as unit penalties. A small
 ///   bias (<1) is added to nudge exporters earlier without outweighing the main objective (a bias
