@@ -7,6 +7,7 @@ use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, snas};
 use crate::model::Model;
+use crate::simulation::activity::ActivityMap;
 use crate::simulation::investment::DemandMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, MoneyPerActivity, MoneyPerCapacity};
@@ -56,7 +57,7 @@ pub struct AppraisalOutput {
     /// Activity coefficients and metric costs used in the appraisal
     pub coefficients: Arc<ObjectiveCoefficients>,
     /// Full solution to the optimisation
-    pub solution: IndexMap<(AssetRef, TimeSliceID), Activity>,
+    pub solution: ActivityMap,
 }
 
 impl AppraisalOutput {
@@ -217,7 +218,7 @@ fn calculate_lcox(
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
-    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
+    previous_solution: &ActivityMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
         model,
@@ -256,7 +257,7 @@ fn calculate_npv(
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
-    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
+    previous_solution: &ActivityMap,
 ) -> Result<AppraisalOutput> {
     let results = perform_optimisation(
         model,
@@ -304,7 +305,7 @@ pub fn appraise_investment(
     objective_type: ObjectiveType,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
-    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
+    previous_solution: &ActivityMap,
 ) -> Result<AppraisalOutput> {
     let appraisal_method = match objective_type {
         ObjectiveType::LevelisedCostOfX => calculate_lcox,

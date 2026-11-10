@@ -9,6 +9,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
+use crate::simulation::activity::Selection;
 use crate::simulation::investment::DemandMap;
 use crate::simulation::prices::Prices;
 use crate::units::Capacity;
@@ -46,7 +47,8 @@ use optimisation::perform_optimisation;
 ///
 /// # Returns
 ///
-/// The assets selected (including retained commissioned assets), or an error.
+/// The assets selected (including retained commissioned assets) along with their activities from
+/// the optimisation, or an error.
 #[allow(clippy::too_many_arguments)]
 pub fn select_assets(
     model: &Model,
@@ -61,7 +63,7 @@ pub fn select_assets(
     prices: &Prices,
     year: u32,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     // Existing and candidate assets from which to choose
     let mut opt_assets =
         get_asset_options(existing_assets, agent, commodity, region_id, year).collect::<Vec<_>>();
@@ -92,8 +94,8 @@ pub fn select_assets(
     )?;
 
     // Assemble assets from optimisation result
-    let mut selected_assets = Vec::new();
-    for (asset, result) in results.capacities {
+    let mut selected = Vec::new();
+    for (asset, result) in &results.capacities {
         // Solver noise can give tiny negative values
         let capacity = asset
             .capacity()
@@ -103,16 +105,16 @@ pub fn select_assets(
         }
 
         // Selected assets are unmothballed. This must happen before `set_capacity`.
-        let mut selected = asset.with_no_mothballed_capacity();
-        let inner = selected.make_mut();
+        let mut selected_asset = asset.clone().with_no_mothballed_capacity();
+        let inner = selected_asset.make_mut();
         if inner.is_candidate() {
             inner.select_candidate_for_investment(agent.id.clone());
         }
         inner.set_capacity(capacity);
-        selected_assets.push(selected);
+        selected.push((asset.clone(), selected_asset));
     }
 
-    Ok(selected_assets)
+    Ok(Selection::from_optimisation(selected, &results.activities))
 }
 
 /// Get options from existing and potential assets for the given parameters

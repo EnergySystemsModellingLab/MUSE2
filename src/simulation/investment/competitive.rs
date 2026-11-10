@@ -16,6 +16,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
+use crate::simulation::activity::{ActivityMap, Selection};
 use crate::simulation::investment::DemandMap;
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceSelection;
@@ -23,7 +24,6 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
 use debug::write_debug_info;
-use indexmap::IndexMap;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use metrics::{
@@ -55,7 +55,8 @@ use std::collections::HashMap;
 ///
 /// # Returns
 ///
-/// The assets selected (including retained commissioned assets), or an error.
+/// The assets selected (including retained commissioned assets) along with their activities from
+/// the final appraisal round, or an error.
 #[allow(clippy::too_many_arguments)]
 pub fn select_assets(
     model: &Model,
@@ -70,7 +71,7 @@ pub fn select_assets(
     prices: &Prices,
     year: u32,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     // Existing and candidate assets from which to choose
     let mut opt_assets = get_asset_options(
         existing_assets,
@@ -251,7 +252,7 @@ pub fn select_best_assets(
     demand: &DemandMap,
     year: u32,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     let objective_type = agent.objectives[&year];
 
     // Remaining addition limits for candidate processes
@@ -280,7 +281,7 @@ pub fn select_best_assets(
     let mut round = 0;
     let mut selected_assets: Vec<AssetRef> = Vec::new();
     let mut unmet_demand = demand.clone();
-    let mut previous_solution = IndexMap::new();
+    let mut previous_solution = ActivityMap::new();
     while is_any_remaining_demand(
         &unmet_demand,
         model.parameters.remaining_demand_absolute_tolerance,
@@ -386,16 +387,22 @@ pub fn select_best_assets(
     }
 
     // Convert Candidate assets to Ready
-    // At this point we also assign the agent ID to the asset
-    for asset in &mut selected_assets {
-        if asset.is_candidate() {
-            asset
-                .make_mut()
-                .select_candidate_for_investment(agent.id.clone());
-        }
-    }
+    // At this point we also assign the agent ID to the asset. The solution from the final round
+    // covers exactly the selected assets.
+    let selected = selected_assets
+        .into_iter()
+        .map(|asset| {
+            let mut selected_asset = asset.clone();
+            if selected_asset.is_candidate() {
+                selected_asset
+                    .make_mut()
+                    .select_candidate_for_investment(agent.id.clone());
+            }
+            (asset, selected_asset)
+        })
+        .collect();
 
-    Ok(selected_assets)
+    Ok(Selection::from_optimisation(selected, &previous_solution))
 }
 
 /// Prepare existing assets for reappraisal.
