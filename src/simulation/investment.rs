@@ -5,6 +5,7 @@ use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::Process;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -16,6 +17,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use log::debug;
 use std::collections::HashMap;
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 pub mod competitive;
@@ -23,6 +25,17 @@ pub mod portfolio;
 
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
+
+/// The assets and processes available to an agent to meet its share of demand for one market
+#[derive(Default)]
+pub struct AssetOptions {
+    /// Assets with fixed capacity: they are dispatched but cannot be expanded, reduced or mothballed
+    pub committed: Vec<AssetRef>,
+    /// Existing assets which may be retained in full, in part or not at all
+    pub existing: Vec<AssetRef>,
+    /// Processes from which the algorithm may create candidate assets
+    pub processes: Vec<Arc<Process>>,
+}
 
 /// Demand for a given combination of commodity, region and time-slice selection
 pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Flow>;
