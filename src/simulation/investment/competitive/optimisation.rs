@@ -219,20 +219,16 @@ pub fn perform_optimisation(
     // something we should consider.
     //
     // A second scenario is where there are two different (non-equivalent) assets with identical
-    // marginal cost (despite having different VOC and/or flows), and where moving activity between
+    // marginal cost, and where moving activity between
     // the assets isn't prevented by constraints (e.g. activity constraints or utilisation peak
     // constraints). In this case there will be two identical corner solutions, and adding a tranche
     // to asset A may inadvertently cause it to switch to the equally good solution where asset B
     // wins, hence resulting in a decrease in activity (the opposite can also happen where adding a
     // tranche to asset B switches it to a solution where asset B wins, resulting in artificially
-    // inflated marginal activity). For example, in the simple example for 2021 investments RELCHP
-    // and RGASPB have identical marginal cost in autumn.night and autumn.evening. This is a bigger
-    // problem, going back to the issues of degeneracy and non-deterministic results, and something
-    // we should try to understand better and address at the dispatch stage (which ultimately sets
-    // the shadow prices that determine marginal costs). In the case of investment appraisal, this
+    // inflated marginal activity). In the case of investment appraisal, this
     // can artificially decrease/increase marginal activities resulting in nonsensical LCOX. This is
     // a problem. It may help to seed each model with the previous solution, to reduce the risk of
-    // flip-flopping, but the underlying issue also needs to be addressed.
+    // flip-flopping.
 
     Ok(ResultsMap {
         asset_activity: marginal_activity,
