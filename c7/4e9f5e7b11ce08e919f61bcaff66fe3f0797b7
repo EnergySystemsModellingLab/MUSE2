@@ -1,0 +1,50 @@
+src/fixture.rs
+  s_f6e10436c60552::t_51151cf0ef57cf 153,169,185
+src/input/process/flow.rs
+  s_f6e10436c60552::t_51151cf0ef57cf 445,461
+src/simulation/prices.rs
+  s_f6e10436c60552::t_d7ad5774544df1 69-70,78-79,86,89,93,95-100,113-114,119,124,144,156,166,172-174,182,207,221,363,368,371-372,374
+  s_f6e10436c60552::t_ee828a8867c6bd 1302,1309-1310,1313,1324,1643-1645,1647,1649
+  s_f6e10436c60552::t_19afab075662d0 1625-1630,1632-1638,1642,1648,1650-1675
+  s_f6e10436c60552::t_c6045b86ad2393 1639
+  s_f6e10436c60552::t_de2b184dc4ad07 373
+  s_f6e10436c60552::t_ebe25f9abf8f01 1631,1640-1641,1646
+  s_f6e10436c60552::t_6d31370cf3c622 8,12
+schemas/input/commodities.yaml
+  s_f6e10436c60552::t_5e8a34ede93deb 41-44,46-47
+  s_f6e10436c60552::t_7bd4b058cee287 40
+docs/model/prices.md
+  s_f6e10436c60552::t_ad5a2a83d712cd 236
+  s_f6e10436c60552::t_5e8a34ede93deb 5,117-119,125
+docs/release_notes/upcoming.md
+  s_f6e10436c60552::t_5e8a34ede93deb 13-16
+benches/assets.rs
+  s_f6e10436c60552::t_29998a3fa5285c 114
+src/input/commodity.rs
+  s_f6e10436c60552::t_ea0543252b5a45 214-217
+src/simulation.rs
+  s_f6e10436c60552::t_ea0543252b5a45 61-69,123-130,185,206-208,215,256-271,277
+  s_f6e10436c60552::t_8652b85f438bab 32
+src/simulation/optimisation.rs
+  s_f6e10436c60552::t_51151cf0ef57cf 11
+src/simulation/activity.rs
+  s_f6e10436c60552::t_51151cf0ef57cf 5
+src/process.rs
+  s_f6e10436c60552::t_51151cf0ef57cf 645,667,689,713,729,746,770,794,1063
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c74e9f5e7b11ce08e919f61bcaff66fe3f0797b7",
+  "prompts": {},
+  "sessions": {
+    "s_f6e10436c60552": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "fc44beee-7883-4688-b66b-88910cab66b0",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
