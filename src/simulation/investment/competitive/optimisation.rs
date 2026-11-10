@@ -119,29 +119,25 @@ fn compute_unmet_demand(
         .collect()
 }
 
-/// Performs optimisation for an asset, given the coefficients and demand.
-pub fn perform_optimisation(
+/// Solves the appraisal optimisation for a fixed set of assets.
+///
+/// Returns the activity of every asset in every time slice, and the remaining unmet demand.
+pub fn solve_for_assets(
     model: &Model,
-    selected_assets: &[AssetRef],
-    asset: &AssetRef,
+    assets: &[AssetRef],
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
-    previous_solution: &ActivityMap,
-) -> Result<ResultsMap> {
-    // Record hypothetical asset selection
-    let mut assets = selected_assets.to_vec();
-    record_asset_selection(asset.clone(), &mut assets);
-
+) -> Result<(ActivityMap, DemandMap)> {
     // Create problem
     let mut problem = Problem::default();
-    let activity_vars = add_activity_vars(&mut problem, &assets, coefficients);
+    let activity_vars = add_activity_vars(&mut problem, assets, coefficients);
 
     // Add constraints
     add_constraints(
         &mut problem,
         model,
-        &assets,
+        assets,
         commodity,
         &activity_vars,
         demand,
@@ -164,18 +160,38 @@ pub fn perform_optimisation(
 
     // Extract asset activities and calculate unmet demand
     let solution_values = solution.columns();
-    let all_activity = activity_vars
+    let all_activity: ActivityMap = activity_vars
         .keys()
         .zip(solution_values.iter())
         .map(|(key, &value)| (key.clone(), Activity::new(value)))
         .collect();
     let unmet_demand = compute_unmet_demand(
         demand,
-        &assets,
+        assets,
         &all_activity,
         commodity,
         &model.time_slice_info,
     );
+
+    Ok((all_activity, unmet_demand))
+}
+
+/// Performs optimisation for an asset, given the coefficients and demand.
+pub fn perform_optimisation(
+    model: &Model,
+    selected_assets: &[AssetRef],
+    asset: &AssetRef,
+    commodity: &Commodity,
+    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    demand: &DemandMap,
+    previous_solution: &ActivityMap,
+) -> Result<ResultsMap> {
+    // Record hypothetical asset selection
+    let mut assets = selected_assets.to_vec();
+    record_asset_selection(asset.clone(), &mut assets);
+
+    let (all_activity, unmet_demand) =
+        solve_for_assets(model, &assets, commodity, coefficients, demand)?;
 
     // Collect equivalence group for the asset of interest
     let equivalence_groups = group_dispatch_equivalent_assets(assets.iter());
