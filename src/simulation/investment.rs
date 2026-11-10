@@ -55,7 +55,7 @@ pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Fl
 ///
 /// * `model` - The model
 /// * `year` - Milestone year being processed
-/// * `existing_assets` - The asset pool (commissioned and otherwise)
+/// * `assets` - The asset pool (commissioned and otherwise)
 /// * `mode` - Whether agents dispatch committed assets or make investment decisions
 /// * `prices` - Commodity prices calculated in the previous full system dispatch
 /// * `writer` - Data writer
@@ -68,7 +68,7 @@ pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Fl
 pub fn run_agents_for_year(
     model: &Model,
     year: u32,
-    existing_assets: &[AssetRef],
+    assets: &[AssetRef],
     mode: AgentRunMode,
     prices: &Prices,
     writer: &mut DataWriter,
@@ -95,15 +95,8 @@ pub fn run_agents_for_year(
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selection = market_set.run_agents(
-            model,
-            year,
-            mode,
-            &net_demand,
-            existing_assets,
-            prices,
-            writer,
-        )?;
+        let selection =
+            market_set.run_agents(model, year, mode, &net_demand, assets, prices, writer)?;
 
         // Update our list of seen markets
         for market in market_set.iter_markets() {
