@@ -1,5 +1,6 @@
 //! Code for creating sets of markets.
-use super::optimisation::{DispatchRun, FlowMap};
+use super::activity::{FlowMap, Selection};
+use super::optimisation::DispatchRun;
 use crate::agent::{Agent, AgentType};
 use crate::asset::AssetRef;
 use crate::commodity::{Commodity, CommodityID};
@@ -59,6 +60,10 @@ impl MarketSet {
     /// * `existing_assets` – Assets already commissioned in the system.
     /// * `prices` – Commodity price assumptions to use when valuing investments.
     /// * `writer` – Data sink used to log optimisation artefacts.
+    ///
+    /// # Returns
+    ///
+    /// The selected assets along with their activities from asset selection.
     pub fn select_assets(
         &self,
         model: &Model,
@@ -67,7 +72,7 @@ impl MarketSet {
         existing_assets: &[AssetRef],
         prices: &Prices,
         writer: &mut DataWriter,
-    ) -> Result<Vec<AssetRef>> {
+    ) -> Result<Selection> {
         match self {
             MarketSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
                 model,
@@ -112,9 +117,9 @@ impl MarketSet {
             }
             MarketSet::Layer(investment_sets) => {
                 debug!("Starting asset selection for layer '{self}'");
-                let mut all_assets = Vec::new();
+                let mut layer_selection = Selection::default();
                 for investment_set in investment_sets {
-                    let assets = investment_set.select_assets(
+                    let selection = investment_set.select_assets(
                         model,
                         year,
                         demand,
@@ -122,10 +127,10 @@ impl MarketSet {
                         prices,
                         writer,
                     )?;
-                    all_assets.extend(assets);
+                    layer_selection.extend(selection);
                 }
                 debug!("Completed asset selection for layer '{self}'");
-                Ok(all_assets)
+                Ok(layer_selection)
             }
         }
     }
@@ -153,7 +158,8 @@ impl Display for MarketSet {
 
 /// Select assets for a single market in a given year
 ///
-/// Returns a list of assets that are selected for investment for this market in this year.
+/// Returns the assets that are selected for investment for this market in this year, along with
+/// their activities from asset selection.
 #[allow(clippy::too_many_arguments)]
 pub fn select_assets_for_single_market(
     model: &Model,
@@ -165,10 +171,10 @@ pub fn select_assets_for_single_market(
     prices: &Prices,
     excluded_processes: &IndexSet<ProcessID>,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     let commodity = &model.commodities[commodity_id];
 
-    let mut selected_assets = Vec::new();
+    let mut market_selection = Selection::default();
     for (agent, commodity_portion) in
         get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
     {
@@ -211,7 +217,7 @@ pub fn select_assets_for_single_market(
             AgentType::Competitive => competitive::select_assets,
             AgentType::Portfolio => portfolio::select_assets,
         };
-        let best_assets = select_assets(
+        let selection = select_assets(
             model,
             agent,
             commodity,
@@ -225,10 +231,10 @@ pub fn select_assets_for_single_market(
             year,
             writer.debug_writer(),
         )?;
-        selected_assets.extend(best_assets);
+        market_selection.extend(selection);
     }
 
-    Ok(selected_assets)
+    Ok(market_selection)
 }
 
 /// Iterates through a pre-ordered set of markets forming a cycle, selecting assets for each
@@ -249,21 +255,24 @@ pub fn select_assets_for_cycle(
     existing_assets: &[AssetRef],
     prices: &Prices,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     // Precompute a joined string for logging
     let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
+    let is_feedback_asset = |asset: &AssetRef| {
+        feedback_processes.contains(&(asset.process_id().clone(), asset.region_id().clone()))
+    };
 
     // First pass: iterate over the markets in order, considering all processes
     let mut net_demand = demand.clone();
     let mut assets_for_first_pass = Vec::new();
-    let mut retained_first_pass_assets = Vec::new();
+    let mut retained_first_pass = Selection::default();
     let mut excluded_flows = FlowMap::new();
     for market in markets {
         let (commodity_id, region_id) = market.clone();
 
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 1");
-        let selected_assets = select_assets_for_single_market(
+        let selection = select_assets_for_single_market(
             model,
             &commodity_id,
             &region_id,
@@ -277,24 +286,18 @@ pub fn select_assets_for_cycle(
         debug!("Completed {commodity_id}|{region_id} selection pass 1");
 
         // If no assets have been selected, skip to the next market
-        if selected_assets.is_empty() {
+        if selection.is_empty() {
             debug!("No assets selected for '{commodity_id}|{region_id}'");
             continue;
         }
-        assets_for_first_pass.extend(selected_assets.iter().cloned());
-        retained_first_pass_assets.extend(
-            selected_assets
-                .iter()
-                .filter(|asset| {
-                    feedback_processes
-                        .contains(&(asset.process_id().clone(), asset.region_id().clone()))
-                })
-                .cloned(),
-        );
+        assets_for_first_pass.extend(selection.assets.iter().cloned());
+        let mut retained = selection.clone();
+        retained.retain(is_feedback_asset);
+        retained_first_pass.extend(retained);
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
-        let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
+        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
             .without_commodity_constraints()
             .with_market_balance_subset(std::slice::from_ref(market))
             .with_input_prices(&prices.shadow)
@@ -308,22 +311,21 @@ pub fn select_assets_for_cycle(
         // Update demand map with flows from newly selected assets
         let flows = solution.create_flow_map();
         for ((asset, commodity_id, time_slice), flow) in &flows {
-            if feedback_processes.contains(&(asset.process_id().clone(), asset.region_id().clone()))
-            {
+            if is_feedback_asset(asset) {
                 excluded_flows
                     .entry((asset.clone(), commodity_id.clone(), time_slice.clone()))
                     .and_modify(|stored_flow| *stored_flow += *flow)
                     .or_insert(*flow);
             }
         }
-        update_net_demand_map(&mut net_demand, &flows, &selected_assets);
+        update_net_demand_map(&mut net_demand, &flows, &selection.assets);
     }
 
     // Second pass: iterate over the markets in the same order, excluding feedback processes, with
     // demand updated to account for the flows of feedback assets retained from the first pass
     let mut net_demand = demand.clone();
     update_net_demand_map(&mut net_demand, &excluded_flows, &assets_for_first_pass);
-    let mut assets_for_second_pass = Vec::new();
+    let mut second_pass = Selection::default();
     for market in markets {
         let (commodity_id, region_id) = market.clone();
         let feedback_processes: IndexSet<ProcessID> = feedback_processes
@@ -333,7 +335,7 @@ pub fn select_assets_for_cycle(
 
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 2");
-        let selected_assets = select_assets_for_single_market(
+        let selection = select_assets_for_single_market(
             model,
             &commodity_id,
             &region_id,
@@ -347,15 +349,14 @@ pub fn select_assets_for_cycle(
         debug!("Completed {commodity_id}|{region_id} selection pass 2");
 
         // If no assets have been selected, skip to the next market
-        if selected_assets.is_empty() {
+        if selection.is_empty() {
             debug!("No assets selected for '{commodity_id}|{region_id}'");
             continue;
         }
-        assets_for_second_pass.extend(selected_assets.iter().cloned());
 
         // Run dispatch
         debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
-        let solution = DispatchRun::new(model, &selected_assets, year, &net_demand)
+        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
             .without_commodity_constraints()
             .with_market_balance_subset(std::slice::from_ref(market))
             .with_input_prices(&prices.shadow)
@@ -370,14 +371,13 @@ pub fn select_assets_for_cycle(
         update_net_demand_map(
             &mut net_demand,
             &solution.create_flow_map(),
-            &selected_assets,
+            &selection.assets,
         );
+        second_pass.extend(selection);
     }
 
-    Ok(retained_first_pass_assets
-        .into_iter()
-        .chain(assets_for_second_pass)
-        .collect())
+    retained_first_pass.extend(second_pass);
+    Ok(retained_first_pass)
 }
 
 /// Get a portion of the demand profile for this market

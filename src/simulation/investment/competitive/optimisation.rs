@@ -8,6 +8,7 @@ use super::record_asset_selection;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::simulation::activity::ActivityMap;
 use crate::simulation::investment::DemandMap;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::apply_highs_options_from_toml;
@@ -34,7 +35,7 @@ pub struct ResultsMap {
     /// Remaining unmet demand per time slice, computed post-solve
     pub unmet_demand: DemandMap,
     /// Full solution to the optimisation (activities of all assets)
-    pub solution: IndexMap<(AssetRef, TimeSliceID), Activity>,
+    pub solution: ActivityMap,
 }
 
 /// Adds activity variables to the problem, one per time slice.
@@ -87,7 +88,7 @@ fn add_constraints(
 fn compute_unmet_demand(
     demand: &DemandMap,
     assets: &[AssetRef],
-    activity: &IndexMap<(AssetRef, TimeSliceID), Activity>,
+    activity: &ActivityMap,
     commodity: &Commodity,
     time_slice_info: &TimeSliceInfo,
 ) -> DemandMap {
@@ -126,7 +127,7 @@ pub fn perform_optimisation(
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
-    previous_solution: &IndexMap<(AssetRef, TimeSliceID), Activity>,
+    previous_solution: &ActivityMap,
 ) -> Result<ResultsMap> {
     // Record hypothetical asset selection
     let mut assets = selected_assets.to_vec();
