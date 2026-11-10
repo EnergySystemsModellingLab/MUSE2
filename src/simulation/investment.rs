@@ -27,7 +27,7 @@ pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
 /// Demand for a given combination of commodity, region and time-slice selection
 pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Flow>;
 
-/// Perform agent investment to determine capacity investment of new assets for next milestone year.
+/// Run agents to determine capacity investment of new assets for the next milestone year.
 ///
 /// # Arguments
 ///
@@ -40,9 +40,9 @@ pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Fl
 /// # Returns
 ///
 /// The assets selected (including retained commissioned assets) for the given planning `year`,
-/// along with their activities from asset selection, or an error.
+/// along with their activities from the agent runs, or an error.
 #[context_manager::wrap(InvestmentTimer)]
-pub fn perform_agent_investment(
+pub fn run_agents_for_year(
     model: &Model,
     year: u32,
     existing_assets: &[AssetRef],
@@ -72,7 +72,7 @@ pub fn perform_agent_investment(
     for market_set in investment_order {
         // Select assets for this market set
         let selection =
-            market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
+            market_set.run_agents(model, year, &net_demand, existing_assets, prices, writer)?;
 
         // Update our list of seen markets
         for market in market_set.iter_markets() {
