@@ -12,8 +12,10 @@ use log::info;
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod activity;
+use activity::FlowMap;
 pub mod optimisation;
-use optimisation::{DispatchRun, FlowMap};
+use optimisation::DispatchRun;
 pub mod investment;
 use investment::{collect_preset_demands_for_year, perform_agent_investment};
 pub mod market;
@@ -82,9 +84,11 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Perform agent investment
             info!("Running agent investment...");
+            // NB: activities from asset selection are not currently used
             let selected_assets =
                 perform_agent_investment(model, year, &existing_assets, &prices, &mut writer)
-                    .context("Agent investment failed")?;
+                    .context("Agent investment failed")?
+                    .assets;
 
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
