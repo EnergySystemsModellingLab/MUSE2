@@ -17,7 +17,7 @@ use activity::FlowMap;
 pub mod optimisation;
 use optimisation::DispatchRun;
 pub mod investment;
-use investment::{collect_preset_demands_for_year, perform_agent_investment};
+use investment::{collect_preset_demands_for_year, run_agents_for_year};
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
@@ -86,7 +86,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             info!("Running agent investment...");
             // NB: activities from asset selection are not currently used
             let selected_assets =
-                perform_agent_investment(model, year, &existing_assets, &prices, &mut writer)
+                run_agents_for_year(model, year, &existing_assets, &prices, &mut writer)
                     .context("Agent investment failed")?
                     .assets;
 

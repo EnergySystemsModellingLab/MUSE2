@@ -1,4 +1,4 @@
-//! The portfolio asset selection algorithm.
+//! The portfolio agent algorithm.
 //!
 //! Rather than selecting assets one at a time, a single optimisation chooses the capacities of all
 //! existing and candidate assets at once so as to meet demand at least cost.
@@ -25,7 +25,8 @@ mod output;
 use optimisation::perform_optimisation;
 use output::write_debug_info;
 
-/// Select assets for an agent to meet its share of demand for a commodity in a region.
+/// Run the portfolio algorithm for an agent to meet its share of demand for a commodity in a
+/// region.
 ///
 /// Existing assets of the agent which produce the commodity and one candidate for each process in
 /// the agent's search space are considered together in a single optimisation. Processes in
@@ -53,9 +54,9 @@ use output::write_debug_info;
 #[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::needless_pass_by_value,
-    reason = "Match competitive::select_assets for shared function-pointer dispatch"
+    reason = "Match competitive::run_agent for shared function-pointer dispatch"
 )]
-pub fn select_assets(
+pub fn run_agent(
     model: &Model,
     agent: &Agent,
     commodity: &Commodity,
