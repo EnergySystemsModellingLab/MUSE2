@@ -26,6 +26,15 @@ pub mod portfolio;
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
 
+/// How agents are run for a milestone year
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentRunMode {
+    /// Agents dispatch their existing assets as committed assets, without investment options
+    Dispatch,
+    /// Agents choose which existing assets to retain and which candidates to invest in
+    Invest,
+}
+
 /// The assets and processes available to an agent to meet its share of demand for one market
 #[derive(Default)]
 pub struct AssetOptions {
@@ -40,25 +49,27 @@ pub struct AssetOptions {
 /// Demand for a given combination of commodity, region and time-slice selection
 pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Flow>;
 
-/// Run agents to determine capacity investment of new assets for the next milestone year.
+/// Run agents for a milestone year, either dispatching committed assets or choosing investments.
 ///
 /// # Arguments
 ///
 /// * `model` - The model
-/// * `year` - Current milestone year
+/// * `year` - Milestone year being processed
 /// * `existing_assets` - The asset pool (commissioned and otherwise)
+/// * `mode` - Whether agents dispatch committed assets or make investment decisions
 /// * `prices` - Commodity prices calculated in the previous full system dispatch
 /// * `writer` - Data writer
 ///
 /// # Returns
 ///
-/// The assets selected (including retained commissioned assets) for the given planning `year`,
-/// along with their activities from the agent runs, or an error.
+/// The assets returned by the agents for the given `year`, along with their activities, or an
+/// error.
 #[context_manager::wrap(InvestmentTimer)]
 pub fn run_agents_for_year(
     model: &Model,
     year: u32,
     existing_assets: &[AssetRef],
+    mode: AgentRunMode,
     prices: &Prices,
     writer: &mut DataWriter,
 ) -> Result<Selection> {
@@ -84,8 +95,15 @@ pub fn run_agents_for_year(
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selection =
-            market_set.run_agents(model, year, &net_demand, existing_assets, prices, writer)?;
+        let selection = market_set.run_agents(
+            model,
+            year,
+            mode,
+            &net_demand,
+            existing_assets,
+            prices,
+            writer,
+        )?;
 
         // Update our list of seen markets
         for market in market_set.iter_markets() {
