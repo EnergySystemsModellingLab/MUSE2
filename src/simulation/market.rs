@@ -60,7 +60,7 @@ impl MarketSet {
     /// * `year` – Planning year being solved.
     /// * `mode` – Whether agents dispatch committed assets or make investment decisions.
     /// * `demand` – Net demand profiles available to all markets before selection.
-    /// * `existing_assets` – Assets already commissioned in the system.
+    /// * `assets` – Assets available to agents in this market.
     /// * `prices` – Commodity price assumptions to use when valuing investments.
     /// * `writer` – Data sink used to log optimisation artefacts.
     ///
@@ -74,7 +74,7 @@ impl MarketSet {
         year: u32,
         mode: AgentRunMode,
         demand: &AllDemandMap,
-        existing_assets: &[AssetRef],
+        assets: &[AssetRef],
         prices: &Prices,
         writer: &mut DataWriter,
     ) -> Result<Selection> {
@@ -86,7 +86,7 @@ impl MarketSet {
                 year,
                 mode,
                 demand,
-                existing_assets,
+                assets,
                 prices,
                 &IndexSet::new(),
                 writer,
@@ -109,7 +109,7 @@ impl MarketSet {
                     year,
                     mode,
                     demand,
-                    existing_assets,
+                    assets,
                     prices,
                     writer,
                 )
@@ -126,15 +126,8 @@ impl MarketSet {
                 debug!("Starting agent runs for layer '{self}'");
                 let mut layer_selection = Selection::default();
                 for investment_set in investment_sets {
-                    let selection = investment_set.run_agents(
-                        model,
-                        year,
-                        mode,
-                        demand,
-                        existing_assets,
-                        prices,
-                        writer,
-                    )?;
+                    let selection = investment_set
+                        .run_agents(model, year, mode, demand, assets, prices, writer)?;
                     layer_selection.extend(selection);
                 }
                 debug!("Completed agent runs for layer '{self}'");
@@ -176,7 +169,7 @@ pub fn run_agents_for_single_market(
     year: u32,
     mode: AgentRunMode,
     demand: &AllDemandMap,
-    existing_assets: &[AssetRef],
+    assets: &[AssetRef],
     prices: &Prices,
     excluded_processes: &IndexSet<ProcessID>,
     writer: &mut DataWriter,
@@ -201,16 +194,19 @@ pub fn run_agents_for_single_market(
             commodity_portion,
         );
 
+        // Collect the relevant assets owned by this agent
+        let agent_assets: Vec<AssetRef> = assets
+            .iter()
+            .filter_agent(&agent.id)
+            .filter_region(region_id)
+            .filter_primary_producers_of(commodity_id)
+            .cloned()
+            .collect();
+
         let (options, agent_addition_limits, agent_total_limits) = match mode {
             AgentRunMode::Dispatch => (
                 AssetOptions {
-                    committed: existing_assets
-                        .iter()
-                        .filter_agent(&agent.id)
-                        .filter_region(region_id)
-                        .filter_primary_producers_of(commodity_id)
-                        .cloned()
-                        .collect(),
+                    committed: agent_assets,
                     existing: Vec::new(),
                     processes: Vec::new(),
                 },
@@ -241,11 +237,8 @@ pub fn run_agents_for_single_market(
                 // Filter available assets and processes before running the agent
                 let options = AssetOptions {
                     committed: Vec::new(),
-                    existing: existing_assets
+                    existing: agent_assets
                         .iter()
-                        .filter_agent(&agent.id)
-                        .filter_region(region_id)
-                        .filter_primary_producers_of(commodity_id)
                         .filter(|asset| !excluded_processes.contains(asset.process_id()))
                         .cloned()
                         .collect(),
@@ -300,7 +293,7 @@ pub fn run_agents_for_cycle(
     year: u32,
     mode: AgentRunMode,
     demand: &AllDemandMap,
-    existing_assets: &[AssetRef],
+    assets: &[AssetRef],
     prices: &Prices,
     writer: &mut DataWriter,
 ) -> Result<Selection> {
@@ -313,7 +306,6 @@ pub fn run_agents_for_cycle(
     // First pass: iterate over the markets in order, considering all processes
     let mut net_demand = demand.clone();
     let mut assets_for_first_pass = Vec::new();
-    let mut all_first_pass = Selection::default();
     let mut retained_first_pass = Selection::default();
     let mut excluded_flows = FlowMap::new();
     for market in markets {
@@ -328,7 +320,7 @@ pub fn run_agents_for_cycle(
             year,
             mode,
             &net_demand,
-            existing_assets,
+            assets,
             prices,
             &IndexSet::new(),
             writer,
@@ -341,13 +333,11 @@ pub fn run_agents_for_cycle(
             continue;
         }
 
-        if mode == AgentRunMode::Dispatch {
-            all_first_pass.extend(selection.clone());
+        if mode == AgentRunMode::Invest {
+            assets_for_first_pass.extend(selection.assets.iter().cloned());
         }
-
-        assets_for_first_pass.extend(selection.assets.iter().cloned());
         let mut retained = selection.clone();
-        retained.retain(is_feedback_asset);
+        retained.retain(|asset| mode == AgentRunMode::Dispatch || is_feedback_asset(asset));
         retained_first_pass.extend(retained);
 
         // Run dispatch
@@ -366,7 +356,7 @@ pub fn run_agents_for_cycle(
         // Update demand map with flows from newly selected assets
         let flows = solution.create_flow_map();
         for ((asset, commodity_id, time_slice), flow) in &flows {
-            if is_feedback_asset(asset) {
+            if mode == AgentRunMode::Invest && is_feedback_asset(asset) {
                 excluded_flows
                     .entry((asset.clone(), commodity_id.clone(), time_slice.clone()))
                     .and_modify(|stored_flow| *stored_flow += *flow)
@@ -377,7 +367,7 @@ pub fn run_agents_for_cycle(
     }
 
     if mode == AgentRunMode::Dispatch {
-        return Ok(all_first_pass);
+        return Ok(retained_first_pass);
     }
 
     // Second pass: iterate over the markets in the same order, excluding feedback processes, with
@@ -401,7 +391,7 @@ pub fn run_agents_for_cycle(
             year,
             mode,
             &net_demand,
-            existing_assets,
+            assets,
             prices,
             &feedback_processes,
             writer,
