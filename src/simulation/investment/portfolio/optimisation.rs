@@ -43,24 +43,29 @@ pub struct ResultsMap {
 ///   unbounded)
 /// - for existing assets, their total capacity, including any mothballed capacity (they can be
 ///   reduced, but not increased)
+///
+/// The first `num_committed` assets are committed: their capacity is fixed at their total capacity.
 fn add_capacity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
+    num_committed: usize,
     addition_limits: &HashMap<ProcessID, Capacity>,
 ) -> IndexMap<AssetRef, Variable> {
     assets
         .iter()
-        .map(|asset| {
-            let upper_bound = if asset.is_candidate() {
-                addition_limits.get(asset.process_id()).copied()
-            } else {
-                Some(asset.total_capacity())
-            };
-
+        .enumerate()
+        .map(|(i, asset)| {
             let cost = annual_fixed_cost(asset).value();
-            let var = match upper_bound {
-                Some(upper) => problem.add_column(cost, 0.0..=upper.value()),
-                None => problem.add_column(cost, 0.0..),
+            let var = if i < num_committed {
+                let capacity = asset.total_capacity().value();
+                problem.add_column(cost, capacity..=capacity)
+            } else if asset.is_candidate() {
+                match addition_limits.get(asset.process_id()) {
+                    Some(limit) => problem.add_column(cost, 0.0..=limit.value()),
+                    None => problem.add_column(cost, 0.0..),
+                }
+            } else {
+                problem.add_column(cost, 0.0..=asset.total_capacity().value())
             };
             (asset.clone(), var)
         })
@@ -126,11 +131,14 @@ fn add_constraints(
     // add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
 }
 
-/// Performs optimisation for an asset, given the prices and demand.
+/// Performs optimisation for the given assets, given the prices and demand.
+///
+/// The first `num_committed` assets are committed and have fixed capacity.
 #[allow(clippy::too_many_arguments)]
 pub fn perform_optimisation(
     model: &Model,
     assets: &[AssetRef],
+    num_committed: usize,
     commodity: &Commodity,
     prices: &Prices,
     year: u32,
@@ -142,7 +150,7 @@ pub fn perform_optimisation(
     let mut problem = Problem::default();
     let activity_vars =
         add_activity_vars(&mut problem, assets, &model.time_slice_info, prices, year);
-    let capacity_vars = add_capacity_vars(&mut problem, assets, addition_limits); // must come after activity vars
+    let capacity_vars = add_capacity_vars(&mut problem, assets, num_committed, addition_limits); // must come after activity vars
 
     // Add constraints
     add_constraints(
