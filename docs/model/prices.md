@@ -2,8 +2,7 @@
 
 This section describes how commodity prices are calculated in MUSE2 at the end of each
 milestone year iteration. The pricing algorithm operates on the results of the dispatch
-optimisation, translating flows, capacities, and solver dual values (shadow prices) into commodity
-market prices.
+optimisation, translating flows and capacities into commodity market prices.
 
 ## Pricing Strategies
 
@@ -16,10 +15,6 @@ commodity.
 active assets.
 - **`full`**: Prices are set to the full cost (marginal cost + annual fixed/capital costs) of the
 highest-cost active asset producing the commodity.
-- **`shadow`**: Prices are taken directly from the shadow prices (dual values) of the commodity
-balance constraints in the dispatch optimisation.
-- **`scarcity`**: Prices are set to the shadow price plus the highest activity dual of the assets
-producing the commodity in that region and time slice.
 - **`unpriced`**: No prices are calculated for the commodity. This is mandatory for all OTH
 (Other)-type commodities.
 
@@ -119,13 +114,15 @@ determined, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-or
 Within a [circularity][graph-circularities], markets are priced in the reverse of their investment
 order. As with investment, some processes need the price of an input that hasn't been calculated
 yet: these are exactly the [feedback processes][graph-circularities]. For these inputs, MUSE2 uses
-the shadow price from dispatch as an estimate.
+the price from the previous milestone year (or the previous
+[ironing-out loop][framework-overview] iteration, if enabled) as an estimate. If there is no
+previous price (e.g. in the first year), zero is used.
 
 In the [example model][graph-example], hydrogen is invested in before electricity, so prices are
 calculated in this order:
 
 1. **Electricity** is priced first. The hydrogen turbine (H2YGEN) is a feedback process, and the
-   price of hydrogen hasn't been calculated yet, so the shadow price of hydrogen is used for its
+   price of hydrogen hasn't been calculated yet, so the previous price of hydrogen is used for its
    input.
 2. **Hydrogen** is then priced, using the electricity price from step 1 for the electrolyser's
    (H2YPRO) input.
@@ -236,3 +233,4 @@ calculated first and then used as an input cost when calculating the GASNAT pric
 [`commodities.csv`]: ../file_formats/input_files.md#commoditiescsv
 [graph-circularities]: ./commodity_graphs.md#circularities
 [graph-example]: ./commodity_graphs.md#example
+[framework-overview]: index.html#framework-overview
