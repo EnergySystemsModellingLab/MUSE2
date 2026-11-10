@@ -1,0 +1,41 @@
+src/simulation/optimisation.rs
+  s_1a096aca9a2311::t_d4182176de9252 11
+  s_1a096aca9a2311::t_a0e350235a2201 203-209,272-277
+  s_1a096aca9a2311::t_c78dae7668e309 278
+benches/assets.rs
+  s_1a096aca9a2311::t_4b8c2621847380 18,109,113
+src/simulation.rs
+  s_1a096aca9a2311::t_4b8c2621847380 6,238-239,241-242,244-250
+src/simulation/prices.rs
+  s_1a096aca9a2311::t_30825a392a3443 106-107,242-244
+  s_1a096aca9a2311::t_4b8c2621847380 67-89,91,94-95,349,365
+  s_1a096aca9a2311::t_cbf8ad93099fcf 15,108-112,122
+  s_1a096aca9a2311::t_4cc53869de0524 120-121,140-142,153-155,177-178,190-192,204-206,220-222,256-257,389-390,414-416
+  s_1a096aca9a2311::t_a0e350235a2201 266-272
+  s_1a096aca9a2311::t_c8ccac87b84d2a 8,90,92-93,123,179,258,312-314,324-325,337-338,350,352-353,366,368-369,391
+  s_1a096aca9a2311::t_56f5506f687fba 96-97
+src/simulation/activity.rs
+  s_1a096aca9a2311::t_a0e350235a2201 5,12-13
+  s_1a096aca9a2311::t_46134f0cb0d543 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5849c634727fc53e7eda834bb091aa343161a894",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_1a096aca9a2311": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "b6ebcb22-4f13-45dc-b05e-f8f7a7811c23",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
