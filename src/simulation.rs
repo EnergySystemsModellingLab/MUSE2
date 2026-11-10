@@ -3,7 +3,7 @@ use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
-use crate::simulation::prices::{Prices, calculate_prices};
+use crate::simulation::prices::{Prices, calculate_prices_from_solutions};
 use crate::timeit::DispatchTimer;
 use crate::units::Capacity;
 use anyhow::{Context, Result};
@@ -235,13 +235,19 @@ fn run_dispatch_for_year(
         solution_with_candidates.as_ref(),
     ) {
         (None, None) => Prices::default(),
-        (Some(existing), None) => calculate_prices(model, existing, existing, year)?,
+        (Some(existing), None) => {
+            calculate_prices_from_solutions(model, existing, existing, candidates, year)?
+        }
         (Some(existing), Some(with_candidates)) => {
-            calculate_prices(model, existing, with_candidates, year)?
+            calculate_prices_from_solutions(model, existing, with_candidates, candidates, year)?
         }
-        (None, Some(with_candidates)) => {
-            calculate_prices(model, with_candidates, with_candidates, year)?
-        }
+        (None, Some(with_candidates)) => calculate_prices_from_solutions(
+            model,
+            with_candidates,
+            with_candidates,
+            candidates,
+            year,
+        )?,
     };
 
     Ok((prices, flow_map))

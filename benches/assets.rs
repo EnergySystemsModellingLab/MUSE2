@@ -15,7 +15,7 @@ use muse2::simulation::market::{
     collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
 };
 use muse2::simulation::optimisation::DispatchRun;
-use muse2::simulation::prices::{Prices, calculate_prices};
+use muse2::simulation::prices::{Prices, calculate_prices_from_solutions};
 use rayon::ThreadPoolBuilder;
 use std::hint::black_box;
 use std::sync::Arc;
@@ -106,10 +106,11 @@ fn calculate_seed_prices(
             .run("bench setup: with candidates", writer)
             .expect("Dispatch with candidates failed");
 
-    calculate_prices(
+    calculate_prices_from_solutions(
         model,
         &solution_existing,
         &solution_with_candidates,
+        candidates,
         BASE_YEAR,
     )
     .expect("Failed to calculate prices")
