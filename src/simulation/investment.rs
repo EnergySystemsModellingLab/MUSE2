@@ -1,5 +1,6 @@
 //! Code for performing agent investment.
-use super::optimisation::{DispatchRun, FlowMap};
+use super::activity::{FlowMap, Selection};
+use super::optimisation::DispatchRun;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
@@ -38,8 +39,8 @@ pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Fl
 ///
 /// # Returns
 ///
-/// The assets selected (including retained commissioned assets) for the given planning `year` or an
-/// error.
+/// The assets selected (including retained commissioned assets) for the given planning `year`,
+/// along with their activities from asset selection, or an error.
 #[context_manager::wrap(InvestmentTimer)]
 pub fn perform_agent_investment(
     model: &Model,
@@ -47,14 +48,14 @@ pub fn perform_agent_investment(
     existing_assets: &[AssetRef],
     prices: &Prices,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     // Initialise net demand map
     let preset_demands = collect_preset_demands_for_year(&model.commodities, year);
     let mut net_demand = preset_demands.clone();
 
-    // Keep a list of all the assets selected
+    // Keep track of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
-    let mut all_selected_assets = Vec::new();
+    let mut all_selected = Selection::default();
 
     let investment_order = &model.investment_order[&year];
     debug!(
@@ -70,7 +71,7 @@ pub fn perform_agent_investment(
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selected_assets =
+        let selection =
             market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
 
         // Update our list of seen markets
@@ -81,13 +82,14 @@ pub fn perform_agent_investment(
         // If no assets have been selected, skip dispatch optimisation
         // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
-        if selected_assets.is_empty() {
+        if selection.is_empty() {
             debug!("No assets selected for '{market_set}'");
             continue;
         }
 
         // Add the selected assets to the list of all selected assets
-        all_selected_assets.extend(selected_assets.iter().cloned());
+        let selected_assets = selection.assets.clone();
+        all_selected.extend(selection);
 
         // Perform dispatch optimisation with assets that have been selected so far
         // **TODO**: presumably we only need to do this for selected_assets, as assets added in
@@ -96,7 +98,7 @@ pub fn perform_agent_investment(
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected_assets, year, &preset_demands)
+        let solution = DispatchRun::new(model, &all_selected.assets, year, &preset_demands)
             .without_commodity_constraints()
             .with_market_balance_subset(&seen_markets)
             .with_input_prices(&prices.shadow)
@@ -110,7 +112,7 @@ pub fn perform_agent_investment(
         );
     }
 
-    Ok(all_selected_assets)
+    Ok(all_selected)
 }
 
 /// Collect the preset commodity demands for a given year into a map of commodity, region and
