@@ -1,0 +1,15 @@
+src/agent.rs
+  h_e76403a1cd4bf1 75
+  h_e76403a1cd4bf1 77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2cb68ee08f94fc9424f3618e196637132a08b56",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
