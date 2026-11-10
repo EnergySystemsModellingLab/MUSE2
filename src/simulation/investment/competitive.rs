@@ -10,20 +10,19 @@ mod optimisation;
 mod output;
 
 use crate::agent::{Agent, AgentID};
-use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
+use crate::asset::{Asset, AssetCapacity, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DebugDataWriter;
-use crate::process::ProcessID;
+use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::activity::{ActivityMap, Selection};
-use crate::simulation::investment::DemandMap;
+use crate::simulation::investment::{AssetOptions, DemandMap};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
-use indexmap::IndexSet;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use metrics::{
@@ -33,12 +32,13 @@ use metrics::{
 use output::write_debug_info;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Run the competitive algorithm for an agent to meet its share of demand for a commodity in a
 /// region.
 ///
 /// Existing assets of the agent which produce the commodity compete with candidate assets from the
-/// agent's search space. Processes in `excluded_processes` are not considered.
+/// agent's search space.
 ///
 /// # Arguments
 ///
@@ -47,8 +47,7 @@ use std::collections::HashMap;
 /// * `commodity` - The commodity for which demand must be met
 /// * `region_id` - The region
 /// * `demand` - The agent's share of demand for the commodity in the region
-/// * `existing_assets` - The asset pool (commissioned and otherwise)
-/// * `excluded_processes` - Processes which may not be selected
+/// * `options` - Existing assets and processes available to the agent
 /// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
 /// * `agent_total_limits` - The agent's share of total capacity limits for processes
 /// * `prices` - Commodity prices from the previous full system dispatch
@@ -66,28 +65,28 @@ pub fn run_agent(
     commodity: &Commodity,
     region_id: &RegionID,
     demand: &DemandMap,
-    existing_assets: &[AssetRef],
-    excluded_processes: &IndexSet<ProcessID>,
+    options: &AssetOptions,
     agent_addition_limits: &HashMap<ProcessID, Capacity>,
     agent_total_limits: &HashMap<ProcessID, Capacity>,
     prices: &Prices,
     year: u32,
     debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Selection> {
+    debug_assert_eq!(options.committed.len(), 0);
+
     // Existing and candidate assets from which to choose
-    let mut opt_assets = get_asset_options(
-        existing_assets,
-        demand,
-        agent,
-        commodity,
-        region_id,
-        year,
-        model.parameters.capacity_tranche_fraction,
+    let opt_assets = chain(
+        options.existing.iter().cloned(),
+        get_candidate_assets(
+            demand,
+            &options.processes,
+            region_id,
+            commodity,
+            year,
+            model.parameters.capacity_tranche_fraction,
+        ),
     )
     .collect::<Vec<_>>();
-
-    // Exclude certain processes from the options
-    opt_assets.retain(|asset| !excluded_processes.contains(asset.process_id()));
 
     select_best_assets(
         model,
@@ -104,38 +103,7 @@ pub fn run_agent(
     )
 }
 
-/// Get options from existing and potential assets for the given parameters
-pub fn get_asset_options<'a>(
-    all_existing_assets: &'a [AssetRef],
-    demand: &'a DemandMap,
-    agent: &'a Agent,
-    commodity: &'a Commodity,
-    region_id: &'a RegionID,
-    year: u32,
-    capacity_tranche_fraction: Dimensionless,
-) -> impl Iterator<Item = AssetRef> + 'a {
-    // Get existing assets which produce the commodity of interest
-    let existing_assets = all_existing_assets
-        .iter()
-        .filter_agent(&agent.id)
-        .filter_region(region_id)
-        .filter_primary_producers_of(&commodity.id)
-        .cloned();
-
-    // Get candidates assets which produce the commodity of interest
-    let candidate_assets = get_candidate_assets(
-        demand,
-        agent,
-        region_id,
-        commodity,
-        year,
-        capacity_tranche_fraction,
-    );
-
-    chain(existing_assets, candidate_assets)
-}
-
-/// Get candidate assets which produce a particular commodity for a given agent
+/// Get candidate assets which produce a particular commodity from the given processes.
 ///
 /// Each candidate represents one investment tranche with a defined capacity.
 /// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
@@ -143,36 +111,33 @@ pub fn get_asset_options<'a>(
 ///   demand for the commodity and the asset's maximum annual production per unit capacity
 ///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
 ///   `capacity_tranche_fraction` to infer the tranche size.
-fn get_candidate_assets<'a>(
+pub fn get_candidate_assets<'a>(
     demand: &'a DemandMap,
-    agent: &'a Agent,
+    processes: &'a [Arc<Process>],
     region_id: &'a RegionID,
     commodity: &'a Commodity,
     year: u32,
     capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
-    agent
-        .iter_search_space(region_id, &commodity.id, year)
-        .map(move |process| {
-            // Create asset with zero capacity, which will be updated below
-            let mut asset =
-                Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year)
-                    .unwrap();
+    processes.iter().map(move |process| {
+        // Create asset with zero capacity, which will be updated below
+        let mut asset =
+            Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year).unwrap();
 
-            // Set capacity of the candidate for investment appraisal
-            let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
-                // For processes with a defined tranche size, take this
-                tranche_size
-            } else {
-                // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
-                let capacity_scale =
-                    calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-                capacity_scale * capacity_tranche_fraction
-            };
-            let asset_capacity = AssetCapacity::single(tranche_size);
-            asset.set_capacity(asset_capacity);
-            asset.into()
-        })
+        // Set capacity of the candidate for investment appraisal
+        let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
+            // For processes with a defined tranche size, take this
+            tranche_size
+        } else {
+            // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
+            let capacity_scale =
+                calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
+            capacity_scale * capacity_tranche_fraction
+        };
+        let asset_capacity = AssetCapacity::single(tranche_size);
+        asset.set_capacity(asset_capacity);
+        asset.into()
+    })
 }
 
 /// Calculates a characteristic capacity scale for a candidate asset.
