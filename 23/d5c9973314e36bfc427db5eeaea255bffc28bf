@@ -1,0 +1,21 @@
+src/output.rs
+  s_378dcf4051c8b4::t_fd71f92134cc0c 16-17,270,278-279,296,306,548-568,579-581,642-669,672
+  s_378dcf4051c8b4::t_be68c7acb56112 670,673,1198-1242
+  s_378dcf4051c8b4::t_ab71244bb4cc11 671,674,1197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "23d5c9973314e36bfc427db5eeaea255bffc28bf",
+  "prompts": {},
+  "sessions": {
+    "s_378dcf4051c8b4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}

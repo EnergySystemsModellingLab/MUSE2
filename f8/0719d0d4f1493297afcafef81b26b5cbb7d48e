@@ -1,0 +1,141 @@
+src/graph/investment.rs
+  s_83fb8d859a105f::t_92d8cb0f793628 146-147
+  s_83fb8d859a105f::t_42959866b7bd2d 276-277
+  s_83fb8d859a105f::t_0f351d813399f2 19,25-28,44-56,58-59,61-63,67,74-76,78-81,85-89,92,97-98,100,108,140,142-144,244,254,259-263,266-275,278-279,282,284-291,295,297-304,306-309,311,313-319,321,323-325,327-329,331,334-337,340,376-377,379,390,392-400,403,405-408,410-412,611
+  h_e76403a1cd4bf1 16,20,42,90-91,99,101,102,247,256,384-386,522,536-540,543-551,554,556-563,565-568,574-576,578-580,584-586,589-592,594,597,613,615,616-618,620,624,641,648,651-653,656,657-658,659,674,685,705,713-717,719,721,725,727-729,734,737-740,742,745,747-748,750-751
+  s_83fb8d859a105f::t_d987f440f91a0f 542,614,706,726,730,735
+  h_e76403a1cd4bf1 615
+  s_83fb8d859a105f::t_954a047c0669fc 587-588,593,595,599-601,631,633
+  s_83fb8d859a105f::t_6958ec0a60d174 211-213,214-218
+  s_83fb8d859a105f::t_3ef85010019582 518,525
+  s_83fb8d859a105f::t_696f6671ab9ae2 355,357,362-363,376-378,387
+  s_83fb8d859a105f::t_d240adb3a7f3da 241,246,248-252
+  s_83fb8d859a105f::t_3cf12e165f510b 413-414
+  s_83fb8d859a105f::t_b3038508d5b61a 57,71
+  s_83fb8d859a105f::t_ce88ed44e0fa5c 43
+  s_83fb8d859a105f::t_a762d4048f1f7e 183-184
+  s_83fb8d859a105f::t_17e36268e72132 116-119,531-533,570-573,577-581,602-610,627-630,634-640,642-655,660-673,675-683,687-702
+  s_83fb8d859a105f::t_99bdaf37f2c00c 103-105,111-115,120-137
+  s_83fb8d859a105f::t_11889eb792114c 159-163,207-210
+  s_83fb8d859a105f::t_74901872b1ab9d 242,245
+  s_83fb8d859a105f::t_067aa272bd4dc5 4-5,11
+  s_83fb8d859a105f::t_5b97fda6ee478a 342-354,356,358-361,364-375
+  s_83fb8d859a105f::t_0302535f8cb496 138-139
+  s_83fb8d859a105f::t_e81820261cbaf8 247
+src/simulation/prices.rs
+  s_83fb8d859a105f::t_0f50cca3aa6da0 334
+  s_83fb8d859a105f::t_3ecd913f36460f 163
+docs/model/commodity_graphs.md
+  s_83fb8d859a105f::t_9afe3a7f1620df 271
+  h_e76403a1cd4bf1 168,188,200,207
+  s_e3618010bfe6e6::t_bd8e46415a35c2 144-145
+  s_e3618010bfe6e6::t_76284ec6c7e7e6 153-154,158,163,169-170,173-175,177,183,187,191,196,201,205-206,218,223-225,230-233
+  s_e3618010bfe6e6::t_3949e3b7655cc0 217
+  s_6fc1e99d5da531::t_9440f9abd3cb27 155-157,159-162,164-167,171-172,176,178-182,184-186,189-190,192-195,197-199
+src/input.rs
+  s_83fb8d859a105f::t_81e759086c7b15 298-299
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+tests/data/circularity/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 24-33,36-51
+tests/data/circularity_npv/assets.csv
+  h_e76403a1cd4bf1 18-35
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-729,742-753,756,760,762-766,769-793,806-817,821-826,830-841,854-865,882-883,898-1304,1306,1308-1310,1313,1317-1325,1329-1337,1341-1349,1353-1921
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+src/simulation/market.rs
+  s_83fb8d859a105f::t_933fe93260fa2c 30-35,47,84-87,98
+  s_83fb8d859a105f::t_4948ecb6a05c7f 141
+  s_83fb8d859a105f::t_9428a665c7800e 395-396,414-417
+  s_83fb8d859a105f::t_75734b7f903992 8,248-249,257
+  s_e3618010bfe6e6::t_dae029d78d38e7 88-94
+  s_e3618010bfe6e6::t_ae6bf9c621debd 250-252,267
+  s_e3618010bfe6e6::t_34a4b22f94a91a 28-29
+  s_e3618010bfe6e6::t_90e809f10e2fea 333-334
+src/simulation/investment.rs
+  s_83fb8d859a105f::t_acc6e08295574b 175-176
+  h_e76403a1cd4bf1 80-81
+  s_378dcf4051c8b4::t_f42937c942311c 23-25
+docs/images/investment_order_example.svg
+  s_e3618010bfe6e6::t_24713f89ae3cd0 7-9,11,14-15,19-20,25-27,32-34,39-40,45-47,52-53,58-59,64-65,70-72,77-78,83-84,89-90,95-96,101-104
+docs/images/investment_order_example.dot
+  s_e3618010bfe6e6::t_5b1fb6af931216 18-19,33
+docs/model/prices.md
+  s_e3618010bfe6e6::t_d8688c9dcc8d72 237-238
+  s_e3618010bfe6e6::t_db8b2ef8fca008 119,123-135
+  s_6fc1e99d5da531::t_a2c4b3dd2f2f60 120-122
+docs/model/investment.md
+  s_e3618010bfe6e6::t_71fed1b33ddc83 480-483
+  s_e3618010bfe6e6::t_89cb38af335dfc 519
+  s_e3618010bfe6e6::t_0f66a3bd289351 50-51,61-63
+  s_6fc1e99d5da531::t_c7b42bd145df43 42-49,52-60
+docs/release_notes/upcoming.md
+  h_e76403a1cd4bf1 12
+  s_e3618010bfe6e6::t_abf96e705442c5 13,17
+  s_e3618010bfe6e6::t_7bb626473e1260 8
+src/simulation/investment/competitive/optimisation.rs
+  s_378dcf4051c8b4::t_4886f57c7d1dbc 1-148
+src/output.rs
+  s_378dcf4051c8b4::t_f42937c942311c 7,731
+src/simulation/investment/competitive/constraints.rs
+  s_378dcf4051c8b4::t_4886f57c7d1dbc 1-174
+src/fixture.rs
+  s_378dcf4051c8b4::t_f42937c942311c 18-20
+src/simulation/investment/competitive/metrics.rs
+  s_378dcf4051c8b4::t_f42937c942311c 15
+  s_378dcf4051c8b4::t_4886f57c7d1dbc 1-14,16-854
+src/simulation/investment/competitive.rs
+  s_378dcf4051c8b4::t_f42937c942311c 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f80719d0d4f1493297afcafef81b26b5cbb7d48e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_378dcf4051c8b4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_6fc1e99d5da531": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "87fcd9e7-e714-4bd2-9286-6c9baacf2500",
+        "model": "claude-opus-5.5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_83fb8d859a105f": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "c9fc9f21-6a0c-4fa8-86db-7d3a60de716a",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_e3618010bfe6e6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "8bd37d8a-eb51-4605-8b07-75765390502c",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
