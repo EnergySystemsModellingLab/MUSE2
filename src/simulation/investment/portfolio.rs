@@ -13,7 +13,7 @@ use crate::simulation::activity::Selection;
 use crate::simulation::investment::{AssetOptions, DemandMap};
 use crate::simulation::prices::Prices;
 use crate::units::Capacity;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use itertools::chain;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -74,9 +74,21 @@ pub fn run_agent(
     )
     .collect::<Vec<_>>();
 
-    // Perform optimisation
     let agent_id = &agent.id;
     let commodity_id = &commodity.id;
+
+    // With no assets there is nothing to optimise (the LP would be empty)
+    if opt_assets.is_empty() {
+        let tolerance = model.parameters.remaining_demand_absolute_tolerance;
+        ensure!(
+            demand.values().all(|flow| *flow <= tolerance),
+            "Agent '{agent_id}' cannot meet its demand for commodity '{commodity_id}' in region \
+            '{region_id}' in year {year} with its existing assets"
+        );
+        return Ok(Selection::default());
+    }
+
+    // Perform optimisation
     let results = perform_optimisation(
         model,
         &opt_assets,
