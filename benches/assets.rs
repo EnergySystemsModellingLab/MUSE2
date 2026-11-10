@@ -249,6 +249,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                             let run = || {
                                 select_best_assets(
                                     black_box(&model),
+                                    &[],
                                     opt_assets,
                                     agent_addition_limits,
                                     agent_total_limits,
