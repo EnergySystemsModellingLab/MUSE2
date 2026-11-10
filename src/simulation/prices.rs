@@ -5,11 +5,11 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, CommodityType, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
-use crate::simulation::activity::{ActivityDualMap, ActivityMap};
+use crate::simulation::activity::ActivityMap;
 use crate::simulation::market::MarketSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
-use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
+use crate::units::{Activity, Dimensionless, Flow, MoneyPerFlow, UnitType, Year};
 use anyhow::Result;
 use indexmap::IndexMap;
 use itertools::iproduct;
@@ -66,8 +66,8 @@ pub struct Prices {
 
 /// Calculate commodity prices from the solutions to dispatch optimisations.
 ///
-/// This extracts the activities of existing assets from `solution_without_candidates` and the dual
-/// values from `solution_with_candidates`, then calls [`calculate_prices`].
+/// This extracts the activities of existing assets from `solution_without_candidates` and the
+/// shadow prices from `solution_with_candidates`, then calls [`calculate_prices`].
 ///
 /// # Arguments
 ///
@@ -75,24 +75,29 @@ pub struct Prices {
 /// * `solution_without_candidates` - Solution to dispatch optimisation without candidates
 /// * `solution_with_candidates` - Solution to dispatch optimisation with candidates
 /// * `candidates` - The candidate assets included in `solution_with_candidates`, if any
+/// * `previous_prices` - Prices from the previous year or ironing-out iteration, used to seed
+///   price calculations for cyclic markets
 /// * `year` - The year for which prices are being calculated
 pub fn calculate_prices_from_solutions(
     model: &Model,
     solution_without_candidates: &Solution,
     solution_with_candidates: &Solution,
     candidates: &[AssetRef],
+    previous_prices: &Prices,
     year: u32,
 ) -> Result<Prices> {
-    // Shadow prices come from the solution _with_ candidates, so that we can get them for
-    // commodities not produced/consumed by any existing assets.
-    calculate_prices(
+    let mut prices = calculate_prices(
         model,
         &solution_without_candidates.activity_map_for_existing(),
         candidates,
-        PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals()),
-        &solution_with_candidates.activity_dual_map(),
+        previous_prices,
         year,
-    )
+    )?;
+
+    // Shadow prices come from the solution _with_ candidates, so that we can get them for
+    // commodities not produced/consumed by any existing assets.
+    prices.shadow = PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals());
+    Ok(prices)
 }
 
 /// Calculate commodity prices.
@@ -105,22 +110,18 @@ pub fn calculate_prices_from_solutions(
 /// * `model` - The model
 /// * `activity` - Activity of existing assets in each time slice
 /// * `candidates` - Candidate assets
-/// * `shadow_prices` - Shadow prices for all SED/SVD commodities. These should be derived from a
-///   dispatch that includes candidates, so that commodities not produced/consumed by any existing
-///   assets get prices.
-/// * `activity_duals` - Dual values of the activity constraints for assets (only used for
-///   scarcity-adjusted pricing)
+/// * `previous_prices` - Prices from the previous year or ironing-out iteration. These are used to
+///   seed the prices of markets in cycles; markets with no previous price are seeded with zero.
 /// * `year` - The year for which prices are being calculated
 ///
 /// # Returns
 ///
-/// Market prices for commodities as well as shadow prices.
+/// Market prices and fallback prices. The `shadow` prices are left empty.
 pub fn calculate_prices(
     model: &Model,
     activity: &ActivityMap,
     candidates: &[AssetRef],
-    shadow_prices: PriceMap,
-    activity_duals: &ActivityDualMap,
+    previous_prices: &Prices,
     year: u32,
 ) -> Result<Prices> {
     // Set up empty market prices map
@@ -139,9 +140,8 @@ pub fn calculate_prices(
             model,
             activity,
             candidates,
-            activity_duals,
             year,
-            &shadow_prices,
+            &previous_prices.market,
             &mut annual_activities,
             &mut market_prices,
             None,
@@ -152,9 +152,8 @@ pub fn calculate_prices(
                 model,
                 activity,
                 candidates,
-                activity_duals,
                 year,
-                &shadow_prices,
+                &previous_prices.fallback,
                 &mut annual_activities,
                 &mut fallback_prices,
                 Some(model.parameters.fallback_pricing_strategy),
@@ -164,21 +163,23 @@ pub fn calculate_prices(
 
     Ok(Prices {
         market: market_prices,
-        shadow: shadow_prices,
+        shadow: PriceMap::default(),
         fallback: fallback_prices,
     })
 }
 
 /// Calculate prices for the markets in an market set, updating `market_prices`.
+///
+/// `previous_prices` is the previous set of prices for the same strategy as `market_prices`
+/// (market or fallback), used to seed markets in cycles.
 #[allow(clippy::too_many_arguments)]
 fn price_market_set(
     market_set: &MarketSet,
     model: &Model,
     activity: &ActivityMap,
     candidates: &[AssetRef],
-    activity_duals: &ActivityDualMap,
     year: u32,
-    shadow_prices: &PriceMap,
+    previous_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
     strategy_override: Option<PricingStrategy>,
@@ -189,10 +190,8 @@ fn price_market_set(
                 model,
                 activity,
                 candidates,
-                activity_duals,
                 year,
                 std::slice::from_ref(market),
-                shadow_prices,
                 annual_activities,
                 market_prices,
                 strategy_override,
@@ -203,10 +202,9 @@ fn price_market_set(
                 model,
                 activity,
                 candidates,
-                activity_duals,
                 year,
                 markets,
-                shadow_prices,
+                previous_prices,
                 annual_activities,
                 market_prices,
                 strategy_override,
@@ -219,9 +217,8 @@ fn price_market_set(
                     model,
                     activity,
                     candidates,
-                    activity_duals,
                     year,
-                    shadow_prices,
+                    previous_prices,
                     annual_activities,
                     market_prices,
                     strategy_override,
@@ -241,10 +238,8 @@ fn price_market_set(
 /// * `model` - The model
 /// * `activity` - Activity of existing assets in each time slice
 /// * `candidates` - Candidate assets
-/// * `activity_duals` - Dual values of the activity constraints for assets
 /// * `year` - The year for which prices are being calculated
 /// * `markets` - The markets to calculate prices for
-/// * `shadow_prices` - Shadow prices for all commodities
 /// * `annual_activities` - Optional map of annual activities for all assets, used for full cost
 ///   pricing. If not provided, it will be calculated on demand if at least one market uses full
 ///   cost pricing.
@@ -255,10 +250,8 @@ fn price_markets(
     model: &Model,
     activity: &ActivityMap,
     candidates: &[AssetRef],
-    activity_duals: &ActivityDualMap,
     year: u32,
     markets: &[(CommodityID, RegionID)],
-    shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
     strategy_override: Option<PricingStrategy>,
@@ -293,29 +286,6 @@ fn price_markets(
             .entry(strategy)
             .or_insert_with(HashSet::new)
             .insert((commodity_id.clone(), region_id.clone()));
-    }
-
-    // Add prices for shadow-priced commodities
-    if let Some(shadow_set) = pricing_sets.get(&PricingStrategy::Shadow) {
-        for (commodity_id, region_id) in shadow_set {
-            for time_slice in model.time_slice_info.iter_ids() {
-                if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
-                    market_prices.insert(commodity_id, region_id, time_slice, shadow_price);
-                }
-            }
-        }
-    }
-
-    // Add prices for scarcity-adjusted commodities
-    if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
-        add_scarcity_adjusted_prices(
-            activity_duals
-                .iter()
-                .map(|((asset, time_slice), dual)| (asset, time_slice, *dual)),
-            shadow_prices,
-            market_prices,
-            scarcity_set,
-        );
     }
 
     // Add prices for marginal cost commodities
@@ -388,20 +358,20 @@ fn price_cycle(
     model: &Model,
     activity: &ActivityMap,
     candidates: &[AssetRef],
-    activity_duals: &ActivityDualMap,
     year: u32,
     markets: &[(CommodityID, RegionID)],
-    shadow_prices: &PriceMap,
+    previous_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
     market_prices: &mut PriceMap,
     strategy_override: Option<PricingStrategy>,
 ) {
-    // Seed the markets with shadow prices
+    // Seed the markets with the previous prices, or zero if there are none
     for (commodity_id, region_id) in markets {
         for time_slice in model.time_slice_info.iter_ids() {
-            if let Some(shadow_price) = shadow_prices.get(commodity_id, region_id, time_slice) {
-                market_prices.insert(commodity_id, region_id, time_slice, shadow_price);
-            }
+            let seed = previous_prices
+                .get(commodity_id, region_id, time_slice)
+                .unwrap_or(MoneyPerFlow(0.0));
+            market_prices.insert(commodity_id, region_id, time_slice, seed);
         }
     }
 
@@ -413,10 +383,8 @@ fn price_cycle(
                 model,
                 activity,
                 candidates,
-                activity_duals,
                 year,
                 std::slice::from_ref(market),
-                shadow_prices,
                 annual_activities,
                 market_prices,
                 strategy_override,
@@ -575,60 +543,6 @@ impl IntoIterator for PriceMap {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-/// Calculate scarcity-adjusted prices for a set of commodities and add to an existing prices map.
-///
-/// # Arguments
-///
-/// * `activity_duals` - Iterator over activity duals from optimisation solution
-/// * `shadow_prices` - Shadow prices for all commodities
-/// * `market_prices` - Existing prices map to extend with scarcity-adjusted prices
-/// * `markets_to_price` - Set of markets to calculate scarcity-adjusted prices for
-fn add_scarcity_adjusted_prices<'a, I>(
-    activity_duals: I,
-    shadow_prices: &PriceMap,
-    market_prices: &mut PriceMap,
-    markets_to_price: &HashSet<(CommodityID, RegionID)>,
-) where
-    I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
-{
-    // Calculate highest activity dual for each commodity/region/time slice
-    let mut highest_duals = IndexMap::new();
-    for (asset, time_slice, dual) in activity_duals {
-        let region_id = asset.region_id();
-
-        // Iterate over the output flows of this asset
-        // Only consider flows for commodities we are pricing
-        for flow in asset.iter_output_flows().filter(|flow| {
-            markets_to_price.contains(&(flow.commodity.id.clone(), region_id.clone()))
-        }) {
-            // Update the highest dual for this commodity/time slice
-            highest_duals
-                .entry((
-                    flow.commodity.id.clone(),
-                    region_id.clone(),
-                    time_slice.clone(),
-                ))
-                .and_modify(|current_dual| {
-                    if dual > *current_dual {
-                        *current_dual = dual;
-                    }
-                })
-                .or_insert(dual);
-        }
-    }
-
-    // Add this to the shadow price for each commodity/region/time slice and insert into the map
-    for ((commodity, region, time_slice), highest_dual) in &highest_duals {
-        // There should always be a shadow price for commodities we are considering here, so it
-        // should be safe to unwrap
-        let shadow_price = shadow_prices.get(commodity, region, time_slice).unwrap();
-        // highest_dual is in units of MoneyPerActivity, and shadow_price is in MoneyPerFlow, but
-        // this is correct according to Adam
-        let scarcity_price = shadow_price + MoneyPerFlow(highest_dual.value());
-        market_prices.insert(commodity, region, time_slice, scarcity_price);
     }
 }
 
@@ -1385,14 +1299,18 @@ fn add_full_cost_average_prices<'a, I, J>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::AgentMap;
     use crate::asset::Asset;
     use crate::asset::AssetRef;
     use crate::commodity::{Commodity, CommodityID, CommodityMap};
     use crate::fixture::{
         commodity_id, other_commodity, region_id, sed_commodity, time_slice, time_slice_info,
     };
+    use crate::model::ModelParameters;
+    use crate::process::ProcessMap;
     use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow, ProcessParameter};
     use crate::region::RegionID;
+    use crate::region::RegionMap;
     use crate::time_slice::TimeSliceID;
     use crate::units::ActivityPerCapacity;
     use crate::units::{
@@ -1403,6 +1321,7 @@ mod tests {
     use indexmap::{IndexMap, IndexSet};
     use rstest::rstest;
     use std::collections::{HashMap, HashSet};
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     fn build_process_flow(commodity: &Commodity, coeff: f64, cost: MoneyPerFlow) -> ProcessFlow {
@@ -1702,5 +1621,56 @@ mod tests {
     fn weighted_average_accumulator_zero_weight() {
         let accum = WeightedAverageAccumulator::<Dimensionless>::default();
         assert_eq!(accum.finalise(), None);
+    }
+
+    #[rstest]
+    #[case(Some(MoneyPerFlow(3.0)), MoneyPerFlow(3.0))]
+    #[case(None, MoneyPerFlow(0.0))]
+    fn price_cycle_seeds_from_previous_prices(
+        commodity_id: CommodityID,
+        sed_commodity: Commodity,
+        region_id: RegionID,
+        time_slice: TimeSliceID,
+        time_slice_info: TimeSliceInfo,
+        #[case] previous_price: Option<MoneyPerFlow>,
+        #[case] expected: MoneyPerFlow,
+    ) {
+        // With no assets, nothing overwrites the seed
+        let commodities: CommodityMap = [(commodity_id.clone(), Arc::new(sed_commodity))]
+            .into_iter()
+            .collect();
+        let model = Model {
+            model_path: PathBuf::default(),
+            parameters: ModelParameters::default(),
+            agents: AgentMap::default(),
+            commodities,
+            processes: ProcessMap::default(),
+            time_slice_info,
+            regions: RegionMap::default(),
+            user_assets: Vec::new(),
+            investment_order: HashMap::new(),
+        };
+        let mut previous = PriceMap::default();
+        if let Some(price) = previous_price {
+            previous.insert(&commodity_id, &region_id, &time_slice, price);
+        }
+
+        let mut market_prices = PriceMap::default();
+        price_cycle(
+            &model,
+            &ActivityMap::default(),
+            &[],
+            2020,
+            &[(commodity_id.clone(), region_id.clone())],
+            &previous,
+            &mut None,
+            &mut market_prices,
+            None,
+        );
+
+        let price = market_prices
+            .get(&commodity_id, &region_id, &time_slice)
+            .unwrap();
+        assert_approx_eq!(MoneyPerFlow, price, expected);
     }
 }
