@@ -3,6 +3,7 @@ use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
 use crate::process::ProcessID;
+use crate::simulation::activity::ActivityMap;
 use crate::simulation::investment::DemandMap;
 use crate::simulation::optimisation::ModelError;
 use crate::simulation::optimisation::{apply_highs_options_from_toml, solve_optimal};
@@ -31,7 +32,7 @@ pub struct ResultsMap {
     /// Capacities
     pub capacities: IndexMap<AssetRef, Capacity>,
     /// Activity variables in each time slice
-    pub activities: IndexMap<(AssetRef, TimeSliceID), Activity>,
+    pub activities: ActivityMap,
 }
 
 /// Adds capacity variables to the problem, one per asset.
@@ -176,7 +177,7 @@ pub fn perform_optimisation(
     let (activity_values, remaining_values) = solution_values.split_at(activity_vars.len());
     let capacity_values = &remaining_values[..capacity_vars.len()];
 
-    let activities: IndexMap<_, _> = activity_vars
+    let activities: ActivityMap = activity_vars
         .keys()
         .zip(activity_values)
         .map(|(key, &value)| (key.clone(), Activity::new(value)))
