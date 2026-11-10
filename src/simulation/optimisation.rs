@@ -8,7 +8,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
-use crate::simulation::activity::{FlowMap, create_flow_map};
+use crate::simulation::activity::{ActivityDualMap, ActivityMap, FlowMap, create_flow_map};
 use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
@@ -200,6 +200,13 @@ impl Solution<'_> {
             .map(|((asset, time_slice), &value)| (asset, time_slice, Activity(value)))
     }
 
+    /// Activity for each existing asset, as an [`ActivityMap`]
+    pub fn activity_map_for_existing(&self) -> ActivityMap {
+        self.iter_activity_for_existing()
+            .map(|(asset, time_slice, activity)| ((asset.clone(), time_slice.clone()), activity))
+            .collect()
+    }
+
     /// Activity for each candidate asset
     pub fn iter_activity_for_candidates(
         &self,
@@ -210,14 +217,6 @@ impl Solution<'_> {
             .skip(self.variables.candidate_asset_var_idx.start)
             .zip(cols.iter())
             .map(|((asset, time_slice), &value)| (asset, time_slice, Activity(value)))
-    }
-
-    /// Iterate over the keys for activity for each candidate asset
-    pub fn iter_activity_keys_for_candidates(
-        &self,
-    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID)> {
-        self.iter_activity_for_candidates()
-            .map(|(asset, time_slice, _activity)| (asset, time_slice))
     }
 
     /// Iterate over unmet demand
@@ -268,6 +267,13 @@ impl Solution<'_> {
                 let (time_slice, _) = ts_selection.iter(self.time_slice_info).next().unwrap();
                 (asset, time_slice, dual)
             })
+    }
+
+    /// Dual values for activity constraints, as an [`ActivityDualMap`]
+    pub fn activity_dual_map(&self) -> ActivityDualMap {
+        self.iter_activity_duals()
+            .map(|(asset, time_slice, dual)| ((asset.clone(), time_slice.clone()), dual))
+            .collect()
     }
 
     /// Keys and values for column duals.
