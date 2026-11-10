@@ -21,7 +21,7 @@ use crate::simulation::investment::{AssetOptions, DemandMap};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow};
 use coefficients::calculate_coefficients_for_assets;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
@@ -29,6 +29,7 @@ use metrics::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
     sort_and_filter_appraisal_outputs,
 };
+use optimisation::solve_for_assets;
 use output::write_debug_info;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -37,8 +38,9 @@ use std::sync::Arc;
 /// Run the competitive algorithm for an agent to meet its share of demand for a commodity in a
 /// region.
 ///
-/// Existing assets of the agent which produce the commodity compete with candidate assets from the
-/// agent's search space.
+/// Committed assets are dispatched first and always selected unchanged. Existing assets of the
+/// agent which produce the commodity compete with candidate assets from the agent's search space to
+/// meet any remaining demand.
 ///
 /// # Arguments
 ///
@@ -47,7 +49,7 @@ use std::sync::Arc;
 /// * `commodity` - The commodity for which demand must be met
 /// * `region_id` - The region
 /// * `demand` - The agent's share of demand for the commodity in the region
-/// * `options` - Existing assets and processes available to the agent
+/// * `options` - Committed assets, existing assets and processes available to the agent
 /// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
 /// * `agent_total_limits` - The agent's share of total capacity limits for processes
 /// * `prices` - Commodity prices from the previous full system dispatch
@@ -56,8 +58,9 @@ use std::sync::Arc;
 ///
 /// # Returns
 ///
-/// The assets selected (including retained commissioned assets) along with their activities from
-/// the final appraisal round, or an error.
+/// The assets selected (including committed assets and retained commissioned assets) along with
+/// their activities from the final appraisal round, or an error. An error is also returned if
+/// demand cannot be met.
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent(
     model: &Model,
@@ -72,8 +75,6 @@ pub fn run_agent(
     year: u32,
     debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Selection> {
-    debug_assert_eq!(options.committed.len(), 0);
-
     // Existing and candidate assets from which to choose
     let opt_assets = chain(
         options.existing.iter().cloned(),
@@ -90,6 +91,7 @@ pub fn run_agent(
 
     select_best_assets(
         model,
+        &options.committed,
         opt_assets,
         agent_addition_limits.clone(),
         agent_total_limits.clone(),
@@ -206,9 +208,13 @@ fn log_on_equal_appraisal_outputs(
 }
 
 /// Get the best assets for meeting demand for the given commodity
+///
+/// `committed_assets` have fixed capacity and are always selected, unchanged. They are dispatched
+/// before any of `opt_assets` are appraised.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_best_assets(
     model: &Model,
+    committed_assets: &[AssetRef],
     mut opt_assets: Vec<AssetRef>,
     agent_addition_limits: HashMap<ProcessID, Capacity>,
     agent_total_limits: HashMap<ProcessID, Capacity>,
@@ -238,7 +244,7 @@ pub fn select_best_assets(
     let coefficients = calculate_coefficients_for_assets(
         model,
         objective_type,
-        &opt_assets,
+        &chain(committed_assets, &opt_assets).cloned().collect_vec(),
         &prices.market,
         &prices.fallback,
         year,
@@ -246,9 +252,18 @@ pub fn select_best_assets(
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
-    let mut selected_assets: Vec<AssetRef> = Vec::new();
+    let mut selected_assets: Vec<AssetRef> = committed_assets.to_vec();
     let mut unmet_demand = demand.clone();
     let mut previous_solution = ActivityMap::new();
+
+    // Dispatch the committed assets. This must happen even if there is no demand, so that every
+    // selected asset has activities.
+    if !committed_assets.is_empty() {
+        (previous_solution, unmet_demand) =
+            solve_for_assets(model, &selected_assets, commodity, &coefficients, demand)?;
+    }
+
+    let has_options = !opt_assets.is_empty();
     while is_any_remaining_demand(
         &unmet_demand,
         model.parameters.remaining_demand_absolute_tolerance,
@@ -261,13 +276,15 @@ pub fn select_best_assets(
             true,
         );
         remove_assets_exceeding_agent_limits(&mut opt_assets, &remaining_agent_total_limits, false);
-        ensure!(
-            !opt_assets.is_empty(),
-            "Failed to meet demand for commodity '{}' in region '{}' with provided investment \
-            options. This may be due to overly restrictive process investment constraints.",
-            commodity.id,
-            region_id
-        );
+        if opt_assets.is_empty() {
+            return Err(no_options_error(
+                has_options,
+                agent,
+                commodity,
+                region_id,
+                year,
+            ));
+        }
 
         // Appraise all options in parallel: each asset's appraisal is independent (all shared
         // state is read-only within this block), so we can safely use Rayon here.
@@ -353,9 +370,23 @@ pub fn select_best_assets(
         round += 1;
     }
 
-    // Convert Candidate assets to Ready
-    // At this point we also assign the agent ID to the asset. The solution from the final round
-    // covers exactly the selected assets.
+    Ok(finalise_selection(
+        selected_assets,
+        agent,
+        &previous_solution,
+    ))
+}
+
+/// Convert the selected assets to the final selection
+///
+/// Candidate assets are converted to Ready, and at this point we also assign the agent ID to the
+/// asset. The solution from the final round covers exactly the selected assets. Committed and
+/// commissioned assets are unchanged.
+fn finalise_selection(
+    selected_assets: Vec<AssetRef>,
+    agent: &Agent,
+    solution: &ActivityMap,
+) -> Selection {
     let selected = selected_assets
         .into_iter()
         .map(|asset| {
@@ -369,7 +400,32 @@ pub fn select_best_assets(
         })
         .collect();
 
-    Ok(Selection::from_optimisation(selected, &previous_solution))
+    Selection::from_optimisation(selected, solution)
+}
+
+/// Create the error for when demand remains but there are no asset options left to appraise
+fn no_options_error(
+    has_options: bool,
+    agent: &Agent,
+    commodity: &Commodity,
+    region_id: &RegionID,
+    year: u32,
+) -> anyhow::Error {
+    if has_options {
+        anyhow!(
+            "Failed to meet demand for commodity '{}' in region '{region_id}' with provided \
+            investment options. This may be due to overly restrictive process investment \
+            constraints.",
+            commodity.id
+        )
+    } else {
+        anyhow!(
+            "Agent '{}' cannot meet its demand for commodity '{}' in region '{region_id}' in \
+            year {year} with its existing assets",
+            agent.id,
+            commodity.id
+        )
+    }
 }
 
 /// Prepare existing assets for reappraisal.

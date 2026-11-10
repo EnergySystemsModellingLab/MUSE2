@@ -168,6 +168,7 @@ mod tests {
     use crate::commodity::CommodityID;
     use crate::fixture::build_patched_simple_tempdir;
     use crate::input::load_model;
+    use crate::simulation::DataWriter;
     use crate::units::Flow;
     use itertools::assert_equal;
     use tempfile::tempdir;
@@ -213,7 +214,7 @@ mod tests {
             &HashMap::new(),
             &Prices::default(),
             year,
-            &mut writer,
+            writer.debug_writer(),
         );
         (committed, result)
     }
