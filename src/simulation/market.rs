@@ -23,10 +23,10 @@ use std::fmt::Display;
 /// Represents a set of markets which are invested in together.
 #[derive(PartialEq, Debug, Clone, Eq)]
 pub enum MarketSet {
-    /// Assets are selected for a single market using [`select_assets_for_single_market`]
+    /// Assets are selected for a single market using [`run_agents_for_single_market`]
     Single((CommodityID, RegionID)),
     /// Assets are selected for a group of markets which forms a cycle using
-    /// [`select_assets_for_cycle`]
+    /// [`run_agents_for_cycle`]
     Cycle {
         /// The markets in the cycle, in investment order
         markets: Vec<(CommodityID, RegionID)>,
@@ -49,8 +49,8 @@ impl MarketSet {
         }
     }
 
-    /// Selects assets for this market set variant and passes through the shared
-    /// context needed by single-market, cycle, or layered selection.
+    /// Runs agents for this market set variant and passes through the shared
+    /// context needed by single-market, cycle, or layered runs.
     ///
     /// # Arguments
     ///
@@ -63,8 +63,8 @@ impl MarketSet {
     ///
     /// # Returns
     ///
-    /// The selected assets along with their activities from asset selection.
-    pub fn select_assets(
+    /// The selected assets along with their activities from the agent runs.
+    pub fn run_agents(
         &self,
         model: &Model,
         year: u32,
@@ -74,7 +74,7 @@ impl MarketSet {
         writer: &mut DataWriter,
     ) -> Result<Selection> {
         match self {
-            MarketSet::Single((commodity_id, region_id)) => select_assets_for_single_market(
+            MarketSet::Single((commodity_id, region_id)) => run_agents_for_single_market(
                 model,
                 commodity_id,
                 region_id,
@@ -90,13 +90,13 @@ impl MarketSet {
                 feedback_processes,
             } => {
                 debug!(
-                    "Starting investment for cycle '{self}' with feedback processes: [{}]",
+                    "Starting agent runs for cycle '{self}' with feedback processes: [{}]",
                     feedback_processes
                         .iter()
                         .map(|(process_id, region_id)| format!("{process_id}|{region_id}"))
                         .join(", ")
                 );
-                select_assets_for_cycle(
+                run_agents_for_cycle(
                     model,
                     markets,
                     feedback_processes,
@@ -116,10 +116,10 @@ impl MarketSet {
                 })
             }
             MarketSet::Layer(investment_sets) => {
-                debug!("Starting asset selection for layer '{self}'");
+                debug!("Starting agent runs for layer '{self}'");
                 let mut layer_selection = Selection::default();
                 for investment_set in investment_sets {
-                    let selection = investment_set.select_assets(
+                    let selection = investment_set.run_agents(
                         model,
                         year,
                         demand,
@@ -129,7 +129,7 @@ impl MarketSet {
                     )?;
                     layer_selection.extend(selection);
                 }
-                debug!("Completed asset selection for layer '{self}'");
+                debug!("Completed agent runs for layer '{self}'");
                 Ok(layer_selection)
             }
         }
@@ -156,12 +156,12 @@ impl Display for MarketSet {
     }
 }
 
-/// Select assets for a single market in a given year
+/// Run the responsible agents for a single market in a given year.
 ///
 /// Returns the assets that are selected for investment for this market in this year, along with
-/// their activities from asset selection.
+/// their activities from the agent runs.
 #[allow(clippy::too_many_arguments)]
-pub fn select_assets_for_single_market(
+pub fn run_agents_for_single_market(
     model: &Model,
     commodity_id: &CommodityID,
     region_id: &RegionID,
@@ -179,7 +179,7 @@ pub fn select_assets_for_single_market(
         get_responsible_agents(model.agents.values(), commodity_id, region_id, year)
     {
         debug!(
-            "Running asset selection for agent '{}' in market '{}|{}'",
+            "Running agent '{}' in market '{}|{}'",
             agent.id, commodity_id, region_id
         );
 
@@ -213,11 +213,11 @@ pub fn select_assets_for_single_market(
         );
 
         // Choose assets from among existing pool and candidates
-        let select_assets = match agent.agent_type {
-            AgentType::Competitive => competitive::select_assets,
-            AgentType::Portfolio => portfolio::select_assets,
+        let run_agent = match agent.agent_type {
+            AgentType::Competitive => competitive::run_agent,
+            AgentType::Portfolio => portfolio::run_agent,
         };
-        let selection = select_assets(
+        let selection = run_agent(
             model,
             agent,
             commodity,
@@ -246,7 +246,7 @@ pub fn select_assets_for_single_market(
 /// dispatch optimisation is performed after each market is visited in each pass, to calculate the
 /// demand which the selected assets place on other markets.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub fn select_assets_for_cycle(
+pub fn run_agents_for_cycle(
     model: &Model,
     markets: &[(CommodityID, RegionID)],
     feedback_processes: &IndexSet<(ProcessID, RegionID)>,
@@ -272,7 +272,7 @@ pub fn select_assets_for_cycle(
 
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 1");
-        let selection = select_assets_for_single_market(
+        let selection = run_agents_for_single_market(
             model,
             &commodity_id,
             &region_id,
@@ -335,7 +335,7 @@ pub fn select_assets_for_cycle(
 
         // Select assets for this market
         debug!("Running {commodity_id}|{region_id} selection pass 2");
-        let selection = select_assets_for_single_market(
+        let selection = run_agents_for_single_market(
             model,
             &commodity_id,
             &region_id,
