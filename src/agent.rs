@@ -70,13 +70,13 @@ impl Agent {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentType {
-    /// Existing and candidate assets compete in rounds, with the best option according to the
-    /// agent's objective selected in each round
-    #[default]
-    Competitive,
     /// The capacities of all existing and candidate assets are chosen together in a single
     /// optimisation
+    #[default]
     Portfolio,
+    /// Existing and candidate assets compete in rounds, with the best option according to the
+    /// agent's objective selected in each round
+    Competitive,
 }
 
 /// The decision rule for a particular objective
