@@ -124,7 +124,7 @@ mod tests {
     #[fixture]
     fn appraisal_output(asset: Asset, time_slice: TimeSliceID) -> AppraisalOutput {
         let activity_coefficients = indexmap! { time_slice.clone() => MoneyPerActivity(0.5) };
-        let market_costs = indexmap! { time_slice.clone() => MoneyPerActivity(0.4) };
+        let metric_costs = indexmap! { time_slice.clone() => MoneyPerActivity(0.4) };
         let activity = indexmap! { time_slice.clone() => Activity(10.0) };
         let unmet_demand =
             indexmap! { TimeSliceSelection::Single(time_slice.clone()) => Flow(5.0) };
@@ -132,7 +132,7 @@ mod tests {
             asset: AssetRef::from(asset),
             coefficients: Arc::new(ObjectiveCoefficients {
                 activity_coefficients,
-                market_costs,
+                metric_costs,
             }),
             activity,
             unmet_demand,
