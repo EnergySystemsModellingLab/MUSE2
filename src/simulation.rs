@@ -64,6 +64,20 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     writer.write_flows(year, &flow_map)?;
     writer.write_prices(year, &prices.market)?;
 
+    // Agent-level activities for the base year. These are not yet used.
+    info!("Running agent dispatch...");
+    writer.set_debug_context("base year agent dispatch".to_string());
+    let _base_year_selection = run_agents_for_year(
+        model,
+        year,
+        &asset_pool,
+        AgentRunMode::Dispatch,
+        &prices,
+        &mut writer,
+    )
+    .context("Agent dispatch failed")?;
+    writer.clear_debug_context();
+
     while let Some(year) = year_iter.next() {
         info!("Milestone year: {year}");
 
