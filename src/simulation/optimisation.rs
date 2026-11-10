@@ -1,13 +1,12 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
-use crate::asset::{Asset, AssetRef};
+use crate::asset::AssetRef;
 use crate::commodity::CommodityID;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
-use crate::simulation::PriceMap;
 use crate::simulation::activity::{ActivityMap, FlowMap, create_flow_map};
 use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
@@ -60,14 +59,12 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `input_prices` - Optional explicit prices for input commodities
     /// * `existing_assets` - The asset pool
     /// * `candidate_assets` - Candidate assets for inclusion in active pool
     /// * `year` - Current milestone year
     fn new_with_activity_vars(
         problem: &mut Problem,
         model: &Model,
-        input_prices: Option<&PriceMap>,
         existing_assets: &[AssetRef],
         candidate_assets: &[AssetRef],
         year: u32,
@@ -77,7 +74,6 @@ impl VariableMap {
             problem,
             &mut activity_vars,
             &model.time_slice_info,
-            input_prices,
             existing_assets,
             year,
         );
@@ -85,7 +81,6 @@ impl VariableMap {
             problem,
             &mut activity_vars,
             &model.time_slice_info,
-            input_prices,
             candidate_assets,
             year,
         );
@@ -356,24 +351,6 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
     }
 }
 
-/// Filter prices data to only include prices for markets not being balanced
-///
-/// Markets being balanced (i.e. with commodity balance constraints) will have prices calculated
-/// internally by the solver, so we need to remove them to prevent double-counting.
-fn filter_input_prices(
-    input_prices: &PriceMap,
-    markets_to_balance: &[(CommodityID, RegionID)],
-) -> PriceMap {
-    input_prices
-        .iter()
-        .filter(|(commodity_id, region_id, _, _)| {
-            !markets_to_balance
-                .iter()
-                .any(|(c, r)| c == *commodity_id && r == *region_id)
-        })
-        .collect()
-}
-
 /// Provides the interface for running the dispatch optimisation.
 ///
 /// The run will attempt to meet unmet demand: if the solver reports infeasibility
@@ -388,10 +365,7 @@ pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
     existing_assets: &'run [AssetRef],
     candidate_assets: &'run [AssetRef],
-    markets_to_balance: &'run [(CommodityID, RegionID)],
     market_demands: &'run AllDemandMap,
-    input_prices: Option<&'run PriceMap>,
-    include_commodity_constraints: bool,
     year: u32,
 }
 
@@ -407,10 +381,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             model,
             existing_assets: assets,
             candidate_assets: &[],
-            markets_to_balance: &[],
             market_demands,
-            input_prices: None,
-            include_commodity_constraints: true,
             year,
         }
     }
@@ -419,35 +390,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     pub fn with_candidates(self, candidate_assets: &'run [AssetRef]) -> Self {
         Self {
             candidate_assets,
-            ..self
-        }
-    }
-
-    /// Exclude explicit production and consumption constraints from the dispatch run.
-    pub fn without_commodity_constraints(self) -> Self {
-        Self {
-            include_commodity_constraints: false,
-            ..self
-        }
-    }
-
-    /// Only apply commodity balance constraints to the specified subset of markets
-    pub fn with_market_balance_subset(
-        self,
-        markets_to_balance: &'run [(CommodityID, RegionID)],
-    ) -> Self {
-        assert_ne!(markets_to_balance, []);
-
-        Self {
-            markets_to_balance,
-            ..self
-        }
-    }
-
-    /// Explicitly provide prices for certain input commodities
-    pub fn with_input_prices(self, input_prices: &'run PriceMap) -> Self {
-        Self {
-            input_prices: Some(input_prices),
             ..self
         }
     }
@@ -464,24 +406,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     /// A solution containing new commodity flows for assets and prices for (some) commodities or an
     /// error.
     pub fn run(&self, run_description: &str, writer: &mut DataWriter) -> Result<Solution<'model>> {
-        // If the user provided no markets to balance, we use all of them
-        let all_markets: Vec<_>;
-        let markets_to_balance = if self.markets_to_balance.is_empty() {
-            all_markets = self.model.iter_markets().collect();
-            &all_markets
-        } else {
-            self.markets_to_balance
-        };
-
-        // Select prices for markets not being balanced
-        let input_prices_owned = self
-            .input_prices
-            .map(|prices| filter_input_prices(prices, markets_to_balance));
-        let input_prices = input_prices_owned.as_ref();
+        let markets_to_balance: Vec<_> = self.model.iter_markets().collect();
 
         // First solve the configured dispatch problem. If it is infeasible, run diagnostic solves
         // below to distinguish unmet demand from infeasibility caused by explicit constraints.
-        match self.run_without_unmet_demand_variables(markets_to_balance, input_prices) {
+        match self.run_internal(
+            &markets_to_balance,
+            /*include_commodity_constraints=*/ true,
+            /*allow_unmet_demand=*/ false,
+        ) {
             // If the run is successful, we write debug info and return the solution
             Ok(solution) => {
                 writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
@@ -498,20 +431,16 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 ];
 
                 // Get diagnostic information for unmet demand
-                if let Some(diagnosis) = self.run_unmet_demand_diagnostic(
-                    markets_to_balance,
-                    input_prices,
-                    run_description,
-                    writer,
-                )? {
+                if let Some(diagnosis) =
+                    self.run_unmet_demand_diagnostic(&markets_to_balance, run_description, writer)?
+                {
                     diagnoses.push(diagnosis);
                 }
 
                 // Get diagnostic information for commodity constraints, if any apply this year.
                 if self.has_commodity_constraints()
                     && let Some(diagnosis) = self.run_commodity_constraints_diagnosis(
-                        markets_to_balance,
-                        input_prices,
+                        &markets_to_balance,
                         run_description,
                         writer,
                     )?
@@ -542,21 +471,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_commodity_constraints_diagnosis(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
-        input_prices: Option<&PriceMap>,
         run_description: &str,
         writer: &mut DataWriter,
     ) -> Result<Option<String>> {
-        if !self.include_commodity_constraints {
-            return Ok(None);
-        }
-
         warn!("Dispatch optimisation was infeasible; running commodity constraints diagnostic");
 
         match self.run_internal(
             markets_to_balance,
             /*include_commodity_constraints=*/ false,
             /*allow_unmet_demand=*/ false,
-            input_prices,
         ) {
             Ok(solution) => {
                 let diagnostic_run_description =
@@ -588,7 +511,6 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     fn run_unmet_demand_diagnostic(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
-        input_prices: Option<&PriceMap>,
         run_description: &str,
         writer: &mut DataWriter,
     ) -> Result<Option<String>> {
@@ -596,9 +518,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
 
         match self.run_internal(
             markets_to_balance,
-            self.include_commodity_constraints,
+            /*include_commodity_constraints=*/ true,
             /*allow_unmet_demand=*/ true,
-            input_prices,
         ) {
             Ok(solution) => {
                 // The diagnostic solution is written only to provide debugging information; it is
@@ -639,34 +560,18 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
     }
 
-    /// Run dispatch without unmet demand variables
-    fn run_without_unmet_demand_variables(
-        &self,
-        markets_to_balance: &[(CommodityID, RegionID)],
-        input_prices: Option<&PriceMap>,
-    ) -> Result<Solution<'model>, ModelError> {
-        self.run_internal(
-            markets_to_balance,
-            self.include_commodity_constraints,
-            /*allow_unmet_demand=*/ false,
-            input_prices,
-        )
-    }
-
     /// Run dispatch to balance the specified markets, optionally including unmet demand variables
     fn run_internal(
         &self,
         markets_to_balance: &[(CommodityID, RegionID)],
         include_commodity_constraints: bool,
         allow_unmet_demand: bool,
-        input_prices: Option<&PriceMap>,
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();
         let mut variables = VariableMap::new_with_activity_vars(
             &mut problem,
             self.model,
-            input_prices,
             self.existing_assets,
             self.candidate_assets,
             self.year,
@@ -715,14 +620,12 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
 /// * `problem` - The optimisation problem
 /// * `variables` - The map of asset variables
 /// * `time_slice_info` - Information about assets
-/// * `input_prices` - Optional explicit prices for input commodities
 /// * `assets` - Assets to include
 /// * `year` - Current milestone year
 fn add_activity_variables(
     problem: &mut Problem,
     variables: &mut ActivityVariableMap,
     time_slice_info: &TimeSliceInfo,
-    input_prices: Option<&PriceMap>,
     assets: &[AssetRef],
     year: u32,
 ) -> Range<usize> {
@@ -730,7 +633,7 @@ fn add_activity_variables(
     let start = problem.num_cols();
 
     for (asset, time_slice) in iproduct!(assets.iter(), time_slice_info.iter_ids()) {
-        let coeff = calculate_activity_coefficient(asset, year, time_slice, input_prices);
+        let coeff = asset.get_operating_cost(year, time_slice);
         let var = problem.add_column(coeff.value(), 0.0..);
         let key = (asset.clone(), time_slice.clone());
         let existing = variables.insert(key, var).is_some();
@@ -738,34 +641,4 @@ fn add_activity_variables(
     }
 
     start..problem.num_cols()
-}
-
-/// Calculate the cost coefficient for an activity variable.
-///
-/// Normally, the cost coefficient is the same as the asset's operating costs for the given year and
-/// time slice. If `input_prices` is provided then those prices are added to the flow costs for the
-/// relevant commodities, if they are input flows for the asset.
-///
-/// # Arguments
-///
-/// * `asset` - The asset to calculate the coefficient for
-/// * `year` - The current milestone year
-/// * `time_slice` - The time slice to which this coefficient applies
-/// * `input_prices` - Optional map of prices to include for input commodities
-///
-/// # Returns
-///
-/// The cost coefficient to be used for the relevant decision variable.
-fn calculate_activity_coefficient(
-    asset: &Asset,
-    year: u32,
-    time_slice: &TimeSliceID,
-    input_prices: Option<&PriceMap>,
-) -> MoneyPerActivity {
-    let opex = asset.get_operating_cost(year, time_slice);
-    if let Some(prices) = input_prices {
-        opex + asset.get_input_cost_from_prices(prices, time_slice)
-    } else {
-        opex
-    }
 }

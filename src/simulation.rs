@@ -106,7 +106,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Perform agent investment
             info!("Running agent investment...");
-            // NB: activities from asset selection are not currently used
+            // Activities propagate intermediate demand; full-system dispatch determines prices.
             let selected_assets = run_agents_for_year(
                 model,
                 year,

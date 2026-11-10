@@ -67,9 +67,9 @@ pre-computed **investment order** derived from the topology of the [commodity gr
 markets are processed deepest-first (most downstream to most upstream), grouped into **layers** of
 independent markets at the same depth. See [Investment Appraisal][investment] for full details.
 
-After all markets in each layer are settled, a **partial system dispatch** is run over all assets
-selected so far. This propagates demand upstream: input commodity flows consumed by newly committed
-assets become demand targets for the markets not yet invested in.
+After all markets in each layer are settled, the activities returned by the agent-level
+optimisations propagate demand upstream: input commodity flows consumed by newly committed assets
+become demand targets for the markets not yet invested in.
 
 ### 3. Mothballing and decommissioning
 

@@ -1,6 +1,5 @@
 //! Code for performing agent investment.
 use super::activity::{FlowMap, Selection};
-use super::optimisation::DispatchRun;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
@@ -74,8 +73,7 @@ pub fn run_agents_for_year(
     writer: &mut DataWriter,
 ) -> Result<Selection> {
     // Initialise net demand map
-    let preset_demands = collect_preset_demands_for_year(&model.commodities, year);
-    let mut net_demand = preset_demands.clone();
+    let mut net_demand = collect_preset_demands_for_year(&model.commodities, year);
 
     // Keep track of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -87,53 +85,19 @@ pub fn run_agents_for_year(
         investment_order.iter().join(" -> ")
     );
 
-    // Keep track of the markets that have been seen so far. This will be used to apply
-    // balance constraints in the dispatch optimisation - we only apply balance constraints for
-    // markets that have been seen so far.
-    let mut seen_markets = Vec::new();
-
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
         let selection =
             market_set.run_agents(model, year, mode, &net_demand, assets, prices, writer)?;
 
-        // Update our list of seen markets
-        for market in market_set.iter_markets() {
-            seen_markets.push(market.clone());
-        }
-
-        // If no assets have been selected, skip dispatch optimisation
-        // **TODO**: this probably means there's no demand for the market, which we could
-        // presumably preempt
         if selection.is_empty() {
             debug!("No assets selected for '{market_set}'");
             continue;
         }
 
-        // Add the selected assets to the list of all selected assets
-        let selected_assets = selection.assets.clone();
+        update_net_demand_map(&mut net_demand, &selection.flow_map(), &selection.assets);
         all_selected.extend(selection);
-
-        // Perform dispatch optimisation with assets that have been selected so far
-        // **TODO**: presumably we only need to do this for selected_assets, as assets added in
-        // previous iterations should not change
-        debug!("Running post-investment dispatch for '{market_set}'");
-
-        // As upstream markets by definition will not yet have producers, we explicitly set
-        // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected.assets, year, &preset_demands)
-            .without_commodity_constraints()
-            .with_market_balance_subset(&seen_markets)
-            .with_input_prices(&prices.shadow)
-            .run(&format!("post {market_set} investment"), writer)?;
-
-        // Update demand map with flows from newly added assets
-        update_net_demand_map(
-            &mut net_demand,
-            &solution.create_flow_map(),
-            &selected_assets,
-        );
     }
 
     Ok(all_selected)

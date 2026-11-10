@@ -147,8 +147,8 @@ The investment order is worked out from the commodity graph for each year as fol
    markets that supply it (a [topological sort]).
 4. **Group independent markets into layers.** Each market is given a depth, which is the length of
    the longest supply chain leading to it. Markets with the same depth do not depend on one another,
-   so they are grouped into a **layer**. MUSE2 invests in all markets in a layer before running a
-   single [partial system dispatch][partial-dispatch], rather than one per market, which saves time.
+   so they are grouped into a **layer**. MUSE2 invests in all markets in a layer, then updates
+  [intermediate demands][intermediate-demands] from their selected asset activities.
 
 ### Circularities
 
@@ -267,7 +267,7 @@ When reading these graphs, note that:
 [investment]: ./investment.md
 [prices]: ./prices.md
 [topological sort]: https://en.wikipedia.org/wiki/Topological_sorting
-[partial-dispatch]: ./investment.md#partial-system-dispatch
+[intermediate-demands]: ./investment.md#intermediate-demands
 [order-scc]: ../api/muse2/graph/investment/fn.order_scc.html
 [investment-circularities]: ./investment.md#circularities
 [pricing-circularities]: ./prices.md#circularities
