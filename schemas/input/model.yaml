@@ -48,8 +48,6 @@ properties:
     default: full_average
     enum:
       - unpriced
-      - shadow
-      - scarcity
       - marginal
       - marginal_average
       - full

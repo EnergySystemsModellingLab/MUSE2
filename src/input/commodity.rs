@@ -1,16 +1,13 @@
 //! Code for reading commodity-related data from CSV files.
 use super::{input_err_msg, read_csv};
-use crate::ISSUES_URL;
 use crate::commodity::{
     BalanceType, Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityMap,
     CommodityType, DemandMap, PricingStrategy,
 };
-use crate::model::{ALLOW_DANGEROUS_OPTION_NAME, dangerous_model_options_enabled};
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel};
 use anyhow::{Context, Ok, Result, ensure};
 use indexmap::{IndexMap, IndexSet};
-use log::warn;
 use serde::Deserialize;
 use std::path::Path;
 
@@ -181,20 +178,6 @@ fn validate_commodity(commodity: &Commodity) -> Result<()> {
         }
     }
 
-    // Gatekeep scarcity-adjusted pricing option
-    if commodity.pricing_strategy == PricingStrategy::ScarcityAdjusted {
-        ensure!(
-            dangerous_model_options_enabled(),
-            "The 'scarcity' pricing strategy is currently experimental. \
-            To run anyway, set the {ALLOW_DANGEROUS_OPTION_NAME} option to true."
-        );
-        warn!(
-            "The pricing strategy for {} is set to 'scarcity'. Commodity prices may be \
-            incorrect if assets have more than one output commodity. See: {ISSUES_URL}/677",
-            commodity.id
-        );
-    }
-
     // check that units are provided
     ensure!(
         !commodity.units.trim().is_empty(),
@@ -228,7 +211,10 @@ mod tests {
 
     #[test]
     fn validate_commodity_works() {
-        let commodity = make_commodity(CommodityType::SupplyEqualsDemand, PricingStrategy::Shadow);
+        let commodity = make_commodity(
+            CommodityType::SupplyEqualsDemand,
+            PricingStrategy::FullCostAverage,
+        );
         validate_commodity(&commodity).unwrap();
     }
 
