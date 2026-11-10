@@ -2,13 +2,13 @@
 use super::activity::{FlowMap, Selection};
 use super::optimisation::DispatchRun;
 use crate::agent::{Agent, AgentType};
-use crate::asset::AssetRef;
+use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
-use crate::simulation::investment::{AllDemandMap, DemandMap, update_net_demand_map};
+use crate::simulation::investment::{AllDemandMap, AssetOptions, DemandMap, update_net_demand_map};
 use crate::simulation::investment::{competitive, portfolio};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
@@ -211,6 +211,24 @@ pub fn run_agents_for_single_market(
             Process::agent_total_limit,
         );
 
+        // Filter available assets and processes before running the agent
+        let options = AssetOptions {
+            committed: Vec::new(),
+            existing: existing_assets
+                .iter()
+                .filter_agent(&agent.id)
+                .filter_region(region_id)
+                .filter_primary_producers_of(commodity_id)
+                .filter(|asset| !excluded_processes.contains(asset.process_id()))
+                .cloned()
+                .collect(),
+            processes: agent
+                .iter_search_space(region_id, commodity_id, year)
+                .filter(|process| !excluded_processes.contains(&process.id))
+                .cloned()
+                .collect(),
+        };
+
         // Choose assets from among existing pool and candidates
         let run_agent = match agent.agent_type {
             AgentType::Competitive => competitive::run_agent,
@@ -222,8 +240,7 @@ pub fn run_agents_for_single_market(
             commodity,
             region_id,
             &demand_portion_for_market,
-            existing_assets,
-            excluded_processes,
+            &options,
             &agent_addition_limits,
             &agent_total_limits,
             prices,
