@@ -109,8 +109,6 @@ pub fn add_demand_constraints(
 }
 
 /// Add seasonal and annual utilisation peak constraints to the problem.
-///
-/// These are identical to the equivalent constraints in the full-system dispatch.
 pub fn add_utilisation_peak_constraints(
     problem: &mut Problem,
     model: &Model,
