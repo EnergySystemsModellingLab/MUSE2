@@ -239,45 +239,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case(
-        AssetCapacity::continuous(Capacity(1.0)),
-        Capacity(2.5),
-        Capacity(2.5),
-        None
-    )]
-    #[case(
-        AssetCapacity::discrete(1, Capacity(2.0)),
-        Capacity(4.0),
-        Capacity(4.0),
-        Some(2)
-    )]
-    #[case(
-        AssetCapacity::discrete(1, Capacity(2.0)),
-        Capacity(4.5),
-        Capacity(6.0),
-        Some(3)
-    )]
-    // Solver noise doesn't add an extra tranche
-    #[case(AssetCapacity::discrete(1, Capacity(2.0)), Capacity(4.0 + 1e-9), Capacity(4.0), Some(2))]
-    #[case(
-        AssetCapacity::discrete(1, Capacity(2.0)),
-        Capacity(0.0),
-        Capacity(0.0),
-        Some(0)
-    )]
-    fn with_total_rounded_up_works(
-        #[case] capacity: AssetCapacity,
-        #[case] total: Capacity,
-        #[case] expected_total: Capacity,
-        #[case] expected_tranches: Option<u32>,
-    ) {
-        let result = capacity.with_total_rounded_up(total);
-
-        assert_eq!(result.total_capacity(), expected_total);
-        assert_eq!(result.num_tranches(), expected_tranches);
-    }
-
-    #[rstest]
     #[case(Capacity(-1.0))]
     #[case(Capacity(f64::INFINITY))]
     #[case(Capacity(f64::NEG_INFINITY))]

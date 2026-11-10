@@ -69,7 +69,7 @@ fn add_capacity_vars(
 /// Adds activity variables to the problem, one per time slice.
 ///
 /// The cost coefficient of each variable is the asset's operating cost (variable operating cost,
-/// levies and flow costs) plus the cost of its inputs at shadow prices.
+/// levies and flow costs) plus the cost of its inputs at market prices.
 ///
 /// Returns a map from (asset, time slice) to the corresponding decision variable.
 fn add_activity_vars(
@@ -83,7 +83,7 @@ fn add_activity_vars(
     for asset in assets {
         for time_slice in time_slice_info.iter_ids() {
             let cost = asset.get_operating_cost(year, time_slice)
-                + asset.get_input_cost_from_prices(&prices.shadow, time_slice);
+                + asset.get_input_cost_from_prices(&prices.market, time_slice);
             let var = problem.add_column(cost.value(), 0.0..);
             activity_vars.insert((asset.clone(), time_slice.clone()), var);
         }
