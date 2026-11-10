@@ -2,7 +2,7 @@
 //! assets (from among existing and candidate assets) to meet demand for a given commodity/region
 //! market during agent investment.
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
-use muse2::asset::{AssetPool, AssetRef};
+use muse2::asset::{AssetIterator, AssetPool, AssetRef};
 use muse2::example::Example;
 use muse2::input::load_model;
 use muse2::model::Model;
@@ -10,7 +10,7 @@ use muse2::output::DataWriter;
 use muse2::process::{Process, ProcessID};
 use muse2::simulation::candidate_assets_for_next_year;
 use muse2::simulation::investment::collect_preset_demands_for_year;
-use muse2::simulation::investment::competitive::{get_asset_options, select_best_assets};
+use muse2::simulation::investment::competitive::{get_candidate_assets, select_best_assets};
 use muse2::simulation::market::{
     collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
 };
@@ -196,16 +196,25 @@ fn criterion_benchmark(c: &mut Criterion) {
                 Arc::new(build_synthetic_processes(&templates, n)),
             );
 
-            let opt_assets: Vec<AssetRef> = get_asset_options(
-                &existing_assets,
+            let processes: Vec<_> = agent
+                .iter_search_space(region_id, &commodity.id, YEAR)
+                .cloned()
+                .collect();
+            let mut opt_assets: Vec<AssetRef> = existing_assets
+                .iter()
+                .filter_agent(&agent.id)
+                .filter_region(region_id)
+                .filter_primary_producers_of(&commodity.id)
+                .cloned()
+                .collect();
+            opt_assets.extend(get_candidate_assets(
                 &demand,
-                &agent,
-                commodity,
+                &processes,
                 region_id,
+                commodity,
                 YEAR,
                 model.parameters.capacity_tranche_fraction,
-            )
-            .collect();
+            ));
             let agent_addition_limits = collect_agent_limits(
                 &agent,
                 region_id,
