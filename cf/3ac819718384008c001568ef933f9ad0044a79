@@ -1,0 +1,25 @@
+examples/two_outputs/assets.csv
+  s_dd968c08c6a707::t_154c8917f0a27f 8
+  s_dd968c08c6a707::t_d48f6a992a02c1 3,6
+  s_dd968c08c6a707::t_ddf697795bc0ff 5
+examples/missing_commodity/assets.csv
+  s_dd968c08c6a707::t_154c8917f0a27f 5
+examples/simple/assets.csv
+  s_dd968c08c6a707::t_154c8917f0a27f 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf3ac819718384008c001568ef933f9ad0044a79",
+  "prompts": {},
+  "sessions": {
+    "s_dd968c08c6a707": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "ad519f0a-26b2-41c8-8f3c-dcfc1d0961b8",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
