@@ -2,15 +2,12 @@
 use crate::asset::AssetRef;
 use crate::commodity::CommodityID;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Flow, MoneyPerActivity};
+use crate::units::{Activity, Flow};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
 /// A map of asset activities in each time slice
 pub type ActivityMap = IndexMap<(AssetRef, TimeSliceID), Activity>;
-
-/// A map of the dual values of asset activity constraints in each time slice
-pub type ActivityDualMap = IndexMap<(AssetRef, TimeSliceID), MoneyPerActivity>;
 
 /// A map of commodity flows for assets in each time slice
 pub type FlowMap = IndexMap<(AssetRef, CommodityID, TimeSliceID), Flow>;

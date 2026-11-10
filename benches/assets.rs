@@ -111,6 +111,7 @@ fn calculate_seed_prices(
         &solution_existing,
         &solution_with_candidates,
         candidates,
+        &Prices::default(),
         BASE_YEAR,
     )
     .expect("Failed to calculate prices")

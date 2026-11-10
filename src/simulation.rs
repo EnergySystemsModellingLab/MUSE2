@@ -29,6 +29,7 @@ pub use prices::PriceMap;
 /// * `model` - The model to run
 /// * `output_path` - The folder to which output files will be written
 /// * `debug_model` - Whether to write additional information (e.g. duals) to output files
+#[allow(clippy::too_many_lines)]
 pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
     let mut user_assets = model.user_assets.clone();
@@ -57,8 +58,15 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
-    let (mut prices, flow_map) =
-        run_dispatch_for_year(model, &asset_pool, &candidates, year, &mut writer)?;
+    // There are no previous prices in the base year, so cyclic markets are seeded with zero
+    let (mut prices, flow_map) = run_dispatch_for_year(
+        model,
+        &asset_pool,
+        &candidates,
+        &Prices::default(),
+        year,
+        &mut writer,
+    )?;
 
     // Write results of dispatch optimisation to file
     writer.write_flows(year, &flow_map)?;
@@ -112,8 +120,14 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
-            let (new_prices, ..) =
-                run_dispatch_for_year(model, &selected_assets, &candidates, year, &mut writer)?;
+            let (new_prices, ..) = run_dispatch_for_year(
+                model,
+                &selected_assets,
+                &candidates,
+                &prices,
+                year,
+                &mut writer,
+            )?;
 
             // Check if prices have converged using time slice-weighted averages
             let prices_stable = prices.market.within_tolerance_weighted(
@@ -168,7 +182,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
         let (new_prices, flow_map) =
-            run_dispatch_for_year(model, &asset_pool, &candidates, year, &mut writer)?;
+            run_dispatch_for_year(model, &asset_pool, &candidates, &prices, year, &mut writer)?;
 
         // Write results of dispatch optimisation to file
         writer.write_flows(year, &flow_map)?;
@@ -189,12 +203,16 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 /// from a run with both existing and candidate assets. If either flows or prices cannot be
 /// calculated, empty maps are returned.
 ///
+/// `previous_prices` (from the previous year or ironing-out iteration) are used to seed price
+/// calculations for cyclic markets.
+///
 /// Fully mothballed assets or mothballed tranches thereof are excluded.
 #[context_manager::wrap(DispatchTimer)]
 fn run_dispatch_for_year(
     model: &Model,
     assets: &[AssetRef],
     candidates: &[AssetRef],
+    previous_prices: &Prices,
     year: u32,
     writer: &mut DataWriter,
 ) -> Result<(Prices, FlowMap)> {
@@ -235,17 +253,28 @@ fn run_dispatch_for_year(
         solution_with_candidates.as_ref(),
     ) {
         (None, None) => Prices::default(),
-        (Some(existing), None) => {
-            calculate_prices_from_solutions(model, existing, existing, candidates, year)?
-        }
-        (Some(existing), Some(with_candidates)) => {
-            calculate_prices_from_solutions(model, existing, with_candidates, candidates, year)?
-        }
+        (Some(existing), None) => calculate_prices_from_solutions(
+            model,
+            existing,
+            existing,
+            candidates,
+            previous_prices,
+            year,
+        )?,
+        (Some(existing), Some(with_candidates)) => calculate_prices_from_solutions(
+            model,
+            existing,
+            with_candidates,
+            candidates,
+            previous_prices,
+            year,
+        )?,
         (None, Some(with_candidates)) => calculate_prices_from_solutions(
             model,
             with_candidates,
             with_candidates,
             candidates,
+            previous_prices,
             year,
         )?,
     };
