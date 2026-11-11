@@ -7,7 +7,6 @@ use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::activity::ActivityMap;
 use crate::simulation::market::MarketSet;
-use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerFlow, UnitType, Year};
 use anyhow::Result;
@@ -60,47 +59,6 @@ pub struct Prices {
     pub market: PriceMap,
     /// Commodity fallback prices calculated according to the model's `fallback_pricing_strategy`
     pub fallback: PriceMap,
-}
-
-/// Calculate commodity prices from the solutions to dispatch optimisations.
-///
-/// This extracts the activities of existing assets from `solution_without_candidates` and the
-/// shadow prices from `solution_with_candidates`, then calls [`calculate_prices`].
-///
-/// # Returns
-///
-/// The calculated prices, along with the shadow prices from `solution_with_candidates`.
-///
-/// # Arguments
-///
-/// * `model` - The model
-/// * `solution_without_candidates` - Solution to dispatch optimisation without candidates
-/// * `solution_with_candidates` - Solution to dispatch optimisation with candidates
-/// * `candidates` - The candidate assets included in `solution_with_candidates`, if any
-/// * `previous_prices` - Prices from the previous year or ironing-out iteration, used to seed
-///   price calculations for cyclic markets
-/// * `year` - The year for which prices are being calculated
-pub fn calculate_prices_from_solutions(
-    model: &Model,
-    solution_without_candidates: &Solution,
-    solution_with_candidates: &Solution,
-    candidates: &[AssetRef],
-    previous_prices: &Prices,
-    year: u32,
-) -> Result<(Prices, PriceMap)> {
-    let prices = calculate_prices(
-        model,
-        &solution_without_candidates.activity_map_for_existing(),
-        candidates,
-        previous_prices,
-        year,
-    )?;
-
-    // Shadow prices come from the solution _with_ candidates, so that we can get them for
-    // commodities not produced/consumed by any existing assets.
-    let shadow_prices =
-        PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals());
-    Ok((prices, shadow_prices))
 }
 
 /// Calculate commodity prices.
