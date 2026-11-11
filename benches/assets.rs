@@ -115,6 +115,7 @@ fn calculate_seed_prices(
         BASE_YEAR,
     )
     .expect("Failed to calculate prices")
+    .0
 }
 
 /// Build `n` synthetic candidate processes, based on cycling through `templates`, so that we can
