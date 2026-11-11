@@ -82,11 +82,6 @@ pub struct ModelParameters {
     ///
     /// Don't change unless you know what you're doing.
     pub candidate_asset_capacity: Capacity,
-    /// The epsilon added to commodity balance lower bounds to force candidate dispatch.
-    ///
-    /// Don't change unless you know what you're doing.
-    #[serde(deserialize_with = "deserialise_finite_non_negative")]
-    pub commodity_balance_epsilon: Flow,
     /// Scales the size of inferred investment tranches for candidate assets.
     ///
     /// It is the proportion of the demand-based capacity scale used when the process does not
@@ -140,7 +135,6 @@ impl Default for ModelParameters {
             currency: None,
             allow_dangerous_options: false,
             candidate_asset_capacity: Capacity(1e-4),
-            commodity_balance_epsilon: Flow(1e-6),
             capacity_tranche_fraction: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
             value_of_lost_load: MoneyPerFlow(1e9),
@@ -347,8 +341,6 @@ impl ModelParameters {
                 && self.candidate_asset_capacity > Capacity(0.0),
             "candidate_asset_capacity must be a finite, positive number"
         );
-
-        // commodity_balance_epsilon already validated with deserialise_finite_non_negative
 
         // value_of_lost_load
         check_value_of_lost_load(self.value_of_lost_load)?;

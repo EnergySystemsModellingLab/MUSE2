@@ -15,7 +15,7 @@ use muse2::simulation::market::{
     collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
 };
 use muse2::simulation::optimisation::DispatchRun;
-use muse2::simulation::prices::{Prices, calculate_prices_from_solutions};
+use muse2::simulation::prices::{Prices, calculate_prices};
 use rayon::ThreadPoolBuilder;
 use std::hint::black_box;
 use std::sync::Arc;
@@ -87,7 +87,7 @@ fn build_assets_for_investment_year(
     (base_year_assets, existing_assets, candidates)
 }
 
-/// Dispatch the base year (with and without the investment-year candidates) to obtain realistic
+/// Dispatch the base year to obtain realistic
 /// seed prices for investment appraisal, as per `simulation::run_dispatch_for_year` (this is the
 /// dispatch performed before any agent investment has taken place).
 fn calculate_seed_prices(
@@ -97,19 +97,13 @@ fn calculate_seed_prices(
     writer: &mut DataWriter,
 ) -> Prices {
     let market_demands = collect_preset_demands_for_year(&model.commodities, BASE_YEAR);
-    let solution_existing = DispatchRun::new(model, base_year_assets, BASE_YEAR, &market_demands)
-        .run("bench setup: without candidates", writer)
-        .expect("Dispatch without candidates failed");
-    let solution_with_candidates =
-        DispatchRun::new(model, base_year_assets, BASE_YEAR, &market_demands)
-            .with_candidates(candidates)
-            .run("bench setup: with candidates", writer)
-            .expect("Dispatch with candidates failed");
+    let solution = DispatchRun::new(model, base_year_assets, BASE_YEAR, &market_demands)
+        .run("bench setup", writer)
+        .expect("Dispatch failed");
 
-    calculate_prices_from_solutions(
+    calculate_prices(
         model,
-        &solution_existing,
-        &solution_with_candidates,
+        &solution.activity_map(),
         candidates,
         &Prices::default(),
         BASE_YEAR,

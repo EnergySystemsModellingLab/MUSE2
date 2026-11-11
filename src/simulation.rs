@@ -3,7 +3,7 @@ use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
-use crate::simulation::prices::{Prices, calculate_prices_from_solutions};
+use crate::simulation::prices::{Prices, calculate_prices};
 use crate::timeit::DispatchTimer;
 use crate::units::Capacity;
 use anyhow::{Context, Result};
@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub mod activity;
-use activity::FlowMap;
+use activity::{ActivityMap, FlowMap};
 pub mod optimisation;
 use optimisation::DispatchRun;
 pub mod investment;
@@ -199,9 +199,8 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
 /// Run dispatch to get flows and prices for a milestone year.
 ///
-/// Tries to get commodity flows from a dispatch run which just includes existing assets and prices
-/// from a run with both existing and candidate assets. If either flows or prices cannot be
-/// calculated, empty maps are returned.
+/// Dispatches existing assets to calculate flows and cost-based prices. Candidate assets are
+/// used only to price commodities not covered by existing assets.
 ///
 /// `previous_prices` (from the previous year or ironing-out iteration) are used to seed price
 /// calculations for cyclic markets.
@@ -222,61 +221,18 @@ fn run_dispatch_for_year(
 
     let market_demands = collect_preset_demands_for_year(&model.commodities, year);
 
-    // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
-    // flows (i.e. all are zero)
-    let (solution_existing, flow_map) = if assets.is_empty() {
-        (None, FlowMap::default())
+    let (activity, flow_map) = if assets.is_empty() {
+        (ActivityMap::default(), FlowMap::default())
     } else {
-        let solution = DispatchRun::new(model, assets, year, &market_demands)
-            .run("final without candidates", writer)?;
-        let flow_map = solution.create_flow_map();
-        (Some(solution), flow_map)
+        let solution =
+            DispatchRun::new(model, assets, year, &market_demands).run("final", writer)?;
+        (solution.activity_map(), solution.create_flow_map())
     };
 
-    // Perform a separate dispatch run with both existing assets and candidates, if there are any,
-    // to get shadow prices. If not, use the existing solution alone.
-    let solution_with_candidates = if candidates.is_empty() {
-        None
+    let prices = if assets.is_empty() && candidates.is_empty() {
+        Prices::default()
     } else {
-        Some(
-            DispatchRun::new(model, assets, year, &market_demands)
-                .with_candidates(candidates)
-                .run("final with candidates", writer)?,
-        )
-    };
-
-    // Calculate prices from the appropriate solution(s). If there were candidates, use the solution
-    // that includes them; otherwise use the existing solution alone. If there were no assets at
-    // all, return empty prices.
-    let prices = match (
-        solution_existing.as_ref(),
-        solution_with_candidates.as_ref(),
-    ) {
-        (None, None) => Prices::default(),
-        (Some(existing), None) => calculate_prices_from_solutions(
-            model,
-            existing,
-            existing,
-            candidates,
-            previous_prices,
-            year,
-        )?,
-        (Some(existing), Some(with_candidates)) => calculate_prices_from_solutions(
-            model,
-            existing,
-            with_candidates,
-            candidates,
-            previous_prices,
-            year,
-        )?,
-        (None, Some(with_candidates)) => calculate_prices_from_solutions(
-            model,
-            with_candidates,
-            with_candidates,
-            candidates,
-            previous_prices,
-            year,
-        )?,
+        calculate_prices(model, &activity, candidates, previous_prices, year)?
     };
 
     Ok((prices, flow_map))

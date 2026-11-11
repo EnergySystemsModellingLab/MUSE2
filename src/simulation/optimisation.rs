@@ -14,7 +14,7 @@ use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
 use anyhow::{Context, Result, anyhow, bail};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
-use itertools::{chain, iproduct};
+use itertools::iproduct;
 use log::warn;
 use std::error::Error;
 use std::ops::Range;
@@ -46,8 +46,6 @@ type UnmetDemandVariableMap = IndexMap<(CommodityID, RegionID, TimeSliceID), Var
 ///    are reading the results of the optimisation.
 pub struct VariableMap {
     activity_vars: ActivityVariableMap,
-    existing_asset_var_idx: Range<usize>,
-    candidate_asset_var_idx: Range<usize>,
     unmet_demand_vars: UnmetDemandVariableMap,
     unmet_demand_var_idx: Range<usize>,
 }
@@ -59,36 +57,25 @@ impl VariableMap {
     ///
     /// * `problem` - The optimisation problem
     /// * `model` - The model
-    /// * `existing_assets` - The asset pool
-    /// * `candidate_assets` - Candidate assets for inclusion in active pool
+    /// * `assets` - The asset pool
     /// * `year` - Current milestone year
     fn new_with_activity_vars(
         problem: &mut Problem,
         model: &Model,
-        existing_assets: &[AssetRef],
-        candidate_assets: &[AssetRef],
+        assets: &[AssetRef],
         year: u32,
     ) -> Self {
         let mut activity_vars = ActivityVariableMap::new();
-        let existing_asset_var_idx = add_activity_variables(
+        add_activity_variables(
             problem,
             &mut activity_vars,
             &model.time_slice_info,
-            existing_assets,
-            year,
-        );
-        let candidate_asset_var_idx = add_activity_variables(
-            problem,
-            &mut activity_vars,
-            &model.time_slice_info,
-            candidate_assets,
+            assets,
             year,
         );
 
         Self {
             activity_vars,
-            existing_asset_var_idx,
-            candidate_asset_var_idx,
             unmet_demand_vars: UnmetDemandVariableMap::default(),
             unmet_demand_var_idx: Range::default(),
         }
@@ -172,10 +159,10 @@ pub struct Solution<'a> {
 impl Solution<'_> {
     /// Create a map of commodity flows for each asset's coeffs at every time slice
     pub fn create_flow_map(&self) -> FlowMap {
-        create_flow_map(self.iter_activity_for_existing())
+        create_flow_map(self.iter_activity())
     }
 
-    /// Activity for all assets (existing and candidate, if present)
+    /// Activity for each asset
     pub fn iter_activity(&self) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
         self.variables
             .activity_var_keys()
@@ -183,35 +170,11 @@ impl Solution<'_> {
             .map(|((asset, time_slice), activity)| (asset, time_slice, Activity(*activity)))
     }
 
-    /// Activity for each existing asset
-    pub fn iter_activity_for_existing(
-        &self,
-    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
-        let cols = &self.solution.columns()[self.variables.existing_asset_var_idx.clone()];
-        self.variables
-            .activity_var_keys()
-            .skip(self.variables.existing_asset_var_idx.start)
-            .zip(cols.iter())
-            .map(|((asset, time_slice), &value)| (asset, time_slice, Activity(value)))
-    }
-
-    /// Activity for each existing asset, as an [`ActivityMap`]
-    pub fn activity_map_for_existing(&self) -> ActivityMap {
-        self.iter_activity_for_existing()
+    /// Activity for each asset, as an [`ActivityMap`]
+    pub fn activity_map(&self) -> ActivityMap {
+        self.iter_activity()
             .map(|(asset, time_slice, activity)| ((asset.clone(), time_slice.clone()), activity))
             .collect()
-    }
-
-    /// Activity for each candidate asset
-    pub fn iter_activity_for_candidates(
-        &self,
-    ) -> impl Iterator<Item = (&AssetRef, &TimeSliceID, Activity)> {
-        let cols = &self.solution.columns()[self.variables.candidate_asset_var_idx.clone()];
-        self.variables
-            .activity_var_keys()
-            .skip(self.variables.candidate_asset_var_idx.start)
-            .zip(cols.iter())
-            .map(|((asset, time_slice), &value)| (asset, time_slice, Activity(value)))
     }
 
     /// Iterate over unmet demand
@@ -363,8 +326,7 @@ pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelErr
 #[must_use = "Must call run() method on DispatchRun struct"]
 pub struct DispatchRun<'model, 'run> {
     model: &'model Model,
-    existing_assets: &'run [AssetRef],
-    candidate_assets: &'run [AssetRef],
+    assets: &'run [AssetRef],
     market_demands: &'run AllDemandMap,
     year: u32,
 }
@@ -379,18 +341,9 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ) -> Self {
         Self {
             model,
-            existing_assets: assets,
-            candidate_assets: &[],
+            assets,
             market_demands,
             year,
-        }
-    }
-
-    /// Include the specified candidate assets in the dispatch run
-    pub fn with_candidates(self, candidate_assets: &'run [AssetRef]) -> Self {
-        Self {
-            candidate_assets,
-            ..self
         }
     }
 
@@ -403,8 +356,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ///
     /// # Returns
     ///
-    /// A solution containing new commodity flows for assets and prices for (some) commodities or an
-    /// error.
+    /// A solution containing asset activities and solver diagnostics, or an error.
     pub fn run(&self, run_description: &str, writer: &mut DataWriter) -> Result<Solution<'model>> {
         let markets_to_balance: Vec<_> = self.model.iter_markets().collect();
 
@@ -569,13 +521,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
     ) -> Result<Solution<'model>, ModelError> {
         // Set up problem
         let mut problem = Problem::default();
-        let mut variables = VariableMap::new_with_activity_vars(
-            &mut problem,
-            self.model,
-            self.existing_assets,
-            self.candidate_assets,
-            self.year,
-        );
+        let mut variables =
+            VariableMap::new_with_activity_vars(&mut problem, self.model, self.assets, self.year);
 
         // If unmet demand is enabled for this dispatch run (and is allowed by the model param) then
         // we add variables representing unmet demand for all markets being balanced
@@ -584,16 +531,15 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         }
 
         // Add constraints
-        let all_assets = chain(self.existing_assets.iter(), self.candidate_assets.iter());
+        let assets = self.assets.iter();
         let constraint_keys = add_model_constraints(
             &mut problem,
             &variables,
             self.model,
-            &all_assets,
+            &assets,
             markets_to_balance,
             self.market_demands,
             self.year,
-            self.candidate_assets,
             include_commodity_constraints,
         );
 
@@ -628,10 +574,7 @@ fn add_activity_variables(
     time_slice_info: &TimeSliceInfo,
     assets: &[AssetRef],
     year: u32,
-) -> Range<usize> {
-    // This line **must** come before we add more variables
-    let start = problem.num_cols();
-
+) {
     for (asset, time_slice) in iproduct!(assets.iter(), time_slice_info.iter_ids()) {
         let coeff = asset.get_operating_cost(year, time_slice);
         let var = problem.add_column(coeff.value(), 0.0..);
@@ -639,6 +582,4 @@ fn add_activity_variables(
         let existing = variables.insert(key, var).is_some();
         assert!(!existing, "Duplicate entry for var");
     }
-
-    start..problem.num_cols()
 }
