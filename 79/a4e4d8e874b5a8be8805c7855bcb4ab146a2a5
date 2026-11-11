@@ -1,0 +1,23 @@
+tests/data/simple/debug_dispatch_assets.csv
+  s_2e45f8374fac0d::t_33fa0b295bc9c1 2-545
+tests/data/simple/debug_solver.csv
+  s_2e45f8374fac0d::t_33fa0b295bc9c1 2-6
+tests/data/simple/debug_commodity_balance_duals.csv
+  s_2e45f8374fac0d::t_33fa0b295bc9c1 2-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "79a4e4d8e874b5a8be8805c7855bcb4ab146a2a5",
+  "prompts": {},
+  "sessions": {
+    "s_2e45f8374fac0d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "0c33dce1-1812-408d-9caa-86ac8cd593c7",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
