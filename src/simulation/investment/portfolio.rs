@@ -41,7 +41,7 @@ use output::write_debug_info;
 /// * `options` - Committed assets, existing assets and processes available to the agent
 /// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
 /// * `agent_total_limits` - The agent's share of total capacity limits for processes
-/// * `prices` - Commodity prices from the previous full system dispatch
+/// * `prices` - Commodity prices calculated in the previous dispatch
 /// * `year` - Current milestone year
 /// * `debug_writer` - Optional debug writer
 ///
