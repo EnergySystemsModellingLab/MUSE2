@@ -1,0 +1,46 @@
+benches/assets.rs
+  s_5ae226af121a42::t_45ec912a41dd32 92
+  s_5ae226af121a42::t_d22de4bbb1f968 12-13
+src/simulation/global_dispatch/dispatch.rs
+  s_5ae226af121a42::t_1f4204aee3f8a4 9-14
+src/simulation.rs
+  s_5ae226af121a42::t_d22de4bbb1f968 1-2,7,12,27-28
+src/simulation/global_dispatch.rs
+  s_5ae226af121a42::t_d6ac7883d5b07a 12,21
+  s_5ae226af121a42::t_1f4204aee3f8a4 113-114
+  s_5ae226af121a42::t_d22de4bbb1f968 1-11,13-20,22-112,115-265
+src/simulation/global_dispatch/optimisation/constraints.rs
+  s_5ae226af121a42::t_d22de4bbb1f968 1
+src/simulation/global_dispatch/optimisation.rs
+  s_5ae226af121a42::t_d22de4bbb1f968 4,411,488-489,533-534
+src/graph/investment.rs
+  s_5ae226af121a42::t_d22de4bbb1f968 163
+src/output.rs
+  s_5ae226af121a42::t_c0d17079562c52 186,264
+  s_5ae226af121a42::t_520b03c5fe20b4 191-192,196
+  s_5ae226af121a42::t_12a4eeb3e6ade3 10,181,308-334
+  s_5ae226af121a42::t_d7f855ad43b0c1 335
+src/simulation/global_dispatch/debug.rs
+  s_5ae226af121a42::t_520b03c5fe20b4 244
+  s_5ae226af121a42::t_1f4204aee3f8a4 97-102,163-172,192-201,330,342-347
+  s_5ae226af121a42::t_e445858f438196 1-96,103-162,173-191,202-243,245-246,248-329,331-341,348-393
+  s_5ae226af121a42::t_45ec912a41dd32 247
+docs/developer_guide/architecture_quickstart.md
+  s_5ae226af121a42::t_45ec912a41dd32 24-37,47-48,55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a04d9743d62a056ef6a5ebec392fc11ff4d26f3c",
+  "prompts": {},
+  "sessions": {
+    "s_5ae226af121a42": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "720713b3-ffbe-4bbb-bd91-db0c73bb3fe1",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
