@@ -142,7 +142,8 @@ impl AssetPool {
 
     /// Extend the active pool with Commissioned or Ready assets.
     ///
-    /// Returns the newly commissioned assets (those that were in `Ready` state on entry).
+    /// Returns the newly commissioned assets (those that were in `Ready` state on entry),
+    /// in the order they appeared in `assets`.
     pub fn extend<I>(&mut self, assets: I) -> &[AssetRef]
     where
         I: IntoIterator<Item = AssetRef>,

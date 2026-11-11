@@ -1,5 +1,5 @@
 //! Types representing the activities of assets and the commodity flows derived from them.
-use crate::asset::AssetRef;
+use crate::asset::{AssetPool, AssetRef};
 use crate::commodity::CommodityID;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Flow};
@@ -94,6 +94,28 @@ impl Selection {
     {
         self.assets.retain(&predicate);
         self.activity.retain(|(asset, _), _| predicate(asset));
+    }
+
+    /// Add the selected assets to the pool, re-keying activities to newly commissioned assets.
+    ///
+    /// Returns the newly commissioned assets. Retained assets keep their selected capacities.
+    pub fn commission<'a>(&mut self, pool: &'a mut AssetPool) -> &'a [AssetRef] {
+        let new_assets = pool.extend(self.assets.iter().cloned());
+        let mut commissioned = new_assets.iter();
+        let selected = self
+            .assets
+            .iter()
+            .map(|asset| {
+                let selected = if asset.id().is_none() {
+                    commissioned.next().expect("Missing commissioned asset")
+                } else {
+                    asset
+                };
+                (asset.clone(), selected.clone())
+            })
+            .collect();
+        *self = Self::from_optimisation(selected, &self.activity);
+        new_assets
     }
 
     /// Create a map of commodity flows from the activities of the selected assets
