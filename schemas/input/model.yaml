@@ -29,7 +29,7 @@ properties:
       the energy system to produce commodity flows and prices for each milestone year. Currently the
       only option is `system_dispatch`, in which agents choose capacity and flows and prices come
       from a system-wide, cost-minimising dispatch optimisation. See
-      [the model documentation](../model/README.html#simulation-protocols) for details.
+      [the model documentation](../model/index.html#simulation-protocols) for details.
   candidate_asset_capacity:
     type: number
     description: Capacity to give to candidate assets in dispatch optimisation

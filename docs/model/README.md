@@ -52,44 +52,59 @@ At a high level, the user defines:
 ## Framework Overview
 
 The model operates sequentially across a series of milestone years (MSYs). For the base year,
-existing assets are commissioned and a [dispatch optimisation][dispatch-optimisation] is run to
-establish [commodity prices][prices] for the first investment year. For each subsequent MSY, the
-model performs the following steps:
+existing assets are commissioned and the model establishes the [commodity prices][prices] used as
+the starting point for the first investment year. For each subsequent MSY, the model performs the
+following steps:
 
-### 1. Decommission end-of-life assets
+1. **Decommission end-of-life assets.** Assets whose scheduled decommissioning year has been
+   reached are removed from the active pool.
 
-Assets whose scheduled decommissioning year has been reached are removed from the active pool.
+2. **Agent investment.** Agents select assets to meet commodity demand for the current MSY.
+   Investment decisions follow a pre-computed **investment order** derived from the topology of the
+   [commodity graph][commodity-graphs]: markets are processed deepest-first (most downstream to most
+   upstream), grouped into **layers** of independent markets at the same depth. As markets are
+   settled, the commodity flows of the newly selected assets are used to propagate demand upstream:
+   input commodity flows consumed by newly committed assets become demand targets for the markets
+   not yet invested in. See [Investment Appraisal][investment] for full details.
 
-### 2. Agent investment
+3. **Ironing out.** Investment is repeated iteratively with updated prices to resolve any price
+   instability introduced by new capacity commitments. The loop terminates when time-slice-weighted
+   market prices have converged within `price_tolerance`, or when `max_ironing_out_iterations` is
+   reached (both defined in [`model.toml`][model-toml]).
 
-Agents select assets to meet commodity demand for the current MSY. Investment decisions follow a
-pre-computed **investment order** derived from the topology of the [commodity graph][commodity-graphs]:
-markets are processed deepest-first (most downstream to most upstream), grouped into **layers** of
-independent markets at the same depth. See [Investment Appraisal][investment] for full details.
+4. **Mothballing and decommissioning.** Previously commissioned assets that were not selected for
+   retention are mothballed. Any asset that has remained mothballed for longer than
+   `mothball_years` (defined in [`model.toml`][model-toml]) is permanently decommissioned.
 
-After all markets in each layer are settled, a **partial system dispatch** is run over all assets
-selected so far. This propagates demand upstream: input commodity flows consumed by newly committed
-assets become demand targets for the markets not yet invested in.
+5. **Final flows and prices.** The commodity flows and prices for the MSY are calculated for the
+   settled asset pool, written to the output files, and carried forward as the price basis for the
+   next MSY's investment appraisal.
 
-### 3. Mothballing and decommissioning
+How commodity flows and prices are obtained in each of these steps is determined by the
+[simulation protocol](#simulation-protocols).
 
-Previously commissioned assets that were not selected for retention are mothballed. Any asset that
-has remained mothballed for longer than `mothball_years` (defined in
-[`model.toml`][model-toml]) is permanently decommissioned.
+## Simulation protocols
 
-### 4. Ironing-out loop
+The simulation protocol is selected with the `simulation_protocol` setting in
+[`model.toml`][model-toml]. If it is not specified, `system_dispatch` is used.
 
-Investment and dispatch are repeated iteratively to resolve any price instability introduced by new
-capacity commitments. Each iteration runs the full agent investment pass followed by a full system
-dispatch. The loop terminates when time-slice-weighted market prices have converged within
-`price_tolerance`, or when `max_ironing_out_iterations` is reached (both defined in
-[`model.toml`][model-toml]).
+### `system_dispatch`
 
-### 5. Final dispatch
+In this protocol, agents choose capacity and the flows and prices for each year are obtained from a
+system-wide [dispatch optimisation][dispatch-optimisation]. It works as follows:
 
-A full [dispatch optimisation][dispatch-optimisation] is run over the settled asset pool. The
-resulting flows and commodity prices are written to the output files and carried forward as the
-price basis for the next MSY's investment appraisal.
+- **Base year:** Dispatch optimisations are run over the existing assets, with and without candidate
+  assets, to establish commodity flows and prices.
+- **Agent investment:** After all markets in each layer are settled, a **partial system dispatch** is
+  run over all assets selected so far. For markets in a cycle, a partial dispatch is run after each
+  market is settled. This provides the flows used to propagate demand upstream.
+- **Ironing out:** Each iteration runs the full agent investment pass followed by a full system
+  dispatch of the selected assets, from which updated prices are calculated.
+- **Final dispatch:** A full dispatch optimisation is run over the settled asset pool. The
+  resulting flows and commodity prices are written to the output files.
+
+The `value_of_lost_load`, `commodity_balance_epsilon` and `highs.dispatch_options` settings in
+[`model.toml`][model-toml] are only used by this protocol.
 
 [investment]: ./investment.md
 [commodity-graphs]: ./commodity_graphs.md

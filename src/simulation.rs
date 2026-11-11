@@ -1,4 +1,24 @@
 //! Functionality for running the MUSE2 simulation across milestone years.
+//!
+//! How each milestone year is simulated is determined by the [`SimulationProtocol`], selected with
+//! the `simulation_protocol` setting in `model.toml`. Each protocol lives in its own submodule
+//! (e.g. [`system_dispatch`]) and provides a `run` function which loops over the milestone years.
+//! Protocols share the agent investment code in [`investment`] and [`market`], and the price
+//! calculation code in [`prices`]. The only protocol-specific part of the agent investment loop is
+//! how the flows of newly selected assets are determined, which protocols supply by implementing
+//! [`investment::FlowEstimator`].
+//!
+//! # Adding a new protocol
+//!
+//! 1. Add a variant to [`SimulationProtocol`], and a match arm in [`run`]
+//! 2. Create a submodule with a `pub fn run(model: &Model, writer: &mut DataWriter) -> Result<()>`
+//!    function, and implement [`investment::FlowEstimator`] if it uses [`investment::run_agents_for_year`]
+//! 3. If the protocol has its own debug output files, write them with
+//!    [`DataWriter::write_debug_rows`]
+//! 4. Add the new value to the `simulation_protocol` entry in `schemas/input/model.yaml`, noting any
+//!    settings which are only used by the new protocol
+//! 5. Document the protocol in `docs/model/README.md`, and add a release note
+//! 6. Add regression tests for the protocol
 use crate::asset::{Asset, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
