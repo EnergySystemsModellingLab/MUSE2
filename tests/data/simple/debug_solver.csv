@@ -1,10 +1,6 @@
 milestone_year,run_description,objective_value
-2020,final without candidates,4102.666874515335
-2020,final with candidates,4102.657188072647
-2030,ironing out iteration 0; final without candidates,4323.448953922291
-2030,ironing out iteration 0; final with candidates,4323.444448956254
-2030,final without candidates,4323.448953922285
-2030,final with candidates,4323.444448956253
-2040,ironing out iteration 0; final without candidates,6613.912255465203
-2040,ironing out iteration 0; final with candidates,6613.911723703016
-2040,final without candidates,6613.912255465202
+2020,final,4102.666874515335
+2030,ironing out iteration 0; final,4323.448953922291
+2030,final,4323.448953922285
+2040,ironing out iteration 0; final,6613.912255465203
+2040,final,6613.912255465202
