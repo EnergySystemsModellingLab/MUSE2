@@ -475,6 +475,10 @@ mod tests {
         "simulation_protocol = \"system_dispatch\"",
         Some(SimulationProtocol::SystemDispatch)
     )]
+    #[case(
+        "simulation_protocol = \"agent_dispatch\"",
+        Some(SimulationProtocol::AgentDispatch)
+    )]
     #[case("simulation_protocol = \"unknown_protocol\"", None)]
     fn model_params_simulation_protocol(
         #[case] setting: &str,

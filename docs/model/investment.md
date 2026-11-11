@@ -23,10 +23,11 @@ demand created by already-committed downstream assets is already known.
 Markets are processed in **layers**: a layer is a set of commodity markets that are independent of
 one another (i.e. at the same depth in the commodity graph and with no dependencies between them).
 All markets within a layer are settled before moving to the next layer. After each layer is
-settled, a single [partial system dispatch](#partial-system-dispatch) is run over all assets
-selected so far. This quantifies the input commodity flows consumed by newly committed assets —
-for example, a gas generator committed during electricity market investment will consume gas,
-creating demand that the gas market investment must subsequently meet.
+settled, the flows of newly selected assets are used to update upstream demand. Depending on the
+[simulation protocol][simulation-protocols], these flows come from a
+[partial system dispatch](#partial-system-dispatch) or directly from the activities determined by
+agents. For example, a gas generator committed during electricity market investment will consume
+gas, creating demand that the gas market investment must subsequently meet.
 
 Only commodities of type `ServiceDemand` and `SupplyEqualsDemand` are subject to
 investment decisions. Other commodity types (e.g. `OTH`) are excluded.
@@ -46,8 +47,8 @@ market which is invested in *before* the market they supply (see
 [Commodity Graphs][graph-circularities]). If assets are selected for a feedback process, they create
 extra demand for a market that has already been invested in.
 
-To deal with this, MUSE2 invests in the circularity in two passes over its markets, running a
-[partial system dispatch](#partial-system-dispatch) after each market in each pass:
+To deal with this, MUSE2 invests in the circularity in two passes over its markets, updating demand
+from the selected assets' flows after each market in each pass:
 
 1. **First pass (provisional).** The markets are visited in order, with all processes available,
    including feedback processes. Any feedback assets selected will leave some demand for earlier
@@ -167,8 +168,8 @@ process, agent, region, commodity and milestone year is:
 
 ## Commodity Prices
 
-Agents use commodity prices when selecting assets. These prices come from the previous MSY's
-dispatch (or from the previous [ironing-out loop][framework-overview] iteration, if enabled). See
+Agents use commodity prices when selecting assets. These prices come from the previous MSY
+(or from the previous [ironing-out loop][framework-overview] iteration, if enabled). See
 [Commodity Prices][prices] for how market, shadow and fallback prices are calculated, and
 [Agents][agents] for how each agent type uses them.
 
@@ -179,11 +180,7 @@ has selected to meet its share of demand. Selected existing assets are retained 
 selected mothballed capacity), and selected candidate assets are commissioned as new assets owned by
 the agent.
 
-If an agent is unable to meet its share of demand, the outcome depends on its agent type. A
-competitive agent logs a warning and stops early, keeping the assets selected so far; the unmet
-demand may still be satisfied during the full system dispatch, but this is not guaranteed. If
-investment constraints are so restrictive that it has no options left, the simulation terminates
-with an error. For a portfolio agent, the simulation terminates with an error.
+If an agent is unable to meet its share of demand, the simulation terminates with an error.
 
 > **Note:** only production of the *primary output* commodity is counted against demand. If a
 > selected asset also produces other commodities as secondary outputs, that side-production does
@@ -209,11 +206,11 @@ and dispatch.
 
 ## Partial System Dispatch
 
-After each layer of commodity markets is settled during the investment loop, a **partial system
-dispatch** is run over all assets selected so far. Within a [circularity](#circularities), a partial
-dispatch is instead run after each market in each pass, over the assets just selected for that
-market. This is a standard [dispatch optimisation][dispatch-optimisation] solve, with two key
-modifications described below.
+With the `system_dispatch` protocol, after each layer of commodity markets is settled during the
+investment loop, a **partial system dispatch** is run over all assets selected so far. Within a
+[circularity](#circularities), a partial dispatch is instead run after each market in each pass,
+over the assets just selected for that market. This is a standard
+[dispatch optimisation][dispatch-optimisation] solve, with two key modifications described below.
 
 ### Market subset
 
@@ -246,6 +243,7 @@ assets shaping the demand seen by those upstream.
 
 [agents]: ./agents.md
 [framework-overview]: index.html#framework-overview
+[simulation-protocols]: index.html#simulation-protocols
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
 [process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
