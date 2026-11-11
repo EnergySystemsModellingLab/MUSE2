@@ -6,12 +6,10 @@ use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::activity::FlowMap;
 use crate::simulation::prices::PriceMap;
-use crate::simulation::system_dispatch::optimisation::Solution;
 use crate::time_slice::TimeSliceID;
-use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
+use crate::units::{Capacity, Flow, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use csv;
-use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -33,18 +31,6 @@ const ASSETS_FILE_NAME: &str = "assets.csv";
 
 /// The output file name for asset capacities
 const ASSET_CAPACITIES_FILE_NAME: &str = "asset_capacities.csv";
-
-/// Debug output file for asset dispatch
-const ACTIVITY_ASSET_DISPATCH: &str = "debug_dispatch_assets.csv";
-
-/// The output file name for commodity balance duals
-const COMMODITY_BALANCE_DUALS_FILE_NAME: &str = "debug_commodity_balance_duals.csv";
-
-/// The output file name for unmet demand values
-const UNMET_DEMAND_FILE_NAME: &str = "debug_unmet_demand.csv";
-
-/// The output file name for extra solver output values
-const SOLVER_VALUES_FILE_NAME: &str = "debug_solver.csv";
 
 /// Get the default output directory for the model
 pub fn get_output_dir(model_dir: &Path, results_root: PathBuf) -> Result<PathBuf> {
@@ -188,85 +174,26 @@ struct CommodityPriceRow {
     price: MoneyPerFlow,
 }
 
-/// Represents the activity in a row of the dispatch CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct DispatchRow {
-    milestone_year: u32,
-    run_description: String,
-    asset_id: Option<AssetID>,
-    process_id: ProcessID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    activity: Option<Activity>,
-    activity_dual: Option<MoneyPerActivity>,
-    column_dual: Option<MoneyPerActivity>,
-}
-
-/// Represents the commodity balance duals data in a row of the commodity balance duals CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct CommodityBalanceDualsRow {
-    milestone_year: u32,
-    run_description: String,
-    commodity_id: CommodityID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    value: MoneyPerFlow,
-}
-
-/// Represents the unmet demand data in a row of the unmet demand CSV file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct UnmetDemandRow {
-    milestone_year: u32,
-    run_description: String,
-    commodity_id: CommodityID,
-    region_id: RegionID,
-    time_slice: TimeSliceID,
-    value: Flow,
-}
-
-/// Represents solver output values
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct SolverValuesRow {
-    milestone_year: u32,
-    run_description: String,
-    objective_value: Money,
-}
-
 /// For writing extra debug information about the model
 struct DebugDataWriter {
     context: Option<String>,
     output_path: PathBuf,
-    unmet_demand_file_path: PathBuf,
-    commodity_balance_duals_writer: csv::Writer<File>,
-    unmet_demand_writer: Option<csv::Writer<File>>,
-    solver_values_writer: csv::Writer<File>,
-    dispatch_asset_writer: csv::Writer<File>,
     /// Writers for debug files owned by other modules, created on first use
     custom_writers: HashMap<&'static str, csv::Writer<File>>,
 }
 
 impl DebugDataWriter {
-    /// Open CSV files to write debug info to
+    /// Create a writer for debug info
     ///
     /// # Arguments
     ///
     /// * `output_path` - Folder where files will be saved
-    fn create(output_path: &Path) -> Result<Self> {
-        let new_writer = |file_name| {
-            let file_path = output_path.join(file_name);
-            csv::Writer::from_path(file_path)
-        };
-
-        Ok(Self {
+    fn create(output_path: &Path) -> Self {
+        Self {
             context: None,
             output_path: output_path.to_path_buf(),
-            unmet_demand_file_path: output_path.join(UNMET_DEMAND_FILE_NAME),
-            commodity_balance_duals_writer: new_writer(COMMODITY_BALANCE_DUALS_FILE_NAME)?,
-            unmet_demand_writer: None,
-            solver_values_writer: new_writer(SOLVER_VALUES_FILE_NAME)?,
-            dispatch_asset_writer: new_writer(ACTIVITY_ASSET_DISPATCH)?,
             custom_writers: HashMap::new(),
-        })
+        }
     }
 
     /// Prepend the current context to the run description
@@ -276,171 +203,6 @@ impl DebugDataWriter {
         } else {
             run_description.to_string()
         }
-    }
-
-    /// Write debug info about the dispatch optimisation
-    fn write_dispatch_debug_info(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        solution: &Solution,
-    ) -> Result<()> {
-        self.write_dispatch(
-            milestone_year,
-            run_description,
-            solution.iter_activity(),
-            solution.iter_activity_duals(),
-            solution.iter_column_duals(),
-        )?;
-        self.write_commodity_balance_duals(
-            milestone_year,
-            run_description,
-            solution.iter_commodity_balance_duals(),
-        )?;
-        self.write_unmet_demand(
-            milestone_year,
-            run_description,
-            solution.iter_unmet_demand(),
-        )?;
-        self.write_solver_values(milestone_year, run_description, solution.objective_value)?;
-        Ok(())
-    }
-
-    // Write activity to file
-    fn write_dispatch<'a, I, J, K>(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        iter_activity: I,
-        iter_activity_duals: J,
-        iter_column_duals: K,
-    ) -> Result<()>
-    where
-        I: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, Activity)>,
-        J: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
-        K: Iterator<Item = (&'a AssetRef, &'a TimeSliceID, MoneyPerActivity)>,
-    {
-        // To account for different order of entries or missing ones, we first compile data in hash map
-        type CompiledActivityData = (
-            Option<Activity>,
-            Option<MoneyPerActivity>,
-            Option<MoneyPerActivity>,
-        );
-        let mut map: IndexMap<(&AssetRef, &TimeSliceID), CompiledActivityData> = IndexMap::new();
-
-        // For the activities
-        for (asset, time_slice, activity) in iter_activity {
-            map.entry((asset, time_slice)).or_default().0 = Some(activity);
-        }
-        // The activity duals
-        for (asset, time_slice, activity_dual) in iter_activity_duals {
-            map.entry((asset, time_slice)).or_default().1 = Some(activity_dual);
-        }
-        // And the column duals
-        for (asset, time_slice, column_dual) in iter_column_duals {
-            map.entry((asset, time_slice)).or_default().2 = Some(column_dual);
-        }
-
-        for ((asset, time_slice), (activity, activity_dual, column_dual)) in map {
-            let row = DispatchRow {
-                milestone_year,
-                run_description: self.with_context(run_description),
-                asset_id: asset.id(),
-                process_id: asset.process_id().clone(),
-                region_id: asset.region_id().clone(),
-                time_slice: time_slice.clone(),
-                activity,
-                activity_dual,
-                column_dual,
-            };
-            self.dispatch_asset_writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
-    /// Write commodity balance duals to file
-    fn write_commodity_balance_duals<'a, I>(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        iter: I,
-    ) -> Result<()>
-    where
-        I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, MoneyPerFlow)>,
-    {
-        for (commodity_id, region_id, time_slice, value) in iter {
-            let row = CommodityBalanceDualsRow {
-                milestone_year,
-                run_description: self.with_context(run_description),
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
-                time_slice: time_slice.clone(),
-                value,
-            };
-            self.commodity_balance_duals_writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
-    /// Write unmet demand values to file
-    fn write_unmet_demand<'a, I>(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        iter: I,
-    ) -> Result<()>
-    where
-        I: Iterator<Item = (&'a CommodityID, &'a RegionID, &'a TimeSliceID, Flow)>,
-    {
-        let mut rows = iter.peekable();
-
-        if rows.peek().is_none() {
-            return Ok(());
-        }
-
-        // If the unmet demand writer already exist, we panic, as it should not happen
-        assert!(
-            self.unmet_demand_writer.is_none(),
-            "Unmet demand file already exists!"
-        );
-
-        let run_description = self.with_context(run_description);
-        let writer = self
-            .unmet_demand_writer
-            .insert(csv::Writer::from_path(&self.unmet_demand_file_path)?);
-        for (commodity_id, region_id, time_slice, value) in rows {
-            let row = UnmetDemandRow {
-                milestone_year,
-                run_description: run_description.clone(),
-                commodity_id: commodity_id.clone(),
-                region_id: region_id.clone(),
-                time_slice: time_slice.clone(),
-                value,
-            };
-            writer.serialize(row)?;
-        }
-
-        Ok(())
-    }
-
-    /// Write additional solver output values to file
-    fn write_solver_values(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        objective_value: Money,
-    ) -> Result<()> {
-        let row = SolverValuesRow {
-            milestone_year,
-            run_description: self.with_context(run_description),
-            objective_value,
-        };
-        self.solver_values_writer.serialize(row)?;
-        self.solver_values_writer.flush()?;
-
-        Ok(())
     }
 
     /// Write rows to a debug file owned by another module
@@ -466,12 +228,6 @@ impl DebugDataWriter {
 
     /// Flush the underlying streams
     fn flush(&mut self) -> Result<()> {
-        if let Some(wrt) = &mut self.unmet_demand_writer {
-            wrt.flush()?;
-        }
-        self.commodity_balance_duals_writer.flush()?;
-        self.solver_values_writer.flush()?;
-        self.dispatch_asset_writer.flush()?;
         for wrt in self.custom_writers.values_mut() {
             wrt.flush()?;
         }
@@ -505,12 +261,7 @@ impl DataWriter {
             csv::Writer::from_path(file_path)
         };
 
-        let debug_writer = if save_debug_info {
-            // Create debug CSV files
-            Some(DebugDataWriter::create(output_path)?)
-        } else {
-            None
-        };
+        let debug_writer = save_debug_info.then(|| DebugDataWriter::create(output_path));
 
         Ok(Self {
             assets: new_writer(ASSETS_FILE_NAME)?,
@@ -519,20 +270,6 @@ impl DataWriter {
             prices: new_writer(COMMODITY_PRICES_FILE_NAME)?,
             debug: debug_writer,
         })
-    }
-
-    /// Write debug info about the dispatch optimisation
-    pub fn write_dispatch_debug_info(
-        &mut self,
-        milestone_year: u32,
-        run_description: &str,
-        solution: &Solution,
-    ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug {
-            wtr.write_dispatch_debug_info(milestone_year, run_description, solution)?;
-        }
-
-        Ok(())
     }
 
     /// Whether debug files are being written
@@ -822,207 +559,6 @@ mod tests {
         };
         let records: Vec<CommodityPriceRow> =
             csv::Reader::from_path(dir.path().join(COMMODITY_PRICES_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_commodity_balance_duals(
-        commodity_id: CommodityID,
-        region_id: RegionID,
-        time_slice: TimeSliceID,
-    ) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let value = MoneyPerFlow(0.5);
-        let dir = tempdir().unwrap();
-
-        // Write commodity balance dual
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_commodity_balance_duals(
-                    milestone_year,
-                    &run_description,
-                    iter::once((&commodity_id, &region_id, &time_slice, value)),
-                )
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = CommodityBalanceDualsRow {
-            milestone_year,
-            run_description,
-            commodity_id,
-            region_id,
-            time_slice,
-            value,
-        };
-        let records: Vec<CommodityBalanceDualsRow> =
-            csv::Reader::from_path(dir.path().join(COMMODITY_BALANCE_DUALS_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_unmet_demand(commodity_id: CommodityID, region_id: RegionID, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let value = Flow(0.5);
-        let dir = tempdir().unwrap();
-
-        // Write unmet demand
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_unmet_demand(
-                    milestone_year,
-                    &run_description,
-                    iter::once((&commodity_id, &region_id, &time_slice, value)),
-                )
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = UnmetDemandRow {
-            milestone_year,
-            run_description,
-            commodity_id,
-            region_id,
-            time_slice,
-            value,
-        };
-        let records: Vec<UnmetDemandRow> =
-            csv::Reader::from_path(dir.path().join(UNMET_DEMAND_FILE_NAME))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_dispatch(assets: AssetPool, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let activity = Activity(100.5);
-        let activity_dual = MoneyPerActivity(-1.5);
-        let column_dual = MoneyPerActivity(5.0);
-        let dir = tempdir().unwrap();
-        let asset = assets.iter().next().unwrap();
-
-        // Write activity
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_dispatch(
-                    milestone_year,
-                    &run_description,
-                    iter::once((asset, &time_slice, activity)),
-                    iter::once((asset, &time_slice, activity_dual)),
-                    iter::once((asset, &time_slice, column_dual)),
-                )
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = DispatchRow {
-            milestone_year,
-            run_description,
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            time_slice,
-            activity: Some(activity),
-            activity_dual: Some(activity_dual),
-            column_dual: Some(column_dual),
-        };
-        let records: Vec<DispatchRow> =
-            csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_dispatch_with_missing_keys(assets: AssetPool, time_slice: TimeSliceID) {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let activity = Activity(100.5);
-        let dir = tempdir().unwrap();
-        let asset = assets.iter().next().unwrap();
-
-        // Write activity
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_dispatch(
-                    milestone_year,
-                    &run_description,
-                    iter::once((asset, &time_slice, activity)),
-                    iter::empty::<(&AssetRef, &TimeSliceID, MoneyPerActivity)>(),
-                    iter::empty::<(&AssetRef, &TimeSliceID, MoneyPerActivity)>(),
-                )
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = DispatchRow {
-            milestone_year,
-            run_description,
-            asset_id: asset.id(),
-            process_id: asset.process_id().clone(),
-            region_id: asset.region_id().clone(),
-            time_slice,
-            activity: Some(activity),
-            activity_dual: None,
-            column_dual: None,
-        };
-        let records: Vec<DispatchRow> =
-            csv::Reader::from_path(dir.path().join(ACTIVITY_ASSET_DISPATCH))
-                .unwrap()
-                .into_deserialize()
-                .try_collect()
-                .unwrap();
-        assert_equal(records, iter::once(expected));
-    }
-
-    #[rstest]
-    fn write_solver_values() {
-        let milestone_year = 2020;
-        let run_description = "test_run".to_string();
-        let objective_value = Money(1234.56);
-        let dir = tempdir().unwrap();
-
-        // Write solver values
-        {
-            let mut writer = DebugDataWriter::create(dir.path()).unwrap();
-            writer
-                .write_solver_values(milestone_year, &run_description, objective_value)
-                .unwrap();
-            writer.flush().unwrap();
-        }
-
-        // Read back and compare
-        let expected = SolverValuesRow {
-            milestone_year,
-            run_description,
-            objective_value,
-        };
-        let records: Vec<SolverValuesRow> =
-            csv::Reader::from_path(dir.path().join(SOLVER_VALUES_FILE_NAME))
                 .unwrap()
                 .into_deserialize()
                 .try_collect()

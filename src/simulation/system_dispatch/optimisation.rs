@@ -1,6 +1,7 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
+use super::debug::write_dispatch_debug_info;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::CommodityID;
 use crate::input::format_items_with_cap;
@@ -407,7 +408,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         match self.run_without_unmet_demand_variables(markets_to_balance, input_prices) {
             // If the run is successful, we write debug info and return the solution
             Ok(solution) => {
-                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+                write_dispatch_debug_info(writer, self.year, run_description, &solution)?;
                 Ok(solution)
             }
 
@@ -484,7 +485,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             Ok(solution) => {
                 let diagnostic_run_description =
                     format!("{run_description} COMMODITY_CONSTRAINTS_DIAGNOSTIC");
-                writer.write_dispatch_debug_info(
+                write_dispatch_debug_info(
+                    writer,
                     self.year,
                     &diagnostic_run_description,
                     &solution,
@@ -528,7 +530,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 // never returned as the result of the original dispatch run.
                 let diagnostic_run_description =
                     format!("{run_description} UNMET_DEMAND_DIAGNOSTIC");
-                writer.write_dispatch_debug_info(
+                write_dispatch_debug_info(
+                    writer,
                     self.year,
                     &diagnostic_run_description,
                     &solution,
