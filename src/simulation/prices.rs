@@ -53,13 +53,11 @@ impl<W: UnitType> WeightedAverageAccumulator<W> {
     }
 }
 
-/// Sets of prices calculated from dispatch results
+/// Sets of prices calculated from the results of a simulation protocol
 #[derive(Default)]
 pub struct Prices {
     /// Commodity market prices calculated according to user-specified strategies
     pub market: PriceMap,
-    /// Commodity shadow prices
-    pub shadow: PriceMap,
     /// Commodity fallback prices calculated according to the model's `fallback_pricing_strategy`
     pub fallback: PriceMap,
 }
@@ -68,6 +66,10 @@ pub struct Prices {
 ///
 /// This extracts the activities of existing assets from `solution_without_candidates` and the
 /// shadow prices from `solution_with_candidates`, then calls [`calculate_prices`].
+///
+/// # Returns
+///
+/// The calculated prices, along with the shadow prices from `solution_with_candidates`.
 ///
 /// # Arguments
 ///
@@ -85,8 +87,8 @@ pub fn calculate_prices_from_solutions(
     candidates: &[AssetRef],
     previous_prices: &Prices,
     year: u32,
-) -> Result<Prices> {
-    let mut prices = calculate_prices(
+) -> Result<(Prices, PriceMap)> {
+    let prices = calculate_prices(
         model,
         &solution_without_candidates.activity_map_for_existing(),
         candidates,
@@ -96,8 +98,9 @@ pub fn calculate_prices_from_solutions(
 
     // Shadow prices come from the solution _with_ candidates, so that we can get them for
     // commodities not produced/consumed by any existing assets.
-    prices.shadow = PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals());
-    Ok(prices)
+    let shadow_prices =
+        PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals());
+    Ok((prices, shadow_prices))
 }
 
 /// Calculate commodity prices.
@@ -116,7 +119,7 @@ pub fn calculate_prices_from_solutions(
 ///
 /// # Returns
 ///
-/// Market prices and fallback prices. The `shadow` prices are left empty.
+/// Market prices and fallback prices.
 pub fn calculate_prices(
     model: &Model,
     activity: &ActivityMap,
@@ -163,7 +166,6 @@ pub fn calculate_prices(
 
     Ok(Prices {
         market: market_prices,
-        shadow: PriceMap::default(),
         fallback: fallback_prices,
     })
 }
