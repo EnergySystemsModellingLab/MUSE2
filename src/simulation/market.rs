@@ -1,6 +1,5 @@
 //! Code for creating sets of markets.
 use super::activity::{FlowMap, Selection};
-use super::optimisation::DispatchRun;
 use crate::agent::{Agent, AgentType};
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
@@ -9,7 +8,7 @@ use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
 use crate::simulation::investment::{
-    AgentRunMode, AllDemandMap, AssetOptions, DemandMap, update_net_demand_map,
+    AgentRunMode, AllDemandMap, AssetOptions, DemandMap, FlowEstimator, update_net_demand_map,
 };
 use crate::simulation::investment::{competitive, portfolio};
 use crate::simulation::prices::Prices;
@@ -61,6 +60,7 @@ impl MarketSet {
     /// * `demand` – Net demand profiles available to all markets before selection.
     /// * `assets` – Assets available to agents in this market.
     /// * `prices` – Commodity price assumptions to use when valuing investments.
+    /// * `flow_estimator` – Determines the flows of selected assets, to propagate demand upstream.
     /// * `writer` – Data sink used to log optimisation artefacts.
     ///
     /// # Returns
@@ -75,6 +75,7 @@ impl MarketSet {
         demand: &AllDemandMap,
         assets: &[AssetRef],
         prices: &Prices,
+        flow_estimator: &mut dyn FlowEstimator,
         writer: &mut DataWriter,
     ) -> Result<Selection> {
         match self {
@@ -110,6 +111,7 @@ impl MarketSet {
                     demand,
                     assets,
                     prices,
+                    flow_estimator,
                     writer,
                 )
                 .with_context(|| {
@@ -125,8 +127,16 @@ impl MarketSet {
                 debug!("Starting agent runs for layer '{self}'");
                 let mut layer_selection = Selection::default();
                 for investment_set in investment_sets {
-                    let selection = investment_set
-                        .run_agents(model, year, mode, demand, assets, prices, writer)?;
+                    let selection = investment_set.run_agents(
+                        model,
+                        year,
+                        mode,
+                        demand,
+                        assets,
+                        prices,
+                        flow_estimator,
+                        writer,
+                    )?;
                     layer_selection.extend(selection);
                 }
                 debug!("Completed agent runs for layer '{self}'");
@@ -282,8 +292,8 @@ pub fn run_agents_for_single_market(
 /// market earlier in the investment order. In `Invest` mode, assets for these pairs are selected
 /// in the first pass and retained, then the remaining assets are selected in a second pass that
 /// excludes those processes. In `Dispatch` mode, there is no reselection, so all assets from the
-/// first pass are returned. A dispatch optimisation after each market updates demand for subsequent
-/// markets.
+/// first pass are returned. After each market, the flows of the selected assets are estimated using
+/// `flow_estimator` and used to update demand for subsequent markets.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn run_agents_for_cycle(
     model: &Model,
@@ -294,10 +304,9 @@ pub fn run_agents_for_cycle(
     demand: &AllDemandMap,
     assets: &[AssetRef],
     prices: &Prices,
+    flow_estimator: &mut dyn FlowEstimator,
     writer: &mut DataWriter,
 ) -> Result<Selection> {
-    // Precompute a joined string for logging
-    let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
     let is_feedback_asset = |asset: &AssetRef| {
         feedback_processes.contains(&(asset.process_id().clone(), asset.region_id().clone()))
     };
@@ -339,21 +348,17 @@ pub fn run_agents_for_cycle(
         retained.retain(|asset| mode == AgentRunMode::Dispatch || is_feedback_asset(asset));
         retained_first_pass.extend(retained);
 
-        // Run dispatch
-        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
-        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
-            .without_commodity_constraints()
-            .with_market_balance_subset(std::slice::from_ref(market))
-            .with_input_prices(&prices.shadow)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
+        // Determine the flows of the newly selected assets
+        let flows = flow_estimator.flows_after_cycle_market(
+            markets,
+            market,
+            1,
+            &net_demand,
+            &selection,
+            writer,
+        )?;
 
         // Update demand map with flows from newly selected assets
-        let flows = solution.create_flow_map();
         for ((asset, commodity_id, time_slice), flow) in &flows {
             if mode == AgentRunMode::Invest && is_feedback_asset(asset) {
                 excluded_flows
@@ -403,25 +408,18 @@ pub fn run_agents_for_cycle(
             continue;
         }
 
-        // Run dispatch
-        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
-        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
-            .without_commodity_constraints()
-            .with_market_balance_subset(std::slice::from_ref(market))
-            .with_input_prices(&prices.shadow)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
+        // Determine the flows of the newly selected assets
+        let flows = flow_estimator.flows_after_cycle_market(
+            markets,
+            market,
+            2,
+            &net_demand,
+            &selection,
+            writer,
+        )?;
 
         // Update demand map with flows from newly selected assets
-        update_net_demand_map(
-            &mut net_demand,
-            &solution.create_flow_map(),
-            &selection.assets,
-        );
+        update_net_demand_map(&mut net_demand, &flows, &selection.assets);
         second_pass.extend(selection);
     }
 

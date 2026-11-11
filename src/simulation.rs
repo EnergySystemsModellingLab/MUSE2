@@ -1,23 +1,30 @@
 //! Functionality for running the MUSE2 simulation across milestone years.
 use crate::asset::{Asset, AssetPool, AssetRef};
+use crate::commodity::CommodityID;
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
+use crate::region::RegionID;
+use crate::simulation::market::MarketSet;
 use crate::simulation::prices::{Prices, calculate_prices_from_solutions};
 use crate::timeit::DispatchTimer;
 use crate::units::Capacity;
 use anyhow::{Context, Result};
 use context_manager;
-use log::info;
+use itertools::Itertools;
+use log::{debug, info};
 use std::path::Path;
+use std::slice;
 use std::sync::Arc;
 
 pub mod activity;
-use activity::FlowMap;
+use activity::{FlowMap, Selection};
 pub mod optimisation;
 use optimisation::DispatchRun;
 pub mod investment;
-use investment::{AgentRunMode, collect_preset_demands_for_year, run_agents_for_year};
+use investment::{
+    AgentRunMode, AllDemandMap, FlowEstimator, collect_preset_demands_for_year, run_agents_for_year,
+};
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
@@ -59,7 +66,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     // Run dispatch optimisation
     info!("Running dispatch optimisation...");
     // There are no previous prices in the base year, so cyclic markets are seeded with zero
-    let (mut prices, flow_map) = run_dispatch_for_year(
+    let (mut prices, mut shadow_prices, flow_map) = run_dispatch_for_year(
         model,
         &asset_pool,
         &candidates,
@@ -93,12 +100,14 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             // Perform agent investment
             info!("Running agent investment...");
             // NB: activities from asset selection are not currently used
+            let mut flow_estimator = PartialDispatch::new(model, year, &shadow_prices);
             let selected_assets = run_agents_for_year(
                 model,
                 year,
                 &existing_assets,
                 AgentRunMode::Invest,
                 &prices,
+                &mut flow_estimator,
                 &mut writer,
             )
             .context("Agent investment failed")?
@@ -106,7 +115,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
-            let (new_prices, ..) = run_dispatch_for_year(
+            let (new_prices, new_shadow_prices, ..) = run_dispatch_for_year(
                 model,
                 &selected_assets,
                 &candidates,
@@ -124,6 +133,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Update prices for the next iteration
             prices = new_prices;
+            shadow_prices = new_shadow_prices;
 
             // Clear writer context
             writer.clear_debug_context();
@@ -167,7 +177,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Run dispatch optimisation
         info!("Running final dispatch optimisation for year {year}...");
-        let (new_prices, flow_map) =
+        let (new_prices, new_shadow_prices, flow_map) =
             run_dispatch_for_year(model, &asset_pool, &candidates, &prices, year, &mut writer)?;
 
         // Write results of dispatch optimisation to file
@@ -176,6 +186,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
         // Prices for the next year
         prices = new_prices;
+        shadow_prices = new_shadow_prices;
     }
 
     writer.flush()?;
@@ -189,6 +200,9 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 /// from a run with both existing and candidate assets. If either flows or prices cannot be
 /// calculated, empty maps are returned.
 ///
+/// Returns the prices, the shadow prices from the run with candidates, and the flows of the
+/// existing assets.
+///
 /// `previous_prices` (from the previous year or ironing-out iteration) are used to seed price
 /// calculations for cyclic markets.
 ///
@@ -201,7 +215,7 @@ fn run_dispatch_for_year(
     previous_prices: &Prices,
     year: u32,
     writer: &mut DataWriter,
-) -> Result<(Prices, FlowMap)> {
+) -> Result<(Prices, PriceMap, FlowMap)> {
     // Sanity checks
     debug_assert!(assets.iter().all(|asset| !asset.is_candidate()));
     debug_assert!(candidates.iter().all(|asset| asset.is_candidate()));
@@ -234,11 +248,11 @@ fn run_dispatch_for_year(
     // Calculate prices from the appropriate solution(s). If there were candidates, use the solution
     // that includes them; otherwise use the existing solution alone. If there were no assets at
     // all, return empty prices.
-    let prices = match (
+    let (prices, shadow_prices) = match (
         solution_existing.as_ref(),
         solution_with_candidates.as_ref(),
     ) {
-        (None, None) => Prices::default(),
+        (None, None) => (Prices::default(), PriceMap::default()),
         (Some(existing), None) => calculate_prices_from_solutions(
             model,
             existing,
@@ -265,7 +279,87 @@ fn run_dispatch_for_year(
         )?,
     };
 
-    Ok((prices, flow_map))
+    Ok((prices, shadow_prices, flow_map))
+}
+
+/// Estimates the flows of assets selected by agents using partial dispatch runs.
+///
+/// Each run dispatches only the assets selected so far and balances only the markets which agents
+/// have already settled.
+struct PartialDispatch<'a> {
+    /// The model
+    model: &'a Model,
+    /// The milestone year
+    year: u32,
+    /// Preset demands for the year
+    preset_demands: AllDemandMap,
+    /// Shadow prices used for markets without a balance constraint
+    shadow_prices: &'a PriceMap,
+}
+
+impl<'a> PartialDispatch<'a> {
+    fn new(model: &'a Model, year: u32, shadow_prices: &'a PriceMap) -> Self {
+        Self {
+            model,
+            year,
+            preset_demands: collect_preset_demands_for_year(&model.commodities, year),
+            shadow_prices,
+        }
+    }
+}
+
+impl FlowEstimator for PartialDispatch<'_> {
+    fn flows_after_market_set(
+        &mut self,
+        market_set: &MarketSet,
+        settled_markets: &[(CommodityID, RegionID)],
+        all_selected: &Selection,
+        _new_selection: &Selection,
+        writer: &mut DataWriter,
+    ) -> Result<FlowMap> {
+        debug!("Running post-investment dispatch for '{market_set}'");
+
+        // As upstream markets by definition will not yet have producers, we explicitly set
+        // their prices using external values so that they don't appear free
+        let solution = DispatchRun::new(
+            self.model,
+            &all_selected.assets,
+            self.year,
+            &self.preset_demands,
+        )
+        .without_commodity_constraints()
+        .with_market_balance_subset(settled_markets)
+        .with_input_prices(self.shadow_prices)
+        .run(&format!("post {market_set} investment"), writer)?;
+
+        Ok(solution.create_flow_map())
+    }
+
+    fn flows_after_cycle_market(
+        &mut self,
+        cycle: &[(CommodityID, RegionID)],
+        market: &(CommodityID, RegionID),
+        pass: u32,
+        net_demand: &AllDemandMap,
+        selection: &Selection,
+        writer: &mut DataWriter,
+    ) -> Result<FlowMap> {
+        let markets_str = cycle.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
+        let (commodity_id, region_id) = market;
+        let description =
+            format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass {pass}");
+
+        debug!("Running {description}");
+        let solution = DispatchRun::new(self.model, &selection.assets, self.year, net_demand)
+            .without_commodity_constraints()
+            .with_market_balance_subset(slice::from_ref(market))
+            .with_input_prices(self.shadow_prices)
+            .run(&description, writer)
+            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
+        debug!("Completed {description}");
+
+        Ok(solution.create_flow_map())
+    }
 }
 
 /// Create candidate assets for all potential processes in a specified year
