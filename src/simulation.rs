@@ -5,6 +5,8 @@ use crate::output::DataWriter;
 use crate::process::ProcessMap;
 use crate::units::Capacity;
 use anyhow::Result;
+use log::info;
+use serde::Deserialize;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -15,6 +17,17 @@ pub mod prices;
 pub use prices::PriceMap;
 pub mod system_dispatch;
 
+/// The protocol used to simulate each milestone year, selected with `simulation_protocol` in
+/// `model.toml`
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, strum::Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SimulationProtocol {
+    /// Agents choose capacity; flows and prices come from a system-wide cost-minimising dispatch
+    #[default]
+    SystemDispatch,
+}
+
 /// Run the simulation.
 ///
 /// # Arguments:
@@ -24,7 +37,11 @@ pub mod system_dispatch;
 /// * `debug_model` - Whether to write additional information (e.g. duals) to output files
 pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;
-    system_dispatch::run(model, &mut writer)?;
+    let protocol = model.parameters.simulation_protocol;
+    info!("Simulation protocol: {protocol}");
+    match protocol {
+        SimulationProtocol::SystemDispatch => system_dispatch::run(model, &mut writer)?,
+    }
     writer.flush()
 }
 

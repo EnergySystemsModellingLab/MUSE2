@@ -8,6 +8,7 @@ use crate::input::{
     deserialise_finite_non_negative, deserialise_proportion_nonzero, input_err_msg,
     is_sorted_and_unique, read_toml,
 };
+use crate::simulation::SimulationProtocol;
 use crate::units::{Capacity, Dimensionless, Flow, MoneyPerCapacityPerYear, MoneyPerFlow};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
@@ -78,11 +79,15 @@ pub struct ModelParameters {
     /// Allow potentially dangerous options to be enabled.
     #[serde(rename = "please_give_me_broken_results")] // Can't use constant here :-(
     pub allow_dangerous_options: bool,
+    /// The protocol used to simulate each milestone year.
+    pub simulation_protocol: SimulationProtocol,
     /// The (small) value of capacity given to candidate assets.
     ///
     /// Don't change unless you know what you're doing.
     pub candidate_asset_capacity: Capacity,
     /// The epsilon added to commodity balance lower bounds to force candidate dispatch.
+    ///
+    /// Only used by the `system_dispatch` simulation protocol.
     ///
     /// Don't change unless you know what you're doing.
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
@@ -101,7 +106,8 @@ pub struct ModelParameters {
     pub fallback_pricing_strategy: PricingStrategy,
     /// The cost applied to unmet demand.
     ///
-    /// Currently this only applies to the LCOX appraisal.
+    /// Currently this only applies to the LCOX appraisal. Only used by the `system_dispatch`
+    /// simulation protocol.
     pub value_of_lost_load: MoneyPerFlow,
     /// Additive penalty per unit of capacity used within a season.
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
@@ -123,7 +129,8 @@ pub struct ModelParameters {
     pub remaining_demand_absolute_tolerance: Flow,
     /// Options for the HiGHS solver.
     ///
-    /// For a full list of options, see [the HiGHS documentation].
+    /// For a full list of options, see [the HiGHS documentation]. The `dispatch_options` are only
+    /// used by the `system_dispatch` simulation protocol.
     ///
     /// [the HiGHS documentation]: https://ergo-code.github.io/HiGHS/stable/options/definitions/
     pub highs: HighsOptions,
@@ -139,6 +146,7 @@ impl Default for ModelParameters {
             // Default values for optional parameters
             currency: None,
             allow_dangerous_options: false,
+            simulation_protocol: SimulationProtocol::default(),
             candidate_asset_capacity: Capacity(1e-4),
             commodity_balance_epsilon: Flow(1e-6),
             capacity_tranche_fraction: Dimensionless(0.05),
@@ -459,6 +467,26 @@ mod tests {
             toml::from_str("milestone_years = [2020, 2100]\nprice_cycle_iterations = 3").unwrap();
 
         assert_eq!(model_params.price_cycle_iterations, 3);
+    }
+
+    #[rstest]
+    #[case("", Some(SimulationProtocol::SystemDispatch))]
+    #[case(
+        "simulation_protocol = \"system_dispatch\"",
+        Some(SimulationProtocol::SystemDispatch)
+    )]
+    #[case("simulation_protocol = \"unknown_protocol\"", None)]
+    fn model_params_simulation_protocol(
+        #[case] setting: &str,
+        #[case] expected: Option<SimulationProtocol>,
+    ) {
+        let result: Result<ModelParameters, _> =
+            toml::from_str(&format!("milestone_years = [2020, 2100]\n{setting}"));
+
+        assert_eq!(
+            result.ok().map(|params| params.simulation_protocol),
+            expected
+        );
     }
 
     #[test]
