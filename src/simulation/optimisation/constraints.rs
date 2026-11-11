@@ -3,6 +3,7 @@ use super::VariableMap;
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
+use crate::optimisation::group_dispatch_equivalent_assets;
 use crate::process::FlowDirection;
 use crate::region::RegionID;
 use crate::simulation::investment::AllDemandMap;
@@ -10,7 +11,6 @@ use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;
 use indexmap::IndexMap;
-use std::collections::HashMap;
 
 /// Corresponding variables for a constraint along with the row offset in the solution
 pub struct KeysWithOffset<T> {
@@ -503,47 +503,6 @@ where
     ActivityKeys { offset, keys }
 }
 
-/// Groups assets that have equivalent dispatch properties.
-///
-/// Assets are first bucketed by `dispatch_equivalence_hash()` to avoid unnecessary pairwise
-/// comparisons. Within each hash bucket, assets are compared using `is_dispatch_equivalent()`,
-/// which is the authoritative check for equivalence. This also handles hash collisions correctly.
-///
-/// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
-/// constraints.
-pub fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
-where
-    I: Iterator<Item = &'a AssetRef>,
-{
-    // Group assets by comparing each one with the first asset in each group. The hash index
-    // avoids comparing an asset with groups that cannot contain an equivalent asset, while the
-    // exact comparison preserves correctness in the event of hash collisions.
-    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
-    let mut group_indices: HashMap<u64, Vec<usize>> = HashMap::new();
-    for asset in assets {
-        let hash = asset.dispatch_equivalence_hash();
-
-        // Only groups with the same hash can possibly match.
-        let candidate_groups = group_indices.get(&hash);
-
-        // Find a group whose representative is actually equivalent.
-        let matching_group = candidate_groups
-            .into_iter()
-            .flatten()
-            .find(|&&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset));
-
-        if let Some(group_index) = matching_group {
-            asset_groups[*group_index].push(asset);
-        } else {
-            let group_index = asset_groups.len();
-            asset_groups.push(vec![asset]);
-            group_indices.entry(hash).or_default().push(group_index);
-        }
-    }
-
-    asset_groups
-}
-
 /// Add constraints requiring dispatch-equivalent assets to have equal utilisation in each time
 /// slice.
 ///
@@ -592,13 +551,12 @@ fn add_equal_utilisation_constraints<'a, I>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::{Asset, AssetCapacity};
     use crate::commodity::Commodity;
     use crate::fixture::{asset, process, process_flows_map, svd_commodity};
     use crate::process::Process;
     use crate::process::{FlowType, ProcessFlow};
     use crate::time_slice::TimeSliceSelection;
-    use crate::units::{Capacity, FlowPerActivity, MoneyPerActivity, MoneyPerFlow};
+    use crate::units::{FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
     use std::sync::Arc;
@@ -637,46 +595,5 @@ mod tests {
             Flow(epsilon),
         );
         assert_eq!(result, Flow(expected));
-    }
-
-    #[test]
-    fn groups_no_assets() {
-        assert_eq!(
-            group_dispatch_equivalent_assets(std::iter::empty()),
-            [] as [std::vec::Vec<&AssetRef>; 0]
-        );
-    }
-
-    #[rstest]
-    fn groups_equivalent_assets(asset: Asset) {
-        let mut equivalent = asset.clone();
-        equivalent.set_capacity(AssetCapacity::single(Capacity(3.0)));
-        let assets = [AssetRef::from(asset), AssetRef::from(equivalent)];
-
-        let groups = group_dispatch_equivalent_assets(assets.iter());
-
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].len(), 2);
-    }
-
-    #[rstest]
-    fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
-        Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
-            .variable_operating_cost = MoneyPerActivity(1.0);
-        let different = Asset::new_ready(
-            "agent1".into(),
-            Arc::new(process),
-            "GBR".into(),
-            AssetCapacity::single(Capacity(2.0)),
-            2015,
-        )
-        .unwrap();
-        let assets = [AssetRef::from(asset), AssetRef::from(different)];
-
-        let groups = group_dispatch_equivalent_assets(assets.iter());
-
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].len(), 1);
-        assert_eq!(groups[1].len(), 1);
     }
 }

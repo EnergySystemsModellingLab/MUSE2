@@ -32,6 +32,7 @@ pub mod id;
 pub mod input;
 pub mod log;
 pub mod model;
+mod optimisation;
 pub mod output;
 pub mod patch;
 pub mod process;
