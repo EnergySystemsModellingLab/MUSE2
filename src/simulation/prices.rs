@@ -52,7 +52,7 @@ impl<W: UnitType> WeightedAverageAccumulator<W> {
     }
 }
 
-/// Sets of prices calculated from dispatch results
+/// Sets of prices calculated from agent activities
 #[derive(Default)]
 pub struct Prices {
     /// Commodity market prices calculated according to user-specified strategies

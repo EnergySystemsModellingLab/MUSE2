@@ -3,8 +3,8 @@ use super::optimisation::Variable;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::optimisation::group_dispatch_equivalent_assets;
 use crate::simulation::investment::DemandMap;
-use crate::simulation::optimisation::group_dispatch_equivalent_assets;
 use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{MoneyPerCapacityPerYear, Year};
 use highs::RowProblem as Problem;
@@ -79,9 +79,7 @@ pub fn add_demand_constraints(
 
 /// Add seasonal and annual utilisation peak constraints to the problem.
 ///
-/// This is almost identical to equivalent constraints in the full-system dispatch, but here we
-/// make the penalties negative as this is a maximise optimisation (whereas dispatch is a minimise
-/// optimisation).
+/// Penalties have negative coefficients because the competitive optimisation maximises.
 pub fn add_utilisation_peak_constraints(
     problem: &mut Problem,
     model: &Model,

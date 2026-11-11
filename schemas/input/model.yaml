@@ -20,7 +20,7 @@ properties:
       inflation. Monetary inputs should use a consistent currency and reference year.
   candidate_asset_capacity:
     type: number
-    description: Capacity to give to candidate assets in dispatch optimisation
+    description: Capacity to give to candidate assets when calculating fallback prices
     default: 0.0001
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
@@ -53,12 +53,6 @@ properties:
 
       Setting this to `unpriced` uses a fallback price of zero, reverting to the pure
       shadow-price formulation.
-  value_of_lost_load:
-    type: number
-    description: The cost applied to unmet demand
-    default: 1e9
-    notes: |
-      Currently this only applies to the LCOX appraisal.
   seasonal_utilisation_penalty:
     type: number
     description: Penalty per unit of capacity used within a season
@@ -116,10 +110,6 @@ properties:
       global_options:
         type: object
         description: HiGHS options applied to all optimisations
-        properties: {}
-      dispatch_options:
-        type: object
-        description: HiGHS options applied only to dispatch optimisations
         properties: {}
       appraisal_options:
         type: object

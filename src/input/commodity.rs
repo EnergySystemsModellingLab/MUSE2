@@ -1,8 +1,8 @@
 //! Code for reading commodity-related data from CSV files.
 use super::{input_err_msg, read_csv};
 use crate::commodity::{
-    BalanceType, Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityMap,
-    CommodityType, DemandMap, PricingStrategy,
+    BalanceType, Commodity, CommodityID, CommodityLevyMap, CommodityMap, CommodityType, DemandMap,
+    PricingStrategy,
 };
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel};
@@ -13,8 +13,6 @@ use std::path::Path;
 
 mod levy;
 use levy::read_commodity_levies;
-mod constraints;
-use constraints::read_commodity_constraints;
 mod demand;
 use demand::read_demand;
 mod demand_slicing;
@@ -54,15 +52,6 @@ pub fn read_commodities(
     let commodities = read_commodities_file(model_dir)?;
     let commodity_ids = commodities.keys().cloned().collect();
 
-    // Read constraints table
-    let mut commodity_constraints = read_commodity_constraints(
-        model_dir,
-        &commodities,
-        region_ids,
-        time_slice_info,
-        milestone_years,
-    )?;
-
     // Read costs table
     let mut costs = read_commodity_levies(
         model_dir,
@@ -96,10 +85,6 @@ pub fn read_commodities(
             if let Some(demand) = demand.remove(&id) {
                 commodity.demand = demand;
             }
-            if let Some(commodity_constraints) = commodity_constraints.remove(&id) {
-                commodity.constraints = commodity_constraints;
-            }
-
             (id, commodity.into())
         })
         .collect())
@@ -131,7 +116,6 @@ where
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
-            constraints: CommodityConstraintsMap::default(),
             units: commodity_raw.units,
         };
 
@@ -204,7 +188,6 @@ mod tests {
             levies_prod: CommodityLevyMap::default(),
             levies_cons: CommodityLevyMap::default(),
             demand: DemandMap::default(),
-            constraints: CommodityConstraintsMap::default(),
             units: "PJ".into(),
         }
     }

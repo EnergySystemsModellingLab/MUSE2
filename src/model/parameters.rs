@@ -8,7 +8,7 @@ use crate::input::{
     deserialise_finite_non_negative, deserialise_proportion_nonzero, input_err_msg,
     is_sorted_and_unique, read_toml,
 };
-use crate::units::{Capacity, Dimensionless, Flow, MoneyPerCapacityPerYear, MoneyPerFlow};
+use crate::units::{Capacity, Dimensionless, Flow, MoneyPerCapacityPerYear};
 use anyhow::{Context, Result, ensure};
 use itertools::Itertools;
 use log::warn;
@@ -94,10 +94,6 @@ pub struct ModelParameters {
     /// If set to `unpriced`, a fallback price of zero is used, which reverts to the
     /// pure shadow-price formulation.
     pub fallback_pricing_strategy: PricingStrategy,
-    /// The cost applied to unmet demand.
-    ///
-    /// Currently this only applies to the LCOX appraisal.
-    pub value_of_lost_load: MoneyPerFlow,
     /// Additive penalty per unit of capacity used within a season.
     #[serde(deserialize_with = "deserialise_finite_non_negative")]
     pub seasonal_utilisation_penalty: MoneyPerCapacityPerYear,
@@ -137,7 +133,6 @@ impl Default for ModelParameters {
             candidate_asset_capacity: Capacity(1e-4),
             capacity_tranche_fraction: Dimensionless(0.05),
             fallback_pricing_strategy: PricingStrategy::FullCostAverage,
-            value_of_lost_load: MoneyPerFlow(1e9),
             seasonal_utilisation_penalty: MoneyPerCapacityPerYear(1e-6),
             annual_utilisation_penalty: MoneyPerCapacityPerYear(1e-5),
             max_ironing_out_iterations: 1,
@@ -153,8 +148,6 @@ impl Default for ModelParameters {
 /// Defines the TOML table holding the sub-tables to define HiGHS options
 #[derive(Default)]
 pub struct HighsOptions {
-    /// HiGHS options applied to dispatch optimisation
-    pub dispatch_options: Table,
     /// HiGHS options applied to appraisal optimisation
     pub appraisal_options: Table,
 }
@@ -169,30 +162,19 @@ impl<'de> Deserialize<'de> for HighsOptions {
         #[allow(clippy::struct_field_names)]
         struct RawHighsOptions {
             global_options: Table,
-            dispatch_options: Table,
             appraisal_options: Table,
         }
 
         let RawHighsOptions {
             global_options,
-            mut dispatch_options,
             mut appraisal_options,
         } = RawHighsOptions::deserialize(deserializer)?;
 
-        let append_global_options = |options: &mut Table| {
-            for (option, value) in &global_options {
-                options
-                    .entry(option.clone())
-                    .or_insert_with(|| value.clone());
-            }
-        };
-        append_global_options(&mut dispatch_options);
-        append_global_options(&mut appraisal_options);
+        for (option, value) in global_options {
+            appraisal_options.entry(option).or_insert(value);
+        }
 
-        Ok(Self {
-            dispatch_options,
-            appraisal_options,
-        })
+        Ok(Self { appraisal_options })
     }
 }
 
@@ -211,13 +193,12 @@ impl HighsOptions {
             warn!("Using custom HiGHS options for {name}:\n  - {options_str}");
         }
 
-        log_highs_options("dispatch", &self.dispatch_options);
         log_highs_options("appraisal", &self.appraisal_options);
     }
 
     /// Check whether any options have been set
     pub fn is_empty(&self) -> bool {
-        self.dispatch_options.is_empty() && self.appraisal_options.is_empty()
+        self.appraisal_options.is_empty()
     }
 }
 
@@ -231,16 +212,6 @@ fn check_milestone_years(years: &[u32]) -> Result<()> {
     ensure!(
         is_sorted_and_unique(years),
         "`milestone_years` must be composed of unique values in order"
-    );
-
-    Ok(())
-}
-
-/// Check that the `value_of_lost_load` parameter is valid
-fn check_value_of_lost_load(value: MoneyPerFlow) -> Result<()> {
-    ensure!(
-        value.is_finite() && value > MoneyPerFlow(0.0),
-        "value_of_lost_load must be a finite number greater than zero"
     );
 
     Ok(())
@@ -341,9 +312,6 @@ impl ModelParameters {
                 && self.candidate_asset_capacity > Capacity(0.0),
             "candidate_asset_capacity must be a finite, positive number"
         );
-
-        // value_of_lost_load
-        check_value_of_lost_load(self.value_of_lost_load)?;
 
         // max_ironing_out_iterations
         check_max_ironing_out_iterations(self.max_ironing_out_iterations)?;
@@ -478,23 +446,19 @@ mod tests {
             [highs.global_options]
             output_flag = true
 
-            [highs.dispatch_options]
+            [highs.appraisal_options]
             log_to_console = false
             ",
         )
         .unwrap();
 
         assert_eq!(
-            model_params.highs.dispatch_options["output_flag"],
-            toml::Value::Boolean(true)
-        );
-        assert_eq!(
-            model_params.highs.dispatch_options["log_to_console"],
-            toml::Value::Boolean(false)
-        );
-        assert_eq!(
             model_params.highs.appraisal_options["output_flag"],
             toml::Value::Boolean(true)
+        );
+        assert_eq!(
+            model_params.highs.appraisal_options["log_to_console"],
+            toml::Value::Boolean(false)
         );
     }
 
@@ -506,23 +470,12 @@ mod tests {
             output_flag = true
             log_to_console = true
 
-            [dispatch_options]
-            primal_feasibility_tolerance = 1e-5
-
             [appraisal_options]
             optimality_tolerance = 1e-5
             ",
         )
         .unwrap();
 
-        assert_eq!(
-            highs.dispatch_options["output_flag"],
-            toml::Value::Boolean(true)
-        );
-        assert_eq!(
-            highs.dispatch_options["log_to_console"],
-            toml::Value::Boolean(true)
-        );
         assert_eq!(
             highs.appraisal_options["output_flag"],
             toml::Value::Boolean(true)
@@ -541,9 +494,6 @@ mod tests {
             output_flag = true
             log_to_console = true
 
-            [dispatch_options]
-            output_flag = false
-
             [appraisal_options]
             log_to_console = false
             ",
@@ -551,43 +501,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            highs.dispatch_options["output_flag"],
-            toml::Value::Boolean(false)
-        );
-        assert_eq!(
-            highs.dispatch_options["log_to_console"],
-            toml::Value::Boolean(true)
-        );
-        assert_eq!(
             highs.appraisal_options["output_flag"],
             toml::Value::Boolean(true)
         );
         assert_eq!(
             highs.appraisal_options["log_to_console"],
             toml::Value::Boolean(false)
-        );
-    }
-
-    #[rstest]
-    #[case(1.0, true)] // Valid positive value
-    #[case(1e-10, true)] // Valid very small positive value
-    #[case(1e9, true)] // Valid large value (default)
-    #[case(f64::MAX, true)] // Valid maximum finite value
-    #[case(0.0, false)] // Invalid: exactly zero
-    #[case(-1.0, false)] // Invalid: negative value
-    #[case(-1e-10, false)] // Invalid: very small negative value
-    #[case(f64::INFINITY, false)] // Invalid: infinite value
-    #[case(f64::NEG_INFINITY, false)] // Invalid: negative infinite value
-    #[case(f64::NAN, false)] // Invalid: NaN value
-    fn check_value_of_lost_load_works(#[case] value: f64, #[case] expected_valid: bool) {
-        let money_per_flow = MoneyPerFlow::new(value);
-        let result = check_value_of_lost_load(money_per_flow);
-
-        assert_validation_result(
-            result,
-            expected_valid,
-            value,
-            "value_of_lost_load must be a finite number greater than zero",
         );
     }
 

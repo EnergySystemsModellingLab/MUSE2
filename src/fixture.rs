@@ -6,8 +6,7 @@ use crate::agent::{
 };
 use crate::asset::{Asset, AssetCapacity, AssetPool};
 use crate::commodity::{
-    Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityType, DemandMap,
-    PricingStrategy,
+    Commodity, CommodityID, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
 };
 use crate::patch::{FilePatch, ModelPatch};
 use crate::process::{
@@ -154,7 +153,6 @@ pub fn svd_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
-        constraints: CommodityConstraintsMap::new(),
         units: "PJ".into(),
     }
 }
@@ -170,7 +168,6 @@ pub fn sed_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
-        constraints: CommodityConstraintsMap::new(),
         units: "PJ".into(),
     }
 }
@@ -186,7 +183,6 @@ pub fn other_commodity() -> Commodity {
         levies_prod: CommodityLevyMap::new(),
         levies_cons: CommodityLevyMap::new(),
         demand: DemandMap::new(),
-        constraints: CommodityConstraintsMap::new(),
         units: "PJ".into(),
     }
 }

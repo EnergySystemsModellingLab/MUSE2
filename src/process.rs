@@ -576,9 +576,7 @@ impl ProcessInvestmentConstraint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commodity::{
-        CommodityConstraintsMap, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
-    };
+    use crate::commodity::{CommodityLevyMap, CommodityType, DemandMap, PricingStrategy};
     use crate::fixture::{assert_error, process, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
     use crate::time_slice::TimeSliceSelection;
@@ -646,7 +644,6 @@ mod tests {
             levies_prod,
             levies_cons,
             demand: DemandMap::new(),
-            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         })
     }
@@ -668,7 +665,6 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: levies,
             demand: DemandMap::new(),
-            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         })
     }
@@ -690,7 +686,6 @@ mod tests {
             levies_prod: levies,
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
-            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         })
     }
@@ -714,7 +709,6 @@ mod tests {
             levies_prod,
             levies_cons,
             demand: DemandMap::new(),
-            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         })
     }
@@ -730,7 +724,6 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
-            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         })
     }
@@ -747,7 +740,6 @@ mod tests {
                 levies_prod: CommodityLevyMap::new(),
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
-                constraints: CommodityConstraintsMap::new(),
                 units: "PJ".into(),
             }),
             coeff: FlowPerActivity(1.0),
@@ -771,7 +763,6 @@ mod tests {
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
-                constraints: CommodityConstraintsMap::new(),
                 units: "PJ".into(),
             }),
             coeff: FlowPerActivity(1.0),
@@ -795,7 +786,6 @@ mod tests {
                 levies_prod: levies,
                 levies_cons: CommodityLevyMap::new(),
                 demand: DemandMap::new(),
-                constraints: CommodityConstraintsMap::new(),
                 units: "PJ".into(),
             }),
             coeff: FlowPerActivity(1.0),
@@ -1064,7 +1054,6 @@ mod tests {
             levies_prod: CommodityLevyMap::new(),
             levies_cons: CommodityLevyMap::new(),
             demand: DemandMap::new(),
-            constraints: CommodityConstraintsMap::new(),
             units: "PJ".into(),
         });
 

@@ -8,9 +8,6 @@ use std::time::Instant;
 // Global variable to store the total time spent in investment step
 static INVESTMENT_TIME: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(0.0));
 
-// Global variable to store the total time spent in dispatch steps
-static DISPATCH_TIME: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(0.0));
-
 /// Trait providing the context of actions to be carried by the timer
 pub trait TimeContext {
     /// Adds the label to be used in the logs
@@ -75,25 +72,5 @@ impl TimeContext for InvestmentContext {
     }
 }
 
-/// Dispatch context, using a fixed label in logs and accumulating
-/// the time in the `DISPATCH_TIME` variable
-pub struct DispatchContext;
-impl TimeContext for DispatchContext {
-    fn label(_: &CallerContext) -> String {
-        "Dispatch step".to_string()
-    }
-    fn accumulate(milliseconds: &f64) {
-        let mut dispatch_time = DISPATCH_TIME.lock().unwrap();
-        *dispatch_time += *milliseconds;
-    }
-    fn total_time() -> f64 {
-        let dispatch_time = DISPATCH_TIME.lock().unwrap();
-        *dispatch_time
-    }
-}
-
 /// Investment context for timing a function call
 pub type InvestmentTimer = GenericTimer<InvestmentContext>;
-
-/// Dispatch context for timing a function call
-pub type DispatchTimer = GenericTimer<DispatchContext>;

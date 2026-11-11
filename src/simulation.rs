@@ -12,7 +12,6 @@ use std::sync::Arc;
 
 pub mod activity;
 pub mod investment;
-pub mod optimisation;
 use investment::{AgentRunMode, run_agents_for_year};
 pub mod market;
 pub mod prices;
@@ -24,7 +23,7 @@ pub use prices::PriceMap;
 ///
 /// * `model` - The model to run
 /// * `output_path` - The folder to which output files will be written
-/// * `debug_model` - Whether to write additional information (e.g. duals) to output files
+/// * `debug_model` - Whether to write additional agent optimisation information to output files
 #[allow(clippy::too_many_lines)]
 pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     let mut writer = DataWriter::create(output_path, &model.model_path, debug_model)?;

@@ -3,20 +3,23 @@
 //! market during agent investment.
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use muse2::asset::{AssetIterator, AssetPool, AssetRef};
+use muse2::commodity::CommodityID;
 use muse2::example::Example;
 use muse2::input::load_model;
 use muse2::model::Model;
 use muse2::output::DataWriter;
 use muse2::process::{Process, ProcessID};
-use muse2::simulation::candidate_assets_for_next_year;
+use muse2::region::RegionID;
 use muse2::simulation::investment::collect_preset_demands_for_year;
 use muse2::simulation::investment::competitive::{get_candidate_assets, select_best_assets};
 use muse2::simulation::market::{
     collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
 };
-use muse2::simulation::optimisation::DispatchRun;
-use muse2::simulation::prices::{Prices, calculate_prices};
+use muse2::simulation::prices::{PriceMap, Prices};
+use muse2::time_slice::TimeSliceID;
+use muse2::units::MoneyPerFlow;
 use rayon::ThreadPoolBuilder;
+use serde::Deserialize;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::time::Duration;
@@ -58,57 +61,55 @@ fn load_bench_model() -> (Model, DataWriter, TempDir, TempDir) {
     (model, writer, example_dir, output_dir)
 }
 
-/// Commission base-year assets, age them up to `YEAR`, and build the candidate assets available
-/// for investment in `YEAR`, mirroring the start of `simulation::run`.
-fn build_assets_for_investment_year(
-    model: &Model,
-) -> (Vec<AssetRef>, Vec<AssetRef>, Vec<AssetRef>) {
+/// Commission base-year assets and age them up to `YEAR`, mirroring the start of `simulation::run`.
+fn build_assets_for_investment_year(model: &Model) -> Vec<AssetRef> {
     let mut user_assets = model.user_assets.clone();
     let mut asset_pool = AssetPool::new();
     asset_pool.commission_new(BASE_YEAR, &mut user_assets);
 
-    // Keep a copy of the assets commissioned for the base year, which are used to seed prices for
-    // the investment year (mirroring the first iteration of `simulation::run`, in which the base
-    // year is dispatched before any investment has taken place)
-    let base_year_assets: Vec<AssetRef> = asset_pool.to_vec();
-
     // Age the asset pool up to the investment year, dropping any assets that have been
     // decommissioned by then
     asset_pool.decommission_old(YEAR);
-    let existing_assets = asset_pool.take();
-
-    // Candidate assets for the investment year
-    let candidates = candidate_assets_for_next_year(
-        &model.processes,
-        Some(YEAR),
-        model.parameters.candidate_asset_capacity,
-    );
-
-    (base_year_assets, existing_assets, candidates)
+    asset_pool.take()
 }
 
-/// Dispatch the base year to obtain realistic
-/// seed prices for investment appraisal, as per `simulation::run_dispatch_for_year` (this is the
-/// dispatch performed before any agent investment has taken place).
-fn calculate_seed_prices(
-    model: &Model,
-    base_year_assets: &[AssetRef],
-    candidates: &[AssetRef],
-    writer: &mut DataWriter,
-) -> Prices {
-    let market_demands = collect_preset_demands_for_year(&model.commodities, BASE_YEAR);
-    let solution = DispatchRun::new(model, base_year_assets, BASE_YEAR, &market_demands)
-        .run("bench setup", writer)
-        .expect("Dispatch failed");
+/// Load recorded base-year prices so benchmark setup does not require a simulation.
+///
+/// The example uses the same full-cost-average strategy for market and fallback prices.
+fn load_seed_prices() -> Prices {
+    #[derive(Deserialize)]
+    struct PriceRow {
+        milestone_year: u32,
+        commodity_id: CommodityID,
+        region_id: RegionID,
+        time_slice: TimeSliceID,
+        price: MoneyPerFlow,
+    }
 
-    calculate_prices(
-        model,
-        &solution.activity_map(),
-        candidates,
-        &Prices::default(),
-        BASE_YEAR,
-    )
-    .expect("Failed to calculate prices")
+    let mut reader = csv::Reader::from_reader(
+        include_bytes!("../tests/data/two_outputs/commodity_prices.csv").as_slice(),
+    );
+    let mut market = PriceMap::default();
+    for row in reader.deserialize::<PriceRow>() {
+        let row = row.expect("Failed to read benchmark seed prices");
+        if row.milestone_year == BASE_YEAR {
+            market.insert(
+                &row.commodity_id,
+                &row.region_id,
+                &row.time_slice,
+                row.price,
+            );
+        }
+    }
+    assert!(
+        market.iter().next().is_some(),
+        "Benchmark seed prices must include the base year"
+    );
+
+    Prices {
+        fallback: market.clone(),
+        market,
+    }
 }
 
 /// Build `n` synthetic candidate processes, based on cycling through `templates`, so that we can
@@ -138,8 +139,8 @@ fn build_synthetic_processes(templates: &[Arc<Process>], n: usize) -> Vec<Arc<Pr
 #[allow(clippy::too_many_lines)]
 fn criterion_benchmark(c: &mut Criterion) {
     let (model, mut writer, _example_dir, _output_dir) = load_bench_model();
-    let (base_year_assets, existing_assets, candidates) = build_assets_for_investment_year(&model);
-    let prices = calculate_seed_prices(&model, &base_year_assets, &candidates, &mut writer);
+    let existing_assets = build_assets_for_investment_year(&model);
+    let prices = load_seed_prices();
 
     // The market of interest: agent, commodity and region for which assets will be selected
     let commodity = &model.commodities[COMMODITY_ID];

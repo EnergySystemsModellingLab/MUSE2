@@ -42,7 +42,7 @@ use optimisation::perform_optimisation;
 /// * `options` - Committed assets, existing assets and processes available to the agent
 /// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
 /// * `agent_total_limits` - The agent's share of total capacity limits for processes
-/// * `prices` - Commodity prices from the previous full system dispatch
+/// * `prices` - Commodity prices calculated from the previous agent activities
 /// * `year` - Current milestone year
 /// * `writer` - Data writer
 ///

@@ -8,12 +8,11 @@ use super::record_asset_selection;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
+use crate::optimisation::{
+    ModelError, apply_highs_options_from_toml, group_dispatch_equivalent_assets, solve_optimal,
+};
 use crate::simulation::activity::ActivityMap;
 use crate::simulation::investment::DemandMap;
-use crate::simulation::optimisation::ModelError;
-use crate::simulation::optimisation::apply_highs_options_from_toml;
-use crate::simulation::optimisation::group_dispatch_equivalent_assets;
-use crate::simulation::optimisation::solve_optimal;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Flow};
 use anyhow::{Context, Result};

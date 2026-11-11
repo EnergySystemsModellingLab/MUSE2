@@ -56,7 +56,7 @@ pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Fl
 /// * `year` - Milestone year being processed
 /// * `assets` - The asset pool (commissioned and otherwise)
 /// * `mode` - Whether agents dispatch committed assets or make investment decisions
-/// * `prices` - Commodity prices calculated in the previous full system dispatch
+/// * `prices` - Commodity prices calculated from the previous agent activities
 /// * `writer` - Data writer
 ///
 /// # Returns
