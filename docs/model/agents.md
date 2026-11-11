@@ -272,11 +272,7 @@ with the updated set of selected assets. This continues until:
 
 - The remaining demand falls below `remaining_demand_absolute_tolerance`
   (in [`model.toml`][model-toml]), or
-- No feasible options remain. In this case, a warning is logged and the loop ends early. The
-  unmet demand may still be satisfied during the full system dispatch, but is not guaranteed.
-
-If demand cannot be met at all due to overly restrictive investment constraints, the simulation
-terminates with an error.
+- No feasible options remain. In this case, the simulation terminates with an error.
 
 ### Example: Gas Power Plant
 

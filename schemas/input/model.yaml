@@ -24,11 +24,14 @@ properties:
     default: system_dispatch
     enum:
       - system_dispatch
+      - agent_dispatch
     notes: |
       A simulation protocol defines how agents' investment decisions are combined with dispatch of
-      the energy system to produce commodity flows and prices for each milestone year. Currently the
-      only option is `system_dispatch`, in which agents choose capacity and flows and prices come
-      from a system-wide, cost-minimising dispatch optimisation. See
+      the energy system to produce commodity flows and prices for each milestone year. With
+      `system_dispatch`, agents choose capacity and flows and prices come from a system-wide,
+      cost-minimising dispatch optimisation. With `agent_dispatch`, flows and prices are calculated
+      directly from the activities determined by agents' own optimisations, and no system-wide
+      dispatch is run. See
       [the model documentation](../model/index.html#simulation-protocols) for details.
   candidate_asset_capacity:
     type: number
