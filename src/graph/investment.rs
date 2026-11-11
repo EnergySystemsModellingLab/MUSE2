@@ -1,10 +1,10 @@
 //! Module for solving the investment order of commodities
 use super::{CommoditiesGraph, GraphEdge, GraphNode};
 use crate::commodity::{CommodityMap, CommodityType};
+use crate::optimisation::{ModelError, solve_optimal};
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::market::MarketSet;
-use crate::simulation::optimisation::{ModelError, solve_optimal};
 use anyhow::{Context, Result};
 use highs::{Col, RowProblem, Sense};
 use indexmap::IndexMap;
