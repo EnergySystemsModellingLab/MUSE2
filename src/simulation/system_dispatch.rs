@@ -27,7 +27,9 @@ use itertools::Itertools;
 use log::{debug, info};
 use std::slice;
 
+mod output;
 pub mod optimisation;
+use output::create_debug_files;
 use optimisation::{DispatchRun, Solution};
 
 /// Run the simulation using the `system_dispatch` protocol.
@@ -38,6 +40,10 @@ use optimisation::{DispatchRun, Solution};
 /// * `writer` - The data writer to which results are written
 #[allow(clippy::too_many_lines)]
 pub fn run(model: &Model, writer: &mut DataWriter) -> Result<()> {
+    if let Some(debug_writer) = writer.debug_writer() {
+        create_debug_files(debug_writer)?;
+    }
+
     let mut user_assets = model.user_assets.clone();
     let mut asset_pool = AssetPool::new(); // active assets
 
