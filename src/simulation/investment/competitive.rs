@@ -21,11 +21,11 @@ use crate::simulation::investment::{AssetOptions, DemandMap};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, ensure};
 use coefficients::calculate_coefficients_for_assets;
 use debug::write_debug_info;
 use itertools::{Itertools, chain};
-use log::{debug, warn};
+use log::debug;
 use metrics::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
     sort_and_filter_appraisal_outputs,
@@ -327,18 +327,14 @@ pub fn select_best_assets(
         // Sort by investment priority and discard non-feasible options
         let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);
 
-        // If none of the remaining options are feasible, we terminate the loop. We may still be
-        // able to meet the full demands with assets selected so far, so we continue anyway with a
-        // warning.
-        if outputs.is_empty() {
-            warn!(
-                "Investment appraisal completed with unmet demand for commodity '{}', region '{}', \
-                year '{}', agent '{}'. {} non-feasible investments were not considered. \
-                This unmet demand may still be satisfied during the full system dispatch.",
-                commodity.id, region_id, year, agent.id, num_nonfeasible
-            );
-            break;
-        }
+        ensure!(
+            !outputs.is_empty(),
+            "Investment appraisal failed with unmet demand for commodity '{}', region \
+            '{region_id}', year {year}, agent '{}'. {num_nonfeasible} non-feasible investments \
+            were not considered.",
+            commodity.id,
+            agent.id
+        );
 
         // Warn if there are multiple equally good assets
         log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);

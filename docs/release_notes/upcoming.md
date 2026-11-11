@@ -7,8 +7,9 @@
  with `price_cycle_iterations` in `model.toml` (default: 1)
 - Circular commodity dependencies are now handled with a two-pass investment algorithm ([#1557])
 - A new optional `simulation_protocol` setting in `model.toml` selects how each milestone year is
-  simulated. The only value currently available is `system_dispatch`, which is the default and
-  corresponds to the existing behaviour
+  simulated. `system_dispatch` is the default and corresponds to the existing behaviour. The new
+  `agent_dispatch` protocol calculates flows and prices directly from the activities determined by
+  agents' own optimisations, without a system-wide dispatch
 
 ## Breaking changes
 

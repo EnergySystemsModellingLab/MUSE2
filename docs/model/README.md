@@ -106,6 +106,21 @@ system-wide [dispatch optimisation][dispatch-optimisation]. It works as follows:
 The `value_of_lost_load`, `commodity_balance_epsilon` and `highs.dispatch_options` settings in
 [`model.toml`][model-toml] are only used by this protocol.
 
+### `agent_dispatch`
+
+In this protocol, no system-wide dispatch is run. Instead, the activities determined by agents' own
+optimisations are used directly. It works as follows:
+
+- **Base year:** Agents dispatch the existing assets. Flows come from the resulting activities and
+  prices are calculated from them.
+- **Agent investment:** The flows of newly selected assets, taken from their activities, are used
+  to propagate demand upstream as each market (or, for markets in a cycle, each market in turn) is
+  settled.
+- **Ironing out:** Each iteration runs the full agent investment pass, and updated prices are
+  calculated from the activities of the selected assets.
+- **Final flows and prices:** The flows and prices for the year are calculated from the activities
+  of the final selection.
+
 [investment]: ./investment.md
 [commodity-graphs]: ./commodity_graphs.md
 [dispatch-optimisation]: ./dispatch_optimisation.md
