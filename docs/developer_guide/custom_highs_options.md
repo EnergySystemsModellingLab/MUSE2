@@ -8,7 +8,9 @@ set `please_give_me_broken_results = true` in your [`model.toml` file][model.tom
 You can change any of the options exposed by the HiGHS solver; for more information, see [the HiGHS
 documentation][highs-opts].
 
-You can set options to be applied to all optimisations, just dispatch or just appraisal.
+You can set options to be applied to all optimisations, just dispatch or just appraisal. Note that
+dispatch options are only used by the `system_dispatch` [simulation protocol][protocols], which is
+currently the only one available.
 
 Here is an example:
 
@@ -33,4 +35,5 @@ optimality_tolerance = 10e-6
 ```
 
 [model.toml]: ../file_formats/input_files.md#model-parameters-modeltoml
+[protocols]: ../model/README.md#simulation-protocols
 [highs-opts]: https://ergo-code.github.io/HiGHS/stable/options/definitions/

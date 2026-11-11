@@ -9,6 +9,9 @@
 - Agents now have an agent type, set with the new optional `agent_type` column in `agents.csv`. The
   new `portfolio` agent type selects assets for each market by solving a single optimisation,
   rather than appraising options one at a time ([#1574])
+- A new optional `simulation_protocol` setting in `model.toml` selects how each milestone year is
+  simulated. The only value currently available is `system_dispatch`, which is the default and
+  corresponds to the existing behaviour
 
 ## Breaking changes
 
