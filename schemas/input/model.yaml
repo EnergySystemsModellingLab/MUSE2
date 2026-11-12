@@ -21,7 +21,7 @@ properties:
   simulation_protocol:
     type: string
     description: The protocol used to simulate each milestone year
-    default: system_dispatch
+    default: agent_dispatch
     enum:
       - system_dispatch
       - agent_dispatch

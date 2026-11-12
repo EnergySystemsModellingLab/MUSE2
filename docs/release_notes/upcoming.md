@@ -10,9 +10,9 @@
   new `portfolio` agent type selects assets for each market by solving a single optimisation,
   rather than appraising options one at a time ([#1574])
 - A new optional `simulation_protocol` setting in `model.toml` selects how each milestone year is
-  simulated. `system_dispatch` is the default and corresponds to the existing behaviour. The new
-  `agent_dispatch` protocol calculates flows and prices directly from the activities determined by
-  agents' own optimisations, without a system-wide dispatch
+  simulated. The new default, `agent_dispatch`, calculates flows and prices directly from the
+  activities determined by agents' own optimisations, without a system-wide dispatch.
+  `system_dispatch` selects the previous behaviour
 
 ## Breaking changes
 
