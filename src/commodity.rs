@@ -101,12 +101,6 @@ pub enum CommodityType {
 /// The strategy used for calculating commodity prices
 #[derive(Debug, PartialEq, Clone, Copy, Deserialize, Hash, Eq)]
 pub enum PricingStrategy {
-    /// Take commodity prices directly from the shadow prices
-    #[serde(rename = "shadow")]
-    Shadow,
-    /// Adjust shadow prices for scarcity
-    #[serde(rename = "scarcity")]
-    ScarcityAdjusted,
     /// Use marginal cost of highest-cost active asset producing the commodity
     #[serde(rename = "marginal")]
     MarginalCost,

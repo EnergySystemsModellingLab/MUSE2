@@ -8,7 +8,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
-use crate::simulation::activity::{ActivityDualMap, ActivityMap, FlowMap, create_flow_map};
+use crate::simulation::activity::{ActivityMap, FlowMap, create_flow_map};
 use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
@@ -267,13 +267,6 @@ impl Solution<'_> {
                 let (time_slice, _) = ts_selection.iter(self.time_slice_info).next().unwrap();
                 (asset, time_slice, dual)
             })
-    }
-
-    /// Dual values for activity constraints, as an [`ActivityDualMap`]
-    pub fn activity_dual_map(&self) -> ActivityDualMap {
-        self.iter_activity_duals()
-            .map(|(asset, time_slice, dual)| ((asset.clone(), time_slice.clone()), dual))
-            .collect()
     }
 
     /// Keys and values for column duals.

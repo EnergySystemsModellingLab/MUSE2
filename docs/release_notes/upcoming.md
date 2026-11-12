@@ -10,6 +10,10 @@
 ## Breaking changes
 
 - The `capacity_margin` parameter has been removed ([#1557])
+- The `shadow` and `scarcity` pricing strategies have been removed. Commodities using them in
+  `commodities.csv`, or `fallback_pricing_strategy` in `model.toml`, must switch to another strategy
+- Prices in cyclically-dependent markets are now seeded with the previous year's (or previous
+  ironing-out iteration's) prices, or zero if there are none, rather than with shadow prices
 
 ## Bug fixes
 
