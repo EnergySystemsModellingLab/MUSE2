@@ -1,0 +1,27 @@
+milestone_year,run_description,asset_id,process_id,region_id,capacity
+2030,ironing out iteration 0; RSHEAT GBR A0_RES,4,RGASBR,GBR,2900.0
+2030,ironing out iteration 0; RSHEAT GBR A0_RES,5,RELCHP,GBR,399.98
+2030,ironing out iteration 0; RSHEAT GBR A0_RES,,RGASBR,GBR,355.83840587648046
+2030,ironing out iteration 0; RSHEAT GBR A0_RES,,RELCHP,GBR,0.0
+2030,ironing out iteration 0; ELCTRI GBR A0_ELC,2,WNDFRM,GBR,3.964844
+2030,ironing out iteration 0; ELCTRI GBR A0_ELC,3,GASCGT,GBR,0.32485931898600967
+2030,ironing out iteration 0; ELCTRI GBR A0_ELC,,WNDFRM,GBR,4.520911454047764
+2030,ironing out iteration 0; ELCTRI GBR A0_ELC,,GASCGT,GBR,-0.0
+2030,ironing out iteration 0; ELCTRI GBR A0_ELC,,SLRFRM,GBR,0.0
+2030,ironing out iteration 0; GASNAT GBR A0_GPR,1,GASPRC,GBR,1807.0680195508528
+2030,ironing out iteration 0; GASNAT GBR A0_GPR,,GASPRC,GBR,0.0
+2030,ironing out iteration 0; GASPRD GBR A0_GEX,0,GASDRV,GBR,1897.4214205283952
+2030,ironing out iteration 0; GASPRD GBR A0_GEX,,GASDRV,GBR,0.0
+2040,ironing out iteration 0; RSHEAT GBR A0_RES,6,RGASBR,GBR,355.83840587648046
+2040,ironing out iteration 0; RSHEAT GBR A0_RES,,RGASBR,GBR,3655.8189696
+2040,ironing out iteration 0; RSHEAT GBR A0_RES,,RELCHP,GBR,0.0
+2040,ironing out iteration 0; ELCTRI GBR A0_ELC,2,WNDFRM,GBR,0.0
+2040,ironing out iteration 0; ELCTRI GBR A0_ELC,3,GASCGT,GBR,0.0
+2040,ironing out iteration 0; ELCTRI GBR A0_ELC,7,WNDFRM,GBR,0.0
+2040,ironing out iteration 0; ELCTRI GBR A0_ELC,,WNDFRM,GBR,0.0
+2040,ironing out iteration 0; ELCTRI GBR A0_ELC,,GASCGT,GBR,0.0
+2040,ironing out iteration 0; ELCTRI GBR A0_ELC,,SLRFRM,GBR,0.0
+2040,ironing out iteration 0; GASNAT GBR A0_GPR,1,GASPRC,GBR,1807.0680195508528
+2040,ironing out iteration 0; GASNAT GBR A0_GPR,,GASPRC,GBR,679.7717018943207
+2040,ironing out iteration 0; GASPRD GBR A0_GEX,0,GASDRV,GBR,1897.4214205283952
+2040,ironing out iteration 0; GASPRD GBR A0_GEX,,GASDRV,GBR,713.7602869890369
