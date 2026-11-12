@@ -1,0 +1,26 @@
+src/asset/pool.rs
+  h_e76403a1cd4bf1 635,648,654,663-664,677,683,694
+src/fixture.rs
+  h_e76403a1cd4bf1 219
+src/output.rs
+  h_e76403a1cd4bf1 739-740
+  h_e76403a1cd4bf1 738,741
+src/asset.rs
+  h_e76403a1cd4bf1 1251
+src/asset/capacity.rs
+  h_e76403a1cd4bf1 31,44,80,98,221,235,255-256,260-261,265-266,281,284-285,306-308,321,324-325,337
+src/input/asset.rs
+  h_e76403a1cd4bf1 119,140,227,280
+  h_e76403a1cd4bf1 225-226,228,278-279,281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a551d75d025d3cd285797ca120648e0f33a4c77a",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
