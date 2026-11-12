@@ -1,0 +1,41 @@
+docs/model/agents.md
+  s_ec6102e006e663::t_3f4d051588b762 383,411
+  s_ec6102e006e663::t_8db810171e61b1 3-27,29,32-63,66-185,187-191,193-256,258-382,384-410,412-459,461-467
+  h_e76403a1cd4bf1 1-2,28,30-31,186,192,257,460
+  s_ec6102e006e663::t_63599ee2d657a8 64-65
+docs/glossary.md
+  s_ec6102e006e663::t_b2e22b2cf02cde 37-39
+  s_ec6102e006e663::t_a59123b073fdce 36,135-138,199,237-239
+docs/SUMMARY.md
+  s_ec6102e006e663::t_378b438ef1ea02 17-18
+docs/model/README.md
+  s_ec6102e006e663::t_378b438ef1ea02 50-51,69-70,78-80,94,97
+docs/model/dispatch_optimisation.md
+  s_ec6102e006e663::t_378b438ef1ea02 155,249-250
+  s_ec6102e006e663::t_507675caf9989a 296-297
+docs/model/investment.md
+  s_ec6102e006e663::t_f7d43aa4f4b8b5 1,6-12,74-76,82-85,114,119-127,129,137-139,142,156,168,170-173,177-180,182-186,188-191,195-199,201-203,205-208,232,247
+docs/model/commodity_graphs.md
+  s_ec6102e006e663::t_378b438ef1ea02 133,182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d867be9cf1026e03ae1acc63630ea544a59e6660",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_ec6102e006e663": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "a9c4ee03-97a7-42ea-b475-77913957a93d",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
