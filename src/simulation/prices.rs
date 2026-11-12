@@ -5,12 +5,14 @@ use crate::asset::AssetRef;
 use crate::commodity::{CommodityID, CommodityMap, CommodityType, PricingStrategy};
 use crate::model::Model;
 use crate::region::RegionID;
+use crate::simulation::activity::{ActivityDualMap, ActivityMap};
 use crate::simulation::market::MarketSet;
 use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerActivity, MoneyPerFlow, UnitType, Year};
 use anyhow::Result;
 use indexmap::IndexMap;
+use itertools::iproduct;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
@@ -62,6 +64,37 @@ pub struct Prices {
     pub fallback: PriceMap,
 }
 
+/// Calculate commodity prices from the solutions to dispatch optimisations.
+///
+/// This extracts the activities of existing assets from `solution_without_candidates` and the dual
+/// values from `solution_with_candidates`, then calls [`calculate_prices`].
+///
+/// # Arguments
+///
+/// * `model` - The model
+/// * `solution_without_candidates` - Solution to dispatch optimisation without candidates
+/// * `solution_with_candidates` - Solution to dispatch optimisation with candidates
+/// * `candidates` - The candidate assets included in `solution_with_candidates`, if any
+/// * `year` - The year for which prices are being calculated
+pub fn calculate_prices_from_solutions(
+    model: &Model,
+    solution_without_candidates: &Solution,
+    solution_with_candidates: &Solution,
+    candidates: &[AssetRef],
+    year: u32,
+) -> Result<Prices> {
+    // Shadow prices come from the solution _with_ candidates, so that we can get them for
+    // commodities not produced/consumed by any existing assets.
+    calculate_prices(
+        model,
+        &solution_without_candidates.activity_map_for_existing(),
+        candidates,
+        PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals()),
+        &solution_with_candidates.activity_dual_map(),
+        year,
+    )
+}
+
 /// Calculate commodity prices.
 ///
 /// Calculate prices for each commodity/region/time-slice according to the commodity's configured
@@ -70,8 +103,13 @@ pub struct Prices {
 /// # Arguments
 ///
 /// * `model` - The model
-/// * `solution_without_candidates` - Solution to dispatch optimisation without candidates
-/// * `solution_with_candidates` - Solution to dispatch optimisation with candidates
+/// * `activity` - Activity of existing assets in each time slice
+/// * `candidates` - Candidate assets
+/// * `shadow_prices` - Shadow prices for all SED/SVD commodities. These should be derived from a
+///   dispatch that includes candidates, so that commodities not produced/consumed by any existing
+///   assets get prices.
+/// * `activity_duals` - Dual values of the activity constraints for assets (only used for
+///   scarcity-adjusted pricing)
 /// * `year` - The year for which prices are being calculated
 ///
 /// # Returns
@@ -79,16 +117,12 @@ pub struct Prices {
 /// Market prices for commodities as well as shadow prices.
 pub fn calculate_prices(
     model: &Model,
-    solution_without_candidates: &Solution,
-    solution_with_candidates: &Solution,
+    activity: &ActivityMap,
+    candidates: &[AssetRef],
+    shadow_prices: PriceMap,
+    activity_duals: &ActivityDualMap,
     year: u32,
 ) -> Result<Prices> {
-    // Collect shadow prices for all SED/SVD commodities
-    // These are derived from the dispatch solution _with_ candidates, so that we can get shadow
-    // prices for commodities not produced/consumed by any existing assets.
-    let shadow_prices =
-        PriceMap::from_iter(solution_with_candidates.iter_commodity_balance_duals());
-
     // Set up empty market prices map
     let mut market_prices = PriceMap::default();
 
@@ -103,8 +137,9 @@ pub fn calculate_prices(
         price_market_set(
             market_set,
             model,
-            solution_without_candidates,
-            solution_with_candidates,
+            activity,
+            candidates,
+            activity_duals,
             year,
             &shadow_prices,
             &mut annual_activities,
@@ -115,8 +150,9 @@ pub fn calculate_prices(
             price_market_set(
                 market_set,
                 model,
-                solution_without_candidates,
-                solution_with_candidates,
+                activity,
+                candidates,
+                activity_duals,
                 year,
                 &shadow_prices,
                 &mut annual_activities,
@@ -138,8 +174,9 @@ pub fn calculate_prices(
 fn price_market_set(
     market_set: &MarketSet,
     model: &Model,
-    solution_without_candidates: &Solution,
-    solution_with_candidates: &Solution,
+    activity: &ActivityMap,
+    candidates: &[AssetRef],
+    activity_duals: &ActivityDualMap,
     year: u32,
     shadow_prices: &PriceMap,
     annual_activities: &mut Option<HashMap<AssetRef, Activity>>,
@@ -150,8 +187,9 @@ fn price_market_set(
         MarketSet::Single(market) => {
             price_markets(
                 model,
-                solution_without_candidates,
-                solution_with_candidates,
+                activity,
+                candidates,
+                activity_duals,
                 year,
                 std::slice::from_ref(market),
                 shadow_prices,
@@ -163,8 +201,9 @@ fn price_market_set(
         MarketSet::Cycle { markets, .. } => {
             price_cycle(
                 model,
-                solution_without_candidates,
-                solution_with_candidates,
+                activity,
+                candidates,
+                activity_duals,
                 year,
                 markets,
                 shadow_prices,
@@ -178,8 +217,9 @@ fn price_market_set(
                 price_market_set(
                     set,
                     model,
-                    solution_without_candidates,
-                    solution_with_candidates,
+                    activity,
+                    candidates,
+                    activity_duals,
                     year,
                     shadow_prices,
                     annual_activities,
@@ -199,8 +239,9 @@ fn price_market_set(
 /// # Arguments
 ///
 /// * `model` - The model
-/// * `solution_without_candidates` - Solution to dispatch optimisation without candidate activities
-/// * `solution_with_candidates` - Solution to dispatch optimisation with candidate activities
+/// * `activity` - Activity of existing assets in each time slice
+/// * `candidates` - Candidate assets
+/// * `activity_duals` - Dual values of the activity constraints for assets
 /// * `year` - The year for which prices are being calculated
 /// * `markets` - The markets to calculate prices for
 /// * `shadow_prices` - Shadow prices for all commodities
@@ -212,8 +253,9 @@ fn price_market_set(
 #[allow(clippy::too_many_arguments)]
 fn price_markets(
     model: &Model,
-    solution_without_candidates: &Solution,
-    solution_with_candidates: &Solution,
+    activity: &ActivityMap,
+    candidates: &[AssetRef],
+    activity_duals: &ActivityDualMap,
     year: u32,
     markets: &[(CommodityID, RegionID)],
     shadow_prices: &PriceMap,
@@ -221,6 +263,13 @@ fn price_markets(
     market_prices: &mut PriceMap,
     strategy_override: Option<PricingStrategy>,
 ) {
+    let existing_activity = || {
+        activity
+            .iter()
+            .map(|((asset, time_slice), activity)| (asset, time_slice, *activity))
+    };
+    let candidate_activity_keys = || iproduct!(candidates, model.time_slice_info.iter_ids());
+
     // Partition markets by pricing strategy into a map keyed by `PricingStrategy`.
     let mut pricing_sets = HashMap::new();
     for (commodity_id, region_id) in markets {
@@ -260,7 +309,9 @@ fn price_markets(
     // Add prices for scarcity-adjusted commodities
     if let Some(scarcity_set) = pricing_sets.get(&PricingStrategy::ScarcityAdjusted) {
         add_scarcity_adjusted_prices(
-            solution_with_candidates.iter_activity_duals(),
+            activity_duals
+                .iter()
+                .map(|((asset, time_slice), dual)| (asset, time_slice, *dual)),
             shadow_prices,
             market_prices,
             scarcity_set,
@@ -270,8 +321,8 @@ fn price_markets(
     // Add prices for marginal cost commodities
     if let Some(marginal_set) = pricing_sets.get(&PricingStrategy::MarginalCost) {
         add_marginal_cost_prices(
-            solution_without_candidates.iter_activity_for_existing(),
-            solution_with_candidates.iter_activity_keys_for_candidates(),
+            existing_activity(),
+            candidate_activity_keys(),
             market_prices,
             year,
             marginal_set,
@@ -283,8 +334,8 @@ fn price_markets(
     // Add prices for marginal average commodities
     if let Some(marginal_avg_set) = pricing_sets.get(&PricingStrategy::MarginalCostAverage) {
         add_marginal_cost_average_prices(
-            solution_without_candidates.iter_activity_for_existing(),
-            solution_with_candidates.iter_activity_keys_for_candidates(),
+            existing_activity(),
+            candidate_activity_keys(),
             market_prices,
             year,
             marginal_avg_set,
@@ -295,12 +346,11 @@ fn price_markets(
 
     // Add prices for full cost commodities
     if let Some(fullcost_set) = pricing_sets.get(&PricingStrategy::FullCost) {
-        let annual_activities = annual_activities.get_or_insert_with(|| {
-            calculate_annual_activities(solution_without_candidates.iter_activity_for_existing())
-        });
+        let annual_activities = annual_activities
+            .get_or_insert_with(|| calculate_annual_activities(existing_activity()));
         add_full_cost_prices(
-            solution_without_candidates.iter_activity_for_existing(),
-            solution_with_candidates.iter_activity_keys_for_candidates(),
+            existing_activity(),
+            candidate_activity_keys(),
             annual_activities,
             market_prices,
             year,
@@ -312,12 +362,11 @@ fn price_markets(
 
     // Add prices for full average commodities
     if let Some(full_avg_set) = pricing_sets.get(&PricingStrategy::FullCostAverage) {
-        let annual_activities = annual_activities.get_or_insert_with(|| {
-            calculate_annual_activities(solution_without_candidates.iter_activity_for_existing())
-        });
+        let annual_activities = annual_activities
+            .get_or_insert_with(|| calculate_annual_activities(existing_activity()));
         add_full_cost_average_prices(
-            solution_without_candidates.iter_activity_for_existing(),
-            solution_with_candidates.iter_activity_keys_for_candidates(),
+            existing_activity(),
+            candidate_activity_keys(),
             annual_activities,
             market_prices,
             year,
@@ -337,8 +386,9 @@ fn price_markets(
 #[allow(clippy::too_many_arguments)]
 fn price_cycle(
     model: &Model,
-    solution_without_candidates: &Solution,
-    solution_with_candidates: &Solution,
+    activity: &ActivityMap,
+    candidates: &[AssetRef],
+    activity_duals: &ActivityDualMap,
     year: u32,
     markets: &[(CommodityID, RegionID)],
     shadow_prices: &PriceMap,
@@ -361,8 +411,9 @@ fn price_cycle(
         for market in markets.iter().rev() {
             price_markets(
                 model,
-                solution_without_candidates,
-                solution_with_candidates,
+                activity,
+                candidates,
+                activity_duals,
                 year,
                 std::slice::from_ref(market),
                 shadow_prices,
