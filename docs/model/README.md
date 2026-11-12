@@ -47,7 +47,8 @@ At a high level, the user defines:
 
 5) The agents that choose between processes by applying search spaces, objectives and decision
    rules. Portions of demand for each commodity must be assigned to an agent, and the sum of these
-   portions must be one.
+   portions must be one. Each agent has an agent type, which determines the algorithm it uses to
+   select assets (see [Agents][agents]).
 
 ## Framework Overview
 
@@ -65,7 +66,8 @@ Assets whose scheduled decommissioning year has been reached are removed from th
 Agents select assets to meet commodity demand for the current MSY. Investment decisions follow a
 pre-computed **investment order** derived from the topology of the [commodity graph][commodity-graphs]:
 markets are processed deepest-first (most downstream to most upstream), grouped into **layers** of
-independent markets at the same depth. See [Investment Appraisal][investment] for full details.
+independent markets at the same depth. For each market, each responsible agent selects assets using
+the algorithm for its [agent type][agents]. See [Investment][investment] for full details.
 
 After all markets in each layer are settled, a **partial system dispatch** is run over all assets
 selected so far. This propagates demand upstream: input commodity flows consumed by newly committed
@@ -73,9 +75,9 @@ assets become demand targets for the markets not yet invested in.
 
 ### 3. Mothballing and decommissioning
 
-Previously commissioned assets that were not selected for retention are mothballed. Any asset that
-has remained mothballed for longer than `mothball_years` (defined in
-[`model.toml`][model-toml]) is permanently decommissioned.
+Capacity of previously commissioned assets that was not selected for retention is mothballed. This
+may be the whole of an asset or only some of its capacity. Any capacity that has remained mothballed
+for `mothball_years` (defined in [`model.toml`][model-toml]) is permanently decommissioned.
 
 ### 4. Ironing-out loop
 
@@ -89,9 +91,10 @@ dispatch. The loop terminates when time-slice-weighted market prices have conver
 
 A full [dispatch optimisation][dispatch-optimisation] is run over the settled asset pool. The
 resulting flows and commodity prices are written to the output files and carried forward as the
-price basis for the next MSY's investment appraisal.
+price basis for the next MSY's investment.
 
 [investment]: ./investment.md
+[agents]: ./agents.md
 [commodity-graphs]: ./commodity_graphs.md
 [dispatch-optimisation]: ./dispatch_optimisation.md
 [prices]: ./prices.md
