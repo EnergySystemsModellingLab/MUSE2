@@ -2,7 +2,8 @@
 //!
 //! How each milestone year is simulated is determined by the [`SimulationProtocol`], selected with
 //! the `simulation_protocol` setting in `model.toml`. Each protocol lives in its own submodule
-//! (e.g. [`system_dispatch`]) and provides a `run` function which loops over the milestone years.
+//! (e.g. [`system_dispatch`] and [`agent_dispatch`]) and provides a `run` function which loops over
+//! the milestone years.
 //! Protocols share the agent investment code in [`investment`] and [`market`], and the price
 //! calculation code in [`prices`]. The only protocol-specific part of the agent investment loop is
 //! how the flows of newly selected assets are determined, which protocols supply by implementing
@@ -35,6 +36,7 @@ pub mod investment;
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
+pub mod agent_dispatch;
 pub mod system_dispatch;
 
 /// The protocol used to simulate each milestone year, selected with `simulation_protocol` in
@@ -44,8 +46,11 @@ pub mod system_dispatch;
 #[strum(serialize_all = "snake_case")]
 pub enum SimulationProtocol {
     /// Agents choose capacity; flows and prices come from a system-wide cost-minimising dispatch
-    #[default]
     SystemDispatch,
+    /// Agents choose capacity; flows and prices come directly from the activities determined by
+    /// agents' own optimisations
+    #[default]
+    AgentDispatch,
 }
 
 /// Run the simulation.
@@ -61,6 +66,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     info!("Simulation protocol: {protocol}");
     match protocol {
         SimulationProtocol::SystemDispatch => system_dispatch::run(model, &mut writer)?,
+        SimulationProtocol::AgentDispatch => agent_dispatch::run(model, &mut writer)?,
     }
     writer.flush()
 }
