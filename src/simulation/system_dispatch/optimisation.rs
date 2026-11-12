@@ -1,10 +1,12 @@
 //! Code for performing dispatch optimisation.
 //!
 //! This is used to calculate commodity flows and prices.
+use super::debug::write_dispatch_debug_info;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::CommodityID;
 use crate::input::format_items_with_cap;
 use crate::model::Model;
+use crate::optimisation::{ModelError, apply_highs_options_from_toml, solve_optimal};
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
@@ -12,16 +14,14 @@ use crate::simulation::activity::{ActivityMap, FlowMap, create_flow_map};
 use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use highs::{HighsModelStatus, RowProblem as Problem, Sense};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{chain, iproduct};
 use log::warn;
-use std::error::Error;
 use std::ops::Range;
 
 mod constraints;
-pub(crate) use constraints::group_dispatch_equivalent_assets;
 use constraints::{ConstraintKeys, add_model_constraints};
 
 /// A decision variable in the optimisation
@@ -280,82 +280,6 @@ impl Solution<'_> {
     }
 }
 
-/// Defines the possible errors that can occur when running the solver
-#[derive(Debug, derive_more::Display, derive_more::From)]
-pub enum ModelError {
-    /// An optimal solution could not be found
-    #[display("Could not find optimal result: {_0:?}")]
-    NonOptimal(HighsModelStatus),
-    /// Another error occurred
-    #[display("{_0}")]
-    Other(anyhow::Error),
-}
-
-impl ModelError {
-    /// Convert this error into an [`anyhow::Error`]
-    pub fn into_anyhow(self) -> anyhow::Error {
-        match self {
-            ModelError::NonOptimal(status) => anyhow!("Could not find optimal result: {status:?}"),
-            ModelError::Other(error) => error,
-        }
-    }
-}
-
-impl Error for ModelError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ModelError::NonOptimal(_) => None,
-            ModelError::Other(error) => Some(error.as_ref()),
-        }
-    }
-}
-
-/// Apply the specified HiGHS options from a [`toml::Table`]
-pub fn apply_highs_options_from_toml(
-    model: &mut highs::Model,
-    options: &toml::Table,
-) -> Result<()> {
-    // Attempt to set an option, returning an error if it fails
-    macro_rules! try_set_opt {
-        ($option:expr, $value:expr) => {{
-            model
-                .try_set_option($option.as_str(), $value)
-                .map_err(|_| anyhow!("Invalid option name or value"))?;
-
-            Ok(())
-        }};
-    }
-
-    // Iterate through options, applying each in turn to the HiGHS model
-    for (option, value) in options {
-        match value {
-            toml::Value::String(value) => try_set_opt!(option, value.as_str()),
-            toml::Value::Integer(value) => match i32::try_from(*value) {
-                Ok(value) => try_set_opt!(option, value),
-                Err(_) => Err(anyhow!("Value out of range")),
-            },
-            toml::Value::Float(value) => try_set_opt!(option, *value),
-            toml::Value::Boolean(value) => try_set_opt!(option, *value),
-            _ => Err(anyhow!("HiGHS options cannot have this type")),
-        }
-        .with_context(|| format!("Failed to set option \"{option}\" to value \"{value}\""))?;
-    }
-
-    Ok(())
-}
-
-/// Try to solve the model, returning an error if the model is incoherent or result is non-optimal
-pub fn solve_optimal(model: highs::Model) -> Result<highs::SolvedModel, ModelError> {
-    let solved = model
-        .try_solve()
-        .map_err(|status| anyhow!("Incoherent model: {status:?}"))?;
-
-    match solved.status() {
-        HighsModelStatus::Optimal => Ok(solved),
-        status => Err(status.into()),
-    }
-}
-
 /// Filter prices data to only include prices for markets not being balanced
 ///
 /// Markets being balanced (i.e. with commodity balance constraints) will have prices calculated
@@ -484,7 +408,7 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
         match self.run_without_unmet_demand_variables(markets_to_balance, input_prices) {
             // If the run is successful, we write debug info and return the solution
             Ok(solution) => {
-                writer.write_dispatch_debug_info(self.year, run_description, &solution)?;
+                write_dispatch_debug_info(writer, self.year, run_description, &solution)?;
                 Ok(solution)
             }
 
@@ -561,7 +485,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
             Ok(solution) => {
                 let diagnostic_run_description =
                     format!("{run_description} COMMODITY_CONSTRAINTS_DIAGNOSTIC");
-                writer.write_dispatch_debug_info(
+                write_dispatch_debug_info(
+                    writer,
                     self.year,
                     &diagnostic_run_description,
                     &solution,
@@ -605,7 +530,8 @@ impl<'model, 'run> DispatchRun<'model, 'run> {
                 // never returned as the result of the original dispatch run.
                 let diagnostic_run_description =
                     format!("{run_description} UNMET_DEMAND_DIAGNOSTIC");
-                writer.write_dispatch_debug_info(
+                write_dispatch_debug_info(
+                    writer,
                     self.year,
                     &diagnostic_run_description,
                     &solution,

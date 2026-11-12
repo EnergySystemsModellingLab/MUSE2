@@ -18,6 +18,18 @@ properties:
       US dollars in 2020 terms), or take any other form chosen by the modeller. The label is metadata
       only: MUSE2 does not interpret it, perform currency conversion, or adjust monetary values for
       inflation. Monetary inputs should use a consistent currency and reference year.
+  simulation_protocol:
+    type: string
+    description: The protocol used to simulate each milestone year
+    default: system_dispatch
+    enum:
+      - system_dispatch
+    notes: |
+      A simulation protocol defines how agents' investment decisions are combined with dispatch of
+      the energy system to produce commodity flows and prices for each milestone year. Currently the
+      only option is `system_dispatch`, in which agents choose capacity and flows and prices come
+      from a system-wide, cost-minimising dispatch optimisation. See
+      [the model documentation](../model/index.html#simulation-protocols) for details.
   candidate_asset_capacity:
     type: number
     description: Capacity to give to candidate assets in dispatch optimisation
@@ -30,6 +42,8 @@ properties:
     default: 1e-6
     notes: |
       The default value should work. Do not change this value unless you know what you're doing!
+
+      Only used by the `system_dispatch` simulation protocol.
   capacity_tranche_fraction:
     type: number
     description: Scales the size of inferred investment tranches for candidate assets
@@ -65,6 +79,8 @@ properties:
     default: 1e9
     notes: |
       Currently this only applies to the LCOX appraisal.
+
+      Only used by the `system_dispatch` simulation protocol.
   seasonal_utilisation_penalty:
     type: number
     description: Penalty per unit of capacity used within a season
@@ -125,7 +141,7 @@ properties:
         properties: {}
       dispatch_options:
         type: object
-        description: HiGHS options applied only to dispatch optimisations
+        description: HiGHS options applied only to dispatch optimisations (only used by the `system_dispatch` simulation protocol)
         properties: {}
       appraisal_options:
         type: object

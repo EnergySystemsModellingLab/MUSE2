@@ -6,6 +6,9 @@
 - The number of price calculation iterations for cyclically-dependent markets can now be configured
  with `price_cycle_iterations` in `model.toml` (default: 1)
 - Circular commodity dependencies are now handled with a two-pass investment algorithm ([#1557])
+- A new optional `simulation_protocol` setting in `model.toml` selects how each milestone year is
+  simulated. The only value currently available is `system_dispatch`, which is the default and
+  corresponds to the existing behaviour
 
 ## Breaking changes
 
