@@ -105,7 +105,7 @@ mod tests {
     use super::*;
     use crate::asset::{Asset, AssetRef};
     use crate::fixture::{asset, time_slice};
-    use indexmap::indexmap;
+    use indexmap::{IndexMap, indexmap};
     use itertools::{Itertools, assert_equal};
     use rstest::{fixture, rstest};
     use std::iter;
@@ -129,6 +129,7 @@ mod tests {
             activity,
             unmet_demand,
             metric: Some(Box::new(LCOXMetric::new(MoneyPerActivity(4.14)))),
+            solution: IndexMap::new(),
         }
     }
 
