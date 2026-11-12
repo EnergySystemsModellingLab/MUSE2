@@ -130,7 +130,7 @@ the processes they need, so a model that passes validation can still fail when i
 In each milestone year, MUSE2 invests in one market (or group of markets) at a time, from the most
 downstream to the most upstream, so that demand from assets already selected downstream (e.g. heat
 pumps consuming electricity) is known when upstream markets are invested in (see
-[Investment Appraisal][investment]). Prices are calculated in the reverse order, so that the prices
+[Investment][investment]). Prices are calculated in the reverse order, so that the prices
 of a process's inputs are known before the price of its output is calculated (see
 [Commodity Prices][prices]).
 
@@ -179,7 +179,7 @@ The order for each circularity must satisfy the following rule:
   feedback processes, a circularity is no longer a loop, and this rule ensures that the demand for
   every market can still be met, either from outside the circularity or from markets later in the
   order. This allows MUSE2 to invest in the circularity without feedback processes, following the
-  normal downstream-to-upstream rules (see [Investment Appraisal][investment-circularities]).
+  normal downstream-to-upstream rules (see [Investment][investment-circularities]).
 
 In the example model, this means that hydrogen must be invested in first. If electricity came
 first, the electrolyser (H2YPRO) would be a feedback process, leaving hydrogen with no other
