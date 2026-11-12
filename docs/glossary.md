@@ -33,10 +33,10 @@ an investment decision.
 be decommissioned when it reaches the end of its allowed *Lifetime* or after remaining mothballed for
 the configured period.
 
-**Asset Mothballing:** The temporary withdrawal of an *Asset* or some of its tranches from the active
-pool when it is not selected for retention. A mothballed *Asset* is not dispatched, but may be
-reactivated in a later investment period; it is permanently decommissioned if it remains mothballed
-for longer than a configured number of years.
+**Asset Mothballing:** The temporary withdrawal of some or all of an *Asset*'s *Capacity* (e.g. some
+of its tranches) from operation when it is not selected for retention. Mothballed *Capacity* is not
+dispatched, but may be reactivated in a later investment period; it is permanently decommissioned
+if it remains mothballed for a configured number of years.
 
 **Asset Tranche:** A discrete portion of an *Asset*'s *Capacity*. An *Asset* can consist of multiple
 *Asset Tranches* of equal size, which can be retained, mothballed, or decommissioned independently.
@@ -132,10 +132,10 @@ Cost* may have a low *Marginal Cost* but a higher *Full Cost*.
 **Input Commodity:** A *Commodity* that flows into a *Process*. A *Process* may have multiple input
 commodities.
 
-**Investment Appraisal:** The process of evaluating existing and *Candidate Assets* to determine
-which investments an *Agent* should make in a particular *Commodity Market* and *Milestone Year*.
-Appraisal considers the *Agent Objective*, expected costs, commodity prices, and the asset's
-expected operation.
+**Investment Appraisal:** The process by which a competitive *Agent* evaluates each existing and
+*Candidate Asset* to determine which investments it should make in a particular *Commodity Market*
+and *Milestone Year*. Appraisal considers the *Agent Objective*, expected costs, commodity prices,
+and the asset's expected operation.
 
 **Investment Order:** The sequence in which *Commodity* markets are considered for investment.
 MUSE2 generally processes downstream markets before upstream markets, so that demand for input
@@ -196,7 +196,7 @@ which trade and other regional interactions are modelled.
 
 **Search Space:** The set of *Processes* an *Agent* is allowed to consider for investment, defined
 for a particular *Commodity*, *Region*, and *Year*. It determines which *Candidate Assets* are
-available during investment appraisal.
+available during investment.
 
 **Season:** A subdivision of a *Year* that groups related *Time Slices*. For example, summer,
 winter, or other.
@@ -234,8 +234,9 @@ a day-night level requires the balance to be met separately in each time-of-day 
 *Time-slice Level*. For example, a selection can group all winter *Time Slices* so that a seasonal
 *Availability* limit applies to their combined *Activity*.
 
-**Tranche Size:** The capacity of one tranche of an *Asset*. Every *Asset* has a *Tranche Size*,
-either defined when the *Asset* is created or inferred when an investment is made. *Tranche Size*
+**Tranche Size:** The capacity of one tranche of an *Asset*. An *Asset* that is made up of tranches
+has a *Tranche Size*, either defined when the *Asset* is created or inferred when a competitive
+*Agent* invests in it. Other *Assets* have a continuous *Capacity*. *Tranche Size*
 defines the granularity at which retention, mothballing, and decommissioning decisions are made. For
 example, a 100 MW *Asset* with a 25 MW *Tranche Size* has four tranches, which can be retained or
 mothballed independently.
