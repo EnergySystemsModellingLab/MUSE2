@@ -110,7 +110,7 @@ time is valued at approximately £95.24 today (100 / (1 + 0.05)).
 **Dispatch:** The way in which *Assets* are operated to serve demand. Within the limits imposed by
 *Availability*, *Commodity* balances, and other user-defined constraints, MUSE2 effectively dispatches
 *Assets* in *Merit Order*: cheaper *Assets* are used first, up to their available capacity or until
-demand is met. The resulting operation is calculated by a least-cost linear programme.
+demand is met. The resulting operation is calculated by a least-cost linear program.
 
 **End Year:** The final year in the model *Time Horizon*.
 
@@ -135,7 +135,7 @@ commodities.
 **Investment Appraisal:** The process by which a competitive *Agent* evaluates each existing and
 *Candidate Asset* to determine which investments it should make in a particular *Commodity Market*
 and *Milestone Year*. Appraisal considers the *Agent Objective*, expected costs, commodity prices,
-and the asset's expected operation.
+and the asset's expected operation alongside any assets the agent has already selected.
 
 **Investment Order:** The sequence in which *Commodity* markets are considered for investment.
 MUSE2 generally processes downstream markets before upstream markets, so that demand for input
