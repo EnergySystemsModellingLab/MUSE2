@@ -470,7 +470,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case("", Some(SimulationProtocol::SystemDispatch))]
+    #[case("", Some(SimulationProtocol::AgentDispatch))]
     #[case(
         "simulation_protocol = \"system_dispatch\"",
         Some(SimulationProtocol::SystemDispatch)

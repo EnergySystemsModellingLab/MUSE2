@@ -46,10 +46,10 @@ pub mod system_dispatch;
 #[strum(serialize_all = "snake_case")]
 pub enum SimulationProtocol {
     /// Agents choose capacity; flows and prices come from a system-wide cost-minimising dispatch
-    #[default]
     SystemDispatch,
     /// Agents choose capacity; flows and prices come directly from the activities determined by
     /// agents' own optimisations
+    #[default]
     AgentDispatch,
 }
 

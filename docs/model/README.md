@@ -86,7 +86,7 @@ How commodity flows and prices are obtained in each of these steps is determined
 ## Simulation protocols
 
 The simulation protocol is selected with the `simulation_protocol` setting in
-[`model.toml`][model-toml]. If it is not specified, `system_dispatch` is used.
+[`model.toml`][model-toml]. If it is not specified, `agent_dispatch` is used.
 
 ### `system_dispatch`
 

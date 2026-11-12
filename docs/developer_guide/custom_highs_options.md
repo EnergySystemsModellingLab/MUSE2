@@ -9,8 +9,7 @@ You can change any of the options exposed by the HiGHS solver; for more informat
 documentation][highs-opts].
 
 You can set options to be applied to all optimisations, just dispatch or just appraisal. Note that
-dispatch options are only used by the `system_dispatch` [simulation protocol][protocols], which is
-currently the only one available.
+dispatch options are only used by the `system_dispatch` [simulation protocol][protocols].
 
 Here is an example:
 
