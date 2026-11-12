@@ -15,8 +15,8 @@ digraph investment_order {
     subgraph cluster_cycle {
         label="Circularity (invested 2nd)";
         style="rounded,dashed";
-        ELCTRI [label="ELCTRI\n(2a)", fillcolor="#B3CDE3"];
-        H2YPRD [label="H2YPRD\n(2b)", fillcolor="#B3CDE3"];
+        ELCTRI [label="ELCTRI\n(2b)", fillcolor="#B3CDE3"];
+        H2YPRD [label="H2YPRD\n(2a)", fillcolor="#B3CDE3"];
     }
 
     subgraph cluster_layer {
@@ -30,7 +30,7 @@ digraph investment_order {
     GASNAT -> ELCTRI;
     GASNAT -> RSHEAT;
     ELCTRI -> H2YPRD;
-    H2YPRD -> ELCTRI;
+    H2YPRD -> ELCTRI [label="H2YGEN\n(feedback)", color="#D62728", fontcolor="#D62728"];
     ELCTRI -> RSHEAT;
     ELCTRI -> TPASKM;
 }
