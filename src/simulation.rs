@@ -12,10 +12,12 @@ use log::info;
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod activity;
+use activity::FlowMap;
 pub mod optimisation;
-use optimisation::{DispatchRun, FlowMap};
+use optimisation::DispatchRun;
 pub mod investment;
-use investment::{collect_preset_demands_for_year, perform_agent_investment};
+use investment::{AgentRunMode, collect_preset_demands_for_year, run_agents_for_year};
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
@@ -62,6 +64,20 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
     writer.write_flows(year, &flow_map)?;
     writer.write_prices(year, &prices.market)?;
 
+    // Agent-level activities for the base year. These are not yet used.
+    info!("Running agent dispatch...");
+    writer.set_debug_context("base year agent dispatch".to_string());
+    let _base_year_selection = run_agents_for_year(
+        model,
+        year,
+        &asset_pool,
+        AgentRunMode::Dispatch,
+        &prices,
+        &mut writer,
+    )
+    .context("Agent dispatch failed")?;
+    writer.clear_debug_context();
+
     while let Some(year) = year_iter.next() {
         info!("Milestone year: {year}");
 
@@ -82,9 +98,17 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
 
             // Perform agent investment
             info!("Running agent investment...");
-            let selected_assets =
-                perform_agent_investment(model, year, &existing_assets, &prices, &mut writer)
-                    .context("Agent investment failed")?;
+            // NB: activities from asset selection are not currently used
+            let selected_assets = run_agents_for_year(
+                model,
+                year,
+                &existing_assets,
+                AgentRunMode::Invest,
+                &prices,
+                &mut writer,
+            )
+            .context("Agent investment failed")?
+            .assets;
 
             // Run dispatch optimisation to get updated prices for the next iteration
             info!("Running dispatch optimisation...");
