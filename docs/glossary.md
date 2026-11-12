@@ -135,7 +135,7 @@ commodities.
 **Investment Appraisal:** The process by which a competitive *Agent* evaluates each existing and
 *Candidate Asset* to determine which investments it should make in a particular *Commodity Market*
 and *Milestone Year*. Appraisal considers the *Agent Objective*, expected costs, commodity prices,
-and the asset's expected operation.
+and the asset's expected operation alongside any assets the agent has already selected.
 
 **Investment Order:** The sequence in which *Commodity* markets are considered for investment.
 MUSE2 generally processes downstream markets before upstream markets, so that demand for input
