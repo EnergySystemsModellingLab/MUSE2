@@ -188,7 +188,7 @@ mod tests {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
-            agent_type: AgentType::Competitive,
+            agent_type: AgentType::Portfolio,
             decision_rule: DecisionRule::Single,
             regions: IndexSet::from(["GBR".into()]),
             objectives: AgentObjectiveMap::new(),
@@ -233,11 +233,11 @@ mod tests {
     #[rstest]
     #[case(
         "id,description,regions,decision_rule\nagent,,GBR,single\n",
-        Some(AgentType::Competitive)
+        Some(AgentType::Portfolio)
     )]
     #[case(
         "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,\n",
-        Some(AgentType::Competitive)
+        Some(AgentType::Portfolio)
     )]
     #[case(
         "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,competitive\n",
