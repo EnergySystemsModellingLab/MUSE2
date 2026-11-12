@@ -73,9 +73,9 @@ pub fn add_activity_constraints(
 
 /// Adds demand constraints to the problem.
 ///
-/// Constrains supply to be greater than or equal to demand. One inequality constraint is added per
-/// time-slice selection at the commodity's balance level, requiring the sum of activity (scaled by
-/// flow coefficients) to be at least the total demand for that selection.
+/// Constrains supply to equal demand. One equality constraint is added per time-slice selection at
+/// the commodity's balance level, requiring the sum of activity (scaled by flow coefficients) to
+/// equal the total demand for that selection.
 pub fn add_demand_constraints(
     problem: &mut Problem,
     assets: &[AssetRef],
@@ -104,7 +104,8 @@ pub fn add_demand_constraints(
             .collect::<Vec<_>>();
 
         // Create the constraint
-        problem.add_row(demand[&ts_selection].value().., terms);
+        let demand = demand[&ts_selection].value();
+        problem.add_row(demand..=demand, terms);
     }
 }
 

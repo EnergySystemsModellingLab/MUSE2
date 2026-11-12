@@ -420,15 +420,15 @@ where:
   \\]
 
 - **Demand**: for each time-slice selection \\( s \\) at the commodity's time-slice level, the
-  total production of the commodity \\( c \\) by all options must at least meet the agent's
+  total production of the commodity \\( c \\) by all options must equal the agent's
   share of demand:
 
   \\[
-    \sum_a \sum\_{t \in s} f\_{a,c} \cdot A\_{a,t} \ge \mathrm{Demand}\_{c,s}
+    \sum_a \sum\_{t \in s} f\_{a,c} \cdot A\_{a,t} = \mathrm{Demand}\_{c,s}
   \\]
 
-  where \\( f\_{a,c} \\) is the flow coefficient of the commodity for option \\( a \\). Unlike
-  in the competitive mini dispatch, supply may exceed demand.
+  where \\( f\_{a,c} \\) is the flow coefficient of the commodity for option \\( a \\). Minimum
+  activity limits can make the optimisation infeasible if demand cannot be met exactly.
 
 - **Total capacity limits**: for each process \\( p \\) with a
   [total capacity limit][investment-constraints], the summed capacity of all options for that
