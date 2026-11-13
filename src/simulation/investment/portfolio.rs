@@ -19,10 +19,10 @@ use std::collections::HashMap;
 
 mod constraints;
 mod costs;
-mod debug;
 mod optimisation;
-use debug::write_debug_info;
+mod output;
 use optimisation::perform_optimisation;
+use output::write_debug_info;
 
 /// Select assets for an agent to meet its share of demand for a commodity in a region.
 ///
