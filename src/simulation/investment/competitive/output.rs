@@ -61,7 +61,7 @@ pub fn write_debug_info(
 
     let rows = appraisal_results.iter().map(|result| AppraisalResultsRow {
         milestone_year,
-        run_description: run_description.clone(),
+        run_description: run_description.to_string(),
         asset_id: result.asset.id(),
         process_id: result.asset.process_id().clone(),
         region_id: result.asset.region_id().clone(),
@@ -82,7 +82,7 @@ pub fn write_debug_info(
             };
             AppraisalResultsTimeSliceRow {
                 milestone_year,
-                run_description: run_description.clone(),
+                run_description: run_description.to_string(),
                 asset_id: result.asset.id(),
                 process_id: result.asset.process_id().clone(),
                 region_id: result.asset.region_id().clone(),

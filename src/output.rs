@@ -12,6 +12,7 @@ use anyhow::{Context, Result, ensure};
 use csv;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fs::{self, File, OpenOptions};
@@ -266,11 +267,11 @@ impl DebugDataWriter {
     }
 
     /// Prepend the current context to the run description
-    fn with_context(&self, run_description: &str) -> String {
+    fn with_context<'a>(&self, run_description: &'a str) -> Cow<'a, str> {
         if let Some(context) = &self.context {
-            format!("{context}; {run_description}")
+            Cow::Owned(format!("{context}; {run_description}"))
         } else {
-            run_description.to_string()
+            Cow::Borrowed(run_description)
         }
     }
 
@@ -340,7 +341,7 @@ impl DebugDataWriter {
         for ((asset, time_slice), (activity, activity_dual, column_dual)) in map {
             let row = DispatchRow {
                 milestone_year,
-                run_description: self.with_context(run_description),
+                run_description: self.with_context(run_description).into_owned(),
                 asset_id: asset.id(),
                 process_id: asset.process_id().clone(),
                 region_id: asset.region_id().clone(),
@@ -368,7 +369,7 @@ impl DebugDataWriter {
         for (commodity_id, region_id, time_slice, value) in iter {
             let row = CommodityBalanceDualsRow {
                 milestone_year,
-                run_description: self.with_context(run_description),
+                run_description: self.with_context(run_description).into_owned(),
                 commodity_id: commodity_id.clone(),
                 region_id: region_id.clone(),
                 time_slice: time_slice.clone(),
@@ -402,7 +403,7 @@ impl DebugDataWriter {
             "Unmet demand file already exists!"
         );
 
-        let run_description = self.with_context(run_description);
+        let run_description = self.with_context(run_description).into_owned();
         let writer = self
             .unmet_demand_writer
             .insert(csv::Writer::from_path(&self.unmet_demand_file_path)?);
@@ -430,7 +431,7 @@ impl DebugDataWriter {
     ) -> Result<()> {
         let row = SolverValuesRow {
             milestone_year,
-            run_description: self.with_context(run_description),
+            run_description: self.with_context(run_description).into_owned(),
             objective_value,
         };
         self.solver_values_writer.serialize(row)?;
@@ -549,10 +550,10 @@ impl DataWriter {
     }
 
     /// Prepend the current debug context (if any) to a run description
-    pub fn debug_run_description(&self, run_description: &str) -> String {
+    pub fn debug_run_description<'a>(&self, run_description: &'a str) -> Cow<'a, str> {
         match &self.debug {
             Some(wtr) => wtr.with_context(run_description),
-            None => run_description.to_string(),
+            None => Cow::Borrowed(run_description),
         }
     }
 
@@ -1106,6 +1107,24 @@ mod tests {
         let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
 
         writer.write_debug_rows("custom.csv", [1]).unwrap_err();
+    }
+
+    #[test]
+    fn debug_run_description_borrows_without_context() {
+        let dir = tempdir().unwrap();
+        let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
+        let description = "test run";
+
+        assert!(matches!(
+            writer.debug_run_description(description),
+            Cow::Borrowed(value) if std::ptr::eq(value, description)
+        ));
+
+        writer.set_debug_context("outer context".into());
+        assert!(matches!(
+            writer.debug_run_description(description),
+            Cow::Owned(value) if value == "outer context; test run"
+        ));
     }
 
     #[test]
