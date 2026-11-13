@@ -23,6 +23,7 @@ use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
 use debug::write_debug_info;
+use indexmap::IndexSet;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
 use metrics::{
@@ -63,7 +64,7 @@ pub fn select_assets(
     region_id: &RegionID,
     demand: DemandMap,
     existing_assets: &[AssetRef],
-    excluded_processes: &[ProcessID],
+    excluded_processes: &IndexSet<ProcessID>,
     agent_addition_limits: HashMap<ProcessID, Capacity>,
     agent_total_limits: HashMap<ProcessID, Capacity>,
     prices: &Prices,
