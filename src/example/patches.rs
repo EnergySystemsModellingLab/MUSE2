@@ -137,22 +137,6 @@ fn get_all_patches() -> PatchMap {
                 None,
             ),
         ),
-        (
-            // The simple example with electricity priced using shadow prices
-            "simple_shadow",
-            PatchInfo::new(
-                "simple",
-                vec![FilePatch::new("commodities.csv").with_replacement(&[
-                    "id,description,type,time_slice_level,pricing_strategy,units",
-                    "GASPRD,Gas produced,sed,season,,PJ",
-                    "GASNAT,Natural gas,sed,season,,PJ",
-                    "ELCTRI,Electricity,sed,daynight,shadow,PJ",
-                    "RSHEAT,Residential heating,svd,daynight,,PJ",
-                    "CO2EMT,CO2 emitted,oth,annual,,ktCO2",
-                ])],
-                None,
-            ),
-        ),
         // The simple example with the ironing-out loop turned on
         (
             "simple_ironing_out",
