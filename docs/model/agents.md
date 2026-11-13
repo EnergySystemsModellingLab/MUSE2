@@ -32,11 +32,13 @@ competitive agents (`competitive`) and portfolio agents (`portfolio`)
 ## Competitive agents
 
 Competitive agents select assets in a series of rounds. In each round, every remaining option (a
-tranche of an existing asset or of a candidate asset) is appraised against the agent's remaining
-demand. A small [dispatch optimisation](#mini-dispatch-optimisation) determines how the option
-would operate, and an [investment metric](#metric-calculation) is then calculated according to the
-agent's objective. The best option is selected, its production is subtracted from the remaining
-demand, and the process repeats until demand is met or no feasible options remain.
+tranche of an existing asset or of a candidate asset) is appraised alongside the assets already
+selected in previous rounds. A small [dispatch optimisation](#mini-dispatch-optimisation) of the
+already-selected assets plus the option determines how the option would operate, and an
+[investment metric](#metric-calculation) is then calculated for the option's
+[marginal activity](#marginal-activity) according to the agent's objective. The best option is
+selected and added to the set of selected assets, and the process repeats until demand is met or no
+feasible options remain.
 
 ### Commodity prices used in appraisal
 
@@ -101,9 +103,15 @@ remaining limit.
 ### Mini Dispatch Optimisation
 
 For each supply option being appraised, a small linear programme (LP) is solved to determine the
-optimal activity profile given the current remaining demand.
+optimal activity profile. The LP includes every asset selected so far in the current market
+(whether existing or candidate) as well as the option being appraised, and is solved against the
+market's full demand rather than the demand remaining after earlier selections. The option is
+therefore appraised on how it would operate alongside the assets already selected, rather than in
+isolation.
 
 #### Activity coefficients
+
+Each asset in the LP has its own activity coefficients, calculated as described below.
 
 The mini dispatch optimisation implicitly frames each time slice as a choice: the asset can either
 produce the commodity of interest, or it can be treated as procured from an alternative source at
@@ -149,30 +157,53 @@ in [`model.toml`][model-toml].
 
 #### Constraints
 
-- **Activity bounds**: the sum of activity within each time-slice selection is bounded by the
-  asset's availability limits multiplied by its capacity.
+- **Activity bounds**: for each asset, the sum of activity within each time-slice selection is
+  bounded by the asset's availability limits multiplied by its capacity.
 - **Demand constraints**: demand for a commodity is balanced at the commodity's defined
   *time-slice level* (e.g. annual, seasonal, or time-slice). The total supply (activity × flow
-  coefficient) within each balance bucket must not exceed the remaining demand for that bucket.
+  coefficient) of all assets in the LP within each balance bucket must not exceed the demand for
+  that bucket.
+- **Equal utilisation of equivalent assets**: assets with equivalent dispatch properties are
+  constrained to have the same utilisation in every time slice, as in the full-system dispatch (see
+  [Equal Utilisation of Equivalent Assets][dispatch-equal-utilisation]).
 
 #### Objective
 
-The optimisation maximises the total net revenue across all time slices, subject to the above
-constraints:
+The optimisation maximises the total net revenue across all assets and time slices, subject to the
+above constraints:
 
 \\[
-  \max \sum_t \alpha_t \cdot \mathrm{Activity}_t
+  \max \sum_{a} \sum_t \alpha_{a,t} \cdot \mathrm{Activity}_{a,t}
 \\]
 
 In addition, seasonal/annual utilisation penalties are included to encourage even spread of
 utilisation within and across seasons. These are equivalent to the
 [Seasonal/Annual Utilisation Penalties][dispatch-utilisation-penalties] used in the full-system
-dispatch optimisation.
+dispatch optimisation, and are applied to each asset separately.
 
 ### Metric Calculation
 
-After the dispatch LP is solved, an investment metric is calculated from the resulting activity
-profile using **market prices**.
+After the dispatch LP is solved, an investment metric is calculated for the option using **market
+prices**. The metric is based on the option's marginal activity, while the fixed costs and market
+costs are those of the option itself.
+
+#### Marginal activity
+
+Because the LP includes previously selected assets, the option's activity cannot be read directly
+from the solution. Instead, the metric uses the *marginal activity*
+\\( \Delta\mathrm{Activity}_t \\): the change in activity, relative to the previous round's
+solution, of all assets equivalent to the option (including the option itself):
+
+\\[
+  \Delta\mathrm{Activity}_t = \sum_{a \in G} \left(\mathrm{Activity}_{a,t}^{(k)} -
+    \mathrm{Activity}_{a,t}^{(k-1)}\right)
+\\]
+
+where \\( G \\) is the set of assets in the LP that are equivalent to the option (see
+[Equal Utilisation of Equivalent Assets][dispatch-equal-utilisation]), and \\( k \\) is the current
+round. Activity in the previous solution is zero for any asset not present in it, so in the first
+round the marginal activity is simply the option's activity. All of the marginal activity is
+attributed to the option being appraised.
 
 #### Market costs per time slice
 
@@ -196,9 +227,9 @@ The LCOX metric is calculated as the total annualised cost divided by total annu
 the above defined market costs which *exclude* the primary output commodity:
 
 \\[
-  \mathrm{LCOXMetric} = \frac{\mathrm{AFC} \times \mathrm{Capacity} + \sum_t \mathrm{Activity}_t
-  \times \mu_t^{\mathrm{LCOX}}}
-    {\sum_t \mathrm{Activity}_t}
+  \mathrm{LCOXMetric} = \frac{\mathrm{AFC} \times \mathrm{Capacity} + \sum_t
+  \Delta\mathrm{Activity}_t \times \mu_t^{\mathrm{LCOX}}}
+    {\sum_t \Delta\mathrm{Activity}_t}
 \\]
 
 Lower values indicate lower-cost investments.
@@ -209,16 +240,16 @@ The NPV metric is based on the Specific Net Annualised Surplus (SNAS). This the 
 unit of activity, using market costs that *include* the primary output commodity:
 
 \\[
-  \mathrm{SNAS} = \frac{-\left(\mathrm{AFC} \times \mathrm{Capacity} + \sum_t \mathrm{Activity}_t \times
-    \mu_t^{\mathrm{NPV}}\right)}{\sum_t \mathrm{Activity}_t}
+  \mathrm{SNAS} = \frac{-\left(\mathrm{AFC} \times \mathrm{Capacity} + \sum_t
+    \Delta\mathrm{Activity}_t \times \mu_t^{\mathrm{NPV}}\right)}{\sum_t \Delta\mathrm{Activity}_t}
 \\]
 
 Higher values indicate more profitable investments.
 
-> For both metrics, any option with zero total activity after the mini dispatch LP is excluded from
-> consideration, as it cannot contribute to meeting demand. This will generally happen if all
-> time slices have negative activity coefficients, unless the process has lower-bound activity
-> constraints that force activity.
+> For both metrics, any option with zero total marginal activity after the mini dispatch LP is
+> excluded from consideration, as it cannot contribute to meeting demand. This will generally
+> happen if all time slices have negative activity coefficients, unless the process has lower-bound
+> activity constraints that force activity.
 
 ### Asset selection
 
@@ -234,9 +265,11 @@ equal metrics, the following tie-breaking rules are applied in order:
 
 #### Selection loop
 
-The best-ranked asset is committed. Its production profile from the mini dispatch optimisation is
-subtracted from the remaining demand, and the loop repeats with the updated demand profile. This
-continues until:
+The best-ranked asset is committed and added to the set of selected assets. The solution of its mini
+dispatch optimisation is kept as the baseline for calculating
+[marginal activity](#marginal-activity) in the next round. The remaining demand is calculated as the
+market's demand minus the supply from all selected assets in that solution, and the loop repeats
+with the updated set of selected assets. This continues until:
 
 - The remaining demand falls below `remaining_demand_absolute_tolerance`
   (in [`model.toml`][model-toml]), or
@@ -301,8 +334,13 @@ The optimiser maximises \\( 10 \cdot \mathrm{Activity}_{t_0} + (-10) \cdot \math
 so it prefers to dispatch during \\( t_0 \\) and minimise activity during \\( t_1 \\), subject to
 demand and availability constraints.
 
-Suppose the optimiser determines \\( \mathrm{Activity}_{t_0} = 80 \\) MWh and
-\\( \mathrm{Activity}_{t_1} = 20 \\) MWh.
+For simplicity, assume this is the first round of selection, so that no assets have been selected
+yet and the plant is the only asset in the LP. Suppose the optimiser determines
+\\( \mathrm{Activity}_{t_0} = 80 \\) MWh and \\( \mathrm{Activity}_{t_1} = 20 \\) MWh. As there is
+no previous solution, the marginal activity equals the activity:
+\\( \Delta\mathrm{Activity}_{t_0} = 80 \\) MWh and \\( \Delta\mathrm{Activity}_{t_1} = 20 \\) MWh.
+In later rounds, the marginal activity would instead be the change in activity relative to the
+previous round's solution.
 
 #### LCOX Metric
 
@@ -465,3 +503,4 @@ Once the LP has been solved, the selected assets are constructed from the capaci
 [agent-search-spaces-csv]: ../file_formats/input_files.md#agent_search_spacescsv
 [agent-objectives-csv]: ../file_formats/input_files.md#agent_objectivescsv
 [dispatch-utilisation-penalties]: ./dispatch_optimisation.md#seasonalannual-utilisation-penalties
+[dispatch-equal-utilisation]: ./dispatch_optimisation.md#equal-utilisation-of-equivalent-assets
