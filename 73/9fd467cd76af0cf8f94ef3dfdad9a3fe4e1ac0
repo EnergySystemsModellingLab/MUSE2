@@ -1,0 +1,31 @@
+docs/model/agents.md
+  h_e76403a1cd4bf1 318
+  s_934a99b98bc1a6::t_cfd98cf75e78bb 45-46,48-49,51,55,124,136,141,186-187,308
+schemas/input/model.yaml
+  h_e76403a1cd4bf1 62
+  s_934a99b98bc1a6::t_cfd98cf75e78bb 60
+docs/model/dispatch_optimisation.md
+  h_e76403a1cd4bf1 247
+  s_934a99b98bc1a6::t_cfd98cf75e78bb 154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "739fd467cd76af0cf8f94ef3dfdad9a3fe4e1ac0",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_934a99b98bc1a6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "9cb1852f-4c45-4bb7-9cd5-275580dec4fd",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
