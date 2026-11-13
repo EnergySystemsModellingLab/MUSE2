@@ -1,29 +1,23 @@
 //! Calculation for investment tools such as Levelised Cost of X (LCOX) and Net Present Value (NPV).
-use super::DemandMap;
+use super::coefficients::ObjectiveCoefficients;
+use super::costs::annual_fixed_cost;
+use super::optimisation::{ResultsMap, perform_optimisation};
 use crate::agent::ObjectiveType;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::Commodity;
 use crate::finance::{lcox, snas};
 use crate::model::Model;
+use crate::simulation::investment::DemandMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
-use costs::annual_fixed_cost;
 use erased_serde::Serialize as ErasedSerialize;
+use float_cmp::{ApproxEq, F64Margin};
 use indexmap::IndexMap;
-use optimisation::ResultsMap;
 use serde::Serialize;
 use std::any::Any;
 use std::cmp::Ordering;
 use std::sync::Arc;
-
-pub mod coefficients;
-mod constraints;
-mod costs;
-mod optimisation;
-use coefficients::ObjectiveCoefficients;
-use float_cmp::{ApproxEq, F64Margin};
-use optimisation::perform_optimisation;
 
 /// Compares two values with approximate equality checking.
 ///
@@ -86,7 +80,7 @@ impl AppraisalOutput {
     /// lead to different decisions being made, depending on the user's platform (e.g. macOS ARM
     /// vs. Windows). We want to avoid this, if possible, which is why we use a more approximate
     /// comparison.
-    pub fn compare_metric(&self, other: &Self) -> Ordering {
+    fn compare_metric(&self, other: &Self) -> Ordering {
         let (metric1, metric2) = self
             .metric
             .as_deref()
@@ -132,7 +126,7 @@ pub trait ComparableMetric: Any + Send + Sync {
 #[derive(Debug, Clone, Serialize)]
 pub struct LCOXMetric {
     /// The calculated cost value for this LCOX metric
-    pub cost: MoneyPerActivity,
+    cost: MoneyPerActivity,
 }
 
 impl LCOXMetric {
@@ -169,14 +163,14 @@ impl MetricTrait for LCOXMetric {}
 /// In the NPV appraisal tool we compare options using the Specific Net Annualised Surplus (SNAS)
 /// expressed per unit activity. Higher values indicate more profitable investments.
 #[derive(Debug, Clone, Serialize)]
-pub struct NPVMetric {
+struct NPVMetric {
     /// The calculated SNAS value for this metric
-    pub snas: MoneyPerActivity,
+    snas: MoneyPerActivity,
 }
 
 impl NPVMetric {
     /// Creates a new `NPVMetric` with the given SNAS value.
-    pub fn new(snas: MoneyPerActivity) -> Self {
+    fn new(snas: MoneyPerActivity) -> Self {
         Self { snas }
     }
 }
@@ -281,7 +275,7 @@ pub fn appraise_investment(
     model: &Model,
     asset: &AssetRef,
     commodity: &Commodity,
-    objective_type: &ObjectiveType,
+    objective_type: ObjectiveType,
     coefficients: &Arc<ObjectiveCoefficients>,
     demand: &DemandMap,
 ) -> Result<AppraisalOutput> {
