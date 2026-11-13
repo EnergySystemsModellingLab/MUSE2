@@ -10,6 +10,9 @@ src/simulation/investment/competitive.rs
   s_87c5e8dae63a5a::t_6efbafa5bfac72 41-43,52,94
 benches/assets.rs
   s_87c5e8dae63a5a::t_a9e2a3066b48ac 252
+src/simulation/investment/portfolio.rs
+  s_74a80dff1d140e::t_46a942c5209a48 217
+  s_74a80dff1d140e::t_b8af28b1fb3f16 171
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -22,6 +25,14 @@ benches/assets.rs
     }
   },
   "sessions": {
+    "s_74a80dff1d140e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "62d4171b-3264-4d03-9c80-f3b64fbd0c7e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
     "s_87c5e8dae63a5a": {
       "agent_id": {
         "tool": "github-copilot-cli",
