@@ -22,6 +22,7 @@ use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
@@ -32,7 +33,6 @@ use metrics::{
 use output::write_debug_info;
 use rayon::prelude::*;
 use std::collections::HashMap;
-use indexmap::IndexMap;
 
 /// Select assets for an agent to meet its share of demand for a commodity in a region.
 ///
