@@ -152,7 +152,7 @@ These constraints are defined in the optional `commodity_constraints.csv` file. 
 The dual values (shadow prices) of the commodity balance constraints represent the marginal cost of
 satisfying an additional unit of demand for that commodity in region \\( r \\) during selection
  \\( s \\). These shadow prices are critical outputs of the dispatch model and are used to seed and
- guide investment appraisal in subsequent steps.
+ guide the investment appraisal of [competitive agents][competitive-agents] in subsequent steps.
 
 ---
 
@@ -246,7 +246,8 @@ candidate assets are present:
 \\]
 
 where \\( \epsilon \\) is the `commodity_balance_epsilon` parameter. The shadow prices from this
-candidate dispatch run are then used to seed and guide investment appraisal in subsequent steps.
+candidate dispatch run are then used to seed and guide the investment appraisal of
+[competitive agents][competitive-agents] in subsequent steps.
 
 ---
 
@@ -292,3 +293,5 @@ caused by one or more constraints defined in `commodity_constraints.csv`.
 If the rerun remains infeasible, commodity constraints are not identified as the cause. Since
 commodity constraints are an experimental feature, this diagnosis should be treated as indicative
 rather than definitive.
+
+[competitive-agents]: ./agents.md#competitive-agents
