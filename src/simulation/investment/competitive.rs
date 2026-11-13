@@ -239,7 +239,7 @@ fn log_on_equal_appraisal_outputs(
 }
 
 /// Get the best assets for meeting demand for the given commodity
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_best_assets(
     model: &Model,
     mut opt_assets: Vec<AssetRef>,
@@ -268,8 +268,14 @@ pub fn select_best_assets(
         prepare_commissioned_assets_for_retention(&mut opt_assets);
 
     // Calculate coefficients for all asset options according to the agent's objective
-    let coefficients =
-        calculate_coefficients_for_assets(model, objective_type, &opt_assets, prices, year);
+    let coefficients = calculate_coefficients_for_assets(
+        model,
+        objective_type,
+        &opt_assets,
+        &prices.market,
+        &prices.fallback,
+        year,
+    );
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
