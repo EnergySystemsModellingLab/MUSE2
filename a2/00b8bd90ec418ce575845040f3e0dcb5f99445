@@ -1,0 +1,140 @@
+tests/data/simple/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 178-497
+tests/data/two_regions/assets.csv
+  h_e76403a1cd4bf1 9-29
+tests/data/simple_full/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_mothball/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_mothball/assets.csv
+  h_e76403a1cd4bf1 10
+tests/data/circularity/asset_capacities.csv
+  h_e76403a1cd4bf1 17,19,21-22,24-34,36-49
+tests/data/missing_commodity/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-318,321-324,334-345,358-369,373-378,382-384,388-390,406-417,452-459,462-463,466-469,472-513,522-537,542-705
+tests/data/muse1_default/commodity_prices.csv
+  h_e76403a1cd4bf1 26-37,44-55,62-73,80-91,98-121
+tests/data/simple_marginal_average/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_ironing_out/commodity_flows.csv
+  h_e76403a1cd4bf1 226-312,314-317,321-393,406-417,426-427,432-433,442-443,446-473,486-753
+tests/data/simple_marginal_average/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/muse1_default/asset_capacities.csv
+  h_e76403a1cd4bf1 4-57
+tests/data/simple_ironing_out/assets.csv
+  h_e76403a1cd4bf1 9-11
+tests/data/simple/debug_commodity_balance_duals.csv
+  h_e76403a1cd4bf1 163-164,178-183,185,190-191,193,195-196,198,201,206,209,226-231,233,238-239,241,243-244,246,249,254,257,323-324,326,329,334,337-343,345,350-351,353,362-365,370-386,390-393,399-400,402-409,414-417,451-452,454,457,462,465-471,473,478-479,481,490-493,498-514,518-521,526-537,542-565,570-573,578-581,586-589,594-629,642-645,658-689,702-721,738-761,770-801
+tests/data/muse1_default/commodity_flows.csv
+  h_e76403a1cd4bf1 26-49,74-673
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-754,756,758,760-765,769-841,854-867,870-1332,1334,1336,1338,1341-1342,1344-1345,1355-1357,1361-1369,1373-1381,1385-1825
+tests/data/muse1_default/assets.csv
+  h_e76403a1cd4bf1 6-15
+tests/data/simple/debug_asset_selection_portfolio.csv
+  h_e76403a1cd4bf1 1-27
+tests/data/two_regions/asset_capacities.csv
+  h_e76403a1cd4bf1 6-7,10-15,18-27,30-43,46-63,66-87,90-113
+tests/data/two_outputs/commodity_flows.csv
+  h_e76403a1cd4bf1 562-692,694,696-699,702,705-765,769-777,790-803,806-819,826-1275,1278,1280,1297-1305,1309-1317,1321-1761
+tests/data/simple_marginal/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_full/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/circularity_npv/assets.csv
+  h_e76403a1cd4bf1 21-32
+tests/data/simple/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_full/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_marginal_average/commodity_prices.csv
+  h_e76403a1cd4bf1 66-98,100,102-105,109-177
+tests/data/simple_mothball/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-17,19-22
+tests/data/simple_ironing_out/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-20
+tests/data/simple_marginal/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/missing_commodity/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11-12,14-23
+tests/data/simple_ironing_out/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 178-497
+tests/data/simple/debug_solver.csv
+  h_e76403a1cd4bf1 4-17
+tests/data/two_outputs/assets.csv
+  h_e76403a1cd4bf1 15-20,22-30
+tests/data/circularity/assets.csv
+  h_e76403a1cd4bf1 21-32
+tests/data/simple_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_marginal_average/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_marginal/commodity_prices.csv
+  h_e76403a1cd4bf1 66-98,102-105,109-177
+tests/data/simple/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/missing_commodity/commodity_prices.csv
+  h_e76403a1cd4bf1 98-241
+tests/data/simple_full/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple/debug_dispatch_assets.csv
+  h_e76403a1cd4bf1 306-322,324,338-345,350-369,371-372,374,377,382,384-393,398-407,410-414,417-471,473,478-489,494-503,506-510,513-553,558-585,590-601,606-615,618-622,625-665,670-681,686-713,718-729,734-743,746-750,753-793,798-809,814-833,835-838,841,846,848-857,862-977,979-981,986-989,994,998-1000,1006-1007,1010-1017,1022-1025,1030,1033,1038,1040-1042,1046-1049,1055-1056,1058-1065,1070-1081,1086-1095,1098-1102,1105-1145,1150-1161,1166-1265,1267-1270,1273,1278,1280-1289,1294-1345,1347-1349,1354-1357,1362,1366-1368,1374-1375,1378-1385,1390-1393,1398,1401,1406,1408-1410,1414-1417,1422-1841,1858-1905,1922-2017
+tests/data/simple_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_mothball/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-324,334-345,358-393,406-417,426-427,432-433,442-443,446-473,486-520,522-523,526-529,546-551,610-705,722-769
+tests/data/simple/debug_asset_selection_portfolio_time_slices.csv
+  h_e76403a1cd4bf1 1-417
+tests/data/two_outputs/commodity_prices.csv
+  h_e76403a1cd4bf1 162-465
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-754,756,758,760-765,769-841,854-867,870-1332,1334,1336,1338,1341-1342,1344-1345,1355-1357,1361-1369,1373-1381,1385-1825
+tests/data/simple_marginal/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_npv/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/two_outputs/asset_capacities.csv
+  h_e76403a1cd4bf1 15,17,19-20,22-32,34-47
+tests/data/two_regions/commodity_flows.csv
+  h_e76403a1cd4bf1 50-97,110-127,140-1345
+tests/data/circularity_npv/asset_capacities.csv
+  h_e76403a1cd4bf1 17,19,21-22,24-34,36-49
+tests/data/two_regions/commodity_prices.csv
+  h_e76403a1cd4bf1 44,46,49-56,58,61-73,81,83-84,86-91,93,95-96,98-109,116,118,121-128,130,133-145,152-181,188,190,193-200,202,205-241
+tests/data/simple_shadow/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_shadow/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_shadow/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_shadow/commodity_prices.csv
+  h_e76403a1cd4bf1 66-98,102-105,110-177
+tests/data/simple_tranche_size/asset_capacities.csv
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_tranche_size/assets.csv
+  h_e76403a1cd4bf1 8,10-12
+tests/data/simple_tranche_size/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-305,307-309,311,314-318,322-324,334-345,358-393,406-417,426-427,432-443,446-769
+tests/data/simple_tranche_size/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a200b8bd90ec418ce575845040f3e0dcb5f99445",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
