@@ -1,0 +1,30 @@
+src/simulation/investment/competitive.rs
+  s_74a80dff1d140e::t_1f9470c8331135 16,72,100,253,323
+  s_74a80dff1d140e::t_3172138adad1f5 54
+src/simulation/market.rs
+  s_74a80dff1d140e::t_1f9470c8331135 225
+src/output.rs
+  s_74a80dff1d140e::t_1f9470c8331135 233,278-282,452,553-555
+  s_74a80dff1d140e::t_3172138adad1f5 450-451,1045,1048-1055,1080-1084,1097-1101,1111-1114,1120-1123
+benches/assets.rs
+  s_74a80dff1d140e::t_1f9470c8331135 252
+src/simulation/investment/competitive/output.rs
+  s_74a80dff1d140e::t_1f9470c8331135 4,50,57,59,158
+  s_74a80dff1d140e::t_3172138adad1f5 108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be4bca983274e0e7f82bf72917967800a81010cb",
+  "prompts": {},
+  "sessions": {
+    "s_74a80dff1d140e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "62d4171b-3264-4d03-9c80-f3b64fbd0c7e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
