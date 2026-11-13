@@ -7,8 +7,7 @@ use crate::simulation::market::MarketSet;
 use crate::simulation::optimisation::{ModelError, solve_optimal};
 use anyhow::{Context, Result};
 use highs::{Col, RowProblem, Sense};
-use indexmap::IndexMap;
-use itertools::Itertools;
+use indexmap::{IndexMap, IndexSet};
 use petgraph::algo::{condensation, toposort};
 use petgraph::graph::Graph;
 use petgraph::prelude::NodeIndex;
@@ -116,7 +115,7 @@ fn to_market_set(graph: &CommoditiesGraph, scc: &[NodeIndex]) -> MarketSet {
 fn find_feedback_processes(
     graph: &CommoditiesGraph,
     scc: &[NodeIndex],
-) -> Vec<(ProcessID, RegionID)> {
+) -> IndexSet<(ProcessID, RegionID)> {
     scc.iter()
         .enumerate()
         // Get edges into each market from markets earlier in the order
@@ -132,8 +131,6 @@ fn find_feedback_processes(
             }
             _ => None,
         })
-        // A process may consume several earlier markets
-        .unique()
         .collect()
 }
 
@@ -694,8 +691,8 @@ mod tests {
         };
         assert_eq!(markets[0], ("A".into(), "GBR".into()));
         assert_eq!(
-            feedback_processes,
-            &[
+            feedback_processes.iter().cloned().collect::<Vec<_>>(),
+            [
                 ("A_to_B".into(), "GBR".into()),
                 ("A_to_C".into(), "GBR".into())
             ]

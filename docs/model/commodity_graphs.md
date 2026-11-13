@@ -166,7 +166,7 @@ consumes a market in the circularity which comes *earlier* in the investment ord
 it supplies, i.e. it flows the wrong way through the investment order. For example, if hydrogen is
 invested in before electricity, H2YGEN is a feedback process.
 
-Circularities may be small, like this one, or much larger, involving many commodities and covering
+A circularity may involve only a few commodities (like this one), but may involve many and cover
 a large part of your model. MUSE2 handles them all in the same way: it chooses an order for the
 markets in the circularity, which in turn determines its feedback processes. These are then treated
 specially during [investment][investment-circularities] and [pricing][pricing-circularities].

@@ -131,8 +131,8 @@ calculated in this order:
    (H2YPRO) input.
 
 To reduce the effect of the initial estimate, you can repeat these steps by setting
-`price_cycle_iterations` in `model.toml` (default: 1). With more than one iteration, step 1 is
-repeated using the hydrogen price from step 2, and so on.
+`price_cycle_iterations` in [`model.toml`][model-toml] (default: 1). With more than one iteration,
+step 1 is repeated using the hydrogen price from step 2, and so on.
 
 <!-- markdownlint-disable MD024 -->
 ## Example
@@ -236,3 +236,4 @@ calculated first and then used as an input cost when calculating the GASNAT pric
 [`commodities.csv`]: ../file_formats/input_files.md#commoditiescsv
 [graph-circularities]: ./commodity_graphs.md#circularities
 [graph-example]: ./commodity_graphs.md#example
+[model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml

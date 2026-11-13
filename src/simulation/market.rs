@@ -15,13 +15,14 @@ use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
 use anyhow::{Context, Result};
+use indexmap::IndexSet;
 use itertools::{Itertools, chain};
 use log::debug;
 use std::collections::HashMap;
 use std::fmt::Display;
 
 /// Represents a set of markets which are invested in together.
-#[derive(PartialEq, Debug, Clone, Eq, Hash)]
+#[derive(PartialEq, Debug, Clone, Eq)]
 pub enum MarketSet {
     /// Assets are selected for a single market using [`select_assets_for_single_market`]
     Single((CommodityID, RegionID)),
@@ -31,7 +32,7 @@ pub enum MarketSet {
         /// The markets in the cycle, in investment order
         markets: Vec<(CommodityID, RegionID)>,
         /// Producers of cycle markets which consume a market from earlier in the investment order
-        feedback_processes: Vec<(ProcessID, RegionID)>,
+        feedback_processes: IndexSet<(ProcessID, RegionID)>,
     },
     /// Assets are selected for a layer of independent [`MarketSet`]s
     Layer(Vec<MarketSet>),
@@ -78,7 +79,7 @@ impl MarketSet {
                 demand,
                 existing_assets,
                 prices,
-                &[],
+                &IndexSet::new(),
                 writer,
             ),
             MarketSet::Cycle {
@@ -164,7 +165,7 @@ pub fn select_assets_for_single_market(
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
     prices: &Prices,
-    excluded_processes: &[ProcessID],
+    excluded_processes: &IndexSet<ProcessID>,
     writer: &mut DataWriter,
 ) -> Result<Vec<AssetRef>> {
     let commodity = &model.commodities[commodity_id];
@@ -254,7 +255,7 @@ pub fn select_assets_for_single_market(
 pub fn select_assets_for_cycle(
     model: &Model,
     markets: &[(CommodityID, RegionID)],
-    feedback_processes: &[(ProcessID, RegionID)],
+    feedback_processes: &IndexSet<(ProcessID, RegionID)>,
     year: u32,
     demand: &AllDemandMap,
     existing_assets: &[AssetRef],
@@ -282,7 +283,7 @@ pub fn select_assets_for_cycle(
             &net_demand,
             existing_assets,
             prices,
-            &[],
+            &IndexSet::new(),
             writer,
         )?;
         debug!("Completed {commodity_id}|{region_id} selection pass 1");
@@ -337,7 +338,7 @@ pub fn select_assets_for_cycle(
     let mut assets_for_second_pass = Vec::new();
     for market in markets {
         let (commodity_id, region_id) = market.clone();
-        let feedback_processes: Vec<ProcessID> = feedback_processes
+        let feedback_processes: IndexSet<ProcessID> = feedback_processes
             .iter()
             .filter_map(|(p, r)| (*r == region_id).then_some(p.clone()))
             .collect();
