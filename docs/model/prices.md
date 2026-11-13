@@ -116,20 +116,23 @@ determined, see [Commodity Graphs](./commodity_graphs.md#investment-and-price-or
 
 ## Circularities
 
-When the energy system includes circular commodity flows (e.g., electricity producing hydrogen,
-which then generates electricity), the resulting cyclic dependencies are resolved as follows:
+Within a [circularity][graph-circularities], markets are priced in the reverse of their investment
+order. As with investment, some processes need the price of an input that hasn't been calculated
+yet: these are exactly the [feedback processes][graph-circularities]. For these inputs, MUSE2 uses
+the shadow price from dispatch as an estimate.
 
-1. **Initial Seeding:** Cyclic markets are seeded with their shadow prices.
-2. **Sequential Evaluation:** Commodities in the cycle are evaluated in sequence, starting with
-those furthest upstream relative to the rest of the system (i.e., furthest from the commodities
-downstream of the SCC), and working down. Marginal cost calculations use newly updated prices for
-input commodities already evaluated in the sequence, and fall back to the seeded shadow prices for
-any not yet evaluated, which may occur due to circular dependencies.
-3. **Iterative Refinement:** This process repeats for a fixed number of iterations,
-re-evaluating each market in the cycle in reverse order (starting with those
-furthest from commodities downstream of the SCC) to propagate the feedback effects through the
-circular markets. The number of iterations is controlled by the `price_cycle_iterations` parameter
-in `model.toml` (default = 1 means just a single pass).
+In the [example model][graph-example], hydrogen is invested in before electricity, so prices are
+calculated in this order:
+
+1. **Electricity** is priced first. The hydrogen turbine (H2YGEN) is a feedback process, and the
+   price of hydrogen hasn't been calculated yet, so the shadow price of hydrogen is used for its
+   input.
+2. **Hydrogen** is then priced, using the electricity price from step 1 for the electrolyser's
+   (H2YPRO) input.
+
+To reduce the effect of the initial estimate, you can repeat these steps by setting
+`price_cycle_iterations` in [`model.toml`][model-toml] (default: 1). With more than one iteration,
+step 1 is repeated using the hydrogen price from step 2, and so on.
 
 <!-- markdownlint-disable MD024 -->
 ## Example
@@ -231,3 +234,6 @@ calculated first and then used as an input cost when calculating the GASNAT pric
 
 [Capital Recovery Factor]: https://homerenergy.com/products/pro/docs/latest/capital_recovery_factor.html
 [`commodities.csv`]: ../file_formats/input_files.md#commoditiescsv
+[graph-circularities]: ./commodity_graphs.md#circularities
+[graph-example]: ./commodity_graphs.md#example
+[model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml

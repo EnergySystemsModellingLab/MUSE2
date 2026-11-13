@@ -141,7 +141,8 @@ The investment order is worked out from the commodity graph for each year as fol
    kept.
 2. **Group circularities.** Each set of markets that form a loop is treated as a single group (in
    graph theory terms, the strongly connected components of the graph are collapsed into single
-   nodes). The graph now has no loops.
+   nodes), with the markets inside it ordered as described in [Circularities](#circularities). The
+   graph now has no loops.
 3. **Sort the markets.** The markets are put in order so that every market comes before the
    markets that supply it (a [topological sort]).
 4. **Group independent markets into layers.** Each market is given a depth, which is the length of
@@ -149,16 +150,61 @@ The investment order is worked out from the commodity graph for each year as fol
    so they are grouped into a **layer**. MUSE2 invests in all markets in a layer before running a
    single [partial system dispatch][partial-dispatch], rather than one per market, which saves time.
 
-Markets within a circularity cannot be put into an order that respects every dependency, as each
-market in the loop depends on the others. MUSE2 chooses an order for them by solving a small
-optimisation problem; see the [API documentation for `order_scc`][order-scc] for details. For how
-investment then proceeds within a circularity, see [Circularities][investment-circularities].
+### Circularities
+
+In a circularity, each market in the loop is both upstream and downstream of the others, so whatever
+order the markets are put in, at least one of them will be invested in before all of its demand is
+known. In the [example model](#example):
+
+- if electricity is invested in first, any electricity demand from hydrogen electrolysers (H2YPRO)
+  isn't yet known;
+- if hydrogen is invested in first, any hydrogen demand from hydrogen turbines (H2YGEN) isn't yet
+  known.
+
+The processes that cause this are called **feedback processes**. A feedback process is one that
+consumes a market in the circularity which comes *earlier* in the investment order than the market
+it supplies, i.e. it flows the wrong way through the investment order. For example, if hydrogen is
+invested in before electricity, H2YGEN is a feedback process.
+
+A circularity may involve only a few commodities (like this one), but may involve many and cover
+a large part of your model. MUSE2 handles them all in the same way: it chooses an order for the
+markets in the circularity, which in turn determines its feedback processes. These are then treated
+specially during [investment][investment-circularities] and [pricing][pricing-circularities].
+
+#### Choosing an order
+
+The order for each circularity must satisfy the following rule:
+
+- **Every market must keep at least one producer that isn't a feedback process.** Without its
+  feedback processes, a circularity is no longer a loop, and this rule ensures that the demand for
+  every market can still be met, either from outside the circularity or from markets later in the
+  order. This allows MUSE2 to invest in the circularity without feedback processes, following the
+  normal downstream-to-upstream rules (see [Investment Appraisal][investment-circularities]).
+
+In the example model, this means that hydrogen must be invested in first. If electricity came
+first, the electrolyser (H2YPRO) would be a feedback process, leaving hydrogen with no other
+producer.
+
+Of the orders that satisfy this rule, MUSE2 chooses the one with the **fewest conflicts** (i.e.
+pairs of markets linked by one or more feedback processes). If several orders are equally good, it
+prefers to put markets that supply markets downstream of the circularity first.
+
+MUSE2 finds this order when the model is loaded by solving a small optimisation problem (a
+mixed-integer linear program, or MILP); for details, see the
+[API documentation for `order_scc`][order-scc]. If no order satisfies the rule, MUSE2 stops with an
+error.
+
+> **Note:** sometimes several orders are equally good. In this case, MUSE2 will pick one of them,
+> and the choice may depend arbitrarily on factors such as the order of rows in the input data or
+> the machine that the model is running on. This may affect your results. You can see which order
+> and feedback processes were chosen in the [log](#checking-the-investment-order-for-your-model).
 
 ### Example investment order
 
 Figure 2 shows the investment order for the [example model](#example). CO2EMT (an `oth` commodity)
-and the `SOURCE` node are ignored, and electricity and hydrogen are grouped into a circularity.
-Residential heat and passenger kilometres have no dependencies between them, so they form a layer.
+and the `SOURCE` node are ignored, and electricity and hydrogen are grouped into a circularity, with
+hydrogen invested in first and H2YGEN identified as a feedback process. Residential heat and
+passenger kilometres have no dependencies between them, so they form a layer.
 
 ![Investment order for the example model](../images/investment_order_example.svg)
 
@@ -168,19 +214,23 @@ prices are calculated in the reverse order, from left to right.*
 ### Checking the investment order for your model
 
 If you set the [log level] to `debug`, MUSE2 will print the investment order for each milestone
-year in which it makes investments. For the example model, this looks like:
+year in which it makes investments, and the feedback processes for each circularity. For the
+example model, this looks like:
 
 <!-- markdownlint-disable MD013 -->
 
 ```txt
-Investment order for year '2030': [TPASKM|GBR, RSHEAT|GBR] -> (ELCTRI|GBR, H2YPRD|GBR) -> GASNAT|GBR -> GASPRD|GBR
+Investment order for year '2030': [TPASKM|GBR, RSHEAT|GBR] -> (H2YPRD|GBR, ELCTRI|GBR) -> GASNAT|GBR -> GASPRD|GBR
+...
+Starting investment for cycle '(H2YPRD|GBR, ELCTRI|GBR)' with feedback processes: [H2YGEN|GBR]
 ```
 
 <!-- markdownlint-enable MD013 -->
 
-Each market is written as `COMMODITY|REGION`. Square brackets (`[...]`) show a layer and round
-brackets (`(...)`) show a circularity. Markets within a layer are independent, so their order within
-the layer doesn't matter.
+Each market is written as `COMMODITY|REGION` and each process as `PROCESS|REGION`. Square brackets
+(`[...]`) show a layer and round brackets (`(...)`) show a circularity, with its markets in
+investment order. Markets within a layer are independent, so their order within the layer doesn't
+matter.
 
 ## Visualising your model
 
