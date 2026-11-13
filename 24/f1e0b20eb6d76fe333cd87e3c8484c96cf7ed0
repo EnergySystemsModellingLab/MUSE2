@@ -1,0 +1,37 @@
+docs/model/agents.md
+  s_f828466d789f1a::t_4192377ccc309c 230-232
+  s_f828466d789f1a::t_4b496e8225b8aa 193-195
+  s_f828466d789f1a::t_424628d73fca25 160-161,164-168,172-173,176,182,186-192,196-206
+  s_f828466d789f1a::t_c2edcb9ff0cc2e 106-110,114
+  s_f828466d789f1a::t_5be680478847a6 268-272
+  s_f828466d789f1a::t_16e234581c3c12 339-340
+  s_f828466d789f1a::t_fe1fc6be85138a 337-338,341-343
+  s_f828466d789f1a::t_c8c85752a51153 35-41
+  s_f828466d789f1a::t_8f59a41b1e65f3 506
+  s_f828466d789f1a::t_bea94b0e6ea9a7 250-252
+  s_f828466d789f1a::t_9b534e26dba19b 243-244,249
+  s_f828466d789f1a::t_c84a4bbf12861a 115
+docs/glossary.md
+  s_f828466d789f1a::t_595be06fc0aa1a 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "24f1e0b20eb6d76fe333cd87e3c8484c96cf7ed0",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_f828466d789f1a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "36103a22-1e09-4866-80b5-7b7d7b863df9",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
