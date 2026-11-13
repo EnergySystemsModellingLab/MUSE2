@@ -1,9 +1,11 @@
 //! Code for performing agent investment.
-use super::optimisation::{DispatchRun, FlowMap};
+use super::activity::{FlowMap, Selection};
+use super::optimisation::DispatchRun;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
+use crate::process::Process;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
@@ -15,6 +17,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use log::debug;
 use std::collections::HashMap;
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 pub mod competitive;
@@ -23,38 +26,60 @@ pub mod portfolio;
 /// A map of demand across time-slice selections for a specific market
 pub type DemandMap = IndexMap<TimeSliceSelection, Flow>;
 
+/// How agents are run for a milestone year
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentRunMode {
+    /// Agents dispatch their existing assets as committed assets, without investment options
+    Dispatch,
+    /// Agents choose which existing assets to retain and which candidates to invest in
+    Invest,
+}
+
+/// The assets and processes available to an agent to meet its share of demand for one market
+#[derive(Default)]
+pub struct AssetOptions {
+    /// Assets with fixed capacity: they are dispatched but cannot be expanded, reduced or mothballed
+    pub committed: Vec<AssetRef>,
+    /// Existing assets which may be retained in full, in part or not at all
+    pub existing: Vec<AssetRef>,
+    /// Processes from which the algorithm may create candidate assets
+    pub processes: Vec<Arc<Process>>,
+}
+
 /// Demand for a given combination of commodity, region and time-slice selection
 pub type AllDemandMap = IndexMap<(CommodityID, RegionID, TimeSliceSelection), Flow>;
 
-/// Perform agent investment to determine capacity investment of new assets for next milestone year.
+/// Run agents for a milestone year, either dispatching committed assets or choosing investments.
 ///
 /// # Arguments
 ///
 /// * `model` - The model
-/// * `year` - Current milestone year
-/// * `existing_assets` - The asset pool (commissioned and otherwise)
+/// * `year` - Milestone year being processed
+/// * `assets` - The asset pool (commissioned and otherwise)
+/// * `mode` - Whether agents dispatch committed assets or make investment decisions
 /// * `prices` - Commodity prices calculated in the previous full system dispatch
 /// * `writer` - Data writer
 ///
 /// # Returns
 ///
-/// The assets selected (including retained commissioned assets) for the given planning `year` or an
+/// The assets returned by the agents for the given `year`, along with their activities, or an
 /// error.
 #[context_manager::wrap(InvestmentTimer)]
-pub fn perform_agent_investment(
+pub fn run_agents_for_year(
     model: &Model,
     year: u32,
-    existing_assets: &[AssetRef],
+    assets: &[AssetRef],
+    mode: AgentRunMode,
     prices: &Prices,
     writer: &mut DataWriter,
-) -> Result<Vec<AssetRef>> {
+) -> Result<Selection> {
     // Initialise net demand map
     let preset_demands = collect_preset_demands_for_year(&model.commodities, year);
     let mut net_demand = preset_demands.clone();
 
-    // Keep a list of all the assets selected
+    // Keep track of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
-    let mut all_selected_assets = Vec::new();
+    let mut all_selected = Selection::default();
 
     let investment_order = &model.investment_order[&year];
     debug!(
@@ -70,8 +95,8 @@ pub fn perform_agent_investment(
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
         // Select assets for this market set
-        let selected_assets =
-            market_set.select_assets(model, year, &net_demand, existing_assets, prices, writer)?;
+        let selection =
+            market_set.run_agents(model, year, mode, &net_demand, assets, prices, writer)?;
 
         // Update our list of seen markets
         for market in market_set.iter_markets() {
@@ -81,13 +106,14 @@ pub fn perform_agent_investment(
         // If no assets have been selected, skip dispatch optimisation
         // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
-        if selected_assets.is_empty() {
+        if selection.is_empty() {
             debug!("No assets selected for '{market_set}'");
             continue;
         }
 
         // Add the selected assets to the list of all selected assets
-        all_selected_assets.extend(selected_assets.iter().cloned());
+        let selected_assets = selection.assets.clone();
+        all_selected.extend(selection);
 
         // Perform dispatch optimisation with assets that have been selected so far
         // **TODO**: presumably we only need to do this for selected_assets, as assets added in
@@ -96,7 +122,7 @@ pub fn perform_agent_investment(
 
         // As upstream markets by definition will not yet have producers, we explicitly set
         // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected_assets, year, &preset_demands)
+        let solution = DispatchRun::new(model, &all_selected.assets, year, &preset_demands)
             .without_commodity_constraints()
             .with_market_balance_subset(&seen_markets)
             .with_input_prices(&prices.shadow)
@@ -110,7 +136,7 @@ pub fn perform_agent_investment(
         );
     }
 
-    Ok(all_selected_assets)
+    Ok(all_selected)
 }
 
 /// Collect the preset commodity demands for a given year into a map of commodity, region and
