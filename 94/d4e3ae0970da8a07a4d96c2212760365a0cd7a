@@ -29,10 +29,10 @@ src/graph/investment.rs
 src/simulation/prices.rs
   s_83fb8d859a105f::t_0f50cca3aa6da0 383
   s_83fb8d859a105f::t_3ecd913f36460f 201
-  s_1a096aca9a2311::t_30825a392a3443 106-107,242-244
-  s_1a096aca9a2311::t_4b8c2621847380 67-89,91,94-95,349,365
+  s_1a096aca9a2311::t_30825a392a3443 106-107,242-244,242-243
+  s_1a096aca9a2311::t_4b8c2621847380 67-89,67-68,71-77,78-83,84-85,89,91,94-95,94,349,365
   s_1a096aca9a2311::t_cbf8ad93099fcf 15,108-112,122
-  s_1a096aca9a2311::t_4cc53869de0524 120-121,140-142,153-155,177-178,190-192,204-206,220-222,256-257,389-390,414-416
+  s_1a096aca9a2311::t_4cc53869de0524 120-121,140-142,140-141,153-155,153-154,177-178,190-192,190-191,204-206,204-205,220-222,220-221,256-257,389-390,414-416,414-415
   s_1a096aca9a2311::t_a0e350235a2201 266-272
   s_1a096aca9a2311::t_c8ccac87b84d2a 8,90,92-93,123,179,258,312-314,324-325,337-338,350,352-353,366,368-369,391
   s_1a096aca9a2311::t_56f5506f687fba 96-97
@@ -113,8 +113,8 @@ docs/images/investment_order_example.dot
   s_e3618010bfe6e6::t_5b1fb6af931216 18-19,33
 docs/model/prices.md
   s_e3618010bfe6e6::t_d8688c9dcc8d72 237-238
-  s_e3618010bfe6e6::t_db8b2ef8fca008 119,123-133
-  s_6fc1e99d5da531::t_a2c4b3dd2f2f60 120-122
+  s_e3618010bfe6e6::t_db8b2ef8fca008 119,123-133,123-127,129-133
+  s_6fc1e99d5da531::t_a2c4b3dd2f2f60 120-122,120-121
 docs/model/investment.md
   h_e76403a1cd4bf1 48
   s_e3618010bfe6e6::t_71fed1b33ddc83 213-216
@@ -473,7 +473,7 @@ src/simulation.rs
   s_ebaf67aff77f9b::t_34f00cd694e423 20
   h_e76403a1cd4bf1 70
   s_5a8ab3438e6345::t_fe7742ea467ee1 67-69,71-80
-  s_1a096aca9a2311::t_4b8c2621847380 6,238-239,241-242,244-250
+  s_1a096aca9a2311::t_4b8c2621847380 6,238-239,241-242,244-250,244-248,249-250
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -619,6 +619,14 @@ src/simulation.rs
         "tool": "github-copilot-cli",
         "id": "4b3b637d-2812-4cef-a9c2-2b9e973a6103",
         "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_f6e10436c60552": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "fc44beee-7883-4688-b66b-88910cab66b0",
+        "model": "claude-sonnet-5.5"
       },
       "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
     }
