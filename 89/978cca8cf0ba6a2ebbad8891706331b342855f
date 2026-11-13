@@ -3,6 +3,8 @@ src/input/agent.rs
   s_ec6102e006e663::t_e65c14f3821347 237
 docs/release_notes/upcoming.md
   s_ec6102e006e663::t_ffed6f71f20d9c 9-11,16-17,23
+schemas/input/agents.yaml
+  h_e76403a1cd4bf1 19-23
 ---
 {
   "schema_version": "authorship/3.0.0",
