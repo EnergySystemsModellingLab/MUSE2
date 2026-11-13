@@ -445,15 +445,10 @@ impl DebugDataWriter {
         Ok(())
     }
 
-    /// Write rows to a debug file owned by another module
+    /// Get a writer for a custom debug CSV file, creating the file on first use.
     ///
-    /// The file is created on first use, even if `rows` is empty. File names must start with
-    /// `debug_` and end with `.csv`.
-    pub fn write_debug_rows<R: Serialize>(
-        &mut self,
-        file_name: &'static str,
-        rows: impl IntoIterator<Item = R>,
-    ) -> Result<()> {
+    /// File names must start with `debug_` and end with `.csv`.
+    pub fn get_custom_writer(&mut self, file_name: &'static str) -> Result<&mut csv::Writer<File>> {
         ensure!(
             file_name.starts_with("debug_")
                 && Path::new(file_name)
@@ -462,7 +457,7 @@ impl DebugDataWriter {
             "Custom debug file names must start with `debug_` and end with `.csv`"
         );
 
-        let writer = match self.custom_writers.entry(file_name) {
+        Ok(match self.custom_writers.entry(file_name) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
                 let file = OpenOptions::new()
@@ -471,12 +466,7 @@ impl DebugDataWriter {
                     .open(self.output_path.join(file_name))?;
                 entry.insert(csv::Writer::from_writer(file))
             }
-        };
-        for row in rows {
-            writer.serialize(row)?;
-        }
-
-        Ok(())
+        })
     }
 
     /// Flush the underlying streams
@@ -1020,7 +1010,7 @@ mod tests {
     #[rstest]
     #[case(true)]
     #[case(false)]
-    fn write_debug_rows(#[case] debug: bool) {
+    fn custom_debug_writer_writes_rows(#[case] debug: bool) {
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         struct TestRow {
             run_description: String,
@@ -1047,10 +1037,14 @@ mod tests {
             // Rows written across multiple calls end up in the same file
             if let Some(debug_writer) = writer.debug_writer() {
                 debug_writer
-                    .write_debug_rows(file_name, &rows[..1])
+                    .get_custom_writer(file_name)
+                    .unwrap()
+                    .serialize(&rows[0])
                     .unwrap();
                 debug_writer
-                    .write_debug_rows(file_name, &rows[1..])
+                    .get_custom_writer(file_name)
+                    .unwrap()
+                    .serialize(&rows[1])
                     .unwrap();
             }
             writer.flush().unwrap();
@@ -1070,7 +1064,7 @@ mod tests {
     }
 
     #[test]
-    fn write_debug_rows_does_not_overwrite_existing_file() {
+    fn get_custom_writer_does_not_overwrite_existing_file() {
         let dir = tempdir().unwrap();
         let file_name = "debug_test.csv";
         let existing_contents = "existing contents";
@@ -1080,7 +1074,7 @@ mod tests {
         writer
             .debug_writer()
             .unwrap()
-            .write_debug_rows(file_name, [1])
+            .get_custom_writer(file_name)
             .unwrap_err();
 
         assert_eq!(
@@ -1090,14 +1084,14 @@ mod tests {
     }
 
     #[test]
-    fn write_debug_rows_rejects_non_debug_file_names() {
+    fn get_custom_writer_rejects_non_debug_file_names() {
         let dir = tempdir().unwrap();
         let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
 
         writer
             .debug_writer()
             .unwrap()
-            .write_debug_rows("custom.csv", [1])
+            .get_custom_writer("custom.csv")
             .unwrap_err();
     }
 

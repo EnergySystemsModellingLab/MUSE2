@@ -68,7 +68,10 @@ pub fn write_debug_info(
         capacity: result.asset.total_capacity(),
         metric: result.metric.as_ref().map(|m| m.value()),
     });
-    writer.write_debug_rows(APPRAISAL_RESULTS_FILE_NAME, rows)?;
+    let output_writer = writer.get_custom_writer(APPRAISAL_RESULTS_FILE_NAME)?;
+    for row in rows {
+        output_writer.serialize(row)?;
+    }
 
     let time_slice_rows = appraisal_results.iter().flat_map(|result| {
         let run_description = &run_description;
@@ -95,7 +98,11 @@ pub fn write_debug_info(
             }
         })
     });
-    writer.write_debug_rows(APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME, time_slice_rows)
+    let output_writer = writer.get_custom_writer(APPRAISAL_RESULTS_TIME_SLICE_FILE_NAME)?;
+    for row in time_slice_rows {
+        output_writer.serialize(row)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
