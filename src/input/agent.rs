@@ -2,7 +2,7 @@
 use super::{input_err_msg, read_csv};
 use crate::agent::{
     Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
-    DecisionRule,
+    AgentType, DecisionRule,
 };
 use crate::commodity::CommodityMap;
 use crate::process::ProcessMap;
@@ -30,6 +30,8 @@ struct AgentRaw {
     description: String,
     /// The region(s) in which the agent operates.
     regions: String,
+    /// The algorithm that the agent uses to select assets (defaults to `competitive`).
+    agent_type: Option<AgentType>,
     /// The decision rule that the agent uses to decide investment.
     decision_rule: String,
     /// The tolerance around the main objective to consider secondary objectives.
@@ -143,6 +145,7 @@ where
             description: agent_raw.description,
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            agent_type: agent_raw.agent_type.unwrap_or_default(),
             decision_rule,
             regions,
             objectives: AgentObjectiveMap::new(),
@@ -161,7 +164,9 @@ where
 mod tests {
     use super::*;
     use crate::agent::DecisionRule;
-    use std::iter;
+    use rstest::rstest;
+    use std::{fs, iter};
+    use tempfile::tempdir;
 
     #[test]
     fn read_agents_file_from_iter_works() {
@@ -170,6 +175,7 @@ mod tests {
         let agent = AgentRaw {
             id: "agent".into(),
             description: String::new(),
+            agent_type: None,
             decision_rule: "single".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
@@ -179,6 +185,7 @@ mod tests {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            agent_type: AgentType::Competitive,
             decision_rule: DecisionRule::Single,
             regions: IndexSet::from(["GBR".into()]),
             objectives: AgentObjectiveMap::new(),
@@ -192,6 +199,7 @@ mod tests {
             AgentRaw {
                 id: "agent".into(),
                 description: String::new(),
+                agent_type: None,
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
@@ -199,6 +207,7 @@ mod tests {
             AgentRaw {
                 id: "agent".into(),
                 description: String::new(),
+                agent_type: None,
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
@@ -210,10 +219,42 @@ mod tests {
         let agent = AgentRaw {
             id: "agent".into(),
             description: String::new(),
+            agent_type: None,
             decision_rule: "lexico".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
         };
         read_agents_file_from_iter(iter::once(agent), &region_ids).unwrap_err();
+    }
+
+    #[rstest]
+    #[case(
+        "id,description,regions,decision_rule\nagent,,GBR,single\n",
+        Some(AgentType::Competitive)
+    )]
+    #[case(
+        "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,\n",
+        Some(AgentType::Competitive)
+    )]
+    #[case(
+        "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,competitive\n",
+        Some(AgentType::Competitive)
+    )]
+    #[case(
+        "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,invalid\n",
+        None
+    )]
+    fn read_agents_file_agent_type(#[case] csv: &str, #[case] expected: Option<AgentType>) {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join(AGENT_FILE_NAME), csv).unwrap();
+
+        let region_ids = IndexSet::from(["GBR".into()]);
+        let result = read_agents_file(dir.path(), &region_ids);
+        match expected {
+            Some(agent_type) => assert_eq!(result.unwrap()["agent"].agent_type, agent_type),
+            None => {
+                result.unwrap_err();
+            }
+        }
     }
 }

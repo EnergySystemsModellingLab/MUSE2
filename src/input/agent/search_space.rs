@@ -259,7 +259,7 @@ fn get_producers_map(agents: &AgentMap, processes: &ProcessMap) -> ProducersMap 
 mod tests {
     use super::*;
     use crate::{
-        agent::{AgentCommodityPortionsMap, AgentObjectiveMap, DecisionRule},
+        agent::{AgentCommodityPortionsMap, AgentObjectiveMap, AgentType, DecisionRule},
         fixture::{
             agent_id, assert_error, assert_patched_runs_ok_simple,
             assert_validate_fails_with_simple, commodity_id, process, processes, region_id,
@@ -291,6 +291,7 @@ mod tests {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            agent_type: AgentType::default(),
             decision_rule: DecisionRule::Single,
             regions: iter::once(region_id).collect(),
             objectives: AgentObjectiveMap::new(),
