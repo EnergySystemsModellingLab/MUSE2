@@ -1,0 +1,27 @@
+src/simulation/investment/portfolio/constraints.rs
+  s_8fa0adb092a65a::t_3b2080b5fe7a91 107-108
+  s_8fa0adb092a65a::t_8799181d318076 76-78
+docs/model/agents.md
+  s_8fa0adb092a65a::t_8799181d318076 423,427,430-431
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "238abec8e2f1a48de82b0f2c130c4d737f498bbe",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_8fa0adb092a65a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "46b6e744-7344-41b6-8fc9-784207c0847c",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
