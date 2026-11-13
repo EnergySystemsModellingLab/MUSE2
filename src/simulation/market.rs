@@ -222,7 +222,7 @@ pub fn select_assets_for_single_market(
             agent_total_limits,
             prices,
             year,
-            writer,
+            writer.debug_writer(),
         )?;
         selected_assets.extend(best_assets);
     }

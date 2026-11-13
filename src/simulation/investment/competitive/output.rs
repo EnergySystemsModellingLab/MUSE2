@@ -1,7 +1,7 @@
 //! Debug output for the competitive asset selection algorithm.
 use super::metrics::AppraisalOutput;
 use crate::asset::AssetID;
-use crate::output::DataWriter;
+use crate::output::DebugDataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::investment::DemandMap;
@@ -47,16 +47,16 @@ struct AppraisalResultsTimeSliceRow {
 
 /// Write debug info about a round of investment appraisal
 pub fn write_debug_info(
-    writer: &mut DataWriter,
+    writer: Option<&mut DebugDataWriter>,
     milestone_year: u32,
     run_description: &str,
     appraisal_results: &[AppraisalOutput],
     demand: &DemandMap,
     time_slice_level: TimeSliceLevel,
 ) -> Result<()> {
-    if !writer.debug_enabled() {
+    let Some(writer) = writer else {
         return Ok(());
-    }
+    };
     let run_description = writer.debug_run_description(run_description);
 
     let rows = appraisal_results.iter().map(|result| AppraisalResultsRow {
@@ -105,6 +105,7 @@ mod tests {
     use super::*;
     use crate::asset::{Asset, AssetRef};
     use crate::fixture::{asset, time_slice};
+    use crate::output::DataWriter;
     use indexmap::indexmap;
     use itertools::{Itertools, assert_equal};
     use rstest::{fixture, rstest};
@@ -154,7 +155,7 @@ mod tests {
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
             write_debug_info(
-                &mut writer,
+                writer.debug_writer(),
                 milestone_year,
                 &run_description,
                 &[appraisal_output],

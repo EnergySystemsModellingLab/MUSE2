@@ -230,7 +230,7 @@ struct SolverValuesRow {
 }
 
 /// For writing extra debug information about the model
-struct DebugDataWriter {
+pub struct DebugDataWriter {
     context: Option<String>,
     output_path: PathBuf,
     unmet_demand_file_path: PathBuf,
@@ -273,6 +273,11 @@ impl DebugDataWriter {
         } else {
             Cow::Borrowed(run_description)
         }
+    }
+
+    /// Prepend the current debug context (if any) to a run description
+    pub fn debug_run_description<'a>(&self, run_description: &'a str) -> Cow<'a, str> {
+        self.with_context(run_description)
     }
 
     /// Write debug info about the dispatch optimisation
@@ -442,8 +447,9 @@ impl DebugDataWriter {
 
     /// Write rows to a debug file owned by another module
     ///
-    /// The file is created on first use, even if `rows` is empty.
-    fn write_custom_rows<R: Serialize>(
+    /// The file is created on first use, even if `rows` is empty. File names must start with
+    /// `debug_` and end with `.csv`.
+    pub fn write_debug_rows<R: Serialize>(
         &mut self,
         file_name: &'static str,
         rows: impl IntoIterator<Item = R>,
@@ -544,37 +550,9 @@ impl DataWriter {
         Ok(())
     }
 
-    /// Whether debug files are being written
-    pub fn debug_enabled(&self) -> bool {
-        self.debug.is_some()
-    }
-
-    /// Prepend the current debug context (if any) to a run description
-    pub fn debug_run_description<'a>(&self, run_description: &'a str) -> Cow<'a, str> {
-        match &self.debug {
-            Some(wtr) => wtr.with_context(run_description),
-            None => Cow::Borrowed(run_description),
-        }
-    }
-
-    /// Write rows to a custom debug CSV file in the output directory
-    ///
-    /// This allows other modules (e.g. asset selection algorithms) to own their debug files. The
-    /// file is created the first time it is written to (even if `rows` is empty). Does nothing if
-    /// debug output is disabled.
-    ///
-    /// Files for asset selection algorithms should be named
-    /// `debug_asset_selection_<agent_type>[_<suffix>].csv`.
-    pub fn write_debug_rows<R: Serialize>(
-        &mut self,
-        file_name: &'static str,
-        rows: impl IntoIterator<Item = R>,
-    ) -> Result<()> {
-        if let Some(wtr) = &mut self.debug {
-            wtr.write_custom_rows(file_name, rows)?;
-        }
-
-        Ok(())
+    /// Get the debug writer, if debug output is enabled.
+    pub fn debug_writer(&mut self) -> Option<&mut DebugDataWriter> {
+        self.debug.as_mut()
     }
 
     /// Append newly commissioned asset definitions to the assets CSV file
@@ -1064,11 +1042,17 @@ mod tests {
 
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), debug).unwrap();
-            assert_eq!(writer.debug_enabled(), debug);
+            assert_eq!(writer.debug_writer().is_some(), debug);
 
             // Rows written across multiple calls end up in the same file
-            writer.write_debug_rows(file_name, &rows[..1]).unwrap();
-            writer.write_debug_rows(file_name, &rows[1..]).unwrap();
+            if let Some(debug_writer) = writer.debug_writer() {
+                debug_writer
+                    .write_debug_rows(file_name, &rows[..1])
+                    .unwrap();
+                debug_writer
+                    .write_debug_rows(file_name, &rows[1..])
+                    .unwrap();
+            }
             writer.flush().unwrap();
         }
 
@@ -1093,7 +1077,11 @@ mod tests {
         fs::write(dir.path().join(file_name), existing_contents).unwrap();
         let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
 
-        writer.write_debug_rows(file_name, [1]).unwrap_err();
+        writer
+            .debug_writer()
+            .unwrap()
+            .write_debug_rows(file_name, [1])
+            .unwrap_err();
 
         assert_eq!(
             fs::read_to_string(dir.path().join(file_name)).unwrap(),
@@ -1106,7 +1094,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
 
-        writer.write_debug_rows("custom.csv", [1]).unwrap_err();
+        writer
+            .debug_writer()
+            .unwrap()
+            .write_debug_rows("custom.csv", [1])
+            .unwrap_err();
     }
 
     #[test]
@@ -1116,13 +1108,19 @@ mod tests {
         let description = "test run";
 
         assert!(matches!(
-            writer.debug_run_description(description),
+            writer
+                .debug_writer()
+                .unwrap()
+                .debug_run_description(description),
             Cow::Borrowed(value) if std::ptr::eq(value, description)
         ));
 
         writer.set_debug_context("outer context".into());
         assert!(matches!(
-            writer.debug_run_description(description),
+            writer
+                .debug_writer()
+                .unwrap()
+                .debug_run_description(description),
             Cow::Owned(value) if value == "outer context; test run"
         ));
     }

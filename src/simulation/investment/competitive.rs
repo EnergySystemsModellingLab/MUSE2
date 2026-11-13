@@ -13,7 +13,7 @@ use crate::agent::{Agent, AgentID};
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
-use crate::output::DataWriter;
+use crate::output::DebugDataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::investment::DemandMap;
@@ -51,7 +51,7 @@ use std::collections::HashMap;
 /// * `agent_total_limits` - The agent's share of total capacity limits for processes
 /// * `prices` - Commodity prices from the previous full system dispatch
 /// * `year` - Current milestone year
-/// * `writer` - Data writer
+/// * `debug_writer` - Optional debug writer
 ///
 /// # Returns
 ///
@@ -69,7 +69,7 @@ pub fn select_assets(
     agent_total_limits: HashMap<ProcessID, Capacity>,
     prices: &Prices,
     year: u32,
-    writer: &mut DataWriter,
+    debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Vec<AssetRef>> {
     // Existing and candidate assets from which to choose
     let mut opt_assets = get_asset_options(
@@ -97,7 +97,7 @@ pub fn select_assets(
         prices,
         demand,
         year,
-        writer,
+        debug_writer,
     )
 }
 
@@ -250,7 +250,7 @@ pub fn select_best_assets(
     prices: &Prices,
     mut demand: DemandMap,
     year: u32,
-    writer: &mut DataWriter,
+    mut debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Vec<AssetRef>> {
     let objective_type = agent.objectives[&year];
 
@@ -320,7 +320,7 @@ pub fn select_best_assets(
 
         // Save appraisal results
         write_debug_info(
-            writer,
+            debug_writer.as_deref_mut(),
             year,
             &format!("{} {} round {}", commodity.id, agent.id, round),
             &outputs,

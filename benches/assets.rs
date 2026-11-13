@@ -249,7 +249,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                                     black_box(&prices),
                                     demand,
                                     black_box(YEAR),
-                                    &mut writer,
+                                    writer.debug_writer(),
                                 )
                                 .expect("select_best_assets failed")
                             };
