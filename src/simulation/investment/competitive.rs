@@ -22,6 +22,7 @@ use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
@@ -95,7 +96,7 @@ pub fn select_assets(
         agent,
         region_id,
         prices,
-        demand.clone(),
+        demand,
         year,
         debug_writer,
     )
@@ -248,7 +249,7 @@ pub fn select_best_assets(
     agent: &Agent,
     region_id: &RegionID,
     prices: &Prices,
-    mut demand: DemandMap,
+    demand: &DemandMap,
     year: u32,
     mut debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Vec<AssetRef>> {
@@ -272,9 +273,11 @@ pub fn select_best_assets(
 
     // Iteratively select the best asset until demand is met
     let mut round = 0;
-    let mut best_assets: Vec<AssetRef> = Vec::new();
+    let mut selected_assets: Vec<AssetRef> = Vec::new();
+    let mut unmet_demand = demand.clone();
+    let mut previous_solution = IndexMap::new();
     while is_any_remaining_demand(
-        &demand,
+        &unmet_demand,
         model.parameters.remaining_demand_absolute_tolerance,
     ) {
         // Remove assets that would exceed the remaining limits for their processes from the options
@@ -292,6 +295,7 @@ pub fn select_best_assets(
             commodity.id,
             region_id
         );
+
         // Appraise all options in parallel: each asset's appraisal is independent (all shared
         // state is read-only within this block), so we can safely use Rayon here.
         // Each HiGHS solve inside `appraise_investment` is configured to use only one thread
@@ -306,11 +310,13 @@ pub fn select_best_assets(
 
                 Ok(Some(appraise_investment(
                     model,
+                    &selected_assets,
                     asset,
                     commodity,
                     objective_type,
-                    &coefficients[asset],
-                    &demand,
+                    &coefficients,
+                    demand,
+                    &previous_solution,
                 )?))
             })
             .collect::<Result<Vec<_>>>()? // propagate any solver error
@@ -324,7 +330,7 @@ pub fn select_best_assets(
             year,
             &format!("{} {} round {}", commodity.id, agent.id, round),
             &outputs,
-            &demand,
+            demand,
             commodity.time_slice_level,
         )?;
 
@@ -367,15 +373,16 @@ pub fn select_best_assets(
         );
 
         // Record the selected asset
-        record_asset_selection(best_output.asset, &mut best_assets);
+        record_asset_selection(best_output.asset, &mut selected_assets);
+        previous_solution = best_output.solution;
 
-        demand = best_output.unmet_demand;
+        unmet_demand = best_output.unmet_demand;
         round += 1;
     }
 
     // Convert Candidate assets to Ready
     // At this point we also assign the agent ID to the asset
-    for asset in &mut best_assets {
+    for asset in &mut selected_assets {
         if asset.is_candidate() {
             asset
                 .make_mut()
@@ -383,7 +390,7 @@ pub fn select_best_assets(
         }
     }
 
-    Ok(best_assets)
+    Ok(selected_assets)
 }
 
 /// Prepare existing assets for reappraisal.
