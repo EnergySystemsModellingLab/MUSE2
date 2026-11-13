@@ -1,0 +1,14 @@
+src/simulation/investment/competitive.rs
+  h_e76403a1cd4bf1 26,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "94d1ba81693aef9456a89f5cdab4a4887263bb99",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
