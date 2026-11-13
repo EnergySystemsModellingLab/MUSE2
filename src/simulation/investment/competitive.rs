@@ -5,9 +5,9 @@
 mod coefficients;
 mod constraints;
 mod costs;
-mod debug;
 mod metrics;
 mod optimisation;
+mod output;
 
 use crate::agent::{Agent, AgentID};
 use crate::asset::{Asset, AssetCapacity, AssetIterator, AssetRef};
@@ -22,7 +22,6 @@ use crate::time_slice::TimeSliceSelection;
 use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, ensure};
 use coefficients::calculate_coefficients_for_assets;
-use debug::write_debug_info;
 use indexmap::IndexSet;
 use itertools::{Itertools, chain};
 use log::{debug, warn};
@@ -30,6 +29,7 @@ use metrics::{
     AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
     sort_and_filter_appraisal_outputs,
 };
+use output::write_debug_info;
 use rayon::prelude::*;
 use std::collections::HashMap;
 

@@ -14,8 +14,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::fs;
-use std::fs::File;
+use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 
 pub mod metadata;
@@ -448,10 +447,22 @@ impl DebugDataWriter {
         file_name: &'static str,
         rows: impl IntoIterator<Item = R>,
     ) -> Result<()> {
+        ensure!(
+            file_name.starts_with("debug_")
+                && Path::new(file_name)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("csv")),
+            "Custom debug file names must start with `debug_` and end with `.csv`"
+        );
+
         let writer = match self.custom_writers.entry(file_name) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
-                entry.insert(csv::Writer::from_path(self.output_path.join(file_name))?)
+                let file = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(self.output_path.join(file_name))?;
+                entry.insert(csv::Writer::from_writer(file))
             }
         };
         for row in rows {
@@ -1071,6 +1082,30 @@ mod tests {
         } else {
             assert!(!path.exists());
         }
+    }
+
+    #[test]
+    fn write_debug_rows_does_not_overwrite_existing_file() {
+        let dir = tempdir().unwrap();
+        let file_name = "debug_test.csv";
+        let existing_contents = "existing contents";
+        fs::write(dir.path().join(file_name), existing_contents).unwrap();
+        let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
+
+        writer.write_debug_rows(file_name, [1]).unwrap_err();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join(file_name)).unwrap(),
+            existing_contents
+        );
+    }
+
+    #[test]
+    fn write_debug_rows_rejects_non_debug_file_names() {
+        let dir = tempdir().unwrap();
+        let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
+
+        writer.write_debug_rows("custom.csv", [1]).unwrap_err();
     }
 
     #[test]

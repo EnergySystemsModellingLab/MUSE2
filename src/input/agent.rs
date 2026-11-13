@@ -31,7 +31,8 @@ struct AgentRaw {
     /// The region(s) in which the agent operates.
     regions: String,
     /// The algorithm that the agent uses to select assets (defaults to `competitive`).
-    agent_type: Option<AgentType>,
+    #[serde(default)]
+    agent_type: AgentType,
     /// The decision rule that the agent uses to decide investment.
     decision_rule: String,
     /// The tolerance around the main objective to consider secondary objectives.
@@ -145,7 +146,7 @@ where
             description: agent_raw.description,
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
-            agent_type: agent_raw.agent_type.unwrap_or_default(),
+            agent_type: agent_raw.agent_type,
             decision_rule,
             regions,
             objectives: AgentObjectiveMap::new(),
@@ -175,7 +176,7 @@ mod tests {
         let agent = AgentRaw {
             id: "agent".into(),
             description: String::new(),
-            agent_type: None,
+            agent_type: AgentType::default(),
             decision_rule: "single".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
@@ -199,7 +200,7 @@ mod tests {
             AgentRaw {
                 id: "agent".into(),
                 description: String::new(),
-                agent_type: None,
+                agent_type: AgentType::default(),
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
@@ -207,7 +208,7 @@ mod tests {
             AgentRaw {
                 id: "agent".into(),
                 description: String::new(),
-                agent_type: None,
+                agent_type: AgentType::default(),
                 decision_rule: "single".into(),
                 decision_lexico_tolerance: None,
                 regions: "GBR".into(),
@@ -219,7 +220,7 @@ mod tests {
         let agent = AgentRaw {
             id: "agent".into(),
             description: String::new(),
-            agent_type: None,
+            agent_type: AgentType::default(),
             decision_rule: "lexico".into(),
             decision_lexico_tolerance: None,
             regions: "GBR".into(),
@@ -234,7 +235,7 @@ mod tests {
     )]
     #[case(
         "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,\n",
-        Some(AgentType::Competitive)
+        None
     )]
     #[case(
         "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,competitive\n",

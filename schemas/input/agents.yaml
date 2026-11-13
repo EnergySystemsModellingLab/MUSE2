@@ -16,7 +16,8 @@ fields:
     enum: [competitive]
     description: The asset selection algorithm used by the agent
     notes: |
-      Optional (defaults to `competitive`). Currently the only supported value is `competitive`.
+      Optional (defaults to `competitive` if omitted). Currently the only supported value is
+      `competitive`.
   - name: decision_rule
     type: string
     description: The decision rule applied to objectives
