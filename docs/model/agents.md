@@ -42,19 +42,17 @@ feasible options remain.
 
 ### Commodity prices used in appraisal
 
-Investment appraisal uses three distinct price sets, all sourced from the previous MSY's dispatch
-(or from the previous [ironing-out loop][framework-overview] iteration if enabled):
+Investment appraisal uses two price sets calculated from the previous MSY's dispatch (or from the
+previous [ironing-out loop][framework-overview] iteration if enabled):
 
-- **Shadow prices** \\( \lambda\_{c,r,t} \\): used for activity coefficients in the mini dispatch
-  optimisation step of each appraisal (see [Mini Dispatch Optimisation](#mini-dispatch-optimisation)).
-- **Market prices** \\( \pi\_{c,r,t} \\): used to calculate the investment metric (Cost Index or
-  SNAS) after dispatch.
+- **Market prices** \\( \pi\_{c,r,t} \\): used for activity coefficients in the mini dispatch and
+  for the investment metric (Cost Index or SNAS).
 - **Fallback prices** \\( \phi\_{c,r,t} \\): used to incentivise dispatch in the mini dispatch
-  optimisation when shadow prices alone are insufficient (see
+  optimisation when market prices alone are insufficient (see
   [Mini Dispatch Optimisation](#mini-dispatch-optimisation)). Calculated using the strategy defined
   by `fallback_pricing_strategy` in [`model.toml`][model-toml].
 
-See [Commodity Prices][prices] for how these price sets are calculated.
+See [Commodity Prices][prices] for how prices are calculated.
 
 ### Capacities of options
 
@@ -123,7 +121,7 @@ elsewhere.
 This is captured by the activity coefficient \\( \alpha_t \\), which combines two components:
 
 \\[
-  \mathrm{NetOperatingCost}_t = \mathrm{OperatingCost}(t) - \mathrm{RevenueFromFlows}(\lambda, t)
+  \mathrm{NetOperatingCost}_t = \mathrm{OperatingCost}(t) - \mathrm{RevenueFromFlows}(\pi, t)
 \\]
 
 \\[
@@ -135,12 +133,12 @@ This is captured by the activity coefficient \\( \alpha_t \\), which combines tw
 \\]
 
 where \\( \mathrm{RevenueFromFlows} \\) is the sum of all commodity flow revenues and costs (positive
-for outputs, negative for inputs) valued at shadow prices, \\( \mathrm{OperatingCost} \\) is the
+for outputs, negative for inputs) valued at market prices, \\( \mathrm{OperatingCost} \\) is the
 variable operating cost plus levies and flow costs, \\( f_{c,\mathrm{primary}} \\) is the primary
 output flow coefficient, and \\( \varepsilon \\) is a small positive constant added to ensure that
 break-even assets are still dispatched.
 
-**NetOperatingCost** is the net cost of running the asset for one unit of activity at shadow prices
+**NetOperatingCost** is the net cost of running the asset for one unit of activity at market prices
 — negative when the asset is profitable (revenues exceed costs).
 
 **FallbackCost** is the cost of procuring one unit of activity's worth of primary output from an
@@ -185,7 +183,8 @@ dispatch optimisation, and are applied to each asset separately.
 
 After the dispatch LP is solved, an investment metric is calculated for the option using **market
 prices**. The metric is based on the option's marginal activity, while the fixed costs and market
-costs are those of the option itself.
+costs are those of the option itself. Fallback revenue and epsilon are not included in the metric
+costs, though they can affect the activity profile used to calculate the metric.
 
 #### Marginal activity
 
@@ -306,7 +305,7 @@ All per-flow costs (\\( \mathrm{cost}\_{\mathrm{input}} \\),
 | AFC       | £1,000/MW |
 | Capacity  | 100 MW    |
 
-##### Prices (both shadow and market prices are equal in this example)
+##### Market prices
 
 | Commodity | \\( t_0 \\) (Peak) | \\( t_1 \\) (Off-peak) |
 | ----------- | -------------------- | ------------------------ |
@@ -316,7 +315,7 @@ All per-flow costs (\\( \mathrm{cost}\_{\mathrm{input}} \\),
 
 #### Mini Dispatch Optimisation (identical for LCOX and NPV)
 
-Activity coefficients use shadow prices:
+Activity coefficients use market prices:
 
 **\\( t_0 \\):**
 \\[
