@@ -1,0 +1,626 @@
+src/graph/investment.rs
+  s_83fb8d859a105f::t_92d8cb0f793628 143-144
+  s_83fb8d859a105f::t_42959866b7bd2d 273-274
+  s_83fb8d859a105f::t_0f351d813399f2 18,24-27,43-55,57-58,60-62,66,73-75,77-80,84-88,91,96-97,99,107,137,139-141,241,251,256-260,263-272,275-276,279,281-288,292,294-301,303-306,308,310-316,318,320-322,324-326,328,331-334,337,373-374,376,387,389-397,400,402-405,407-409,608
+  h_e76403a1cd4bf1 15,19,40,41,42,70,89-90,98,100,101,244,249,253,381-383,410-411,512,515,518,519,522,533-537,540-548,551,553-560,562-565,571-573,575-577,581-583,586-589,591,594,607,610,612,613-615,617,621,628,638,645,648-650,653,654-655,656,657,671,682,702,710-714,715,716,718,722,724-726,731,733,734-737,739,742,744-745,747-748
+  s_83fb8d859a105f::t_d987f440f91a0f 539,611,703,723,727,732
+  h_e76403a1cd4bf1 612
+  s_83fb8d859a105f::t_954a047c0669fc 584-585,590,592,596-598,628,630
+  s_83fb8d859a105f::t_6958ec0a60d174 208-210,211-215
+  s_83fb8d859a105f::t_3ef85010019582 515,522
+  s_83fb8d859a105f::t_696f6671ab9ae2 352,354,359-360,373-375,384
+  s_83fb8d859a105f::t_d240adb3a7f3da 238,243,245-249
+  s_83fb8d859a105f::t_3cf12e165f510b 410-411
+  s_83fb8d859a105f::t_b3038508d5b61a 56,70
+  s_83fb8d859a105f::t_ce88ed44e0fa5c 42
+  s_83fb8d859a105f::t_a762d4048f1f7e 180-181
+  s_83fb8d859a105f::t_17e36268e72132 115-117,528-530,567-570,574-578,599-607,624-627,631-637,639-652,657-670,672-680,684-693,696-699
+  s_83fb8d859a105f::t_99bdaf37f2c00c 102-104,110-114,119-133,134
+  s_83fb8d859a105f::t_11889eb792114c 156-159,204-207
+  s_83fb8d859a105f::t_74901872b1ab9d 239,242
+  s_83fb8d859a105f::t_067aa272bd4dc5 4-5
+  s_83fb8d859a105f::t_5b97fda6ee478a 339-351,353,355-358,361-372
+  s_83fb8d859a105f::t_0302535f8cb496 135-136
+  s_83fb8d859a105f::t_e81820261cbaf8 244
+  s_30df774c9b18fd::t_e61c627378b82c 131-133,134
+  s_30df774c9b18fd::t_59420b7a542edf 59
+  s_30df774c9b18fd::t_0663fb70b258dc 135-136
+  s_a558acceac4de2::t_0332913cf96259 160
+src/simulation/prices.rs
+  s_83fb8d859a105f::t_0f50cca3aa6da0 383
+  s_83fb8d859a105f::t_3ecd913f36460f 201
+  s_1a096aca9a2311::t_30825a392a3443 106-107,242-244
+  s_1a096aca9a2311::t_4b8c2621847380 67-89,91,94-95,349,365
+  s_1a096aca9a2311::t_cbf8ad93099fcf 15,108-112,122
+  s_1a096aca9a2311::t_4cc53869de0524 120-121,140-142,153-155,177-178,190-192,204-206,220-222,256-257,389-390,414-416
+  s_1a096aca9a2311::t_a0e350235a2201 266-272
+  s_1a096aca9a2311::t_c8ccac87b84d2a 8,90,92-93,123,179,258,312-314,324-325,337-338,350,352-353,366,368-369,391
+  s_1a096aca9a2311::t_56f5506f687fba 96-97
+docs/model/commodity_graphs.md
+  s_83fb8d859a105f::t_9afe3a7f1620df 271
+  h_e76403a1cd4bf1 168,188,200,207
+  s_e3618010bfe6e6::t_bd8e46415a35c2 144-145
+  s_e3618010bfe6e6::t_76284ec6c7e7e6 153-154,158,163,170,173-175,177,183,187,191,196,201,205-206,218,223-225,230-233
+  s_e3618010bfe6e6::t_3949e3b7655cc0 217
+  s_6fc1e99d5da531::t_9440f9abd3cb27 155-157,159-162,164-167,171-172,176,178-181,184-186,189-190,192-195,197-199
+src/input.rs
+  s_83fb8d859a105f::t_81e759086c7b15 298-299
+  h_e76403a1cd4bf1 321-322,328
+tests/data/circularity/assets.csv
+  h_e76403a1cd4bf1 18-20,21-32
+tests/data/circularity/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-754,756,758,760-765,766,769-841,854-867,870-1332,1333,1334,1335,1336,1338,1340,1341-1342,1344-1345,1349-1354,1355-1357,1361-1369,1373-1381,1385-1825
+tests/data/circularity/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+tests/data/circularity_npv/assets.csv
+  h_e76403a1cd4bf1 18-20,21-32
+tests/data/circularity_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 626-641,650-754,756,758,760-765,766,769-841,854-867,870-1332,1333,1334,1335,1336,1338,1340,1341-1342,1344-1345,1349-1354,1355-1357,1361-1369,1373-1381,1385-1825
+tests/data/circularity_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 114-129,132,148,164,178-497
+src/simulation/market.rs
+  s_83fb8d859a105f::t_933fe93260fa2c 32-35,37,49,94-97,108
+  s_83fb8d859a105f::t_4948ecb6a05c7f 146
+  s_83fb8d859a105f::t_9428a665c7800e 434-435,453-456
+  s_83fb8d859a105f::t_75734b7f903992 9
+  s_e3618010bfe6e6::t_dae029d78d38e7 98,100-104
+  s_e3618010bfe6e6::t_ae6bf9c621debd 306
+  s_e3618010bfe6e6::t_34a4b22f94a91a 30
+  s_e3618010bfe6e6::t_90e809f10e2fea 373-374
+  s_378dcf4051c8b4::t_4b048f1e903747 20
+  s_378dcf4051c8b4::t_97407b7b1c3f18 263,269
+  s_378dcf4051c8b4::t_6026d1d4d5bcb4 4,259,519-521
+  s_378dcf4051c8b4::t_715f0107525eee 545
+  s_378dcf4051c8b4::t_d3eb4e7346b078 265,267-268
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 14
+  h_e76403a1cd4bf1 197,265,335
+  s_674d94b7e26db3::t_d58163d7c34bba 273,276
+  s_674d94b7e26db3::t_f8c8a8a4237e9b 127,131,134,176,179
+  s_674d94b7e26db3::t_de32d741c8b2e6 299,302-304,309,331,339,341,345
+  s_674d94b7e26db3::t_bc130af6830bca 2-3,66-68,80
+  s_674d94b7e26db3::t_c3e738cccb93fc 366,377,402,409,424,426,429-430
+  s_a558acceac4de2::t_0332913cf96259 28,31,54-55,71,82,99,105,126,133,165,184,256-258,260,289,316,387
+  s_a558acceac4de2::t_adb539da4f32b5 69,160
+  s_a558acceac4de2::t_0aa04c53aed24a 5,253-254,266
+  s_ebaf67aff77f9b::t_4899fd4a777b75 11-13,61,75,87,110,170,206-208,210-225,227-235,237-239,241,242-252,294,321,369,371-372,392
+  s_ebaf67aff77f9b::t_1de1a58cf6916d 162-163,279-280,338
+  s_ebaf67aff77f9b::t_cff51729636773 282-287
+  s_ebaf67aff77f9b::t_958d1f550557e6 70
+  s_d543ed7440a2cc::t_d295dcd3f6838f 129-130
+  s_d543ed7440a2cc::t_afb0e7bc305c97 63,77,89,112,172,198-205,209,240,296,323,336-337,340,359,370,394
+src/simulation/investment.rs
+  s_83fb8d859a105f::t_acc6e08295574b 194-195
+  s_378dcf4051c8b4::t_f42937c942311c 23
+  s_378dcf4051c8b4::t_4b048f1e903747 14,18
+  s_378dcf4051c8b4::t_e4e45594267615 287-288,295
+  h_e76403a1cd4bf1 221
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 24
+  s_674d94b7e26db3::t_92b3e895d47471 2-3
+  s_674d94b7e26db3::t_564ec181169444 75,80,82,98,109,115-116
+  s_674d94b7e26db3::t_c9f18f673f0b60 139
+  s_674d94b7e26db3::t_a85a744b129f6e 125
+  s_a558acceac4de2::t_0332913cf96259 68
+  s_a558acceac4de2::t_2c2065eb48cc5c 8,20,38-47
+  s_a558acceac4de2::t_f2f895da59bc90 48
+  s_ebaf67aff77f9b::t_4899fd4a777b75 29-37,72
+  s_ebaf67aff77f9b::t_1de1a58cf6916d 52,65-66
+  s_ebaf67aff77f9b::t_34f00cd694e423 57,59
+  s_d543ed7440a2cc::t_d295dcd3f6838f 98-99
+  s_d543ed7440a2cc::t_afb0e7bc305c97 58,71
+docs/images/investment_order_example.svg
+  s_e3618010bfe6e6::t_24713f89ae3cd0 7-9,11,14-15,19-20,25-27,32-34,39-40,45-47,52-53,58-59,64-65,70-72,77-78,83-84,89-90,95-96,101-104
+docs/images/investment_order_example.dot
+  s_e3618010bfe6e6::t_5b1fb6af931216 18-19,33
+docs/model/prices.md
+  s_e3618010bfe6e6::t_d8688c9dcc8d72 237-238
+  s_e3618010bfe6e6::t_db8b2ef8fca008 119,123-133
+  s_6fc1e99d5da531::t_a2c4b3dd2f2f60 120-122
+docs/model/investment.md
+  h_e76403a1cd4bf1 48
+  s_e3618010bfe6e6::t_71fed1b33ddc83 213-216
+  s_e3618010bfe6e6::t_89cb38af335dfc 253
+  s_e3618010bfe6e6::t_0f66a3bd289351 50-51,61-63
+  s_6fc1e99d5da531::t_c7b42bd145df43 42-49,52-60
+  s_135dd534e72d7a::t_574138b75e3de9 118
+docs/release_notes/upcoming.md
+  h_e76403a1cd4bf1 15
+  s_e3618010bfe6e6::t_abf96e705442c5 18,22
+  s_e3618010bfe6e6::t_7bb626473e1260 8
+src/simulation/investment/competitive/optimisation.rs
+  s_378dcf4051c8b4::t_4886f57c7d1dbc 1-3,1-2,6,8-10,12-14,16-21,24-32,35-36,39-45,52,57-62,57-61,64,66-68,71-72,74-78,80-89,92,93-94,95-98,114,116-121,126,128,130,133,135-139,135-138,141-159,162,164-165,167,250,252,254-255
+  h_e76403a1cd4bf1 22-23,46-51,53-56,63,65,69,73,90,99-113,115,129,132,160-161,166,168,169,171-175,199,239,245,248,249,249
+  s_378dcf4051c8b4::t_41e458bcfddbf0 7
+  s_378dcf4051c8b4::t_f2fb35815395a7 62,70,139
+  s_378dcf4051c8b4::t_2a99f7f1c0a325 33-34,37,205,251,253
+  s_378dcf4051c8b4::t_0a22332463601d 4-5,79
+  s_674d94b7e26db3::t_d04769b9c2b661 38,91
+  s_674d94b7e26db3::t_f62e306f25ca11 11
+  s_87c5e8dae63a5a::t_739ddabd1212c4 122-125,127,131,134,140,163,170,176-194
+  s_87c5e8dae63a5a::t_408320bc651f21 195
+src/simulation/investment/competitive/constraints.rs
+  s_378dcf4051c8b4::t_4886f57c7d1dbc 1-6,8-21,24-25,30,36,40-49,51-53,55,57,77-87,77-84,85-87,90-101,103-104,105-109,111,113-115,117-121,123-125,128,137-140,147-149,157-161,163,165,170-180,185-194,197,255-256
+  h_e76403a1cd4bf1 22-23,26-29,31-35,37-39,50,54,56,58-76,197,255-256
+  s_378dcf4051c8b4::t_f2fb35815395a7 88-89,102,110,112,116,122,126-127,129-136,141-146,150-156,162,164,166-169,181-184,195-196,198-207
+  s_378dcf4051c8b4::t_0a22332463601d 7,210-253
+src/simulation/investment/competitive/metrics.rs
+  s_378dcf4051c8b4::t_f42937c942311c 16
+  s_378dcf4051c8b4::t_4886f57c7d1dbc 1-9,11-15,17-20,22-56,58,61-72,74-76,78-87,89-133,135-170,172,174-177,179-215,217-218,220,222,232-235,238-243,245-254,256-257,259,261,271-280,283-288,290-298,300-301,303-304,307,309-313,323-468,470-496,498-771,773-892
+  s_c5245ca3f71151::t_fccf5e0696b471 88,134,171,173,178
+  s_c5245ca3f71151::t_00e3d2ddc2ee7e 305
+  h_e76403a1cd4bf1 21,216,219,223-224,225,226-228,229,231,244,255,258,262-263,264,265-267,268,270,289,302,306,314-315,316,317-319,320,322
+  s_378dcf4051c8b4::t_2a99f7f1c0a325 59,73,77,230,236,269,281,299,321,497,772
+  s_d6a9f5fb1e2597::t_a4d2a676d22c55 57,237,282,469
+  s_674d94b7e26db3::t_4ac3325471e822 10
+  s_674d94b7e26db3::t_d04769b9c2b661 60,221,260,308
+src/simulation/investment/competitive.rs
+  s_378dcf4051c8b4::t_f42937c942311c 2-4,6-7,10
+  s_378dcf4051c8b4::t_ad97f943bea7a7 12,14-16,18,21,25,27-32,34-35
+  s_378dcf4051c8b4::t_4b048f1e903747 22-23
+  s_378dcf4051c8b4::t_e4e45594267615 564
+  s_378dcf4051c8b4::t_24445d3a6dc945 145
+  s_378dcf4051c8b4::t_1928fe6f37f23d 560-563,565-569
+  s_378dcf4051c8b4::t_7cbef091340c75 11,37,75,99-100,103,106-107,109-115,117,119-123,143-144,146-155,157-210,215-216,218-224,226-227,230-243,252-254,267,269-278,289-302,304-306,310-317,320-322,324-365,368,370-372,379,405,429-552,554-559,570-640,642-710
+  s_378dcf4051c8b4::t_bbac21ffc319e6 711
+  s_378dcf4051c8b4::t_97407b7b1c3f18 40,44-51,53-60,64,66-69,74-76,78,89-91,92-93,95,98-107
+  s_378dcf4051c8b4::t_3399e8c0019c79 8,26,318-319
+  s_c5245ca3f71151::t_00e3d2ddc2ee7e 229
+  s_c5245ca3f71151::t_fccf5e0696b471 5,9
+  s_c5245ca3f71151::t_33439327954216 156
+  h_e76403a1cd4bf1 214,553,641
+  s_378dcf4051c8b4::t_d3eb4e7346b078 70,72-73,96-97
+  s_378dcf4051c8b4::t_41e458bcfddbf0 225,256,268,288,303,307-308,323,366,369
+  s_378dcf4051c8b4::t_169f3d4a24501e 102
+  s_d6a9f5fb1e2597::t_a4d2a676d22c55 244-246,248-251
+  s_674d94b7e26db3::t_41e90c2879625f 77
+  s_674d94b7e26db3::t_e68c3b969f749c 228,257
+  s_674d94b7e26db3::t_91998feae31c81 390-401
+  s_674d94b7e26db3::t_ae2950f8e46b5d 19
+  s_a558acceac4de2::t_adb539da4f32b5 1,38-39
+  s_a558acceac4de2::t_0332913cf96259 65
+  s_a558acceac4de2::t_50842107f3dfa6 13,116
+  s_a558acceac4de2::t_0aa04c53aed24a 17,20,36,71,79-81,108,118
+  s_a558acceac4de2::t_e86025d6ee8670 82-88,124-127,129-142
+  s_87c5e8dae63a5a::t_02fa601b6b10ad 61-63
+  s_87c5e8dae63a5a::t_96a6a9fa13d709 24,279-286,404-428
+  s_87c5e8dae63a5a::t_8f754b1f113b38 373-389,403
+  s_87c5e8dae63a5a::t_1daa52364b31a0 214
+  s_87c5e8dae63a5a::t_01337c8c132ffd 33,211-213,217,244-247,250-251,255,258-266,287
+  s_87c5e8dae63a5a::t_6efbafa5bfac72 41-43,52,94
+benches/assets.rs
+  s_378dcf4051c8b4::t_cb764029b4b0d4 12,15
+  h_e76403a1cd4bf1 261
+  s_a558acceac4de2::t_50842107f3dfa6 5,13,200-211,213,215,218
+  s_87c5e8dae63a5a::t_a9e2a3066b48ac 253
+  s_1a096aca9a2311::t_4b8c2621847380 18,109,113
+src/output.rs
+  s_378dcf4051c8b4::t_fd71f92134cc0c 16-17,238,244-245,262,268,446-466,475-477,538-565,568
+  s_378dcf4051c8b4::t_be68c7acb56112 566,569,1034-1078
+  s_378dcf4051c8b4::t_ab71244bb4cc11 567,570,1033
+  s_378dcf4051c8b4::t_3399e8c0019c79 10,665-666
+  s_9c82011db8f22b::t_4f8b2c345cccf4 729
+  s_9c82011db8f22b::t_69ef9586a8a0d7 592-593
+  s_9c82011db8f22b::t_522fa03ebc5834 164-165,167-168,715,717,753,755
+  h_e76403a1cd4bf1 664,739
+  s_674d94b7e26db3::t_9f36e65674f884 7-8
+src/fixture.rs
+  s_378dcf4051c8b4::t_91b6d28aad7670 7,18,20-21
+  s_378dcf4051c8b4::t_6026d1d4d5bcb4 5
+  s_378dcf4051c8b4::t_715f0107525eee 341
+  h_e76403a1cd4bf1 219
+src/simulation/investment/competitive/debug.rs
+  s_378dcf4051c8b4::t_3399e8c0019c79 1-107,109-118,120-126,128-131,133-198
+  s_d6a9f5fb1e2597::t_a4d2a676d22c55 119,127
+src/agent.rs
+  s_378dcf4051c8b4::t_715f0107525eee 41-42,69-72,77-78,79
+  s_378dcf4051c8b4::t_5cf48ea8b17a73 80-81
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 73-74,76
+  h_e76403a1cd4bf1 75,77-79
+src/input/agent.rs
+  s_378dcf4051c8b4::t_501f3b9d1d7deb 170-172,232-235,237-239,241-245,250-265
+  s_378dcf4051c8b4::t_6026d1d4d5bcb4 181,205,213,225
+  s_378dcf4051c8b4::t_715f0107525eee 5,33-34,148
+  s_378dcf4051c8b4::t_921d0a557327ca 266
+  s_378dcf4051c8b4::t_8f032a35e0d018 167-169,267-285
+  s_378dcf4051c8b4::t_9ccb6ab8042fcc 247-249
+  s_378dcf4051c8b4::t_d355dc0faeedf7 246
+  s_378dcf4051c8b4::t_0804cc41fba174 286
+src/input/agent/search_space.rs
+  s_378dcf4051c8b4::t_dea1703f394ac8 262
+  s_378dcf4051c8b4::t_715f0107525eee 294
+schemas/input/agents.yaml
+  s_378dcf4051c8b4::t_a4d5aa69ecd35c 14-15,17-18
+  s_378dcf4051c8b4::t_e3ac8db39ceb70 16
+src/simulation/investment/competitive/coefficients.rs
+  s_c5245ca3f71151::t_fccf5e0696b471 63
+  s_c5245ca3f71151::t_00e3d2ddc2ee7e 40,65
+  s_d6a9f5fb1e2597::t_a4d2a676d22c55 15-16,19,21-22,28,31-33,35-37,42-43,53-54,67-68,76,83,85,92,95,97-98,100,102,107
+src/graph.rs
+  h_e76403a1cd4bf1 26,43,45-46,48,84,86-87,97,99,103,104,105-110,113-117,121-127,131-154,156-159,160-164,165,166,167,168-169,170,177,179,184-186,187-188,189,198,206,208,211,218
+  h_e76403a1cd4bf1 104,160-164,166,168-169,184-186,189,208,211
+src/graph/validate.rs
+  h_e76403a1cd4bf1 14,33-34,37-39,46,50,55-58,64,117,149,159,167,174,192,203,209,216,220,256-265,290-299,304,324,340-344,349,370-379,384
+tests/cli.rs
+  h_e76403a1cd4bf1 75
+src/asset.rs
+  s_9c82011db8f22b::t_b317d6fca77a3c 997
+  s_9c82011db8f22b::t_70cbcc4eb26189 828
+  s_9c82011db8f22b::t_99383e725d3c81 841-842
+  s_9c82011db8f22b::t_81db92617636d6 995-996,1003,1006,1008,1035,1048,1061,1062,1069-1070,1074-1077,1096,1098-1101
+  s_9c82011db8f22b::t_ae7a72e38ac96e 49
+  s_9c82011db8f22b::t_c40fa438e8aca3 1047,1114
+  s_9c82011db8f22b::t_0ee9dff81e8681 836-837
+  s_9c82011db8f22b::t_370a60d93b60a2 848,855,1111,1561-1562,1566,1568,1571-1575,1580,1586-1588,1593,1600,1611,1615,1622,1638,1646,1651,1657,1659,1665,1667,1670-1671,1676,1682,1684-1685,1690-1691,1702,1704-1706,1710,1713
+  s_9c82011db8f22b::t_4d34aadf878044 1634
+  s_9c82011db8f22b::t_54998a405a7d11 12-13
+  s_9c82011db8f22b::t_738e3ad96f063b 1675
+  s_9c82011db8f22b::t_e4f91321c9e42a 838-840
+  s_9c82011db8f22b::t_225ab61e912634 843
+  s_9c82011db8f22b::t_7c7be9dce9f96b 1045-1046
+  s_9c82011db8f22b::t_a7f01748b44313 1049
+  s_9c82011db8f22b::t_ec06b8b0edf325 1112-1113
+  s_9c82011db8f22b::t_46deed9973a13e 1234-1235
+  s_9c82011db8f22b::t_8b0ec6f17488cd 1237-1238
+  s_9c82011db8f22b::t_be7cf6963b017c 1559-1560
+  s_9c82011db8f22b::t_ec5bb2f98f8f62 1711
+  s_9c82011db8f22b::t_1ced528dd91dd3 1756
+  h_e76403a1cd4bf1 829,1009-1012,1014,1016-1018,1023-1030,1034,1040-1042,1050-1051,1053,1057-1060,1064-1067,1078-1090,1093-1094,1097,1236,1564-1565,1595,1605,1627-1628,1645,1658,1660,1666,1669,1677,1686,1697-1698,1703,1719,1732-1733,1757
+src/asset/capacity.rs
+  s_9c82011db8f22b::t_f7d36d053fe874 355
+  s_9c82011db8f22b::t_b1a6b03cc3ce4d 253-267,283
+  s_9c82011db8f22b::t_ab6bd976daeb39 293-294,296,301-303
+  s_9c82011db8f22b::t_5ac16cae4fb6c6 64,67,71,75,78,85,91,114-118,120-121,127-133,142-162,172-196,203-216
+  s_9c82011db8f22b::t_ac081b695e9e4a 6,8-17,21-30,36,42,51-53
+  s_9c82011db8f22b::t_29f65bf8fafee3 304,314-318,333-334,336
+  s_9c82011db8f22b::t_842476b2c1022a 62,65-66
+  s_9c82011db8f22b::t_7a3e4628ac6bcf 63,70,72-74,76-77
+  s_9c82011db8f22b::t_7ec9caa2ab2b9c 78,106
+  s_9c82011db8f22b::t_45720f419e6696 95-102
+  s_9c82011db8f22b::t_7e406da99ef22f 79
+  h_e76403a1cd4bf1 31,44,80,90,112,235,249,269-270,274-275,279-280,295,298-299,320-322,335,338-339,351
+  s_378dcf4051c8b4::t_a7f7fb37c162cc 80-89,91-94
+src/asset/pool.rs
+  s_9c82011db8f22b::t_dfe9aee6f78cbe 102-103,107
+  s_9c82011db8f22b::t_e1c8fc7ddc8713 104,109-111
+  s_9c82011db8f22b::t_26e770b7b12c0f 113
+  h_e76403a1cd4bf1 105,112,548-550,634,647,653,662-663,676,682,693
+tests/data/simple_shadow/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_ironing_out/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-20
+tests/data/circularity_npv/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-16,18,20,23,35
+  h_e76403a1cd4bf1 17,19,21-22,24-34,36-49
+tests/data/simple_tranche_size/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-5,7,10,13
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_marginal_average/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/simple_npv/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/two_outputs/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-14,16,18,21,33
+  h_e76403a1cd4bf1 15,17,19-20,22-32,34-47
+tests/data/circularity/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-16,18,20,23,35
+  h_e76403a1cd4bf1 17,19,21-22,24-34,36-49
+schemas/input/processes.yaml
+  s_135dd534e72d7a::t_2349c3dbb7dc11 42
+schemas/input/assets.yaml
+  s_135dd534e72d7a::t_6382e602bfea29 26-27
+tests/data/muse1_default/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-3
+  h_e76403a1cd4bf1 5-7,9-13,15-21,23-31,33-43,45-57
+tests/data/two_regions/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-5,8-9,16-17,28-29,44-45,64-65,88-89
+  h_e76403a1cd4bf1 7,10-13,15,18-25,27,30-41,43,46-61,63,66-85,87,90-113
+tests/data/simple/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-21
+tests/data/missing_commodity/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,13
+  h_e76403a1cd4bf1 8-9,11-12,14-23
+tests/data/simple_marginal/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-21
+src/input/asset.rs
+  s_135dd534e72d7a::t_d0e652b85a34b3 142-143,231-253
+  s_135dd534e72d7a::t_f490ead7875d55 254-255
+  h_e76403a1cd4bf1 119,140,225-226,227,228,278-279,280,281
+tests/data/simple_mothball/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13,18
+  h_e76403a1cd4bf1 8-9,11,14-17,19-22
+tests/data/simple_full/asset_capacities.csv
+  s_135dd534e72d7a::t_88403f2e0675ce 2-7,10,12-13
+  h_e76403a1cd4bf1 8-9,11,14-21
+schemas/output/asset_capacities.yaml
+  h_e76403a1cd4bf1 16-18,24-26
+src/simulation/investment/portfolio/costs.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-33
+src/simulation/investment/portfolio/debug.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-12,14-15,17-150
+  s_378dcf4051c8b4::t_a645a420a0bde7 13,16
+src/simulation/investment/portfolio/optimisation.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-5,7-34,36-45,48-50,52-55,58,69-77,79-91,93-133,137-140,142-152,154-187,189-203
+  h_e76403a1cd4bf1 78,92
+  s_674d94b7e26db3::t_b8de537e43ad7b 6,188
+  s_674d94b7e26db3::t_f3710721bd203c 35
+  s_8631bd4610aac6::t_c4e1e5d8c23f17 46-47,51,56-57,59-68,134-136,141,153
+src/simulation/investment/portfolio/constraints.rs
+  s_378dcf4051c8b4::t_4c2e179fd6413b 1-75,79-106,109-112,113-235
+src/simulation/investment/portfolio.rs
+  s_378dcf4051c8b4::t_b30311315bae3e 2-5,7-9,11,14-15,17-18,20-27,30,34-41,43-50,54,56-59,64-66,76,90-94,96-98,116-117,118-125,133-141,144-147,149-150,152-153,155-159,161,162-163,261
+  s_378dcf4051c8b4::t_d3eb4e7346b078 60,62-63,99-101
+  s_674d94b7e26db3::t_3e000560714d42 67,142-143,148,151
+  s_674d94b7e26db3::t_19113ac36fc7ca 12
+  s_a558acceac4de2::t_0332913cf96259 55
+  s_a558acceac4de2::t_adb539da4f32b5 1,28-29
+  s_a558acceac4de2::t_50842107f3dfa6 73
+  s_a558acceac4de2::t_e86025d6ee8670 164-172
+  s_a558acceac4de2::t_0aa04c53aed24a 6,10,13,19,61,72,74-75,154,160
+  s_8631bd4610aac6::t_b61205a27372c1 238
+  s_8631bd4610aac6::t_6545f99b5d1c31 174-177,179,181-196,199-237,239-252,254-261
+  s_8631bd4610aac6::t_a974c2e3a08c12 178,180,197-198,253
+  s_8631bd4610aac6::t_c4e1e5d8c23f17 31-33,42,51-53,68-71,77-78,95,102-115,126-132
+  s_5a8ab3438e6345::t_6044d99618cfb9 16,79-91
+tests/data/missing_commodity/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-318,321-324,334-345,358-369,373-378,382-384,388-390,406-417,452-459,462-463,466-469,472-513,522-537,542-705
+tests/data/missing_commodity/commodity_prices.csv
+  h_e76403a1cd4bf1 98-241
+tests/data/muse1_default/assets.csv
+  h_e76403a1cd4bf1 6-15
+tests/data/muse1_default/commodity_flows.csv
+  h_e76403a1cd4bf1 32-49,80-145,152-241,248-361,368-505,512-673
+tests/data/muse1_default/commodity_prices.csv
+  h_e76403a1cd4bf1 26-37,44-55,62-73,80-91,98-121
+tests/data/simple/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple/debug_asset_selection_portfolio.csv
+  h_e76403a1cd4bf1 1-27
+tests/data/simple/debug_asset_selection_portfolio_time_slices.csv
+  h_e76403a1cd4bf1 1-66,69-98,101-214,216-230,232-361,366-377,382-392,398-409,414-417
+tests/data/simple/debug_commodity_balance_duals.csv
+  h_e76403a1cd4bf1 163-164,178-183,185,190-191,193,195-196,198,201,206,209,226-231,233,238-239,241,243-244,246,249,254,257,323-324,326,329,334,337-343,345,350-351,353,362-365,370-386,390-393,399-400,402-409,414-417,451-452,454,457,462,465-471,473,478-479,481,490-493,498-514,518-521,526-537,542-565,570-573,578-581,586-589,594-629,642-645,658-689,702-721,738-761,770-801
+tests/data/simple/debug_dispatch_assets.csv
+  h_e76403a1cd4bf1 306-322,324,338-345,350-369,371-372,374,377,382,384-393,398-407,410-414,417-471,473,478-489,494-503,506-510,513-553,558-585,590-601,606-615,618-622,625-665,670-681,686-713,718-729,734-743,746-750,753-793,798-809,814-833,835-838,841,846,848-857,862-977,979-981,986-989,994,998-1000,1006-1007,1010-1017,1022-1025,1030,1033,1038,1040-1042,1046-1049,1055-1056,1058-1065,1070-1081,1086-1095,1098-1102,1105-1145,1150-1161,1166-1265,1267-1270,1273,1278,1280-1289,1294-1345,1347-1349,1354-1357,1362,1366-1368,1374-1375,1378-1385,1390-1393,1398,1401,1406,1408-1410,1414-1417,1422-1841,1858-1905,1922-2017
+tests/data/simple/debug_solver.csv
+  h_e76403a1cd4bf1 4-17
+tests/data/simple_full/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_full/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_full/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_ironing_out/assets.csv
+  h_e76403a1cd4bf1 9-11
+tests/data/simple_ironing_out/commodity_flows.csv
+  h_e76403a1cd4bf1 226-312,314-317,321-393,406-417,426-427,432-433,442-443,446-473,486-753
+tests/data/simple_ironing_out/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_marginal/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_marginal/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_marginal/commodity_prices.csv
+  h_e76403a1cd4bf1 66-98,102-105,109-177
+tests/data/simple_marginal_average/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_marginal_average/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_marginal_average/commodity_prices.csv
+  h_e76403a1cd4bf1 66-98,100,102-105,109-177
+tests/data/simple_mothball/assets.csv
+  h_e76403a1cd4bf1 10
+tests/data/simple_mothball/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-324,334-345,358-393,406-417,426-427,432-433,442-443,446-473,486-520,522-523,526-529,546-551,610-705,722-769
+tests/data/simple_mothball/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_npv/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_npv/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_npv/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/simple_shadow/assets.csv
+  h_e76403a1cd4bf1 10-12
+tests/data/simple_shadow/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-311,314-318,321-393,406-417,426-427,432-433,442-443,446-473,486-769
+tests/data/simple_shadow/commodity_prices.csv
+  h_e76403a1cd4bf1 66-98,102-105,110-177
+tests/data/simple_tranche_size/assets.csv
+  h_e76403a1cd4bf1 8,10-12
+tests/data/simple_tranche_size/commodity_flows.csv
+  h_e76403a1cd4bf1 226-241,250-281,294-305,307-309,311,314-318,322-324,334-345,358-393,406-417,426-427,432-443,446-769
+tests/data/simple_tranche_size/commodity_prices.csv
+  h_e76403a1cd4bf1 66-177
+tests/data/two_outputs/assets.csv
+  h_e76403a1cd4bf1 15-20,22-30
+tests/data/two_outputs/commodity_flows.csv
+  h_e76403a1cd4bf1 562-692,694,696-699,702,705-765,769-777,790-803,806-819,826-1275,1278,1280,1297-1305,1309-1317,1321-1761
+tests/data/two_outputs/commodity_prices.csv
+  h_e76403a1cd4bf1 162-465
+tests/data/two_regions/assets.csv
+  h_e76403a1cd4bf1 9-29
+tests/data/two_regions/commodity_flows.csv
+  h_e76403a1cd4bf1 56-97,110-127,140-145,152-289,296-481,488-721,728-1009,1016-1345
+tests/data/two_regions/commodity_prices.csv
+  h_e76403a1cd4bf1 44,46,49-56,58,61-73,81,83-84,86-91,93,95-96,98-109,116,118,121-128,130,133-145,152-181,188,190,193-200,202,205-241
+src/simulation/optimisation.rs
+  s_378dcf4051c8b4::t_0a22332463601d 24
+  s_674d94b7e26db3::t_22782e1a97c4d4 180
+  s_1a096aca9a2311::t_d4182176de9252 11
+  s_1a096aca9a2311::t_a0e350235a2201 203-209,272-277
+  s_1a096aca9a2311::t_c78dae7668e309 278
+src/simulation/optimisation/constraints.rs
+  s_378dcf4051c8b4::t_0a22332463601d 514
+src/simulation/activity.rs
+  s_674d94b7e26db3::t_e463e39b025a91 175
+  s_674d94b7e26db3::t_bc8b80c4f6b692 83-86
+  s_674d94b7e26db3::t_e591e57b38c9ba 62,64-69
+  s_674d94b7e26db3::t_cea5bad63510fa 1-4,6-11,15-61,63,70-82,87-174,176-210
+  s_1a096aca9a2311::t_a0e350235a2201 5,12-13
+  s_1a096aca9a2311::t_46134f0cb0d543 14
+src/simulation.rs
+  s_674d94b7e26db3::t_01539972969b93 15-16,18,101
+  s_ebaf67aff77f9b::t_a8fbe5b6f96e59 102-111
+  s_ebaf67aff77f9b::t_34f00cd694e423 20
+  h_e76403a1cd4bf1 70
+  s_5a8ab3438e6345::t_fe7742ea467ee1 67-69,71-80
+  s_1a096aca9a2311::t_4b8c2621847380 6,238-239,241-242,244-250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "94d4e3ae0970da8a07a4d96c2212760365a0cd7a",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_135dd534e72d7a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4bd373c3-aa68-4848-a5da-06ee538826c5",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_1a096aca9a2311": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "b6ebcb22-4f13-45dc-b05e-f8f7a7811c23",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_30df774c9b18fd": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "0faa7414-583e-44c3-9a53-15bb5cb75e1e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_378dcf4051c8b4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_5a8ab3438e6345": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d3aad83e-e07e-47ab-86ff-9a9881916a05",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_674d94b7e26db3": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f460d7c6-5d40-44cc-a28a-323c3b2f6cbe",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_6fc1e99d5da531": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "87fcd9e7-e714-4bd2-9286-6c9baacf2500",
+        "model": "claude-opus-5.5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_83fb8d859a105f": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "c9fc9f21-6a0c-4fa8-86db-7d3a60de716a",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_8631bd4610aac6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f248835c-5a71-4d76-8c77-ce33d1354bf8",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_87c5e8dae63a5a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4800f15a-8b1c-45c2-ba34-1ccb904fd2a1",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_9c82011db8f22b": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "ca163686-6d41-4dad-b5ca-6ff7e89590ab",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_a558acceac4de2": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "a7a3b829-44b6-48e1-8fa1-3e7b9e5366d3",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_c5245ca3f71151": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "6c2c7d2f-7342-4d80-8789-8b0772f77f6e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_d543ed7440a2cc": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "e94db48b-2315-4d11-8f92-98651378b416",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_d6a9f5fb1e2597": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "a34e1336-811f-4e4f-ad47-f9d05682fd54",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_e3618010bfe6e6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "8bd37d8a-eb51-4605-8b07-75765390502c",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_ebaf67aff77f9b": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4b3b637d-2812-4cef-a9c2-2b9e973a6103",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
