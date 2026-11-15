@@ -107,10 +107,7 @@ across the year remains equal to the annual demand.
 present-value terms. For example, a discount rate of 0.05 means that £100 received in one year's
 time is valued at approximately £95.24 today (100 / (1 + 0.05)).
 
-**Dispatch:** The way in which *Assets* are operated to serve demand. Within the limits imposed by
-*Availability*, *Commodity* balances, and other user-defined constraints, MUSE2 effectively dispatches
-*Assets* in *Merit Order*: cheaper *Assets* are used first, up to their available capacity or until
-demand is met. The resulting operation is calculated by a least-cost linear program.
+**Dispatch:** The way in which *Assets* are operated to serve demand.
 
 **End Year:** The final year in the model *Time Horizon*.
 
@@ -143,9 +140,10 @@ MUSE2 generally processes downstream markets before upstream markets, so that de
 example, investment in electricity generation is considered before investment in gas production
 when gas is used to generate electricity.
 
-**Ironing-out Loop:** The repeated sequence of *Agent* investment and *Dispatch* used to resolve
-price instability introduced by new capacity commitments. The loop stops when time-slice-weighted
-market prices converge within the configured tolerance or the maximum number of iterations is reached.
+**Ironing-out Loop:** The repeated sequence of *Agent* investment and price calculation used to
+resolve price instability introduced by new capacity commitments. The loop stops when
+time-slice-weighted market prices converge within the configured tolerance or the maximum number
+of iterations is reached.
 
 **Levelised Cost of X (LCOX):** The cost per unit of output *Commodity* X from an *Asset*,
 calculated by dividing its discounted lifetime costs by its discounted lifetime output under a
@@ -178,8 +176,8 @@ output commodities.
 **Partial Equilibrium:** An equilibrium in which only the user-defined *Commodities* and markets are
 balanced. MUSE2 does not attempt to equilibrate the whole economy.
 
-**Pricing Strategy:** The method used to calculate a *Commodity*'s price. This includes *Marginal
-Cost* pricing, *Full Cost* pricing, and *Shadow Price* pricing.
+**Pricing Strategy:** The method used to calculate a *Commodity*'s price. Options include *Marginal
+Cost* and *Full Cost* pricing.
 
 **Process:** A blueprint of an available *Process* that converts *Input Commodities* to *Output
 Commodities*. *Processes* have economic attributes of *Capital Cost*, *Fixed Operating Cost* per

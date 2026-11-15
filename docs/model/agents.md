@@ -42,8 +42,8 @@ feasible options remain.
 
 ### Commodity prices used in appraisal
 
-Investment appraisal uses two price sets calculated from the previous MSY's dispatch (or from the
-previous [ironing-out loop][framework-overview] iteration if enabled):
+Investment appraisal uses two price sets from the previous MSY (or from the previous
+[ironing-out loop][framework-overview] iteration if enabled):
 
 - **Market prices** \\( \pi\_{c,r,t} \\): used for activity coefficients in the mini dispatch and
   for the investment metric (Cost Index or SNAS).
