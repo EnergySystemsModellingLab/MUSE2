@@ -517,6 +517,7 @@ src/model/parameters.rs
   s_78c186f8421175::t_7d9107efdc8e5b 490-491
 docs/model/README.md
   s_78c186f8421175::t_ab89ddbaffb7f8 56-65,71-76,81-83,85-110
+  s_4df199bad86683::t_666babf0bff4ab 66-70,77-80,84
 docs/developer_guide/custom_highs_options.md
   s_78c186f8421175::t_ab89ddbaffb7f8 11-13,38
 docs/model/dispatch_optimisation.md
@@ -561,6 +562,14 @@ docs/model/dispatch_optimisation.md
       "agent_id": {
         "tool": "github-copilot-cli",
         "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_4df199bad86683": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "7e005898-bca9-4684-8e02-c7e74876b0a9",
         "model": "unknown"
       },
       "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
