@@ -1,0 +1,61 @@
+src/simulation/investment/competitive/output.rs
+  h_e76403a1cd4bf1 113,137
+src/simulation/investment/competitive.rs
+  h_e76403a1cd4bf1 323,383
+src/simulation/investment/competitive/metrics.rs
+  s_378dcf4051c8b4::t_2a99f7f1c0a325 59,73,77,230,236,269,281,299,321,497,772
+src/simulation/investment/competitive/optimisation.rs
+  s_378dcf4051c8b4::t_2a99f7f1c0a325 33-34,37,189,235,237
+  s_378dcf4051c8b4::t_0a22332463601d 4-5,79
+src/simulation/optimisation.rs
+  s_378dcf4051c8b4::t_0a22332463601d 24
+src/simulation/optimisation/constraints.rs
+  s_378dcf4051c8b4::t_0a22332463601d 514
+src/simulation/investment/competitive/constraints.rs
+  s_378dcf4051c8b4::t_0a22332463601d 7,210-214,216-252
+  h_e76403a1cd4bf1 215
+docs/model/agents.md
+  s_f828466d789f1a::t_4192377ccc309c 229-231
+  s_f828466d789f1a::t_4b496e8225b8aa 192-194
+  s_f828466d789f1a::t_424628d73fca25 158-159,162-166,170-171,174,180,184-185,188-191,195-205
+  s_f828466d789f1a::t_c2edcb9ff0cc2e 104-108,112
+  s_f828466d789f1a::t_5be680478847a6 267-271
+  s_f828466d789f1a::t_16e234581c3c12 338-339
+  s_f828466d789f1a::t_fe1fc6be85138a 336-337,340-342
+  s_f828466d789f1a::t_c8c85752a51153 35-41
+  s_f828466d789f1a::t_8f59a41b1e65f3 504
+  s_f828466d789f1a::t_bea94b0e6ea9a7 249-251
+  s_f828466d789f1a::t_9b534e26dba19b 242-243,248
+  s_f828466d789f1a::t_c84a4bbf12861a 113
+docs/glossary.md
+  s_f828466d789f1a::t_595be06fc0aa1a 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a837d43ab487bb88435574a6279928d8ea9b252e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_378dcf4051c8b4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f229d325-7dd3-48ec-8fec-2de861b4b945",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_f828466d789f1a": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "36103a22-1e09-4866-80b5-7b7d7b863df9",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
