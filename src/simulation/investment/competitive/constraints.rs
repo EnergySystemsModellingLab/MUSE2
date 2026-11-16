@@ -212,8 +212,7 @@ fn add_annual_peak_constraints(
 /// slice.
 ///
 /// Flexible-capacity assets are excluded because their maximum activity depends on a decision
-/// variable. The constraints added here are not included in [`ConstraintKeys`], as their duals
-/// are not currently used.
+/// variable.
 pub fn add_equal_utilisation_constraints(
     problem: &mut Problem,
     activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
