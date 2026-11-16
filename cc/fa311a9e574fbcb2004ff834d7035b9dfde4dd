@@ -16,6 +16,7 @@ src/simulation/market.rs
 src/simulation.rs
   s_ebaf67aff77f9b::t_a8fbe5b6f96e59 105-110,112-115
   s_78c186f8421175::t_b2deabc008b3af 3,7,9,15-16,18,26-28,70,104,111,119,137,181,190,204-206,219,252,256,283-363
+  h_e76403a1cd4bf1 8
 src/simulation/prices.rs
   s_78c186f8421175::t_21e59311dbd2fe 56,70-73,90-91,101-103,122
 benches/assets.rs
