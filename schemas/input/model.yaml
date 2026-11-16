@@ -31,7 +31,8 @@ properties:
       `system_dispatch`, agents choose capacity and flows and prices come from a system-wide,
       cost-minimising dispatch optimisation. With `agent_dispatch`, flows and prices are calculated
       directly from the activities determined by agents' own optimisations, and no system-wide
-      dispatch is run. See
+      dispatch is run. The experimental `system_dispatch` protocol requires setting
+      `please_give_me_broken_results` to true. See
       [the model documentation](../model/index.html#simulation-protocols) for details.
   candidate_asset_capacity:
     type: number
