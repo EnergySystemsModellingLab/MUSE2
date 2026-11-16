@@ -222,10 +222,7 @@ fn log_on_equal_appraisal_outputs(
                     "Process ID: '{}' (State: {}{}, Commission year: {})",
                     asset.process_id(),
                     asset.state(),
-                    asset
-                        .id()
-                        .map(|id| format!(", Asset ID: {id}"))
-                        .unwrap_or_default(),
+                    asset.id().map_or_default(|id| format!(", Asset ID: {id}")),
                     asset.commission_year()
                 )
             })
