@@ -193,10 +193,10 @@ with an error. For a portfolio agent, the simulation terminates with an error.
 ## Mothballing and Decommissioning
 
 After investment is complete for a given MSY, any capacity of previously commissioned assets that
-was not selected for retention is *mothballed*. For assets made up of tranches, whole tranches are
-mothballed, whereas assets with continuous capacity may be partially mothballed. Mothballed capacity
-is not dispatched, but it remains in the asset pool, together with the year in which it was
-mothballed.
+was not selected for retention is *mothballed*. Assets with continuous capacity can mothball any
+portion of this capacity, but assets made up of tranches can mothball only whole tranches.
+Mothballed capacity is not dispatched, but the asset retains this capacity until either it is
+reselected during investment or is discarded after `mothball_years`.
 
 Mothballed capacity is available for selection in future MSYs (see
 [Investment Options](#investment-options)). If an asset is selected again, its mothballed capacity

@@ -90,7 +90,11 @@ pub fn add_demand_constraints(
         let terms = assets
             .iter()
             .flat_map(|asset| {
-                let coefficient = asset.get_flow(&commodity.id).unwrap().coeff.value();
+                let coefficient = asset
+                    .get_flow(&commodity.id)
+                    .expect("Asset does not contain commodity flow")
+                    .coeff
+                    .value();
 
                 ts_selection
                     .iter(time_slice_info)

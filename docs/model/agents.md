@@ -100,7 +100,7 @@ remaining limit.
 
 ### Mini Dispatch Optimisation
 
-For each supply option being appraised, a small linear programme (LP) is solved to determine the
+For each supply option being appraised, a small linear program (LP) is solved to determine the
 optimal activity profile given the current remaining demand.
 
 #### Activity coefficients
@@ -190,7 +190,7 @@ The market cost \\( \mu_t \\) is calculated differently depending on the objecti
     \mu_t^{\mathrm{NPV}} = \mathrm{OperatingCost}(t) - \mathrm{RevenueFromFlows}(\pi, t)
   \\]
 
-#### LCOX metric (`objective_type = "lcox"`)
+#### LCOX metric
 
 The LCOX metric is calculated as the total annualised cost divided by total annual output, using
 the above defined market costs which *exclude* the primary output commodity:
@@ -203,7 +203,7 @@ the above defined market costs which *exclude* the primary output commodity:
 
 Lower values indicate lower-cost investments.
 
-#### NPV metric (`objective_type = "npv"`)
+#### NPV metric
 
 The NPV metric is based on the Specific Net Annualised Surplus (SNAS). This the net surplus per
 unit of activity, using market costs that *include* the primary output commodity:
@@ -351,7 +351,7 @@ available options.
 ## Portfolio agents
 
 Portfolio agents select all of their assets for a market at once, by solving a single linear
-programme (LP). This chooses the capacity and activity of every option together, so as to meet the
+program (LP). This chooses the capacity and activity of every option together, so as to meet the
 agent's share of demand at the lowest total cost.
 
 ### Options
