@@ -13,8 +13,9 @@
 //! 1. Add a variant to [`SimulationProtocol`], and a match arm in [`run`]
 //! 2. Create a submodule with a `pub fn run(model: &Model, writer: &mut DataWriter) -> Result<()>`
 //!    function, and implement [`investment::FlowEstimator`] if it uses [`investment::run_agents_for_year`]
-//! 3. If the protocol has its own debug output files, write them with
-//!    [`DataWriter::write_debug_rows`]
+//! 3. If the protocol has its own debug output files, write them using
+//!    [`crate::output::DebugDataWriter::get_custom_writer`], available through
+//!    [`DataWriter::debug_writer`]
 //! 4. Add the new value to the `simulation_protocol` entry in `schemas/input/model.yaml`, noting any
 //!    settings which are only used by the new protocol
 //! 5. Document the protocol in `docs/model/README.md`, and add a release note
