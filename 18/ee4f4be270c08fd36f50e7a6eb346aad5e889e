@@ -1,0 +1,25 @@
+src/simulation/investment/portfolio/optimisation.rs
+  h_e76403a1cd4bf1 83
+  s_200dfe44eb4ec8::t_7c8acd27fce675 50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18ee4f4be270c08fd36f50e7a6eb346aad5e889e",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_200dfe44eb4ec8": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "e80c04ae-4863-41f0-b549-f01607615639",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
