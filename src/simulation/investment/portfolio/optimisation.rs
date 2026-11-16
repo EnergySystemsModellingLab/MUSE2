@@ -44,7 +44,7 @@ pub struct ResultsMap {
 /// - for existing assets, their total capacity, including any mothballed capacity (they can be
 ///   reduced, but not increased)
 ///
-/// The first `num_committed` assets are committed: their capacity is fixed at their total capacity.
+/// The first `num_committed` assets are committed: their capacity is fixed at their active capacity.
 fn add_capacity_vars(
     problem: &mut Problem,
     assets: &[AssetRef],
