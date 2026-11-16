@@ -31,6 +31,9 @@ competitive agents (`competitive`) and portfolio agents (`portfolio`)
 
 ## Competitive agents
 
+Competitive agents are experimental. To use them, set
+`please_give_me_broken_results = true` in [`model.toml`][model-toml].
+
 Competitive agents select assets in a series of rounds. In each round, every remaining option (a
 tranche of an existing asset or of a candidate asset) is appraised alongside the assets already
 selected in previous rounds. A small [dispatch optimisation](#mini-dispatch-optimisation) of the
