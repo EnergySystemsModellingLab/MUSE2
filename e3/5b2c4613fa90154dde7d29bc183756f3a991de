@@ -191,6 +191,7 @@ benches/assets.rs
   s_a558acceac4de2::t_50842107f3dfa6 5,13,203-214,216,218,221
   s_87c5e8dae63a5a::t_a9e2a3066b48ac 256
   s_1a096aca9a2311::t_4b8c2621847380 110,114
+  s_78c186f8421175::t_0bfccdb844a852 17-19,92
 src/output.rs
   s_378dcf4051c8b4::t_fd71f92134cc0c 17-18,238,244-245,262,268,452,464-465,471,473-474,483-485
   s_378dcf4051c8b4::t_be68c7acb56112 549,1014-1015,1017-1037,1039-1040,1053-1068
@@ -201,6 +202,7 @@ src/output.rs
   s_9c82011db8f22b::t_522fa03ebc5834 164-165,167-168,695,697,733,735
   h_e76403a1cd4bf1 644,719
   s_674d94b7e26db3::t_9f36e65674f884 7
+  s_78c186f8421175::t_0bfccdb844a852 9
 src/fixture.rs
   s_378dcf4051c8b4::t_91b6d28aad7670 7,18,20-21
   s_378dcf4051c8b4::t_6026d1d4d5bcb4 5
@@ -391,6 +393,7 @@ docs/SUMMARY.md
   s_ec6102e006e663::t_378b438ef1ea02 17-18
 docs/model/README.md
   s_ec6102e006e663::t_378b438ef1ea02 50-51,69-70,78-80,94,97
+  s_78c186f8421175::t_ab89ddbaffb7f8 59,61,63,65,71,75,77,81,83,89,91
 tests/data/simple/assets.csv
   h_e76403a1cd4bf1 10-12
 tests/data/two_regions/assets.csv
@@ -481,6 +484,9 @@ src/simulation/activity.rs
   s_674d94b7e26db3::t_cea5bad63510fa 1-4,6-11,12-58,60,67-79,84-171,173-207
 src/simulation.rs
   s_674d94b7e26db3::t_01539972969b93 11
+  s_78c186f8421175::t_0bfccdb844a852 2,7,16,27-28
+src/simulation/system_dispatch.rs
+  s_78c186f8421175::t_0bfccdb844a852 1-394
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -546,6 +552,14 @@ src/simulation.rs
         "tool": "github-copilot-cli",
         "id": "87fcd9e7-e714-4bd2-9286-6c9baacf2500",
         "model": "claude-opus-5.5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_78c186f8421175": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "b8a98517-bdb8-4b70-8745-e8b71e33a649",
+        "model": "unknown"
       },
       "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
     },
