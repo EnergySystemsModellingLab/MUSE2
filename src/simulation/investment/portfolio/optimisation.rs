@@ -58,7 +58,8 @@ fn add_capacity_vars(
         .map(|(i, asset)| {
             let cost = annual_fixed_cost(asset).value();
             let var = if i < num_committed {
-                let capacity = asset.total_capacity().value();
+                // For committed assets, only consider non-mothballed (active) capacity
+                let capacity = asset.active_capacity().value();
                 problem.add_column(cost, capacity..=capacity)
             } else if asset.is_candidate() {
                 match addition_limits.get(asset.process_id()) {
@@ -66,7 +67,10 @@ fn add_capacity_vars(
                     None => problem.add_column(cost, 0.0..),
                 }
             } else {
-                problem.add_column(cost, 0.0..=asset.total_capacity().value())
+                // We allow non-committed existing assets to be de-mothballed, so use the whole
+                // capacity
+                let capacity = asset.total_capacity().value();
+                problem.add_column(cost, 0.0..=capacity)
             };
             (asset.clone(), var)
         })
