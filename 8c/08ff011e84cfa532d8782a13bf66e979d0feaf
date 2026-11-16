@@ -1,0 +1,20 @@
+docs/model/agents.md
+  h_e76403a1cd4bf1 103,354
+  h_e76403a1cd4bf1 193,206
+src/simulation/investment/portfolio/constraints.rs
+  h_e76403a1cd4bf1 93
+  h_e76403a1cd4bf1 94-97
+docs/model/investment.md
+  h_e76403a1cd4bf1 196-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8c08ff011e84cfa532d8782a13bf66e979d0feaf",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
