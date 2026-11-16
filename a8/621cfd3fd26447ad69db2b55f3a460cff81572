@@ -1,0 +1,22 @@
+tests/data/simple/debug_asset_selection_portfolio.csv
+  h_e76403a1cd4bf1 2-7
+tests/data/simple/debug_asset_selection_portfolio_time_slices.csv
+  h_e76403a1cd4bf1 2-97
+tests/data/simple/debug_commodity_balance_duals.csv
+  h_e76403a1cd4bf1 130-289
+tests/data/simple/debug_dispatch_assets.csv
+  h_e76403a1cd4bf1 306-577
+tests/data/simple/debug_solver.csv
+  h_e76403a1cd4bf1 4-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a8621cfd3fd26447ad69db2b55f3a460cff81572",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
