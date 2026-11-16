@@ -27,10 +27,10 @@ use itertools::Itertools;
 use log::{debug, info};
 use std::slice;
 
-mod output;
 pub mod optimisation;
-use output::create_debug_files;
+mod output;
 use optimisation::{DispatchRun, Solution};
+use output::create_debug_files;
 
 /// Run the simulation using the `system_dispatch` protocol.
 ///
