@@ -20,12 +20,14 @@ mod regression {
     define_regression_test_with_debug_files!(simple);
 
     // Other example models
+    define_regression_test!(circularity);
     define_regression_test!(missing_commodity);
     define_regression_test!(muse1_default);
     define_regression_test!(two_outputs);
     define_regression_test!(two_regions);
 
     // Patched examples
+    define_regression_test_with_patches!(circularity_npv);
     define_regression_test_with_patches!(simple_tranche_size);
     define_regression_test_with_patches!(simple_npv);
     define_regression_test_with_patches!(simple_marginal);
@@ -33,10 +35,6 @@ mod regression {
     define_regression_test_with_patches!(simple_full);
     define_regression_test_with_patches!(simple_ironing_out);
     define_regression_test_with_patches!(simple_mothball);
-
-    // Temporarily turning off circularity tests as this feature is in flux
-    // define_regression_test!(circularity);
-    // define_regression_test_with_patches!(circularity_npv);
 }
 
 /// Tolerance for comparing floating-point values in CSV lines.
