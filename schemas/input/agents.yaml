@@ -13,11 +13,14 @@ fields:
     notes: One or more region IDs, separated by semicolons or the string `all`
   - name: agent_type
     type: string
-    enum: [competitive]
+    enum: [competitive, portfolio]
     description: The asset selection algorithm used by the agent
     notes: |
-      Optional (defaults to `competitive` if omitted). Currently the only supported value is
-      `competitive`.
+      Optional (defaults to `portfolio` if omitted). With `portfolio`, the capacities of all
+      existing and candidate assets are chosen together in a single optimisation. With
+      `competitive`, existing and candidate assets compete in rounds, with the best option according
+      to the agent's objective selected in each round. See the [Agents](../model/agents.md) page for
+      details.
   - name: decision_rule
     type: string
     description: The decision rule applied to objectives

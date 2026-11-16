@@ -62,7 +62,7 @@ pub fn select_assets(
     agent: &Agent,
     commodity: &Commodity,
     region_id: &RegionID,
-    demand: DemandMap,
+    demand: &DemandMap,
     existing_assets: &[AssetRef],
     excluded_processes: &IndexSet<ProcessID>,
     agent_addition_limits: HashMap<ProcessID, Capacity>,
@@ -74,7 +74,7 @@ pub fn select_assets(
     // Existing and candidate assets from which to choose
     let mut opt_assets = get_asset_options(
         existing_assets,
-        &demand,
+        demand,
         agent,
         commodity,
         region_id,
@@ -95,7 +95,7 @@ pub fn select_assets(
         agent,
         region_id,
         prices,
-        demand,
+        demand.clone(),
         year,
         debug_writer,
     )
@@ -316,14 +316,16 @@ pub fn select_best_assets(
             .collect();
 
         // Save appraisal results
-        write_debug_info(
-            debug_writer.as_deref_mut(),
-            year,
-            &format!("{} {} round {}", commodity.id, agent.id, round),
-            &outputs,
-            &demand,
-            commodity.time_slice_level,
-        )?;
+        if let Some(writer) = debug_writer.as_deref_mut() {
+            write_debug_info(
+                writer,
+                year,
+                &format!("{} {} round {}", commodity.id, agent.id, round),
+                &outputs,
+                &demand,
+                commodity.time_slice_level,
+            )?;
+        }
 
         // Sort by investment priority and discard non-feasible options
         let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);

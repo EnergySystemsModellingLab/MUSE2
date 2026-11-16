@@ -47,16 +47,13 @@ struct AppraisalResultsTimeSliceRow {
 
 /// Write debug info about a round of investment appraisal
 pub fn write_debug_info(
-    writer: Option<&mut DebugDataWriter>,
+    writer: &mut DebugDataWriter,
     milestone_year: u32,
     run_description: &str,
     appraisal_results: &[AppraisalOutput],
     demand: &DemandMap,
     time_slice_level: TimeSliceLevel,
 ) -> Result<()> {
-    let Some(writer) = writer else {
-        return Ok(());
-    };
     let run_description = writer.debug_run_description(run_description);
 
     let rows = appraisal_results.iter().map(|result| AppraisalResultsRow {
@@ -162,7 +159,7 @@ mod tests {
         {
             let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
             write_debug_info(
-                writer.debug_writer(),
+                writer.debug_writer().unwrap(),
                 milestone_year,
                 &run_description,
                 &[appraisal_output],
