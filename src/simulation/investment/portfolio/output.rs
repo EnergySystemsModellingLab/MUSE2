@@ -40,15 +40,11 @@ struct ResultsTimeSliceRow {
 
 /// Write the capacities and activities from the optimisation to the debug files
 pub fn write_debug_info(
-    writer: Option<&mut DebugDataWriter>,
+    writer: &mut DebugDataWriter,
     milestone_year: u32,
     run_description: &str,
     results: &ResultsMap,
 ) -> Result<()> {
-    let Some(writer) = writer else {
-        return Ok(());
-    };
-
     let run_description = writer.debug_run_description(run_description);
     let output_writer = writer.get_custom_writer(RESULTS_FILE_NAME)?;
     for row in results
@@ -115,7 +111,7 @@ mod tests {
             let mut writer = DataWriter::create(dir.path(), dir.path(), true).unwrap();
             writer.set_debug_context("context".to_string());
             write_debug_info(
-                writer.debug_writer(),
+                writer.debug_writer().unwrap(),
                 milestone_year,
                 run_description,
                 &results,

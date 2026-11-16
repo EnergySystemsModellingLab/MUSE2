@@ -3,6 +3,8 @@ use crate::units::{Capacity, Dimensionless};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
+const TRANCHE_ROUNDING_TOLERANCE: f64 = 1e-6;
+
 /// Capacity of an asset, which may be continuous or a number of discrete tranches of a given size.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub enum AssetCapacity {
@@ -81,13 +83,16 @@ impl AssetCapacity {
     /// Returns a capacity of the same kind holding `total`, rounded up to a whole number of
     /// tranches if discrete.
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    pub fn with_total_rounded_up(self, total: Capacity) -> Self {
+    pub fn copy_type_rounded_up(self, total: Capacity) -> Self {
         match self {
             AssetCapacity::Continuous(_) => AssetCapacity::continuous(total),
             AssetCapacity::Discrete { tranche_size, .. } => {
                 // The small offset stops solver noise (e.g. 3.0000000001) adding a whole tranche
                 let ratio = (total / tranche_size).value();
-                AssetCapacity::discrete((ratio - 1e-6).ceil() as u32, tranche_size)
+                AssetCapacity::discrete(
+                    (ratio - TRANCHE_ROUNDING_TOLERANCE).ceil() as u32,
+                    tranche_size,
+                )
             }
         }
     }

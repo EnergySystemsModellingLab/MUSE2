@@ -102,7 +102,6 @@ fn add_constraints(
     capacity_vars: &IndexMap<AssetRef, Variable>,
     total_limits: &HashMap<ProcessID, Capacity>,
     demand: &DemandMap,
-    time_slice_info: &TimeSliceInfo,
 ) {
     add_total_capacity_constraints(problem, assets, capacity_vars, total_limits);
     add_activity_constraints(
@@ -110,19 +109,19 @@ fn add_constraints(
         assets,
         activity_vars,
         capacity_vars,
-        time_slice_info,
+        &model.time_slice_info,
     );
     add_utilisation_peak_constraints(problem, model, assets, activity_vars);
     add_demand_constraints(
         problem,
         assets,
         commodity,
-        time_slice_info,
+        &model.time_slice_info,
         demand,
         activity_vars,
     );
     // TODO: equal utilisation constraints do not work with flexible capacities
-    // add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
+    // add_equal_utilisation_constraints(problem, activity_vars, &model.time_slice_info, assets);
 }
 
 /// Performs optimisation for an asset, given the prices and demand.
@@ -153,7 +152,6 @@ pub fn perform_optimisation(
         &capacity_vars,
         total_limits,
         demand,
-        &model.time_slice_info,
     );
 
     // Solve model

@@ -79,10 +79,10 @@ asset operated at its maximum annual rate:
     \\times \mathrm{CapacityTrancheFraction}
 \\]
 
-`capacity_tranche_fraction` (set in [`model.toml`][model-toml], must be > 0 and <= 1) controls the
-size of inferred investment tranches relative to this demand-based capacity. Lower values produce
-smaller tranches and therefore require more investment rounds, while higher values produce larger
-tranches.
+`capacity_tranche_fraction` (set in [`model.toml`][model-toml], defaults to 0.05 and must be > 0 and
+<= 1) controls the size of inferred investment tranches relative to this demand-based capacity.
+Lower values produce smaller tranches and therefore require more investment rounds, while higher
+values produce larger tranches.
 
 ### Investment constraints
 
@@ -442,14 +442,13 @@ where:
 
 Once the LP has been solved, the selected assets are constructed from the capacity variables:
 
-1. Any small negative capacities, caused by solver tolerances, are treated as zero.
-2. For assets made up of tranches (including candidates for processes with a `tranche_size`), the
+1. For assets made up of tranches (including candidates for processes with a `tranche_size`), the
    capacity is rounded **up** to a whole number of tranches. Continuous capacities are used as
    they are.
-3. Options with zero capacity are discarded. Existing assets that are discarded, and any capacity
+2. Options with zero capacity are discarded. Existing assets that are discarded, and any capacity
    of existing assets beyond the selected capacity, are
    [mothballed][mothballing].
-4. Selected existing assets have any mothballed capacity that is needed reactivated, and selected
+3. Selected existing assets have any mothballed capacity that is needed reactivated, and selected
    candidate assets are assigned to the agent, to be commissioned.
 
 [investment]: ./investment.md

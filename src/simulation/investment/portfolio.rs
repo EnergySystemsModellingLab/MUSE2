@@ -49,6 +49,10 @@ use output::write_debug_info;
 ///
 /// The assets selected (including retained commissioned assets), or an error.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "Match competitive::select_assets for shared function-pointer dispatch"
+)]
 pub fn select_assets(
     model: &Model,
     agent: &Agent,
@@ -57,8 +61,8 @@ pub fn select_assets(
     demand: &DemandMap,
     existing_assets: &[AssetRef],
     excluded_processes: &IndexSet<ProcessID>,
-    agent_addition_limits: &HashMap<ProcessID, Capacity>,
-    agent_total_limits: &HashMap<ProcessID, Capacity>,
+    agent_addition_limits: HashMap<ProcessID, Capacity>,
+    agent_total_limits: HashMap<ProcessID, Capacity>,
     prices: &Prices,
     year: u32,
     writer: Option<&mut DebugDataWriter>,
@@ -77,20 +81,22 @@ pub fn select_assets(
         commodity,
         prices,
         year,
-        agent_addition_limits,
-        agent_total_limits,
+        &agent_addition_limits,
+        &agent_total_limits,
         demand,
     )?;
 
     // Write optimisation results
     let commodity_id = &commodity.id;
     let agent_id = &agent.id;
-    write_debug_info(
-        writer,
-        year,
-        &format!("{commodity_id} {region_id} {agent_id}"),
-        &results,
-    )?;
+    if let Some(writer) = writer {
+        write_debug_info(
+            writer,
+            year,
+            &format!("{commodity_id} {region_id} {agent_id}"),
+            &results,
+        )?;
+    }
 
     // Assemble assets from optimisation result
     let mut selected_assets = Vec::new();
@@ -98,7 +104,7 @@ pub fn select_assets(
         // Solver noise can give tiny negative values
         let capacity = asset
             .capacity()
-            .with_total_rounded_up(result.max(Capacity(0.0)));
+            .copy_type_rounded_up(result.max(Capacity(0.0)));
         if capacity.is_zero() {
             continue; // existing assets left out here are mothballed by the pool
         }
