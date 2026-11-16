@@ -1,0 +1,14 @@
+src/simulation/investment/portfolio.rs
+  h_e76403a1cd4bf1 23,25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bec7f29622631c9f9fd02dcbe2da54c38c75f31d",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
