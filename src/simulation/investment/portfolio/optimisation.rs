@@ -47,6 +47,7 @@ fn add_capacity_vars(
     assets: &[AssetRef],
     addition_limits: &HashMap<ProcessID, Capacity>,
 ) -> IndexMap<AssetRef, Variable> {
+    assert!(problem.num_cols() > 0); // must come after activity variables
     assets
         .iter()
         .map(|asset| {
@@ -79,6 +80,7 @@ fn add_activity_vars(
     prices: &Prices,
     year: u32,
 ) -> IndexMap<(AssetRef, TimeSliceID), Variable> {
+    assert_eq!(problem.num_cols(), 0); // must come first
     let mut activity_vars = IndexMap::new();
     for asset in assets {
         for time_slice in time_slice_info.iter_ids() {
