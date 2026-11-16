@@ -123,6 +123,8 @@ src/simulation/investment.rs
   s_78c186f8421175::t_eb221c24b5bbe8 9,136-170,193-194,208,212,224-226,232-242,244,247,259,262-268
   s_78c186f8421175::t_81ad7789002e0a 231
   s_78c186f8421175::t_85d44fb22c7254 256-257,271
+  s_d58742058dffa4::t_8e888a2118a837 3,95-116
+  s_d58742058dffa4::t_b60b1e825bf271 616-654
 docs/images/investment_order_example.svg
   s_e3618010bfe6e6::t_24713f89ae3cd0 7-9,11,14-15,19-20,25-27,32-34,39-40,45-47,52-53,58-59,64-65,70-72,77-78,83-84,89-90,95-96,101-104
 docs/images/investment_order_example.dot
@@ -576,6 +578,7 @@ docs/developer_guide/custom_highs_options.md
 src/simulation/agent_dispatch.rs
   s_40627939b0c900::t_9bc1f82bc93906 17,19
   s_40627939b0c900::t_90af3f9c578b7d 1-14,16,20-206
+  s_d58742058dffa4::t_8e888a2118a837 15,18
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -752,6 +755,14 @@ src/simulation/agent_dispatch.rs
       "agent_id": {
         "tool": "github-copilot-cli",
         "id": "e94db48b-2315-4d11-8f92-98651378b416",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_d58742058dffa4": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d5239cc2-0fbb-452e-bdb3-81eedb3de46e",
         "model": "unknown"
       },
       "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
