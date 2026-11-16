@@ -1,0 +1,19 @@
+examples/two_outputs/assets.csv
+  s_5afddde47aa42c::t_ef7c2486884d82 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3069598341c2232b3c551a8d2295441545625f1b",
+  "prompts": {},
+  "sessions": {
+    "s_5afddde47aa42c": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "7fe77d3e-6a2e-4d4b-b794-4a1621c12740",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
