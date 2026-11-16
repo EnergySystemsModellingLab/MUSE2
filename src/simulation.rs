@@ -7,19 +7,6 @@
 //! calculation code in [`prices`]. The only protocol-specific part of the agent investment loop is
 //! how the flows of newly selected assets are determined, which protocols supply by implementing
 //! [`investment::FlowEstimator`].
-//!
-//! # Adding a new protocol
-//!
-//! 1. Add a variant to [`SimulationProtocol`], and a match arm in [`run`]
-//! 2. Create a submodule with a `pub fn run(model: &Model, writer: &mut DataWriter) -> Result<()>`
-//!    function, and implement [`investment::FlowEstimator`] if it uses [`investment::run_agents_for_year`]
-//! 3. If the protocol has its own debug output files, write them using
-//!    [`crate::output::DebugDataWriter::get_custom_writer`], available through
-//!    [`DataWriter::debug_writer`]
-//! 4. Add the new value to the `simulation_protocol` entry in `schemas/input/model.yaml`, noting any
-//!    settings which are only used by the new protocol
-//! 5. Document the protocol in `docs/model/README.md`, and add a release note
-//! 6. Add regression tests for the protocol
 use crate::asset::{Asset, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
