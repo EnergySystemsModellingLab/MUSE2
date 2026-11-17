@@ -21,6 +21,7 @@ use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 pub mod competitive;
+pub mod population;
 pub mod portfolio;
 
 /// A map of demand across time-slice selections for a specific market

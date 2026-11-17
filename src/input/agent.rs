@@ -244,6 +244,10 @@ mod tests {
         "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,portfolio\n",
         Some(AgentType::Portfolio)
     )]
+    #[case(
+        "id,description,regions,decision_rule,agent_type\nagent,,GBR,single,population\n",
+        Some(AgentType::Population)
+    )]
     fn read_agents_file_agent_type(#[case] csv: &str, #[case] expected: Option<AgentType>) {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join(AGENT_FILE_NAME), csv).unwrap();

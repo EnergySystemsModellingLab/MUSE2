@@ -11,7 +11,7 @@ use crate::region::RegionID;
 use crate::simulation::investment::{
     AgentRunMode, AllDemandMap, AssetOptions, DemandMap, FlowEstimator, update_net_demand_map,
 };
-use crate::simulation::investment::{competitive, portfolio};
+use crate::simulation::investment::{competitive, population, portfolio};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};
@@ -263,6 +263,7 @@ pub fn run_agents_for_single_market(
         // Choose assets from among existing pool and candidates
         let run_agent = match agent.agent_type {
             AgentType::Competitive => competitive::run_agent,
+            AgentType::Population => population::run_agent,
             AgentType::Portfolio => portfolio::run_agent,
         };
         let selection = run_agent(
