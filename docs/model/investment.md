@@ -119,12 +119,12 @@ Every asset consists of either a continuous capacity or one or more equal-capaci
   has continuous capacity.
 - Assets invested in _by MUSE_ are made up of tranches of the process `tranche_size`, if defined.
   Otherwise, their capacity depends on the agent type: competitive agents build new capacity in
-  tranches whose size is inferred from demand at the time of investment, while portfolio agents
-  build a continuous capacity (see [Agents][agents]).
+  tranches whose size is inferred from demand at the time of investment, while portfolio and
+  population agents build a continuous capacity (see [Agents][agents]).
 
 The tranches of a multi-tranche asset can be retained or mothballed independently. A
 continuous-capacity asset is retained or mothballed as a whole by competitive agents, whereas
-portfolio agents may retain only part of its capacity (see
+portfolio and population agents may retain only part of its capacity (see
 [Mothballing and Decommissioning](#mothballing-and-decommissioning)).
 
 ## Investment Constraints

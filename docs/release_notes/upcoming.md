@@ -9,6 +9,8 @@
 - Agents now have an agent type, set with the new optional `agent_type` column in `agents.csv`. The
   new `portfolio` agent type selects assets for each market by solving a single optimisation,
   rather than appraising options one at a time ([#1574])
+- A new `population` agent type represents a population of discrete entities with identical needs,
+  such as households, and selects assets in merit order ([#1603])
 - A new optional `simulation_protocol` setting in `model.toml` selects how each milestone year is
   simulated. The new default, `agent_dispatch`, calculates flows and prices directly from the
   activities determined by agents' own optimisations, without a system-wide dispatch.
@@ -29,3 +31,4 @@
 [#1548]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1548
 [#1557]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1557
 [#1574]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1574
+[#1603]: https://github.com/EnergySystemsModellingLab/MUSE2/pull/1603
