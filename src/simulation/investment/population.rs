@@ -1,8 +1,7 @@
-//! The competitive agent algorithm.
+//! The population agent algorithm.
 //!
-//! Candidate and existing assets compete in rounds: each round every option is appraised with a
-//! mini dispatch optimisation, and the best option according to the agent's objective is selected.
-mod coefficients;
+//! Each option is appraised once against the full demand profile. Feasible options are then
+//! selected in merit order, scaling their fitted profiles to the remaining demand.
 mod constraints;
 mod costs;
 mod metrics;
@@ -16,32 +15,26 @@ use crate::model::Model;
 use crate::output::DebugDataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
+use crate::simulation::PriceMap;
 use crate::simulation::activity::ActivityMap;
 use crate::simulation::investment::Selection;
 use crate::simulation::investment::{AssetOptions, DemandMap};
 use crate::simulation::prices::Prices;
-use crate::time_slice::TimeSliceSelection;
-use crate::units::{Activity, Capacity, Dimensionless, Flow, FlowPerCapacity};
-use anyhow::{Result, anyhow, ensure};
-use coefficients::calculate_coefficients_for_assets;
+use crate::units::{Activity, Capacity, Dimensionless, Flow};
+use anyhow::{Result, anyhow};
 use itertools::{Itertools, chain};
 use log::debug;
-use metrics::{
-    AppraisalOutput, appraise_investment, count_equal_and_best_appraisal_outputs,
-    sort_and_filter_appraisal_outputs,
-};
-use optimisation::solve_for_assets;
+use metrics::{AppraisalOutput, count_equal_and_best_appraisal_outputs, sort_appraisal_outputs};
+use optimisation::perform_optimisation;
 use output::write_debug_info;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Run the competitive algorithm for an agent to meet its share of demand for a commodity in a
-/// region.
+/// Run the population algorithm for an agent to meet its share of demand for a commodity.
 ///
-/// Committed assets are dispatched first and always selected unchanged. Existing assets of the
-/// agent which produce the commodity compete with candidate assets from the agent's search space to
-/// meet any remaining demand.
+/// Committed assets are merit-ordered first and selected unchanged, up to their active capacity.
+/// Existing assets and candidates are then merit-ordered together to meet any remaining demand.
 ///
 /// # Arguments
 ///
@@ -52,16 +45,15 @@ use std::sync::Arc;
 /// * `demand` - The agent's share of demand for the commodity in the region
 /// * `options` - Committed assets, existing assets and processes available to the agent
 /// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
-/// * `agent_total_limits` - The agent's share of total capacity limits for processes
-/// * `prices` - Commodity prices calculated in the previous dispatch
+/// * `agent_total_limits` - The agent's share of total capacity limits for existing and candidate
+///   assets
+/// * `prices` - Market prices used to calculate input costs
 /// * `year` - Current milestone year
 /// * `debug_writer` - Optional debug writer
 ///
 /// # Returns
 ///
-/// The assets selected (including committed assets and retained commissioned assets) along with
-/// their activities from the final appraisal round, or an error. An error is also returned if
-/// demand cannot be met.
+/// The selected assets and their activities, or an error if demand cannot be met.
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent(
     model: &Model,
@@ -76,330 +68,417 @@ pub fn run_agent(
     year: u32,
     debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Selection> {
-    // Existing and candidate assets from which to choose
+    // Existing assets retain their current capacity as the maximum retention amount. Candidate
+    // capacity is assembled as in portfolio: discrete when the process has a tranche size and
+    // continuous otherwise.
     let opt_assets = chain(
         options.existing.iter().cloned(),
-        get_candidate_assets(
-            demand,
-            &options.processes,
-            region_id,
-            commodity,
-            year,
-            model.parameters.capacity_tranche_fraction,
-        ),
+        get_candidate_assets(&options.processes, region_id, year),
     )
     .collect::<Vec<_>>();
 
     select_best_assets(
         model,
         &options.committed,
-        opt_assets,
+        &opt_assets,
         agent_addition_limits,
         agent_total_limits,
         commodity,
         agent,
         region_id,
         prices,
-        demand.clone(),
+        demand,
         year,
         debug_writer,
     )
 }
 
-/// Get candidate assets which produce a particular commodity from the given processes.
+/// Construct candidates using the same continuous/discrete capacity setup as portfolio.
 ///
-/// Each candidate represents one investment tranche with a defined capacity.
-/// - For processes with a defined `tranche_size`, the capacity is set to `tranche_size`.
-/// - For processes without a defined `tranche_size`, the capacity is calculated based on the total
-///   demand for the commodity and the asset's maximum annual production per unit capacity
-///   (see `calculate_candidate_asset_capacity_scale`), then multiplied by
-///   `capacity_tranche_fraction` to infer the tranche size.
+/// A candidate with a tranche size starts as one tranche; the optimisation determines its
+/// capacity and selection later rounds it down to a whole number of tranches. Candidates without a
+/// tranche size start with zero continuous capacity. No demand-derived candidate capacity scale is
+/// needed because capacity is a free variable during appraisal.
+///
+/// # Arguments
+///
+/// * `processes` - Processes available in the agent's search space
+/// * `region_id` - The region in which the candidate is located
+/// * `year` - The candidate's commission year
 pub fn get_candidate_assets<'a>(
-    demand: &'a DemandMap,
     processes: &'a [Arc<Process>],
     region_id: &'a RegionID,
-    commodity: &'a Commodity,
     year: u32,
-    capacity_tranche_fraction: Dimensionless,
 ) -> impl Iterator<Item = AssetRef> + 'a {
     processes.iter().map(move |process| {
-        // Create asset with zero capacity, which will be updated below
+        let tranche_size = process.tranche_size.unwrap_or(Capacity(0.0));
         let mut asset =
-            Asset::new_candidate(process.clone(), region_id.clone(), Capacity(0.0), year).unwrap();
-
-        // Set capacity of the candidate for investment appraisal
-        let tranche_size = if let Some(tranche_size) = asset.process().tranche_size {
-            // For processes with a defined tranche size, take this
-            tranche_size
-        } else {
-            // Otherwise, infer the tranche size from demand and the capacity_tranche_fraction.
-            let capacity_scale =
-                calculate_candidate_asset_capacity_scale(&asset, commodity, demand);
-            capacity_scale * capacity_tranche_fraction
-        };
-        let asset_capacity = AssetCapacity::single(tranche_size);
-        asset.set_capacity(asset_capacity);
+            Asset::new_candidate(process.clone(), region_id.clone(), tranche_size, year).unwrap();
+        if process.tranche_size.is_none() {
+            asset.set_capacity(AssetCapacity::continuous(Capacity(0.0)));
+        }
         asset.into()
     })
 }
 
-/// Calculates a characteristic capacity scale for a candidate asset.
+/// Select committed assets first, then existing and candidate assets in merit order.
 ///
-/// The returned value is the capacity that would satisfy the total annual demand assuming the asset
-/// operates at its maximum annual activity for the entire year. It ignores finer-grained activity
-/// constraints and temporal variations in demand.
+/// Every option is appraised once against the original demand profile. Since a feasible appraisal
+/// reproduces that profile exactly, selecting a fraction of its capacity supplies the same fraction
+/// of every demand selection; the remaining demand therefore retains the original shape.
 ///
-/// For processes that do not define a tranche size, this value is later scaled by
-/// `capacity_tranche_fraction` to set the capacity of one candidate investment tranche.
+/// Committed assets are ordered by metric among themselves and used up to active capacity. Then
+/// existing assets and candidates compete together. Candidate additions are bounded by addition
+/// and total limits; existing retention is bounded by the asset's capacity and total limits.
 ///
-/// If the asset has zero maximum annual supply, zero capacity is returned. This indicates that the
-/// asset is non-feasible, and will be excluded from consideration by `select_best_assets`.
-fn calculate_candidate_asset_capacity_scale(
-    asset: &Asset,
-    commodity: &Commodity,
-    demand: &DemandMap,
-) -> Capacity {
-    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
-    let max_annual_supply_per_capacity = *asset
-        .get_activity_per_capacity_limits_for_selection(&TimeSliceSelection::Annual)
-        .end()
-        * coeff;
-    if max_annual_supply_per_capacity < FlowPerCapacity::EPSILON {
-        return Capacity(0.0);
-    }
-    let annual_demand = demand.values().copied().sum::<Flow>();
-    annual_demand / max_annual_supply_per_capacity
-}
-
-/// Print debug message if there are multiple equally good outputs
-fn log_on_equal_appraisal_outputs(
-    outputs: &[AppraisalOutput],
-    agent_id: &AgentID,
-    commodity_id: &CommodityID,
-    region_id: &RegionID,
-) {
-    if outputs.is_empty() {
-        return;
-    }
-
-    let num_identical = count_equal_and_best_appraisal_outputs(outputs);
-
-    if num_identical > 0 {
-        let asset_details = outputs[..=num_identical]
-            .iter()
-            .map(|output| {
-                let asset = &output.asset;
-                format!(
-                    "Process ID: '{}' (State: {}{}, Commission year: {})",
-                    asset.process_id(),
-                    asset.state(),
-                    asset.id().map_or_default(|id| format!(", Asset ID: {id}")),
-                    asset.commission_year()
-                )
-            })
-            .join(", ");
-        debug!(
-            "Found equally good appraisals for Agent ID: {agent_id}, Commodity: '{commodity_id}', \
-            Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
-        );
-    }
-}
-
-/// Get the best assets for meeting demand for the given commodity
+/// # Returns
 ///
-/// `committed_assets` have fixed capacity and are always selected, unchanged. They are dispatched
-/// before any of `opt_assets` are appraised.
+/// The committed assets and the assets needed to meet demand, along with their selected activities.
+/// Returns an error if the available profiles and limits cannot meet demand.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn select_best_assets(
     model: &Model,
     committed_assets: &[AssetRef],
-    mut opt_assets: Vec<AssetRef>,
+    opt_assets: &[AssetRef],
     agent_addition_limits: HashMap<ProcessID, Capacity>,
     agent_total_limits: HashMap<ProcessID, Capacity>,
     commodity: &Commodity,
     agent: &Agent,
     region_id: &RegionID,
     prices: &Prices,
-    mut demand: DemandMap,
+    demand: &DemandMap,
     year: u32,
-    mut debug_writer: Option<&mut DebugDataWriter>,
+    debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Selection> {
-    let objective_type = agent.objectives[&year];
-
-    // Remaining addition limits for candidate processes
-    // Initialised as the full agent addition limits, and reduced as candidate assets are selected
-    let mut remaining_agent_addition_limits = agent_addition_limits;
-
-    // Remaining total capacity for all assets
-    // Initialised as full agent total limits, and reduced as each asset is selection
-    let mut remaining_agent_total_limits = agent_total_limits;
-
-    // Store commissioned tranches available for retention and replace assets with single tranches
-    let mut available_retention_tranches =
-        prepare_commissioned_assets_for_retention(&mut opt_assets);
-
-    // Calculate coefficients for all asset options according to the agent's objective
-    let coefficients = calculate_coefficients_for_assets(
-        model,
-        objective_type,
-        &chain(committed_assets, &opt_assets).cloned().collect_vec(),
-        &prices.market,
-        &prices.fallback,
-        year,
-    );
-
-    // Iteratively select the best asset until demand is met
-    let mut round = 0;
-    let mut selected_assets: Vec<AssetRef> = committed_assets.to_vec();
-    let mut previous_solution = ActivityMap::new();
-
-    // Dispatch the committed assets. This must happen even if there is no demand, so that every
-    // selected asset has activities.
-    if !committed_assets.is_empty() {
-        (previous_solution, demand) =
-            solve_for_assets(model, &selected_assets, commodity, &coefficients, &demand)?;
+    let has_options = !opt_assets.is_empty();
+    let mut remaining_demand = demand.clone();
+    let mut selected = committed_assets
+        .iter()
+        .map(|asset| (asset.clone(), asset.clone()))
+        .collect::<Vec<_>>();
+    let mut activities = ActivityMap::new();
+    for asset in committed_assets {
+        // Committed assets remain selected even when they are not dispatched. Give each one
+        // explicit zero activities so the returned selection contains a complete activity map.
+        for time_slice in model.time_slice_info.iter_ids() {
+            activities.insert((asset.clone(), time_slice.clone()), Activity(0.0));
+        }
     }
 
-    let has_options = !opt_assets.is_empty();
-    while is_any_remaining_demand(
-        &demand,
+    // With no material demand, committed assets are still returned unchanged; there is no profile
+    // to appraise and no existing asset or candidate needs to be retained or built.
+    if !is_any_remaining_demand(
+        &remaining_demand,
         model.parameters.remaining_demand_absolute_tolerance,
     ) {
-        // Remove assets that would exceed the remaining limits for their processes from the options
-        // The addition limit applies only to candidate assets, the total limit applies to all assets
-        remove_assets_exceeding_agent_limits(
-            &mut opt_assets,
-            &remaining_agent_addition_limits,
-            true,
-        );
-        remove_assets_exceeding_agent_limits(&mut opt_assets, &remaining_agent_total_limits, false);
-        if opt_assets.is_empty() {
-            return Err(no_options_error(
-                has_options,
-                agent,
-                commodity,
-                region_id,
-                year,
-            ));
-        }
-        // Appraise all options in parallel: each asset's appraisal is independent (all shared
-        // state is read-only within this block), so we can safely use Rayon here.
-        // Each HiGHS solve inside `appraise_investment` is configured to use only one thread
-        // (via `parallel="off"`) to avoid over-subscription.
-        let mut outputs: Vec<AppraisalOutput> = opt_assets
-            .par_iter()
-            .map(|asset| -> Result<Option<AppraisalOutput>> {
-                // Skip assets with zero capacity
-                if asset.total_capacity() <= Capacity(0.0) {
-                    return Ok(None);
-                }
-
-                Ok(Some(appraise_investment(
-                    model,
-                    asset,
-                    commodity,
-                    objective_type,
-                    &coefficients[asset],
-                    &demand,
-                )?))
-            })
-            .collect::<Result<Vec<_>>>()? // propagate any solver error
-            .into_iter()
-            .flatten()
-            .collect();
-
-        // Save appraisal results
-        if let Some(writer) = debug_writer.as_deref_mut() {
-            write_debug_info(
-                writer,
-                year,
-                &format!("{} {} round {}", commodity.id, agent.id, round),
-                &outputs,
-                &demand,
-                commodity.time_slice_level,
-            )?;
-        }
-
-        // Sort by investment priority and discard non-feasible options
-        let num_nonfeasible = sort_and_filter_appraisal_outputs(&mut outputs);
-
-        ensure!(
-            !outputs.is_empty(),
-            "Investment appraisal failed with unmet demand for commodity '{}', region \
-            '{region_id}', year {year}, agent '{}'. {num_nonfeasible} non-feasible investments \
-            were not considered.",
-            commodity.id,
-            agent.id
-        );
-
-        // Warn if there are multiple equally good assets
-        log_on_equal_appraisal_outputs(&outputs, &agent.id, &commodity.id, region_id);
-
-        let best_output = outputs.into_iter().next().unwrap();
-
-        // Log the selected asset
-        debug!(
-            "Selected {} asset '{}' (capacity: {})",
-            best_output.asset.state(),
-            best_output.asset.process_id(),
-            best_output.asset.total_capacity()
-        );
-
-        // Update the remaining selection state
-        update_selection_state(
-            &best_output.asset,
-            &mut opt_assets,
-            &mut remaining_agent_addition_limits,
-            &mut remaining_agent_total_limits,
-            &mut available_retention_tranches,
-        );
-
-        for (time_slice, activity) in &best_output.activity {
-            *previous_solution
-                .entry((best_output.asset.clone(), time_slice.clone()))
-                .or_insert(Activity(0.0)) += *activity;
-        }
-
-        // Record the selected asset
-        record_asset_selection(best_output.asset.clone(), &mut selected_assets);
-
-        demand = best_output.unmet_demand;
-        round += 1;
+        return Ok(Selection::from_optimisation(selected, &activities));
     }
 
-    Ok(finalise_selection(
-        selected_assets,
-        agent,
-        &previous_solution,
-    ))
+    // Appraise each option against the same full profile exactly once. Committed costs are sunk,
+    // while candidates include annualised capital costs.
+    let mut committed_appraisals = appraise_assets(
+        model,
+        committed_assets,
+        commodity,
+        &prices.market,
+        demand,
+        year,
+    )?;
+    let mut option_appraisals =
+        appraise_assets(model, opt_assets, commodity, &prices.market, demand, year)?;
+    if let Some(writer) = debug_writer {
+        // Write the complete appraisal sets once rather than repeating them after each selection.
+        let run_description = format!("{} {} {}", commodity.id, region_id, agent.id);
+        write_debug_info(
+            writer,
+            year,
+            &run_description,
+            &committed_appraisals,
+            demand,
+            commodity.time_slice_level,
+        )?;
+        write_debug_info(
+            writer,
+            year,
+            &run_description,
+            &option_appraisals,
+            demand,
+            commodity.time_slice_level,
+        )?;
+    }
+
+    sort_appraisal_outputs(&mut committed_appraisals);
+    sort_appraisal_outputs(&mut option_appraisals);
+    log_on_equal_appraisal_outputs(&committed_appraisals, &agent.id, &commodity.id, region_id);
+    log_on_equal_appraisal_outputs(&option_appraisals, &agent.id, &commodity.id, region_id);
+
+    // Committed assets are a separate first stage. Their installed capacity is fixed, but their
+    // activity is scaled to the portion of the full demand profile they can cover.
+    for appraisal in committed_appraisals {
+        if !is_any_remaining_demand(
+            &remaining_demand,
+            model.parameters.remaining_demand_absolute_tolerance,
+        ) {
+            break;
+        }
+        let selected_capacity = capacity_for_remaining_demand(
+            appraisal.capacity,
+            remaining_demand_fraction(demand, &remaining_demand),
+        )
+        .min(appraisal.asset.active_capacity());
+        apply_appraisal(
+            &appraisal,
+            selected_capacity,
+            demand,
+            &mut remaining_demand,
+            &mut activities,
+        );
+        debug!(
+            "Selected committed asset '{}' (capacity used: {selected_capacity})",
+            appraisal.asset.process_id()
+        );
+    }
+
+    // Candidates and existing assets now compete by the same cost metric. Limits are applied to
+    // selected capacity, not to the full-demand capacity used for appraisal.
+    let mut remaining_addition_limits = agent_addition_limits;
+    let mut remaining_total_limits = agent_total_limits;
+    for appraisal in option_appraisals {
+        if !is_any_remaining_demand(
+            &remaining_demand,
+            model.parameters.remaining_demand_absolute_tolerance,
+        ) {
+            break;
+        }
+
+        let requested_capacity = capacity_for_remaining_demand(
+            appraisal.capacity,
+            remaining_demand_fraction(demand, &remaining_demand),
+        );
+        let mut capacity_limit = requested_capacity;
+        if !appraisal.asset.is_candidate() {
+            // Existing assets may be retained or mothballed, but never expanded.
+            capacity_limit = capacity_limit.min(appraisal.asset.total_capacity());
+        }
+        if let Some(limit) = remaining_total_limits.get(appraisal.asset.process_id()) {
+            capacity_limit = capacity_limit.min(*limit);
+        }
+        if appraisal.asset.is_candidate()
+            && let Some(limit) = remaining_addition_limits.get(appraisal.asset.process_id())
+        {
+            capacity_limit = capacity_limit.min(*limit);
+        }
+
+        // A tranche-sized asset must not be rounded up past the demand or any remaining limit.
+        let selected_capacity =
+            round_capacity_down(appraisal.asset.capacity(), capacity_limit).total_capacity();
+        if selected_capacity <= Capacity(0.0) {
+            continue;
+        }
+
+        let selected_asset = selected_asset(&appraisal.asset, selected_capacity, agent);
+        selected.push((appraisal.asset.clone(), selected_asset));
+        // The fitted profile is linear in capacity, so use the selected capacity to update both
+        // activities and every selection of the remaining demand map.
+        apply_appraisal(
+            &appraisal,
+            selected_capacity,
+            demand,
+            &mut remaining_demand,
+            &mut activities,
+        );
+
+        subtract_capacity_limit(
+            appraisal.asset.process_id(),
+            selected_capacity,
+            &mut remaining_total_limits,
+        );
+        if appraisal.asset.is_candidate() {
+            subtract_capacity_limit(
+                appraisal.asset.process_id(),
+                selected_capacity,
+                &mut remaining_addition_limits,
+            );
+        }
+        debug!(
+            "Selected {} asset '{}' (capacity: {selected_capacity})",
+            appraisal.asset.state(),
+            appraisal.asset.process_id()
+        );
+    }
+
+    if is_any_remaining_demand(
+        &remaining_demand,
+        model.parameters.remaining_demand_absolute_tolerance,
+    ) {
+        if !has_options {
+            return Err(no_options_error(false, agent, commodity, region_id, year));
+        }
+        return Err(no_options_error(
+            has_options,
+            agent,
+            commodity,
+            region_id,
+            year,
+        ));
+    }
+
+    Ok(Selection::from_optimisation(selected, &activities))
 }
 
-/// Convert the selected assets to the final selection
-///
-/// Candidate assets are converted to Ready, and at this point we also assign the agent ID to the
-/// asset. The solution contains the activities recorded for committed and selected assets.
-fn finalise_selection(
-    selected_assets: Vec<AssetRef>,
-    agent: &Agent,
-    solution: &ActivityMap,
-) -> Selection {
-    let selected = selected_assets
-        .into_iter()
-        .map(|asset| {
-            let mut selected_asset = asset.clone();
-            if selected_asset.is_candidate() {
-                selected_asset
-                    .make_mut()
-                    .select_candidate_for_investment(agent.id.clone());
+fn appraise_assets(
+    model: &Model,
+    assets: &[AssetRef],
+    commodity: &Commodity,
+    market_prices: &PriceMap,
+    demand: &DemandMap,
+    year: u32,
+) -> Result<Vec<AppraisalOutput>> {
+    // Appraisals are independent and can run in parallel. Infeasible profiles are expected and
+    // omitted; configuration and other solver errors propagate.
+    let results = assets
+        .par_iter()
+        .map(|asset| -> Result<Option<AppraisalOutput>> {
+            let Some(results) =
+                perform_optimisation(model, asset, commodity, market_prices, year, demand)?
+            else {
+                return Ok(None);
+            };
+            if results.capacity <= Capacity(0.0) {
+                return Ok(None);
             }
-            (asset, selected_asset)
+            Ok(Some(AppraisalOutput::new(
+                asset.clone(),
+                results.capacity,
+                &results.activity,
+                results.metric,
+            )))
         })
-        .collect();
-
-    Selection::from_optimisation(selected, solution)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(results.into_iter().flatten().collect())
 }
 
-/// Create the error for when demand remains but there are no asset options left to appraise
+fn selected_asset(asset: &AssetRef, capacity: Capacity, agent: &Agent) -> AssetRef {
+    // Retained commissioned assets are unmothballed before reducing their capacity. Candidates are
+    // marked ready for investment before their selected tranche count is assigned.
+    let mut selected_asset = asset.clone().with_no_mothballed_capacity();
+    let capacity = round_capacity_down(asset.capacity(), capacity);
+    let inner = selected_asset.make_mut();
+    if inner.is_candidate() {
+        inner.select_candidate_for_investment(agent.id.clone());
+    }
+    inner.set_capacity(capacity);
+    selected_asset
+}
+
+fn apply_appraisal(
+    appraisal: &AppraisalOutput,
+    capacity: Capacity,
+    original_demand: &DemandMap,
+    remaining_demand: &mut DemandMap,
+    activities: &mut ActivityMap,
+) {
+    if capacity <= Capacity(0.0) {
+        return;
+    }
+    // The appraisal matches original demand at `appraisal.capacity`; scaling capacity scales its
+    // activity and supply profile by the same factor.
+    let fraction = Dimensionless((capacity / appraisal.capacity).value());
+    for (time_slice, activity_per_capacity) in &appraisal.activity_per_capacity {
+        *activities
+            .entry((appraisal.asset.clone(), time_slice.clone()))
+            .or_insert(Activity(0.0)) += *activity_per_capacity * capacity;
+    }
+    for (selection, original_flow) in original_demand {
+        let flow = (remaining_demand[selection] - *original_flow * fraction).max(Flow(0.0));
+        remaining_demand.insert(selection.clone(), flow);
+    }
+}
+
+/// Scale the capacity required for the full profile to the current residual demand.
+fn capacity_for_remaining_demand(
+    full_demand_capacity: Capacity,
+    remaining_fraction: Dimensionless,
+) -> Capacity {
+    full_demand_capacity * remaining_fraction
+}
+
+/// Calculate the residual demand as a fraction of the original profile.
+///
+/// Every selected option supplies a scalar multiple of the original profile, so the ratio of
+/// total flows is also the ratio for each time-slice selection.
+fn remaining_demand_fraction(original: &DemandMap, remaining: &DemandMap) -> Dimensionless {
+    let original_total: Flow = original.values().copied().sum();
+    if original_total <= Flow(0.0) {
+        return Dimensionless(0.0);
+    }
+    let remaining_total: Flow = remaining.values().copied().sum();
+    (remaining_total / original_total).min(Dimensionless(1.0))
+}
+
+/// Represent a selected capacity using the asset's capacity type, rounding discrete capacity down.
+///
+/// The returned capacity never exceeds the amount available from demand or investment limits.
+fn round_capacity_down(capacity_type: AssetCapacity, capacity: Capacity) -> AssetCapacity {
+    match capacity_type {
+        AssetCapacity::Continuous(_) => AssetCapacity::continuous(capacity.max(Capacity(0.0))),
+        AssetCapacity::Discrete { tranche_size, .. } if tranche_size > Capacity(0.0) => {
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            let num_tranches = (capacity / tranche_size).value().floor() as u32;
+            AssetCapacity::discrete(num_tranches, tranche_size)
+        }
+        AssetCapacity::Discrete { tranche_size, .. } => AssetCapacity::discrete(0, tranche_size),
+    }
+}
+
+/// Reduce a process limit by selected capacity, if that process has a configured limit.
+fn subtract_capacity_limit(
+    process_id: &ProcessID,
+    capacity: Capacity,
+    limits: &mut HashMap<ProcessID, Capacity>,
+) {
+    if let Some(limit) = limits.get_mut(process_id) {
+        *limit = (*limit - capacity).max(Capacity(0.0));
+    }
+}
+
+/// Check whether any demand selection remains above the model's absolute tolerance.
+fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool {
+    demand.values().any(|flow| *flow > absolute_tolerance)
+}
+
+/// Log when multiple options share the same best metric and fallback ordering.
+fn log_on_equal_appraisal_outputs(
+    outputs: &[AppraisalOutput],
+    agent_id: &AgentID,
+    commodity_id: &CommodityID,
+    region_id: &RegionID,
+) {
+    let num_identical = count_equal_and_best_appraisal_outputs(outputs);
+    if num_identical == 0 {
+        return;
+    }
+
+    let asset_details = outputs[..=num_identical]
+        .iter()
+        .map(|output| {
+            let asset = &output.asset;
+            format!(
+                "Process ID: '{}' (State: {}{}, Commission year: {})",
+                asset.process_id(),
+                asset.state(),
+                asset.id().map_or_default(|id| format!(", Asset ID: {id}")),
+                asset.commission_year()
+            )
+        })
+        .join(", ");
+    debug!(
+        "Found equally good appraisals for Agent ID: {agent_id}, Commodity: '{commodity_id}', \
+        Region: {region_id}. Options: [{asset_details}]. Selecting first option.",
+    );
+}
+
+/// Create the error returned when available options and limits cannot meet demand.
 fn no_options_error(
     has_options: bool,
     agent: &Agent,
@@ -424,284 +503,124 @@ fn no_options_error(
     }
 }
 
-/// Prepare existing assets for reappraisal.
-///
-/// Assets are replaced in `assets` with an asset representing a single tranche, as they are
-/// appraised one tranche at a time. Returns a map from the asset to its original number of tranches.
-fn prepare_commissioned_assets_for_retention(assets: &mut [AssetRef]) -> HashMap<AssetRef, u32> {
-    let mut available_retention_tranches = HashMap::new();
-
-    for asset in assets.iter_mut().filter(|asset| asset.is_commissioned()) {
-        let num_tranches = asset.num_tranches();
-
-        // Replace with single tranche as we appraise one tranche at a time
-        *asset = asset.clone().as_single_tranche();
-
-        // Store remaining tranches
-        available_retention_tranches.insert(asset.clone(), num_tranches);
-    }
-
-    available_retention_tranches
-}
-
-/// Check whether there is any remaining demand that is unmet in any time slice
-fn is_any_remaining_demand(demand: &DemandMap, absolute_tolerance: Flow) -> bool {
-    demand.values().any(|flow| *flow > absolute_tolerance)
-}
-
-/// Remove assets that exceed the provided process limits for one complete tranche.
-fn remove_assets_exceeding_agent_limits(
-    opt_assets: &mut Vec<AssetRef>,
-    remaining_agent_limits: &HashMap<ProcessID, Capacity>,
-    only_candidates: bool,
-) {
-    opt_assets.retain(|asset| {
-        (only_candidates && !asset.is_candidate())
-            || remaining_agent_limits
-                .get(asset.process_id())
-                .is_none_or(|limit| *limit >= asset.total_capacity())
-    });
-}
-
-// Update remaining process capacity limit with the capacity of a selected asset
-fn subtract_capacity_from_remaining_limit(
-    best_asset: &AssetRef,
-    remaining_agent_limits: &mut HashMap<ProcessID, Capacity>,
-) {
-    if let Some(remaining_capacity) = remaining_agent_limits.get_mut(best_asset.process_id()) {
-        *remaining_capacity -= best_asset.total_capacity();
-        assert!(
-            *remaining_capacity >= Capacity(0.0),
-            "Remaining Capacity has fallen below zero"
-        );
-    }
-}
-
-/// Update the remaining investment options and selection state.
-///
-/// If the asset is a candidate, its one-tranche capacity is subtracted from
-/// `remaining_agent_addition_limits` (if applicable) to ensure that process addition limits are not
-/// exceeded. If the asset is commissioned, one tranche is subtracted from
-/// `available_retention_tranches` to ensure that retention does not invent new capacity.
-///
-/// # Arguments
-///
-/// * `best_asset` - The asset that has been selected as the best option in this round
-/// * `opt_assets` - The list of remaining asset options to be considered in future rounds
-/// * `remaining_agent_addition_limits` - The remaining agent addition limits for processes
-/// * `remaining_agent_total_limit` - The remaining capacity for processes
-/// * `available_retention_tranches` - The commissioned tranches available for retention
-fn update_selection_state(
-    best_asset: &AssetRef,
-    opt_assets: &mut Vec<AssetRef>,
-    remaining_agent_addition_limits: &mut HashMap<ProcessID, Capacity>,
-    remaining_agent_total_limits: &mut HashMap<ProcessID, Capacity>,
-    available_retention_tranches: &mut HashMap<AssetRef, u32>,
-) {
-    // Subtract asset capacity from the total capacity limit, if applicable.
-    subtract_capacity_from_remaining_limit(best_asset, remaining_agent_total_limits);
-
-    // Update the remaining agent addition limit for the selected asset, if applicable, and remove it
-    // from the options if the limit is exhausted.
-    if best_asset.is_candidate() {
-        // Candidate assets: remove capacity from the investment limit, if applicable.
-        subtract_capacity_from_remaining_limit(best_asset, remaining_agent_addition_limits);
-    } else {
-        // Commissioned assets: we've appraised a single tranche, so remove one tranche from the
-        // available retention count for this asset.
-        let remaining = available_retention_tranches.get_mut(best_asset).unwrap();
-        *remaining = remaining.saturating_sub(1);
-
-        // If all tranches have been selected, remove the asset from the investment options.
-        if *remaining == 0 {
-            let old_idx = opt_assets
-                .iter()
-                .position(|asset| *asset == *best_asset)
-                .unwrap();
-            opt_assets.swap_remove(old_idx);
-            available_retention_tranches.remove(best_asset);
-        }
-    }
-}
-
-/// Record a selected asset. Candidate selections represent one tranche; repeated selections of the
-/// same candidate increase the resulting asset's number of tranches while preserving its tranche
-/// size.
-///
-/// # Arguments
-///
-/// * `best_asset` - The asset that has been selected as the best option in this round
-/// * `best_assets` - The list of assets that have been selected so far
-fn record_asset_selection(best_asset: AssetRef, best_assets: &mut Vec<AssetRef>) {
-    assert!(
-        best_asset.is_commissioned() || best_asset.is_candidate(),
-        "Invalid asset type"
-    );
-
-    // Add the selected asset to the list of best assets, or add one tranche if it's already there.
-    if let Some(existing_asset) = best_assets.iter_mut().find(|asset| **asset == best_asset) {
-        // If the asset is already selected, add the additional required tranche
-        existing_asset
-            .make_mut()
-            .increase_capacity(best_asset.capacity());
-    } else {
-        // Otherwise add it to the list of best assets. Selected assets are unmothballed.
-        best_assets.push(best_asset.with_no_mothballed_capacity());
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{
-        agent_id, asset, process, process_activity_limits_map, process_flows_map, svd_commodity,
-        time_slice, time_slice_info,
-    };
-    use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo};
-    use crate::units::{FlowPerActivity, MoneyPerFlow};
-    use indexmap::indexmap;
-    use rstest::{fixture, rstest};
-    use std::sync::Arc;
+    use crate::agent::AgentID;
+    use crate::commodity::CommodityID;
+    use crate::fixture::build_patched_simple_tempdir;
+    use crate::fixture::process;
+    use crate::input::load_model;
+    use crate::simulation::investment::AssetOptions;
+    use crate::simulation::prices::Prices;
+    use crate::units::Activity;
+    use float_cmp::assert_approx_eq;
+    use rstest::rstest;
 
     #[rstest]
-    #[case(Flow(10.0), Dimensionless(1.0), Capacity(10.0))] // normal: demand / (limit * coeff) = 10 / (1 * 1) = 10
-    #[case(Flow(0.0), Dimensionless(1.0), Capacity(0.0))] // zero demand → zero capacity
-    #[case(Flow(10.0), Dimensionless(0.5), Capacity(20.0))] // activity limit < 1: 10 / (0.5 * 1) = 20
-    #[case(Flow(10.0), Dimensionless(0.0), Capacity(0.0))] // activity limit = 0 → zero capacity
-    fn calculate_asset_capacity_scale_works(
-        time_slice: TimeSliceID,
-        time_slice_info: TimeSliceInfo,
-        svd_commodity: Commodity,
+    #[case(None, AssetCapacity::continuous(Capacity(0.0)))]
+    #[case(Some(Capacity(3.0)), AssetCapacity::single(Capacity(3.0)))]
+    fn candidate_assets_use_portfolio_capacity_setup(
         mut process: Process,
-        #[case] demand_value: Flow,
-        #[case] activity_limit: Dimensionless,
-        #[case] expected: Capacity,
+        #[case] tranche_size: Option<Capacity>,
+        #[case] expected_capacity: AssetCapacity,
     ) {
-        let commodity_rc = Arc::new(svd_commodity);
-        let process_flow = ProcessFlow {
-            commodity: Arc::clone(&commodity_rc),
-            coeff: FlowPerActivity(1.0),
-            kind: FlowType::Fixed,
-            cost: MoneyPerFlow(0.0),
+        process.tranche_size = tranche_size;
+        let candidates = get_candidate_assets(&[Arc::new(process)], &RegionID::from("GBR"), 2020)
+            .collect::<Vec<_>>();
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].capacity(), expected_capacity);
+    }
+
+    #[rstest]
+    #[case(
+        AssetCapacity::continuous(Capacity(5.0)),
+        Capacity(2.5),
+        AssetCapacity::continuous(Capacity(2.5))
+    )]
+    #[case(
+        AssetCapacity::single(Capacity(2.0)),
+        Capacity(5.9),
+        AssetCapacity::discrete(2, Capacity(2.0))
+    )]
+    #[case(
+        AssetCapacity::single(Capacity(2.0)),
+        Capacity(1.9),
+        AssetCapacity::discrete(0, Capacity(2.0))
+    )]
+    fn capacity_is_rounded_down(
+        #[case] capacity_type: AssetCapacity,
+        #[case] capacity: Capacity,
+        #[case] expected: AssetCapacity,
+    ) {
+        assert_eq!(round_capacity_down(capacity_type, capacity), expected);
+    }
+
+    #[test]
+    fn run_agent_supplies_the_full_demand_profile() {
+        let model_dir = build_patched_simple_tempdir(Vec::new());
+        let model = load_model(model_dir.path()).unwrap();
+        let year = model.parameters.milestone_years[0];
+        let agent = &model.agents[&AgentID::from("A0_RES")];
+        let commodity = &model.commodities[&CommodityID::from("RSHEAT")];
+        let region_id = RegionID::from("GBR");
+        let process = agent
+            .iter_search_space(&region_id, &commodity.id, year)
+            .next()
+            .unwrap()
+            .clone();
+        let candidate = get_candidate_assets(std::slice::from_ref(&process), &region_id, year)
+            .next()
+            .unwrap();
+        let flow_coefficient = candidate.get_flow(&commodity.id).unwrap().coeff;
+        let demand: DemandMap = model
+            .time_slice_info
+            .iter_selections_at_level(commodity.time_slice_level)
+            .map(|selection| {
+                let maximum_activity = *candidate
+                    .get_activity_per_capacity_limits_for_selection(&selection)
+                    .end();
+                (
+                    selection,
+                    maximum_activity * Capacity(1.0) * flow_coefficient,
+                )
+            })
+            .collect();
+        let options = AssetOptions {
+            processes: vec![process],
+            ..AssetOptions::default()
         };
-        process.flows = process_flows_map(
-            process.regions.clone(),
-            Arc::new(indexmap! { commodity_rc.id.clone() => process_flow }),
-        );
-
-        let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info);
-        limits.add_time_slice_limit(time_slice.clone(), Dimensionless(0.0)..=activity_limit);
-        process.activity_limits = process_activity_limits_map(process.regions.clone(), limits);
-
-        let asset = asset(process);
-        let demand = indexmap! { TimeSliceSelection::Single(time_slice)=> demand_value };
-        assert_eq!(
-            calculate_candidate_asset_capacity_scale(&asset, &commodity_rc, &demand),
-            expected
-        );
-    }
-
-    #[rstest]
-    fn subtract_capacity_from_remaining_limit_works(asset: Asset) {
-        let mut remaining_agent_limits =
-            HashMap::from([(asset.process_id().clone(), Capacity(10.0))]);
-        subtract_capacity_from_remaining_limit(
-            &AssetRef::from(asset.clone()),
-            &mut remaining_agent_limits,
-        );
-
-        assert_eq!(
-            remaining_agent_limits[asset.process_id()].clone(),
-            Capacity(8.0)
-        );
-    }
-
-    #[fixture]
-    fn commissioned_asset(agent_id: AgentID, asset: Asset) -> Asset {
-        Asset::new_commissioned(
-            agent_id,
-            Arc::new(asset.process().clone()),
-            asset.region_id().clone(),
-            asset.capacity(),
-            asset.commission_year(),
+        let selection = run_agent(
+            &model,
+            agent,
+            commodity,
+            &region_id,
+            &demand,
+            &options,
+            HashMap::new(),
+            HashMap::new(),
+            &Prices::default(),
+            year,
+            None,
         )
-        .unwrap()
-    }
+        .unwrap();
 
-    #[fixture]
-    fn candidate_asset(asset: Asset) -> Asset {
-        Asset::new_candidate(
-            Arc::new(asset.process().clone()),
-            asset.region_id().clone(),
-            asset.total_capacity(),
-            asset.commission_year(),
-        )
-        .unwrap()
-    }
-
-    #[rstest]
-    fn remove_assets_exceeding_agent_limits_works(
-        commissioned_asset: Asset,
-        candidate_asset: Asset,
-    ) {
-        let mut opt_assets = vec![
-            commissioned_asset.clone().into(),
-            candidate_asset.clone().into(),
-        ];
-        let limits = HashMap::from([(commissioned_asset.process_id().clone(), Capacity(1.0))]);
-
-        // Check only the candidate asset is removed when `only_candidates` is true
-        remove_assets_exceeding_agent_limits(&mut opt_assets, &limits, true);
-        assert_eq!(opt_assets.len(), 1);
-        assert_eq!(opt_assets[0], commissioned_asset.clone().into());
-
-        // Check all assets are removed when `only_candidates` is false
-        opt_assets.push(candidate_asset.clone().into());
-        remove_assets_exceeding_agent_limits(&mut opt_assets, &limits, false);
-        assert_eq!(opt_assets, []);
-    }
-
-    #[rstest]
-    #[case(false)]
-    #[case(true)]
-    fn update_selection_state_works(
-        commissioned_asset: Asset,
-        candidate_asset: Asset,
-        #[case] commissioned: bool,
-    ) {
-        let best_asset: AssetRef = if commissioned {
-            commissioned_asset.clone().into()
-        } else {
-            candidate_asset.clone().into()
-        };
-        let mut opt_assets = vec![best_asset.clone()];
-        let mut addition_limits = HashMap::from([(best_asset.process_id().clone(), Capacity(2.0))]);
-        let mut total_limits = HashMap::from([(best_asset.process_id().clone(), Capacity(2.0))]);
-        let mut retention_tranches = HashMap::from([(best_asset.clone(), 1)]);
-
-        update_selection_state(
-            &best_asset,
-            &mut opt_assets,
-            &mut addition_limits,
-            &mut total_limits,
-            &mut retention_tranches,
-        );
-
-        if commissioned {
-            // Expect total_limits to reduce and retention_tranches to be removed
-            assert_eq!(total_limits[best_asset.process_id()], Capacity(0.0));
-            assert!(!retention_tranches.contains_key(&best_asset));
-
-            // Expect addition_limits to remain unchanged
-            assert_eq!(addition_limits[best_asset.process_id()], Capacity(2.0));
-        } else {
-            // Expect total_limits and addition_limits to reduce
-            assert_eq!(total_limits[best_asset.process_id()], Capacity(0.0));
-            assert_eq!(addition_limits[best_asset.process_id()], Capacity(0.0));
-
-            // Expect retention_tranches to remain unchanged
-            assert_eq!(retention_tranches[&best_asset], 1);
+        assert_eq!(selection.assets.len(), 1);
+        let selected_asset = &selection.assets[0];
+        for (time_selection, required_flow) in &demand {
+            let supplied_flow: Flow = time_selection
+                .iter(&model.time_slice_info)
+                .map(|(time_slice, _)| {
+                    selection
+                        .activity
+                        .get(&(selected_asset.clone(), time_slice.clone()))
+                        .copied()
+                        .unwrap_or(Activity(0.0))
+                        * flow_coefficient
+                })
+                .sum();
+            assert_approx_eq!(f64, supplied_flow.value(), required_flow.value());
         }
     }
 }
