@@ -5,7 +5,7 @@ milestone year (MSY), the dispatch model calculates the least-cost operation of 
 energy system assets to satisfy commodity demands. It is solved as a Linear Programme (LP) using the
 HiGHS solver.
 
-This formulation is used by the `system_dispatch` [simulation protocol](README.md#simulation-protocols).
+This formulation is used by the `system_dispatch` [simulation protocol](index.html#simulation-protocols).
 
 ## Sets and Indices
 

@@ -35,5 +35,5 @@ optimality_tolerance = 10e-6
 ```
 
 [model.toml]: ../file_formats/input_files.md#model-parameters-modeltoml
-[protocols]: ../model/README.md#simulation-protocols
+[protocols]: ../model/index.html#simulation-protocols
 [highs-opts]: https://ergo-code.github.io/HiGHS/stable/options/definitions/
