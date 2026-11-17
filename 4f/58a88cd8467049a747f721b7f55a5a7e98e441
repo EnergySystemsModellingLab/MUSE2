@@ -114,6 +114,7 @@ src/simulation/investment/competitive/metrics.rs
   s_c5245ca3f71151::t_fccf5e0696b471 83,129,166,168,173
   s_c5245ca3f71151::t_00e3d2ddc2ee7e 278
   s_d6a9f5fb1e2597::t_a4d2a676d22c55 55,433
+  s_ced6373e3ed0c5::t_b994b95b820729 222,257
 src/simulation/investment/competitive.rs
   s_378dcf4051c8b4::t_f42937c942311c 1-4,6-7,9
   s_378dcf4051c8b4::t_ad97f943bea7a7 12-15,17-20,23-24,26-31,33-34
@@ -492,6 +493,14 @@ tests/data/simple_tranche_size/commodity_prices.csv
       "agent_id": {
         "tool": "github-copilot-cli",
         "id": "0f4adb5b-b280-4497-ac13-59e09e69b190",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_ced6373e3ed0c5": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "90609f55-ddb4-4d1a-be4d-d8a574aa9820",
         "model": "unknown"
       },
       "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
