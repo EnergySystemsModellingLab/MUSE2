@@ -488,6 +488,80 @@ Once the LP has been solved, the selected assets are constructed from the capaci
 3. Selected existing assets have any mothballed capacity that is needed reactivated, and selected
    candidate assets are assigned to the agent, to be commissioned.
 
+## Population agents
+
+A population agent represents a large number of discrete entities with identical needs, such as
+households. Each asset represents equipment that a group of these entities uses to meet one of its
+needs, such as the gas boilers of homes heated with gas.
+
+At each milestone year, the agent selects equipment for a market: one commodity in one region. Its
+target is its share of that market's demand. Demand is a profile across time slices (or groups of
+time slices, according to the commodity's time-slice level), rather than just a single annual total.
+The population agent appraises options against the full profile, then selects them in merit order.
+
+### Population agent options
+
+The options considered are the agent's [investment options][investment-options]:
+
+- each of the agent's existing assets in the region which have the commodity as their primary
+  output, including any mothballed capacity; and
+- one candidate asset for each process in the agent's search space for the commodity, region and
+  milestone year.
+
+### Appraisal
+
+A candidate asset has continuous capacity unless its process defines a `tranche_size`, in which
+case its capacity is in whole multiples of that size. The appraisal finds the capacity needed for
+the full demand profile; the capacity and investment limits described under
+[Population agent asset selection](#population-agent-asset-selection) are applied when assets are
+selected.
+
+Each option is appraised independently, once, against the full demand profile. An optimisation finds
+the capacity and activity in each time slice that would supply the full profile using that option
+alone. Activity must respect the process's availability limits, and output must match demand in
+every time-slice group at the commodity's time-slice level. An option that cannot reproduce the
+profile is excluded.
+
+The optimisation minimises the option's total annual cost:
+
+\\[
+  \mathrm{Metric} =
+    \mathrm{AnnualFixedCost} \times \mathrm{Capacity}
+    + \sum_t \left(
+      \mathrm{OperatingCost}_t + \mathrm{InputCost}_t
+    \right) \times \mathrm{Activity}_t
+    + \mathrm{UtilisationPenalties}
+\\]
+
+- **Annual fixed cost** includes fixed operating and maintenance costs. For a candidate asset it
+  also includes annualised capital cost; for an existing asset, capital cost is already sunk and is
+  not included.
+- **Operating cost** includes the process's variable operating costs, levies and flow costs.
+- **Input cost** is the cost of the asset's input commodities, valued at their market prices.
+- **Utilisation penalties** are included when seasonal or annual peak-utilisation penalties are
+  configured.
+
+The resulting minimum cost is the option's appraisal metric; lower-cost options rank higher. If
+metrics are approximately equal, commissioned assets rank ahead of candidates, and newer
+commissioned assets rank ahead of older ones. Any remaining ties keep the options' input order.
+
+### Population agent asset selection
+
+1. Rank existing assets and candidates together by their appraisal metric, with lower-cost options
+   first.
+2. Consider options in merit order. For each option, scale its full-demand capacity to the fraction
+   of demand that remains. Limit the selected capacity by the available capacity and the agent's
+   share of any investment constraints (process limits scaled by the agent's share of demand).
+   Candidate capacity is limited by both the process's `addition_limit` and `total_capacity_limit`;
+   existing capacity is limited by its total capacity and any `total_capacity_limit`. Round
+   discrete capacity down to whole tranches so it does not exceed demand or a limit. Scale the
+   fitted activity profile by the ratio of selected capacity to its full-demand capacity, and
+   subtract the resulting supply from the remaining demand. Any existing capacity not retained
+   remains mothballed.
+3. Continue until demand is met within the `remaining_demand_absolute_tolerance` configured in
+   `model.toml`. If the available options cannot meet demand after applying their capacity and
+   investment limits, the simulation ends with an error.
+
 [investment]: ./investment.md
 [investment-options]: ./investment.md#investment-options
 [investment-constraints]: ./investment.md#investment-constraints
