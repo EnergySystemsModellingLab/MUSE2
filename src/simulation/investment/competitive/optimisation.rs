@@ -1,17 +1,12 @@
 //! Optimisation problem for investment tools.
 use super::coefficients::ObjectiveCoefficients;
 use super::constraints::{
-    add_activity_constraints, add_demand_constraints, add_equal_utilisation_constraints,
-    add_utilisation_peak_constraints,
+    add_activity_constraints, add_demand_constraints, add_utilisation_peak_constraints,
 };
-use super::record_asset_selection;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
-use crate::optimisation::ModelError;
-use crate::optimisation::apply_highs_options_from_toml;
-use crate::optimisation::group_dispatch_equivalent_assets;
-use crate::optimisation::solve_optimal;
+use crate::optimisation::{ModelError, apply_highs_options_from_toml, solve_optimal};
 use crate::simulation::activity::ActivityMap;
 use crate::simulation::investment::DemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
@@ -30,12 +25,10 @@ pub type Variable = highs::Col;
 
 /// Map containing optimisation results and coefficients
 pub struct ResultsMap {
-    /// Activity variables in each time slice for the asset of interest
-    pub asset_activity: IndexMap<TimeSliceID, Activity>,
+    /// Activity variables in each time slice
+    pub activity: IndexMap<TimeSliceID, Activity>,
     /// Remaining unmet demand per time slice, computed post-solve
     pub unmet_demand: DemandMap,
-    /// Full solution to the optimisation (activities of all assets)
-    pub solution: ActivityMap,
 }
 
 /// Adds activity variables to the problem, one per time slice.
@@ -43,40 +36,38 @@ pub struct ResultsMap {
 /// Returns a map from time slice to the corresponding decision variable.
 fn add_activity_vars(
     problem: &mut Problem,
-    assets: &[AssetRef],
-    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
-) -> IndexMap<(AssetRef, TimeSliceID), Variable> {
-    let mut activity_vars = IndexMap::new();
-    for asset in assets {
-        for (time_slice, cost) in &coefficients[asset].activity_coefficients {
+    cost_coefficients: &ObjectiveCoefficients,
+) -> IndexMap<TimeSliceID, Variable> {
+    cost_coefficients
+        .activity_coefficients
+        .iter()
+        .map(|(time_slice, cost)| {
             let var = problem.add_column(cost.value(), 0.0..);
-            activity_vars.insert((asset.clone(), time_slice.clone()), var);
-        }
-    }
-    activity_vars
+            (time_slice.clone(), var)
+        })
+        .collect()
 }
 
 /// Adds constraints to the problem.
 fn add_constraints(
     problem: &mut Problem,
     model: &Model,
-    assets: &[AssetRef],
+    asset: &AssetRef,
     commodity: &Commodity,
-    activity_vars: &IndexMap<(AssetRef, TimeSliceID), Variable>,
+    activity_vars: &IndexMap<TimeSliceID, Variable>,
     demand: &DemandMap,
     time_slice_info: &TimeSliceInfo,
 ) {
-    add_activity_constraints(problem, assets, activity_vars, time_slice_info);
-    add_utilisation_peak_constraints(problem, model, assets, activity_vars);
+    add_activity_constraints(problem, asset, activity_vars, time_slice_info);
     add_demand_constraints(
         problem,
-        assets,
+        asset,
         commodity,
         time_slice_info,
         demand,
         activity_vars,
     );
-    add_equal_utilisation_constraints(problem, activity_vars, time_slice_info, assets);
+    add_utilisation_peak_constraints(problem, model, asset, activity_vars);
 }
 
 /// Computes remaining unmet demand per time-slice selection after a solve.
@@ -87,57 +78,43 @@ fn add_constraints(
 /// there is no need to distribute values across individual time slices.
 fn compute_unmet_demand(
     demand: &DemandMap,
-    assets: &[AssetRef],
-    activity: &ActivityMap,
+    activity: &IndexMap<TimeSliceID, Activity>,
     commodity: &Commodity,
+    asset: &AssetRef,
     time_slice_info: &TimeSliceInfo,
 ) -> DemandMap {
+    let flow_coeff = asset.get_flow(&commodity.id).unwrap().coeff;
     time_slice_info
         .iter_selections_at_level(commodity.time_slice_level)
         .map(|ts_selection| {
             let demand_for_selection = demand[&ts_selection];
-
-            // Calculate supply for selection: sum output over all assets over all time slices in
-            // the selection
-            let supply_for_selection: Flow = assets
-                .iter()
-                .flat_map(|asset| {
-                    let coefficient = asset.get_flow(&commodity.id).unwrap().coeff;
-
-                    ts_selection
-                        .iter(time_slice_info)
-                        .map(move |(time_slice, _)| {
-                            let value = activity[&(asset.clone(), time_slice.clone())];
-                            value * coefficient
-                        })
-                })
+            let supply_for_selection: Flow = ts_selection
+                .iter(time_slice_info)
+                .map(|(ts, _)| activity[ts] * flow_coeff)
                 .sum();
-
             let unmet = (demand_for_selection - supply_for_selection).max(Flow(0.0));
             (ts_selection, unmet)
         })
         .collect()
 }
 
-/// Solves the appraisal optimisation for a fixed set of assets.
-///
-/// Returns the activity of every asset in every time slice, and the remaining unmet demand.
-pub fn solve_for_assets(
+/// Performs optimisation for an asset, given the coefficients and demand.
+pub fn perform_optimisation(
     model: &Model,
-    assets: &[AssetRef],
+    asset: &AssetRef,
     commodity: &Commodity,
-    coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
+    coefficients: &ObjectiveCoefficients,
     demand: &DemandMap,
-) -> Result<(ActivityMap, DemandMap)> {
-    // Create problem
+) -> Result<ResultsMap> {
+    // Create problem and add variables
     let mut problem = Problem::default();
-    let activity_vars = add_activity_vars(&mut problem, assets, coefficients);
+    let activity_vars = add_activity_vars(&mut problem, coefficients);
 
     // Add constraints
     add_constraints(
         &mut problem,
         model,
-        assets,
+        asset,
         commodity,
         &activity_vars,
         demand,
@@ -157,99 +134,41 @@ pub fn solve_for_assets(
     let solution = solve_optimal(highs_model)
         .map_err(ModelError::into_anyhow)?
         .get_solution();
-
-    // Extract asset activities and calculate unmet demand
     let solution_values = solution.columns();
-    let all_activity: ActivityMap = activity_vars
+    let activity = activity_vars
         .keys()
         .zip(solution_values.iter())
-        .map(|(key, &value)| (key.clone(), Activity::new(value)))
+        .map(|(time_slice, &value)| (time_slice.clone(), Activity::new(value)))
         .collect();
-    let unmet_demand = compute_unmet_demand(
-        demand,
-        assets,
-        &all_activity,
-        commodity,
-        &model.time_slice_info,
-    );
-
-    Ok((all_activity, unmet_demand))
+    let unmet_demand =
+        compute_unmet_demand(demand, &activity, commodity, asset, &model.time_slice_info);
+    Ok(ResultsMap {
+        activity,
+        unmet_demand,
+    })
 }
 
-/// Performs optimisation for an asset, given the coefficients and demand.
-pub fn perform_optimisation(
+/// Dispatches each asset in order, reducing demand after each single-asset optimisation.
+pub fn solve_for_assets(
     model: &Model,
-    selected_assets: &[AssetRef],
-    asset: &AssetRef,
+    assets: &[AssetRef],
     commodity: &Commodity,
     coefficients: &HashMap<AssetRef, Arc<ObjectiveCoefficients>>,
     demand: &DemandMap,
-    previous_solution: &ActivityMap,
-) -> Result<ResultsMap> {
-    // Record hypothetical asset selection
-    let mut assets = selected_assets.to_vec();
-    record_asset_selection(asset.clone(), &mut assets);
+) -> Result<(ActivityMap, DemandMap)> {
+    let mut activity = ActivityMap::new();
+    let mut unmet_demand = demand.clone();
 
-    let (all_activity, unmet_demand) =
-        solve_for_assets(model, &assets, commodity, coefficients, demand)?;
+    for asset in assets {
+        let results =
+            perform_optimisation(model, asset, commodity, &coefficients[asset], &unmet_demand)?;
+        for (time_slice, value) in results.activity {
+            *activity
+                .entry((asset.clone(), time_slice))
+                .or_insert(Activity(0.0)) += value;
+        }
+        unmet_demand = results.unmet_demand;
+    }
 
-    // Collect equivalence group for the asset of interest
-    let equivalence_groups = group_dispatch_equivalent_assets(assets.iter());
-    let asset_group = equivalence_groups
-        .iter()
-        .find(|group| group.contains(&asset))
-        .expect("Asset of interest must be present in an equivalence group");
-
-    // Calculate marginal activity for this asset equivalence group - we attribute this all to the
-    // candidate tranche
-    let marginal_activity: IndexMap<_, _> = all_activity
-        .iter()
-        .filter(|((asset, _ts), _value)| asset_group.contains(&asset))
-        .fold(
-            IndexMap::new(),
-            |mut marginal, ((candidate, ts), current_value)| {
-                let previous_value = previous_solution
-                    .get(&(candidate.clone(), ts.clone()))
-                    .copied()
-                    .unwrap_or(Activity(0.0));
-
-                *marginal.entry(ts.clone()).or_insert(Activity(0.0)) +=
-                    *current_value - previous_value;
-                marginal
-            },
-        );
-
-    // Note, there are some cases where marginal activity in certain timeslices (and overall) can be
-    // negative (i.e. where adding a tranche to the equivalence group actually decreases activity).
-    // Two known cases where this can happen:
-    //
-    // For annually/seasonally balanced commodities, where increasing capacity hits a binding demand
-    // constraint which then gives the asset freedom to choose the best timeslices to meet demand.
-    // Before the demand constraint is met, the asset will serve using all profitable timeslices.
-    // Once the demand constraint is met, not all timeslices need to be active to meet demand, and
-    // the asset will prioritise the _most_ profitable timeslices, at the expense of less profitable
-    // timeslices which will see their activities fall. In these circumstances individual timeslices
-    // can have negative marginal activity, but marginal activity in each balanced time slice
-    // selection (and the year as a whole) cannot be negative (but may be zero). If marginal
-    // activity for the year is zero then LCOX is undefined and the tranche will not be considered,
-    // even if it would be beneficial for the asset as a whole to add that tranche. This is
-    // something we should consider.
-    //
-    // A second scenario is where there are two different (non-equivalent) assets with identical
-    // marginal cost, and where moving activity between
-    // the assets isn't prevented by constraints (e.g. activity constraints or utilisation peak
-    // constraints). In this case there will be two identical corner solutions, and adding a tranche
-    // to asset A may inadvertently cause it to switch to the equally good solution where asset B
-    // wins, hence resulting in a decrease in activity (the opposite can also happen where adding a
-    // tranche to asset B switches it to a solution where asset B wins, resulting in artificially
-    // inflated marginal activity). In the case of investment appraisal, this
-    // can artificially decrease/increase marginal activities resulting in nonsensical LCOX. This is
-    // a problem. It may help to seed each model with the previous solution, to reduce the risk of
-    // flip-flopping.
-
-    Ok(ResultsMap {
-        asset_activity: marginal_activity,
-        unmet_demand,
-        solution: all_activity,
-    })
+    Ok((activity, unmet_demand))
 }

@@ -21,7 +21,7 @@ use crate::simulation::investment::Selection;
 use crate::simulation::investment::{AssetOptions, DemandMap};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceSelection;
-use crate::units::{Capacity, Dimensionless, Flow, FlowPerCapacity};
+use crate::units::{Activity, Capacity, Dimensionless, Flow, FlowPerCapacity};
 use anyhow::{Result, anyhow, ensure};
 use coefficients::calculate_coefficients_for_assets;
 use itertools::{Itertools, chain};
@@ -100,7 +100,7 @@ pub fn run_agent(
         agent,
         region_id,
         prices,
-        demand,
+        demand.clone(),
         year,
         debug_writer,
     )
@@ -220,7 +220,7 @@ pub fn select_best_assets(
     agent: &Agent,
     region_id: &RegionID,
     prices: &Prices,
-    demand: &DemandMap,
+    mut demand: DemandMap,
     year: u32,
     mut debug_writer: Option<&mut DebugDataWriter>,
 ) -> Result<Selection> {
@@ -251,19 +251,18 @@ pub fn select_best_assets(
     // Iteratively select the best asset until demand is met
     let mut round = 0;
     let mut selected_assets: Vec<AssetRef> = committed_assets.to_vec();
-    let mut unmet_demand = demand.clone();
     let mut previous_solution = ActivityMap::new();
 
     // Dispatch the committed assets. This must happen even if there is no demand, so that every
     // selected asset has activities.
     if !committed_assets.is_empty() {
-        (previous_solution, unmet_demand) =
-            solve_for_assets(model, &selected_assets, commodity, &coefficients, demand)?;
+        (previous_solution, demand) =
+            solve_for_assets(model, &selected_assets, commodity, &coefficients, &demand)?;
     }
 
     let has_options = !opt_assets.is_empty();
     while is_any_remaining_demand(
-        &unmet_demand,
+        &demand,
         model.parameters.remaining_demand_absolute_tolerance,
     ) {
         // Remove assets that would exceed the remaining limits for their processes from the options
@@ -283,7 +282,6 @@ pub fn select_best_assets(
                 year,
             ));
         }
-
         // Appraise all options in parallel: each asset's appraisal is independent (all shared
         // state is read-only within this block), so we can safely use Rayon here.
         // Each HiGHS solve inside `appraise_investment` is configured to use only one thread
@@ -298,13 +296,11 @@ pub fn select_best_assets(
 
                 Ok(Some(appraise_investment(
                     model,
-                    &selected_assets,
                     asset,
                     commodity,
                     objective_type,
-                    &coefficients,
-                    demand,
-                    &previous_solution,
+                    &coefficients[asset],
+                    &demand,
                 )?))
             })
             .collect::<Result<Vec<_>>>()? // propagate any solver error
@@ -319,7 +315,7 @@ pub fn select_best_assets(
                 year,
                 &format!("{} {} round {}", commodity.id, agent.id, round),
                 &outputs,
-                demand,
+                &demand,
                 commodity.time_slice_level,
             )?;
         }
@@ -358,11 +354,16 @@ pub fn select_best_assets(
             &mut available_retention_tranches,
         );
 
-        // Record the selected asset
-        record_asset_selection(best_output.asset, &mut selected_assets);
-        previous_solution = best_output.solution;
+        for (time_slice, activity) in &best_output.activity {
+            *previous_solution
+                .entry((best_output.asset.clone(), time_slice.clone()))
+                .or_insert(Activity(0.0)) += *activity;
+        }
 
-        unmet_demand = best_output.unmet_demand;
+        // Record the selected asset
+        record_asset_selection(best_output.asset.clone(), &mut selected_assets);
+
+        demand = best_output.unmet_demand;
         round += 1;
     }
 
@@ -376,8 +377,7 @@ pub fn select_best_assets(
 /// Convert the selected assets to the final selection
 ///
 /// Candidate assets are converted to Ready, and at this point we also assign the agent ID to the
-/// asset. The solution from the final round covers exactly the selected assets. Committed and
-/// commissioned assets are unchanged.
+/// asset. The solution contains the activities recorded for committed and selected assets.
 fn finalise_selection(
     selected_assets: Vec<AssetRef>,
     agent: &Agent,
