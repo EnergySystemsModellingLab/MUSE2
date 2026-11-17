@@ -1,4 +1,4 @@
-id,description,regions,decision_rule,decision_lexico_tolerance
-A1_RES,Residential sector agent,R1,single,
-A1_PWR,Power sector agent,R1,single,
-A1_GAS,Gas sector agent,R1,single,
+id,description,regions,decision_rule,decision_lexico_tolerance,agent_type
+A1_RES,Residential sector agent,R1,single,,population
+A1_PWR,Power sector agent,R1,single,,portfolio
+A1_GAS,Gas sector agent,R1,single,,portfolio
