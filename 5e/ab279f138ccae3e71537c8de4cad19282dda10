@@ -1,0 +1,80 @@
+src/simulation/investment/population/coefficients.rs
+  s_1bf8cc9acbfe6f::t_86bbd435a9a0c0 14-85
+  s_1bf8cc9acbfe6f::t_045d870fb9246c 11-13
+  s_1bf8cc9acbfe6f::t_7d367fc050ac2a 86-88
+src/simulation/investment/population.rs
+  s_1bf8cc9acbfe6f::t_2283202e7de6e2 19-20,37,39-46,48-65,67-71,73,75,78-80,92,95-97,99,101-106,168,200,202,218,239,334-365,386,391,405,417,419,466,492,532,543,553,558,630,648
+  s_1bf8cc9acbfe6f::t_8a2bff35c1f1d5 13-14,17,23,35,98,110-167,179,201,211,216,369,383,418,422,427,429,465,471,473,491,528,544,559,571,582,604,616,618,639,647
+  s_1bf8cc9acbfe6f::t_13445218b918df 72,74,76-77,81-91
+  s_1bf8cc9acbfe6f::t_8691a9b6f53d80 1,27,94,100,206-208,230-234,247-330,626
+  s_1bf8cc9acbfe6f::t_4609702382a642 2-4,10-12
+  s_1bf8cc9acbfe6f::t_25a5ce7d82da10 21
+  s_1bf8cc9acbfe6f::t_5e045d52a74456 24-26
+  s_1bf8cc9acbfe6f::t_275c2e807a2e76 28-30,32-34
+  s_1bf8cc9acbfe6f::t_82ba856a462976 93
+  s_1bf8cc9acbfe6f::t_8d3eb656b03789 107-109
+  s_1bf8cc9acbfe6f::t_b2974b82e339cd 169-171,176-178
+  s_1bf8cc9acbfe6f::t_2ab0869c8a6e6a 180-182,197-199
+  s_1bf8cc9acbfe6f::t_e4f8729969b0ba 203-205
+  s_1bf8cc9acbfe6f::t_7bf4f9a9a440b8 209-210
+  s_1bf8cc9acbfe6f::t_de3925ab62acd4 212-215
+  s_1bf8cc9acbfe6f::t_0c3f8f59cd6732 217
+  s_1bf8cc9acbfe6f::t_28e512136268fa 219
+  s_1bf8cc9acbfe6f::t_54a7d7abf86ac2 227-229
+  s_1bf8cc9acbfe6f::t_d5837e587e3da9 235-238
+  s_1bf8cc9acbfe6f::t_e3b7c4ebd95fcd 240-242,244-246
+  s_1bf8cc9acbfe6f::t_030aefeb4d5f59 331-333
+  s_1bf8cc9acbfe6f::t_05e5e8b53a13a1 366-368
+  s_1bf8cc9acbfe6f::t_7b9a663a696ddd 370-372,380-382
+  s_1bf8cc9acbfe6f::t_c87c4b362c831d 384-385
+  s_1bf8cc9acbfe6f::t_51b93733285b22 387-390
+  s_1bf8cc9acbfe6f::t_76233f8c971763 392-394,402-404
+  s_1bf8cc9acbfe6f::t_fe83488064bd42 406-408,414-416
+  s_1bf8cc9acbfe6f::t_ecfc7e89b526f1 420-421
+  s_1bf8cc9acbfe6f::t_f28daea9b3ea15 423-426
+  s_1bf8cc9acbfe6f::t_cf05305a681ce4 428
+  s_1bf8cc9acbfe6f::t_d641522f22b017 430-432,462-464
+  s_1bf8cc9acbfe6f::t_1942dffbcaadeb 467-470
+  s_1bf8cc9acbfe6f::t_33de07d31a6f99 472
+  s_1bf8cc9acbfe6f::t_f4692ffec5e2e3 474-476,488-490
+  s_1bf8cc9acbfe6f::t_0d98d73f16344c 493-495,525-527
+  s_1bf8cc9acbfe6f::t_ed60c6010fe256 529-531
+  s_1bf8cc9acbfe6f::t_26da3f077e6f25 533-535,540-542
+  s_1bf8cc9acbfe6f::t_55ea1babcafcad 545-547,550-552
+  s_1bf8cc9acbfe6f::t_1677b0ca5973d4 554-557
+  s_1bf8cc9acbfe6f::t_9a0d74a01c0d34 560-562,568-570
+  s_1bf8cc9acbfe6f::t_58bd281ae25af2 572-574,579-581
+  s_1bf8cc9acbfe6f::t_f7da07fc33aff7 583-585,601-603
+  s_1bf8cc9acbfe6f::t_78f4393446cb8e 605-607,613-615
+  s_1bf8cc9acbfe6f::t_4e37d9b9263bca 617
+  s_1bf8cc9acbfe6f::t_422069349e261d 619-621,623-625
+  s_1bf8cc9acbfe6f::t_a37e03cd25ae82 627-629
+  s_1bf8cc9acbfe6f::t_68a3fb1f417a41 631-633,636-638
+  s_1bf8cc9acbfe6f::t_19bd35cedb7b0a 640-642,644-646
+  s_1bf8cc9acbfe6f::t_6bdf0dc522ce6a 649-651
+src/simulation/investment/population/optimisation.rs
+  s_1bf8cc9acbfe6f::t_13445218b918df 9-17
+  s_1bf8cc9acbfe6f::t_ab45a61c4cad75 6-8
+  s_1bf8cc9acbfe6f::t_87d966380809e2 18-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5eab279f138ccae3e71537c8de4cad19282dda10",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_1bf8cc9acbfe6f": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "73b4aeac-6bfe-4f55-9866-728f1dd22697",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
