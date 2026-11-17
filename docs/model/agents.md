@@ -26,8 +26,8 @@ selected by the agent: the existing assets to retain and the new candidate asset
 of the investment process (the investment order, handling of circularities, partial system
 dispatch, mothballing, etc.) is the same for all agent types.
 
-There are two agent types, set with the `agent_type` column of [`agents.csv`][agents-csv]:
-competitive agents (`competitive`) and portfolio agents (`portfolio`)
+The `agent_type` column of [`agents.csv`][agents-csv] selects competitive agents (`competitive`),
+portfolio agents (`portfolio`), or population agents (`population`).
 
 ## Competitive agents
 

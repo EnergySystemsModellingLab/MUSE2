@@ -13,7 +13,7 @@ fields:
     notes: One or more region IDs, separated by semicolons or the string `all`
   - name: agent_type
     type: string
-    enum: [competitive, portfolio]
+    enum: [competitive, portfolio, population]
     description: The asset selection algorithm used by the agent
     notes: |
       Optional (defaults to `portfolio` if omitted). With `portfolio`, the capacities of all
