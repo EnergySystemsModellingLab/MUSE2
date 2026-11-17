@@ -1,5 +1,6 @@
 src/simulation/investment/competitive/optimisation.rs
   s_87c5e8dae63a5a::t_739ddabd1212c4 151-152,155,157-159
+  s_ced6373e3ed0c5::t_44d1f4c4870803 9,19-20,153-154,156,160-180
 src/simulation/investment/competitive.rs
   s_87c5e8dae63a5a::t_02fa601b6b10ad 61-63
   s_87c5e8dae63a5a::t_96a6a9fa13d709 24,275-282,403-427
@@ -7,6 +8,9 @@ src/simulation/investment/competitive.rs
   s_87c5e8dae63a5a::t_1daa52364b31a0 211
   s_87c5e8dae63a5a::t_01337c8c132ffd 32,208-210,214,241-244,247-248,252,254-257,260-262,283
   s_87c5e8dae63a5a::t_6efbafa5bfac72 41-43,52,94
+  s_ced6373e3ed0c5::t_c38d0b25fc5263 253,389
+  s_ced6373e3ed0c5::t_192a22f6064953 258,361,367,383
+  s_ced6373e3ed0c5::t_df15aadcfd0b4e 259
 benches/assets.rs
   s_87c5e8dae63a5a::t_a9e2a3066b48ac 252
 src/simulation/investment/portfolio.rs
@@ -35,6 +39,14 @@ src/simulation/investment/portfolio.rs
       "agent_id": {
         "tool": "github-copilot-cli",
         "id": "4800f15a-8b1c-45c2-ba34-1ccb904fd2a1",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_ced6373e3ed0c5": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "90609f55-ddb4-4d1a-be4d-d8a574aa9820",
         "model": "unknown"
       },
       "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
