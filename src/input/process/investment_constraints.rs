@@ -1,5 +1,6 @@
 //! Code for reading process investment constraints from a CSV file.
 use super::super::input_err_msg;
+use crate::agent::AgentID;
 use crate::id::GetIDValue;
 use crate::input::parse_year_str;
 use crate::input::{read_csv_optional, try_insert};
@@ -22,6 +23,7 @@ const PROCESS_INVESTMENT_CONSTRAINTS_FILE_NAME: &str = "process_investment_const
 #[derive(PartialEq, Debug, Deserialize)]
 struct ProcessInvestmentConstraintRaw {
     process_id: String,
+    agent_id: String,
     regions: String,
     commission_years: String,
     addition_limit: Option<CapacityPerYear>,
@@ -91,7 +93,7 @@ impl ProcessInvestmentConstraintRaw {
                 && self.capacity_growth_limit.is_none()
                 && self.total_capacity_limit.is_none()),
             "Invalid investment constraints for '{}': cannot have all process investment \
-             constraints undefined; rather omit the record for that process/region/year.",
+             constraints undefined; rather omit the record for that process/agent/region/year.",
             self.process_id
         );
 
@@ -181,6 +183,7 @@ where
         // by the number of years since the previous milestone year. Any
         // addition limits specified for the first milestone year are ignored.
         let process_map = map.entry(process_id.clone()).or_default();
+        let agent_id = AgentID(record.agent_id.into());
         for (region, &year) in iproduct!(&record_regions, &constraint_years) {
             // Calculate years since previous milestone year
             // We can ignore constraints in the first milestone year as no investments are performed then
@@ -204,7 +207,11 @@ where
                 total_capacity_limit: record.total_capacity_limit,
             });
 
-            try_insert(process_map, &(region.clone(), year), constraint.clone())?;
+            try_insert(
+                process_map,
+                &(agent_id.clone(), region.clone(), year),
+                constraint.clone(),
+            )?;
         }
     }
     Ok(map)
@@ -213,7 +220,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{assert_error, processes};
+    use crate::fixture::{assert_error, patch_and_validate_simple, processes};
+    use crate::patch::FilePatch;
     use crate::region::RegionID;
     use crate::units::Capacity;
     use rstest::rstest;
@@ -226,6 +234,7 @@ mod tests {
     ) -> Result<()> {
         let constraint = ProcessInvestmentConstraintRaw {
             process_id: "test_process".into(),
+            agent_id: "test_agent".into(),
             regions: "ALL".into(),
             commission_years: "2030".into(),
             addition_limit,
@@ -243,6 +252,7 @@ mod tests {
 
         let constraints = vec![ProcessInvestmentConstraintRaw {
             process_id: "process1".into(),
+            agent_id: "agent1".into(),
             regions: "GBR".into(),
             commission_years: "ALL".into(), // Should apply to milestone years [2012, 2016]
             addition_limit: Some(CapacityPerYear(100.0)),
@@ -268,15 +278,20 @@ mod tests {
         // Should have constraints for milestone years within process year
         // range
         assert_eq!(process_constraints.len(), 2);
-        assert!(process_constraints.contains_key(&(gbr_region.clone(), 2012)));
-        assert!(process_constraints.contains_key(&(gbr_region.clone(), 2016)));
+        let agent_id: AgentID = "agent1".into();
+        assert!(process_constraints.contains_key(&(agent_id.clone(), gbr_region.clone(), 2012)));
+        assert!(process_constraints.contains_key(&(agent_id.clone(), gbr_region.clone(), 2016)));
 
         // All other years should not have constraints
         let process = processes.get(&process_id).unwrap();
         for year in process.years.clone() {
             if ![2012, 2016].contains(&year) {
                 assert!(
-                    !process_constraints.contains_key(&(gbr_region.clone(), year)),
+                    !process_constraints.contains_key(&(
+                        agent_id.clone(),
+                        gbr_region.clone(),
+                        year
+                    )),
                     "Should not contain constraint for year {year}"
                 );
             }
@@ -292,6 +307,7 @@ mod tests {
         let constraints = vec![
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
+                agent_id: "agent1".into(),
                 regions: "GBR".into(),
                 commission_years: "2010".into(),
                 addition_limit: Some(CapacityPerYear(100.0)),
@@ -301,6 +317,7 @@ mod tests {
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
+                agent_id: "agent1".into(),
                 regions: "ALL".into(),
                 commission_years: "2015".into(),
                 addition_limit: Some(CapacityPerYear(200.0)),
@@ -310,12 +327,23 @@ mod tests {
             },
             ProcessInvestmentConstraintRaw {
                 process_id: "process1".into(),
+                agent_id: "agent1".into(),
                 regions: "USA".into(),
                 commission_years: "2020".into(),
                 addition_limit: Some(CapacityPerYear(50.0)),
                 capacity_growth_limit: Some(Dimensionless(0.5)),
                 growth_seed: Some(Dimensionless(1.0)),
                 total_capacity_limit: Some(Capacity(100.0)),
+            },
+            ProcessInvestmentConstraintRaw {
+                process_id: "process1".into(),
+                agent_id: "agent2".into(),
+                regions: "USA".into(),
+                commission_years: "2020".into(),
+                addition_limit: Some(CapacityPerYear(75.0)),
+                capacity_growth_limit: None,
+                growth_seed: None,
+                total_capacity_limit: None,
             },
         ];
 
@@ -338,30 +366,36 @@ mod tests {
 
         // GBR 2010 constraint is for the first milestone year and should be ignored
         assert!(
-            !process_constraints.contains_key(&(gbr_region.clone(), 2010)),
+            !process_constraints.contains_key(&("agent1".into(), gbr_region.clone(), 2010)),
             "GBR 2010 constraint should not exist"
         );
 
         // Check GBR 2015 constraint (from ALL regions), scaled by years since previous milestone (5 years)
+        let agent_id: AgentID = "agent1".into();
         let gbr_2015 = process_constraints
-            .get(&(gbr_region, 2015))
+            .get(&(agent_id.clone(), gbr_region, 2015))
             .expect("GBR 2015 constraint should exist");
         assert_eq!(gbr_2015.addition_limit, Some(Capacity(200.0 * 5.0)));
 
         // Check USA 2015 constraint (from ALL regions), scaled by 5 years
         let usa_2015 = process_constraints
-            .get(&(usa_region.clone(), 2015))
+            .get(&(agent_id.clone(), usa_region.clone(), 2015))
             .expect("USA 2015 constraint should exist");
         assert_eq!(usa_2015.addition_limit, Some(Capacity(200.0 * 5.0)));
 
         // Check USA 2020 constraint, scaled by years since previous milestone (5 years)
         let usa_2020 = process_constraints
-            .get(&(usa_region, 2020))
+            .get(&(agent_id.clone(), usa_region.clone(), 2020))
             .expect("USA 2020 constraint should exist");
         assert_eq!(usa_2020.addition_limit, Some(Capacity(50.0 * 5.0)));
 
-        // Verify total number of constraints (GBR 2015, USA 2015, USA 2020 = 3)
-        assert_eq!(process_constraints.len(), 3);
+        let usa_2020_agent2 = process_constraints
+            .get(&("agent2".into(), usa_region, 2020))
+            .expect("USA 2020 constraint for agent2 should exist");
+        assert_eq!(usa_2020_agent2.addition_limit, Some(Capacity(75.0 * 5.0)));
+
+        // Verify total number of constraints (GBR 2015, USA 2015, USA 2020 × 2 agents = 4)
+        assert_eq!(process_constraints.len(), 4);
     }
 
     #[rstest]
@@ -372,6 +406,7 @@ mod tests {
         // Create a constraint that applies to all regions and all years
         let constraints = vec![ProcessInvestmentConstraintRaw {
             process_id: "process1".into(),
+            agent_id: "agent1".into(),
             regions: "ALL".into(),
             commission_years: "ALL".into(),
             addition_limit: Some(CapacityPerYear(75.0)),
@@ -400,13 +435,13 @@ mod tests {
         // Verify constraint exists for all region-year combinations except the first milestone year
         for &year in &milestone_years[1..] {
             let gbr_constraint = process_constraints
-                .get(&(gbr_region.clone(), year))
+                .get(&(AgentID("agent1".into()), gbr_region.clone(), year))
                 .unwrap_or_else(|| panic!("GBR {year} constraint should exist"));
             // scaled by years since previous milestone (5 years)
             assert_eq!(gbr_constraint.addition_limit, Some(Capacity(75.0 * 5.0)));
 
             let usa_constraint = process_constraints
-                .get(&(usa_region.clone(), year))
+                .get(&(AgentID("agent1".into()), usa_region.clone(), year))
                 .unwrap_or_else(|| panic!("USA {year} constraint should exist"));
             assert_eq!(usa_constraint.addition_limit, Some(Capacity(75.0 * 5.0)));
         }
@@ -423,6 +458,7 @@ mod tests {
 
         let constraints = vec![ProcessInvestmentConstraintRaw {
             process_id: "process1".into(),
+            agent_id: "agent1".into(),
             regions: "GBR".into(),
             commission_years: "2025".into(), // Outside milestone years (2010-2020)
             addition_limit: Some(CapacityPerYear(100.0)),
@@ -440,6 +476,20 @@ mod tests {
         assert_error!(
             result,
             "Invalid year for constraint on process process1. Valid years are [2010, 2015, 2020]"
+        );
+    }
+
+    #[test]
+    fn unknown_agent_id_fails_model_validation() {
+        let result = patch_and_validate_simple!(vec![
+            FilePatch::new(PROCESS_INVESTMENT_CONSTRAINTS_FILE_NAME).with_replacement(&[
+                "process_id,agent_id,regions,commission_years,addition_limit",
+                "GASDRV,UNKNOWN_AGENT,GBR,all,10",
+            ])
+        ]);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Unknown agent ID 'UNKNOWN_AGENT' in investment constraints for process 'GASDRV'"
         );
     }
 
@@ -668,7 +718,7 @@ mod tests {
             invalid,
             "Invalid investment constraints for 'test_process': cannot have all process \
              investment constraints undefined; rather omit the record for that process/\
-             region/year."
+             agent/region/year."
         );
     }
 }

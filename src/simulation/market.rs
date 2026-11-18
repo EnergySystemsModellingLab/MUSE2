@@ -6,7 +6,7 @@ use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DataWriter;
-use crate::process::{Process, ProcessID};
+use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::investment::{
     AgentRunMode, AllDemandMap, AssetOptions, DemandMap, FlowEstimator, update_net_demand_map,
@@ -226,25 +226,8 @@ pub fn run_agents_for_single_market(
                 HashMap::new(),
             ),
             AgentRunMode::Invest => {
-                // Calculate the agent's share of addition limits for candidate processes
-                let agent_addition_limits = collect_agent_limits(
-                    agent,
-                    region_id,
-                    commodity_id,
-                    year,
-                    commodity_portion,
-                    Process::agent_addition_limit,
-                );
-
-                // Calculate the agent's share of total capacity limits for all processes
-                let agent_total_limits = collect_agent_limits(
-                    agent,
-                    region_id,
-                    commodity_id,
-                    year,
-                    commodity_portion,
-                    Process::agent_total_limit,
-                );
+                let (agent_addition_limits, agent_total_limits) =
+                    collect_agent_limits(agent, region_id, commodity_id, year);
 
                 // Filter available assets and processes before running the agent
                 let options = AssetOptions {
@@ -476,34 +459,27 @@ where
 
 /// Collects capacity limits for all processes in the agent's search space for a given market.
 ///
-/// Processes without a defined limit are excluded from the returned map. The limit type is
-/// determined by `get_agent_limit`, which should be one of [`Process::agent_addition_limit`] (the
-/// agent's share of the annual addition limit) or [`Process::agent_total_limit`] (the agent's share
-/// of the maximum total installed capacity).
-///
-/// # Arguments
-///
-/// * `agent` – Agent whose search space is queried.
-/// * `region_id` – Region for which limits are calculated.
-/// * `commodity_id` – Commodity for which limits are calculated.
-/// * `year` – Milestone year being solved.
-/// * `commodity_portion` – Agent's fractional share of commodity demand, used to scale limits.
-/// * `get_agent_limit` – Method on [`Process`] that returns the limit value.
+/// Processes without a defined limit are excluded from the returned maps.
 pub fn collect_agent_limits(
     agent: &Agent,
     region_id: &RegionID,
     commodity_id: &CommodityID,
     year: u32,
-    commodity_portion: Dimensionless,
-    get_agent_limit: fn(&Process, &RegionID, u32, Dimensionless) -> Option<Capacity>,
-) -> HashMap<ProcessID, Capacity> {
-    agent
-        .iter_search_space(region_id, commodity_id, year)
-        .filter_map(|process| {
-            get_agent_limit(process, region_id, year, commodity_portion)
-                .map(|limit| (process.id.clone(), limit))
-        })
-        .collect()
+) -> (HashMap<ProcessID, Capacity>, HashMap<ProcessID, Capacity>) {
+    let mut addition_limits = HashMap::new();
+    let mut total_limits = HashMap::new();
+    for process in agent.iter_search_space(region_id, commodity_id, year) {
+        let Some(constraint) = process.investment_constraint(&agent.id, region_id, year) else {
+            continue;
+        };
+        if let Some(limit) = constraint.addition_limit {
+            addition_limits.insert(process.id.clone(), limit);
+        }
+        if let Some(limit) = constraint.total_capacity_limit {
+            total_limits.insert(process.id.clone(), limit);
+        }
+    }
+    (addition_limits, total_limits)
 }
 
 #[cfg(test)]
@@ -515,7 +491,7 @@ mod tests {
     use crate::fixture::{process, region_id};
     use crate::process::{Process, ProcessInvestmentConstraint};
     use crate::region::RegionID;
-    use crate::units::{Capacity, Dimensionless};
+    use crate::units::Capacity;
     use rstest::rstest;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -543,39 +519,38 @@ mod tests {
     }
 
     #[rstest]
-    fn collect_agent_limits_uses_search_space(mut process: Process, region_id: RegionID) {
+    fn collect_agent_limits_uses_agent_specific_limits(mut process: Process, region_id: RegionID) {
         process.investment_constraints.insert(
-            (region_id.clone(), 2015),
+            ("agent1".into(), region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(10.0)),
                 total_capacity_limit: Some(Capacity(100.0)),
+            }),
+        );
+        process.investment_constraints.insert(
+            ("agent2".into(), region_id.clone(), 2015),
+            Arc::new(ProcessInvestmentConstraint {
+                addition_limit: Some(Capacity(20.0)),
+                total_capacity_limit: Some(Capacity(200.0)),
             }),
         );
         let commodity_id = "commodity".into();
         let process_id = process.id.clone();
         let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let result = collect_agent_limits(
-            &agent,
-            &region_id,
-            &commodity_id,
-            2015,
-            Dimensionless(0.5),
-            Process::agent_addition_limit,
-        );
+        let (addition_limits, total_limits) =
+            collect_agent_limits(&agent, &region_id, &commodity_id, 2015);
+        assert_eq!(addition_limits.get(&process_id), Some(&Capacity(10.0)));
+        assert_eq!(total_limits.get(&process_id), Some(&Capacity(100.0)));
 
-        assert_eq!(result.get(&process_id), Some(&Capacity(5.0)));
-
-        let result = collect_agent_limits(
-            &agent,
-            &region_id,
-            &commodity_id,
-            2015,
-            Dimensionless(0.5),
-            Process::agent_total_limit,
-        );
-
-        assert_eq!(result.get(&process_id), Some(&Capacity(50.0)));
+        let other_agent = Agent {
+            id: "agent2".into(),
+            ..agent
+        };
+        let (addition_limits, total_limits) =
+            collect_agent_limits(&other_agent, &region_id, &commodity_id, 2015);
+        assert_eq!(addition_limits.get(&process_id), Some(&Capacity(20.0)));
+        assert_eq!(total_limits.get(&process_id), Some(&Capacity(200.0)));
     }
 
     #[rstest]
@@ -587,14 +562,7 @@ mod tests {
         let process_id = process.id.clone();
         let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let result = collect_agent_limits(
-            &agent,
-            &region_id,
-            &commodity_id,
-            2015,
-            Dimensionless(1.0),
-            Process::agent_addition_limit,
-        );
+        let (result, _) = collect_agent_limits(&agent, &region_id, &commodity_id, 2015);
 
         assert!(!result.contains_key(&process_id));
     }

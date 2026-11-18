@@ -21,10 +21,10 @@ Each agent has:
 
 During [investment][investment], the asset selection algorithm of each agent is called once for
 every market (commodity–region pair) that the agent is responsible for, with the agent's share of
-demand and its share of any [investment constraints][investment-constraints]. It returns the assets
-selected by the agent: the existing assets to retain and the new candidate assets to build. The rest
-of the investment process (the investment order, handling of circularities, partial system
-dispatch, mothballing, etc.) is the same for all agent types.
+demand and any [investment constraints][investment-constraints] defined for that agent. It returns
+the assets selected by the agent: the existing assets to retain and the new candidate assets to
+build. The rest of the investment process (the investment order, handling of circularities, partial
+system dispatch, mothballing, etc.) is the same for all agent types.
 
 The `agent_type` column of [`agents.csv`][agents-csv] selects competitive agents (`competitive`),
 portfolio agents (`portfolio`), or population agents (`population`).
@@ -546,8 +546,8 @@ commissioned assets rank ahead of older ones. Any remaining ties keep the option
 1. Rank existing assets and candidates together by their appraisal metric, with lower-cost options
    first.
 2. Consider options in merit order. For each option, scale its full-demand capacity to the fraction
-   of demand that remains. Limit the selected capacity by the available capacity and the agent's
-   share of any investment constraints (process limits scaled by the agent's share of demand).
+   of demand that remains. Limit the selected capacity by the available capacity and any
+   investment constraints defined for that agent.
    Candidate capacity is limited by both the process's `addition_limit` and `total_capacity_limit`;
    existing capacity is limited by its total capacity and any `total_capacity_limit`. Round
    discrete capacity down to whole tranches so it does not exceed demand or a limit. Scale the
