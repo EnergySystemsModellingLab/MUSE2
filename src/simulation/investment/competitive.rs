@@ -51,8 +51,8 @@ use std::sync::Arc;
 /// * `region_id` - The region
 /// * `demand` - The agent's share of demand for the commodity in the region
 /// * `options` - Committed assets, existing assets and processes available to the agent
-/// * `agent_addition_limits` - The agent's share of addition limits for candidate processes
-/// * `agent_total_limits` - The agent's share of total capacity limits for processes
+/// * `agent_addition_limits` - Addition limits defined for candidate processes for this agent
+/// * `agent_total_limits` - Total capacity limits defined for processes for this agent
 /// * `prices` - Commodity prices calculated in the previous dispatch
 /// * `year` - Current milestone year
 /// * `debug_writer` - Optional debug writer

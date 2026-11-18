@@ -1,5 +1,6 @@
 //! Processes are used for converting between different commodities. The data structures in this
 //! module are used to represent these conversions along with the associated costs.
+use crate::agent::AgentID;
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
@@ -32,9 +33,9 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Arc<ProcessParameter>>;
 /// The value is actually a map itself, keyed by commodity ID.
 pub type ProcessFlowsMap = HashMap<(RegionID, u32), Arc<IndexMap<CommodityID, ProcessFlow>>>;
 
-/// Map of process investment constraints, keyed by region and year
+/// Map of process investment constraints, keyed by agent, region and year
 pub type ProcessInvestmentConstraintsMap =
-    HashMap<(RegionID, u32), Arc<ProcessInvestmentConstraint>>;
+    HashMap<(AgentID, RegionID, u32), Arc<ProcessInvestmentConstraint>>;
 
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug, Clone)]
@@ -78,55 +79,16 @@ impl Process {
         self.years.contains(&year)
     }
 
-    /// Calculate an agent's share of any limit for this process in a region and year based on
-    /// commodity portion.
-    fn agent_limit(
+    /// Get the investment constraint for an agent, region and year.
+    pub fn investment_constraint(
         &self,
+        agent_id: &AgentID,
         region_id: &RegionID,
         commission_year: u32,
-        commodity_portion: Dimensionless,
-        get_limit: fn(&ProcessInvestmentConstraint) -> Option<Capacity>,
-    ) -> Option<Capacity> {
-        assert!(
-            commodity_portion >= Dimensionless(0.0) && commodity_portion <= Dimensionless(1.0),
-            "commodity_portion must be between 0 and 1 inclusive"
-        );
-
+    ) -> Option<&ProcessInvestmentConstraint> {
         self.investment_constraints
-            .get(&(region_id.clone(), commission_year))
-            .and_then(|constraint| get_limit(constraint).map(|limit| limit * commodity_portion))
-    }
-
-    /// Calculate an agent's share of the addition limit for this process in a region and year
-    /// based on commodity portion.
-    pub fn agent_addition_limit(
-        &self,
-        region_id: &RegionID,
-        commission_year: u32,
-        commodity_portion: Dimensionless,
-    ) -> Option<Capacity> {
-        self.agent_limit(
-            region_id,
-            commission_year,
-            commodity_portion,
-            ProcessInvestmentConstraint::get_addition_limit,
-        )
-    }
-
-    /// Calculate an agent's share of the total limit for this process in a region and year
-    /// based on commodity portion.
-    pub fn agent_total_limit(
-        &self,
-        region_id: &RegionID,
-        commission_year: u32,
-        commodity_portion: Dimensionless,
-    ) -> Option<Capacity> {
-        self.agent_limit(
-            region_id,
-            commission_year,
-            commodity_portion,
-            ProcessInvestmentConstraint::get_total_limit,
-        )
+            .get(&(agent_id.clone(), region_id.clone(), commission_year))
+            .map(Arc::as_ref)
     }
 }
 
@@ -554,23 +516,10 @@ pub struct ProcessParameter {
 /// defined in the input data to account for the number of years since the previous milestone year.
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProcessInvestmentConstraint {
-    /// Addition constraint: Limit an agent can invest in the process, shared according to the
-    /// agent's proportion of the process's primary commodity demand
+    /// Addition constraint: Limit on the new capacity an agent can invest in the process
     pub addition_limit: Option<Capacity>,
     /// Total capacity limit for the process
     pub total_capacity_limit: Option<Capacity>,
-}
-
-impl ProcessInvestmentConstraint {
-    /// Get the addition limit
-    pub fn get_addition_limit(&self) -> Option<Capacity> {
-        self.addition_limit
-    }
-
-    /// Get the total capacity limit allowed
-    pub fn get_total_limit(&self) -> Option<Capacity> {
-        self.total_capacity_limit
-    }
 }
 
 #[cfg(test)]
@@ -1202,69 +1151,26 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Dimensionless(1.1))]
-    #[case(Dimensionless(-0.1))]
-    #[should_panic(expected = "commodity_portion must be between 0 and 1 inclusive")]
-    fn agent_limit_invalid_commodity_portion(
-        process: Process,
-        region_id: RegionID,
-        #[case] commodity_portion: Dimensionless,
-    ) {
-        process.agent_limit(
-            &region_id,
-            2015,
-            commodity_portion,
-            ProcessInvestmentConstraint::get_addition_limit,
-        );
-    }
-
-    #[rstest]
-    fn agent_addition_limit_no_constraint(process: Process, region_id: RegionID) {
-        assert!(
-            process
-                .agent_addition_limit(&region_id, 2015, Dimensionless(1.0))
-                .is_none()
-        );
-    }
-
-    #[rstest]
-    fn agent_addition_limit_scaled_by_portion(mut process: Process, region_id: RegionID) {
+    fn investment_constraint_is_keyed_by_agent(mut process: Process, region_id: RegionID) {
         process.investment_constraints.insert(
-            (region_id.clone(), 2015),
+            ("agent1".into(), region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(crate::units::Capacity(10.0)),
                 total_capacity_limit: Some(crate::units::Capacity(100.0)),
             }),
         );
 
-        let result = process
-            .agent_addition_limit(&region_id, 2015, Dimensionless(0.5))
-            .unwrap();
-        assert_eq!(result, Capacity(5.0));
-    }
-
-    #[rstest]
-    fn agent_total_limit_no_constraint(process: Process, region_id: RegionID) {
+        assert_eq!(
+            process
+                .investment_constraint(&"agent1".into(), &region_id, 2015)
+                .unwrap()
+                .addition_limit,
+            Some(crate::units::Capacity(10.0))
+        );
         assert!(
             process
-                .agent_total_limit(&region_id, 2015, Dimensionless(1.0))
+                .investment_constraint(&"agent2".into(), &region_id, 2015)
                 .is_none()
         );
-    }
-
-    #[rstest]
-    fn agent_total_limit_scaled_by_portion(mut process: Process, region_id: RegionID) {
-        process.investment_constraints.insert(
-            (region_id.clone(), 2015),
-            Arc::new(ProcessInvestmentConstraint {
-                addition_limit: Some(crate::units::Capacity(10.0)),
-                total_capacity_limit: Some(crate::units::Capacity(100.0)),
-            }),
-        );
-
-        let result = process
-            .agent_total_limit(&region_id, 2015, Dimensionless(0.5))
-            .unwrap();
-        assert_eq!(result, Capacity(50.0));
     }
 }
