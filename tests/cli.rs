@@ -74,6 +74,12 @@ fn check_save_graphs_command() {
     // Check that at least one DOT file was created
     assert!(output_dir.join("2020.dot").exists());
     assert!(output_dir.join("2020_v2.dot").exists());
+    assert!(output_dir.join("2020_v3.dot").exists());
+    let v3_graph = std::fs::read_to_string(output_dir.join("2020_v3.dot")).unwrap();
+    assert!(v3_graph.contains("SOURCE"));
+    for process_id in ["WNDFRM", "GASCGT", "SLRFRM"] {
+        assert!(v3_graph.contains(process_id));
+    }
 }
 
 /// Test the `validate` command
