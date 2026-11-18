@@ -9,6 +9,7 @@ use itertools::iproduct;
 use petgraph::Directed;
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
+use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write as IoWrite;
@@ -17,6 +18,23 @@ use std::sync::Arc;
 
 /// A graph of commodity flows for a given agent, region and year
 pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
+
+/// A graph of agent-to-agent commodity flows for a given year
+pub type AgentGraph = Graph<AgentGraphNode, GraphEdge, Directed>;
+
+#[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
+/// A node in a compressed agent graph
+pub enum AgentGraphNode {
+    /// A node representing an agent
+    #[display("{_0}")]
+    Agent(AgentID),
+    /// A source node for processes that have no inputs
+    #[display("SOURCE")]
+    Source,
+    /// A sink node for processes that have no outputs
+    #[display("SINK")]
+    Sink,
+}
 
 #[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
 /// A node in the agent-specific commodity graph
@@ -239,9 +257,76 @@ pub fn build_commodity_graphs_for_model(
         .collect()
 }
 
+/// Compresses commodity-market nodes into one node per agent.
+///
+/// Commodity-market nodes are merged by agent. `Source` and `Sink` nodes are retained, while
+/// demand edges are omitted. Distinct process and region edges are preserved, so compression may
+/// create parallel edges between the same pair of agents.
+pub fn compress_commodity_graph(graph: &CommoditiesGraph) -> AgentGraph {
+    let mut compressed = AgentGraph::new();
+    let mut compressed_nodes = HashMap::new();
+
+    // Merge commodity markets by agent, while keeping source and sink nodes distinct.
+    for node in graph.node_weights().filter_map(to_agent_graph_node) {
+        compressed_nodes
+            .entry(node.clone())
+            .or_insert_with(|| compressed.add_node(node));
+    }
+
+    // Preserve each process edge, including those connected to `Source` or `Sink`.
+    for edge in graph.edge_references() {
+        if matches!(edge.weight(), GraphEdge::Demand) {
+            continue;
+        }
+        let (Some(source), Some(target)) = (
+            to_agent_graph_node(&graph[edge.source()]),
+            to_agent_graph_node(&graph[edge.target()]),
+        ) else {
+            continue;
+        };
+
+        // Keep process metadata; compression can create parallel edges between agents.
+        compressed.add_edge(
+            compressed_nodes[&source],
+            compressed_nodes[&target],
+            edge.weight().clone(),
+        );
+    }
+
+    compressed
+}
+
+fn to_agent_graph_node(node: &GraphNode) -> Option<AgentGraphNode> {
+    match node {
+        GraphNode::CommodityMarket(_, _, agent_id) => Some(AgentGraphNode::Agent(agent_id.clone())),
+        GraphNode::Source => Some(AgentGraphNode::Source),
+        GraphNode::Sink => Some(AgentGraphNode::Sink),
+        GraphNode::Demand => None,
+    }
+}
+
+/// Builds compressed agent graphs for each year from agent-specific commodity graphs.
+pub fn build_agent_graphs_for_model(
+    commodity_graphs: &IndexMap<u32, CommoditiesGraph>,
+) -> IndexMap<u32, AgentGraph> {
+    commodity_graphs
+        .iter()
+        .map(|(&year, graph)| (year, compress_commodity_graph(graph)))
+        .collect()
+}
+
 /// Gets custom DOT attributes for edges in an agent-specific commodity graph
 fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
-    match edge_ref.weight() {
+    get_attributes_for_edge(edge_ref.weight())
+}
+
+/// Gets custom DOT attributes for edges in a compressed agent graph
+fn get_agent_edge_attributes(_: &AgentGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
+    get_attributes_for_edge(edge_ref.weight())
+}
+
+fn get_attributes_for_edge(edge: &GraphEdge) -> String {
+    match edge {
         // Use dashed lines for secondary flows
         GraphEdge::Secondary(..) => "style=dashed".to_string(),
         // Other edges use default attributes
@@ -270,6 +355,24 @@ pub fn save_commodity_graphs_for_model(
     Ok(())
 }
 
+/// Saves compressed agent graphs to file
+///
+/// The graphs are saved as DOT files to the specified output path, one file per year, with a
+/// `_v3` suffix.
+pub fn save_agent_graphs_for_model(
+    agent_graphs: &IndexMap<u32, AgentGraph>,
+    output_path: &Path,
+) -> Result<()> {
+    for (year, graph) in agent_graphs {
+        let dot = Dot::with_attr_getters(graph, &[], &get_agent_edge_attributes, &|_, _| {
+            String::new()
+        });
+        let mut file = File::create(output_path.join(format!("{year}_v3.dot")))?;
+        write!(file, "{dot}")?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,7 +383,6 @@ mod tests {
     use crate::units::{ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
     use petgraph::graph::NodeIndex;
-    use petgraph::visit::EdgeRef;
 
     fn commodity(id: &str) -> Arc<Commodity> {
         let mut commodity = svd_commodity();
@@ -359,8 +461,8 @@ mod tests {
             .unwrap()
     }
 
-    fn has_edge(
-        graph: &CommoditiesGraph,
+    fn has_edge<N>(
+        graph: &Graph<N, GraphEdge, Directed>,
         source: NodeIndex,
         target: NodeIndex,
         expected_edge: &GraphEdge,
@@ -446,6 +548,99 @@ mod tests {
             input_node,
             secondary_output_node,
             &GraphEdge::Secondary("producer".into(), region_id, process_agent_id,),
+        ));
+    }
+
+    #[test]
+    fn compression_merges_markets_and_preserves_source_and_sink_edges() {
+        let agent1: AgentID = "agent1".into();
+        let agent2: AgentID = "agent2".into();
+        let region_id: RegionID = "GBR".into();
+        let mut commodity_graph = CommoditiesGraph::new();
+        let agent1_market_a = commodity_graph.add_node(GraphNode::CommodityMarket(
+            "commodity1".into(),
+            region_id.clone(),
+            agent1.clone(),
+        ));
+        let agent1_market_b = commodity_graph.add_node(GraphNode::CommodityMarket(
+            "commodity2".into(),
+            region_id.clone(),
+            agent1.clone(),
+        ));
+        let agent2_market = commodity_graph.add_node(GraphNode::CommodityMarket(
+            "commodity3".into(),
+            region_id.clone(),
+            agent2.clone(),
+        ));
+        let source = commodity_graph.add_node(GraphNode::Source);
+        let sink = commodity_graph.add_node(GraphNode::Sink);
+        let demand = commodity_graph.add_node(GraphNode::Demand);
+
+        commodity_graph.add_edge(
+            agent1_market_a,
+            agent1_market_b,
+            GraphEdge::Primary("process1".into(), region_id.clone(), agent2.clone()),
+        );
+        commodity_graph.add_edge(
+            agent1_market_b,
+            agent2_market,
+            GraphEdge::Secondary("process2".into(), region_id.clone(), agent2.clone()),
+        );
+        commodity_graph.add_edge(
+            source,
+            agent2_market,
+            GraphEdge::Primary("process3".into(), region_id.clone(), agent2.clone()),
+        );
+        commodity_graph.add_edge(
+            agent1_market_a,
+            sink,
+            GraphEdge::Secondary("process4".into(), region_id.clone(), agent2.clone()),
+        );
+        commodity_graph.add_edge(agent2_market, demand, GraphEdge::Demand);
+
+        let agent_graph = compress_commodity_graph(&commodity_graph);
+        let agent1_node = agent_graph
+            .node_indices()
+            .find(|&node| agent_graph[node] == AgentGraphNode::Agent(agent1.clone()))
+            .unwrap();
+        let agent2_node = agent_graph
+            .node_indices()
+            .find(|&node| agent_graph[node] == AgentGraphNode::Agent(agent2.clone()))
+            .unwrap();
+        let source_node = agent_graph
+            .node_indices()
+            .find(|&node| agent_graph[node] == AgentGraphNode::Source)
+            .unwrap();
+        let sink_node = agent_graph
+            .node_indices()
+            .find(|&node| agent_graph[node] == AgentGraphNode::Sink)
+            .unwrap();
+
+        assert_eq!(agent_graph.node_count(), 4);
+        assert_eq!(agent_graph.edge_count(), 4);
+        assert!(has_edge(
+            &agent_graph,
+            agent1_node,
+            agent1_node,
+            &GraphEdge::Primary("process1".into(), region_id.clone(), agent2.clone()),
+        ));
+        assert!(has_edge(
+            &agent_graph,
+            agent1_node,
+            agent2_node,
+            &GraphEdge::Secondary("process2".into(), region_id, agent2),
+        ));
+        assert!(has_edge(
+            &agent_graph,
+            source_node,
+            agent2_node,
+            &GraphEdge::Primary("process3".into(), "GBR".into(), "agent2".into()),
+        ));
+        assert!(has_edge(
+            &agent_graph,
+            agent1_node,
+            sink_node,
+            &GraphEdge::Secondary("process4".into(), "GBR".into(), "agent2".into()),
         ));
     }
 }
