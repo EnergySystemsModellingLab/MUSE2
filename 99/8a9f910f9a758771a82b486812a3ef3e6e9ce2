@@ -1,0 +1,66 @@
+src/fixture.rs
+  s_e9f319fdfdf5ba::t_eef2560ab69217 4-5,14-15,332
+benches/assets.rs
+  s_e9f319fdfdf5ba::t_0aff23bcac3b64 223
+src/input/process.rs
+  s_e9f319fdfdf5ba::t_5217e40c4e7656 6
+src/input/agent/search_space.rs
+  s_e9f319fdfdf5ba::t_ca4beb2c3731f1 262-265
+  s_e9f319fdfdf5ba::t_9a8c446bab814f 297
+src/input/agent/investment_constraints.rs
+  s_e9f319fdfdf5ba::t_e1e536c9c7981d 6
+  s_e9f319fdfdf5ba::t_6201659a906a96 517-518,533
+  s_e9f319fdfdf5ba::t_eef2560ab69217 317
+  s_e9f319fdfdf5ba::t_897a3cf56b6ce3 156
+  h_e76403a1cd4bf1 19,228,419,421,461,463,536
+  s_e9f319fdfdf5ba::t_9a8c446bab814f 101
+  s_e9f319fdfdf5ba::t_2215466b5499ba 223-227,231,234-253,289,291,297,300,308-309,328,377,379,387,389,397,403,409,415,420,422-424,429-430,451,453,464,472,478,505,507,520-532,534-535
+  s_e9f319fdfdf5ba::t_f1ccd83eee47ca 1-3,17,23,116,118,121-122,124,133,139-140,142,145,149,155,186,211-212
+  s_e9f319fdfdf5ba::t_2b4b52220aa588 21,32,132,147,260,278,334,344,354,364,439,493,519
+src/agent.rs
+  s_e9f319fdfdf5ba::t_9ff4e779e11b23 5,24-27,45-46
+src/simulation/market.rs
+  s_e9f319fdfdf5ba::t_e1e536c9c7981d 556,558
+  s_e9f319fdfdf5ba::t_eef2560ab69217 562
+  s_e9f319fdfdf5ba::t_7c8feeeed14fe1 230,460,470-473,475,477,480,525-530,536-546,553,557,559-560,576
+  s_e9f319fdfdf5ba::t_9a8c446bab814f 490-491,516
+src/process.rs
+  s_e9f319fdfdf5ba::t_9ff4e779e11b23 500
+  s_e9f319fdfdf5ba::t_e1e536c9c7981d 512
+docs/release_notes/upcoming.md
+  s_e9f319fdfdf5ba::t_a26444b78d953c 21-22
+schemas/input/agent_investment_constraints.yaml
+  s_e9f319fdfdf5ba::t_61d5ceafe25708 9-11
+src/input/agent.rs
+  s_e9f319fdfdf5ba::t_c1af799f8612a7 21-22,95-100
+  s_e9f319fdfdf5ba::t_9a8c446bab814f 4-5,157,201
+docs/model/investment.md
+  s_e9f319fdfdf5ba::t_a26444b78d953c 130-131,239
+examples/muse1_default/agent_investment_constraints.csv
+  s_e9f319fdfdf5ba::t_61d5ceafe25708 1
+  s_e9f319fdfdf5ba::t_f46591f366f372 2-6
+examples/two_regions/agent_investment_constraints.csv
+  s_e9f319fdfdf5ba::t_61d5ceafe25708 1
+  s_e9f319fdfdf5ba::t_f46591f366f372 2-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "998a9f910f9a758771a82b486812a3ef3e6e9ce2",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_e9f319fdfdf5ba": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "5f234c9f-6449-47d2-b3ca-463d647c4c86",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
