@@ -281,7 +281,6 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
         &processes,
         &region_ids,
         years,
-        model_params.allow_dangerous_options,
     )?;
     let agent_ids = agents.keys().cloned().collect();
     let user_assets = read_user_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
