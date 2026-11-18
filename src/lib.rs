@@ -28,6 +28,7 @@ pub mod commodity;
 pub mod example;
 pub mod finance;
 pub mod graph;
+pub mod graph2;
 pub mod id;
 pub mod input;
 pub mod log;

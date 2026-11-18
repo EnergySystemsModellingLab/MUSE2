@@ -1,6 +1,7 @@
 //! Command-line interface for the MUSE2 simulation.
 use crate::graph::save_commodity_graphs_for_model;
-use crate::input::{load_commodity_graphs, load_model};
+use crate::graph2::save_commodity_graphs_for_model as save_agent_commodity_graphs_for_model;
+use crate::input::{load_graphs, load_model};
 use crate::log::{self, SetLogger};
 use crate::output::{copy_input_files, create_output_directory, get_graphs_dir, get_output_dir};
 use crate::settings::Settings;
@@ -274,8 +275,10 @@ pub fn handle_save_graphs_command(model_path: &Path, opts: &GraphOpts) -> Result
     }
 
     // Load commodity flow graphs and save to file
-    let commodity_graphs = load_commodity_graphs(model_path).context("Failed to build graphs.")?;
+    let (commodity_graphs, agent_commodity_graphs) =
+        load_graphs(model_path).context("Failed to build graphs.")?;
     save_commodity_graphs_for_model(&commodity_graphs, output_path)?;
+    save_agent_commodity_graphs_for_model(&agent_commodity_graphs, output_path)?;
     info!("Graphs saved to: {}", output_path.display());
 
     Ok(())
