@@ -1,0 +1,21 @@
+src/simulation/investment/competitive.rs
+  s_78c186f8421175::t_f716d619d896b6 56
+src/simulation/investment/portfolio.rs
+  s_78c186f8421175::t_87429e73d99a04 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "34af400660d3b671c40c9fa70b1afaea49a0c2e1",
+  "prompts": {},
+  "sessions": {
+    "s_78c186f8421175": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "b8a98517-bdb8-4b70-8745-e8b71e33a649",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
