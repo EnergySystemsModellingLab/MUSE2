@@ -73,6 +73,7 @@ fn check_save_graphs_command() {
 
     // Check that at least one DOT file was created
     assert!(output_dir.join("2020.dot").exists());
+    assert!(output_dir.join("2020_v2.dot").exists());
 }
 
 /// Test the `validate` command
