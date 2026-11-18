@@ -1,0 +1,14 @@
+tests/regression.rs
+  h_e76403a1cd4bf1 36-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2a23b5c7f65832940bb58822d67be7d6fdf6d7fb",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
