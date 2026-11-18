@@ -1,0 +1,63 @@
+src/simulation/investment/population.rs
+  s_e9f319fdfdf5ba::t_c95cbfc47dbf35 47-49
+schemas/input/process_investment_constraints.yaml
+  s_e9f319fdfdf5ba::t_a96f40b90872d8 9-11,28,43
+examples/muse1_default/process_investment_constraints.csv
+  s_e9f319fdfdf5ba::t_a96f40b90872d8 1-6
+docs/model/investment.md
+  s_e9f319fdfdf5ba::t_a96f40b90872d8 130,139,142-143,153,156
+docs/model/agents.md
+  s_e9f319fdfdf5ba::t_cdecd80db6f686 24-27,549-550
+src/simulation/investment/portfolio.rs
+  s_e9f319fdfdf5ba::t_c95cbfc47dbf35 42-43
+src/input/process/investment_constraints.rs
+  s_e9f319fdfdf5ba::t_b495baf6099aa6 290-294
+  s_e9f319fdfdf5ba::t_f22e5e192a0f30 338-347,369,392-398
+  s_e9f319fdfdf5ba::t_8bec7740e416ec 223,490-491
+  s_e9f319fdfdf5ba::t_48538fe75a209e 237,255,281-283,310,320,330,374,376,382,409,438,444,461
+  s_e9f319fdfdf5ba::t_1c30a05a243579 484-485,488-489
+  s_e9f319fdfdf5ba::t_19ccaf27728a60 721
+  s_e9f319fdfdf5ba::t_b4bcb741926494 224,482-483,486-487,492
+  s_e9f319fdfdf5ba::t_8c8163500463e7 3,26,96,186,210-214
+  s_e9f319fdfdf5ba::t_c95cbfc47dbf35 388
+  s_e9f319fdfdf5ba::t_91275986b07140 493-495
+src/process.rs
+  s_e9f319fdfdf5ba::t_7c7eef281131b5 3,36,38,82-83,85,88,90
+  s_e9f319fdfdf5ba::t_48f54f79c3de6f 91
+  s_e9f319fdfdf5ba::t_02543bd783fb73 1154,1156,1163-1169,1172
+  s_e9f319fdfdf5ba::t_6335cd82364af7 519
+src/simulation/market.rs
+  s_e9f319fdfdf5ba::t_689c5619bbae43 229-230,462,468-482,494,522,524,530-536,541-544,546-553,565
+  s_e9f319fdfdf5ba::t_48f54f79c3de6f 9
+docs/release_notes/upcoming.md
+  s_e9f319fdfdf5ba::t_a96f40b90872d8 21-22
+src/simulation/investment/competitive.rs
+  s_e9f319fdfdf5ba::t_c95cbfc47dbf35 54-55
+examples/two_regions/process_investment_constraints.csv
+  s_e9f319fdfdf5ba::t_a96f40b90872d8 1-6
+src/input.rs
+  s_e9f319fdfdf5ba::t_59840790d49ccf 285-293
+benches/assets.rs
+  s_e9f319fdfdf5ba::t_d376f8f0222d87 222-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "052cb9b0ca856f47c08d56753559e99e1ea8f71c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_e9f319fdfdf5ba": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "5f234c9f-6449-47d2-b3ca-463d647c4c86",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
