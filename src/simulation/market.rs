@@ -227,7 +227,7 @@ pub fn run_agents_for_single_market(
             ),
             AgentRunMode::Invest => {
                 let (agent_addition_limits, agent_total_limits) =
-                    collect_agent_limits(agent, region_id, commodity_id, year);
+                    collect_agent_limits(agent, region_id, year);
 
                 // Filter available assets and processes before running the agent
                 let options = AssetOptions {
@@ -457,26 +457,27 @@ where
     })
 }
 
-/// Collects capacity limits for all processes in the agent's search space for a given market.
+/// Collects capacity limits for an agent in a region and year.
 ///
 /// Processes without a defined limit are excluded from the returned maps.
 pub fn collect_agent_limits(
     agent: &Agent,
     region_id: &RegionID,
-    commodity_id: &CommodityID,
     year: u32,
 ) -> (HashMap<ProcessID, Capacity>, HashMap<ProcessID, Capacity>) {
     let mut addition_limits = HashMap::new();
     let mut total_limits = HashMap::new();
-    for process in agent.iter_search_space(region_id, commodity_id, year) {
-        let Some(constraint) = process.investment_constraint(&agent.id, region_id, year) else {
+    for ((process_id, constraint_region_id, constraint_year), constraint) in
+        &agent.investment_constraints
+    {
+        if constraint_region_id != region_id || *constraint_year != year {
             continue;
-        };
+        }
         if let Some(limit) = constraint.addition_limit {
-            addition_limits.insert(process.id.clone(), limit);
+            addition_limits.insert(process_id.clone(), limit);
         }
         if let Some(limit) = constraint.total_capacity_limit {
-            total_limits.insert(process.id.clone(), limit);
+            total_limits.insert(process_id.clone(), limit);
         }
     }
     (addition_limits, total_limits)
@@ -486,7 +487,8 @@ pub fn collect_agent_limits(
 mod tests {
     use super::*;
     use crate::agent::{
-        Agent, AgentCommodityPortionsMap, AgentObjectiveMap, AgentType, DecisionRule,
+        Agent, AgentCommodityPortionsMap, AgentInvestmentConstraintsMap, AgentObjectiveMap,
+        AgentType, DecisionRule,
     };
     use crate::fixture::{process, region_id};
     use crate::process::{Process, ProcessInvestmentConstraint};
@@ -511,6 +513,7 @@ mod tests {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space,
+            investment_constraints: AgentInvestmentConstraintsMap::default(),
             agent_type: AgentType::default(),
             decision_rule: DecisionRule::Single,
             regions: [region_id.clone()].into(),
@@ -519,36 +522,44 @@ mod tests {
     }
 
     #[rstest]
-    fn collect_agent_limits_uses_agent_specific_limits(mut process: Process, region_id: RegionID) {
-        process.investment_constraints.insert(
-            ("agent1".into(), region_id.clone(), 2015),
+    fn collect_agent_limits_uses_agent_specific_limits(process: Process, region_id: RegionID) {
+        let process_id = process.id.clone();
+        let commodity_id = "commodity".into();
+        let mut agent = agent_with_process(process, &region_id, &commodity_id);
+        agent.investment_constraints.insert(
+            (process_id.clone(), region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(10.0)),
                 total_capacity_limit: Some(Capacity(100.0)),
             }),
         );
-        process.investment_constraints.insert(
-            ("agent2".into(), region_id.clone(), 2015),
+        agent.investment_constraints.insert(
+            ("existing_only_process".into(), region_id.clone(), 2015),
+            Arc::new(ProcessInvestmentConstraint {
+                addition_limit: None,
+                total_capacity_limit: Some(Capacity(50.0)),
+            }),
+        );
+        let mut other_agent = agent.clone();
+        other_agent.id = "agent2".into();
+        other_agent.investment_constraints.insert(
+            (process_id.clone(), region_id.clone(), 2015),
             Arc::new(ProcessInvestmentConstraint {
                 addition_limit: Some(Capacity(20.0)),
                 total_capacity_limit: Some(Capacity(200.0)),
             }),
         );
-        let commodity_id = "commodity".into();
-        let process_id = process.id.clone();
-        let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let (addition_limits, total_limits) =
-            collect_agent_limits(&agent, &region_id, &commodity_id, 2015);
+        let (addition_limits, total_limits) = collect_agent_limits(&agent, &region_id, 2015);
         assert_eq!(addition_limits.get(&process_id), Some(&Capacity(10.0)));
         assert_eq!(total_limits.get(&process_id), Some(&Capacity(100.0)));
+        let existing_only_process: ProcessID = "existing_only_process".into();
+        assert_eq!(
+            total_limits.get(&existing_only_process),
+            Some(&Capacity(50.0))
+        );
 
-        let other_agent = Agent {
-            id: "agent2".into(),
-            ..agent
-        };
-        let (addition_limits, total_limits) =
-            collect_agent_limits(&other_agent, &region_id, &commodity_id, 2015);
+        let (addition_limits, total_limits) = collect_agent_limits(&other_agent, &region_id, 2015);
         assert_eq!(addition_limits.get(&process_id), Some(&Capacity(20.0)));
         assert_eq!(total_limits.get(&process_id), Some(&Capacity(200.0)));
     }
@@ -562,7 +573,7 @@ mod tests {
         let process_id = process.id.clone();
         let agent = agent_with_process(process, &region_id, &commodity_id);
 
-        let (result, _) = collect_agent_limits(&agent, &region_id, &commodity_id, 2015);
+        let (result, _) = collect_agent_limits(&agent, &region_id, 2015);
 
         assert!(!result.contains_key(&process_id));
     }
