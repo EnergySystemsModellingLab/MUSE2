@@ -198,8 +198,8 @@ from the solution. Instead, the metric uses the *marginal activity*
 solution, of all assets equivalent to the option (including the option itself):
 
 \\[
-  \Delta\mathrm{Activity}_t = \sum_{a \in G} \left(\mathrm{Activity}_{a,t}^{(k)} -
-    \mathrm{Activity}_{a,t}^{(k-1)}\right)
+  \Delta\mathrm{Activity}\_t = \sum\_{a \in G} \left(\mathrm{Activity}\_{a,t}^{(k)} -
+    \mathrm{Activity}\_{a,t}^{(k-1)}\right)
 \\]
 
 where \\( G \\) is the set of assets in the LP that are equivalent to the option (see
@@ -333,15 +333,15 @@ Activity coefficients use shadow prices:
 = \text{£}{-10}\text{/MWh}
 \\]
 
-The optimiser maximises \\( 10 \cdot \mathrm{Activity}_{t_0} + (-10) \cdot \mathrm{Activity}_{t_1} \\),
-so it prefers to dispatch during \\( t_0 \\) and minimise activity during \\( t_1 \\), subject to
-demand and availability constraints.
+The optimiser maximises \\( 10 \cdot \mathrm{Activity}\_{t_0} + (-10) \cdot \mathrm{Activity}\_{t_1}
+\\), so it prefers to dispatch during \\( t_0 \\) and minimise activity during \\( t_1 \\), subject
+to demand and availability constraints.
 
 For simplicity, assume this is the first round of selection, so that no assets have been selected
 yet and the plant is the only asset in the LP. Suppose the optimiser determines
-\\( \mathrm{Activity}_{t_0} = 80 \\) MWh and \\( \mathrm{Activity}_{t_1} = 20 \\) MWh. As there is
-no previous solution, the marginal activity equals the activity:
-\\( \Delta\mathrm{Activity}_{t_0} = 80 \\) MWh and \\( \Delta\mathrm{Activity}_{t_1} = 20 \\) MWh.
+\\( \mathrm{Activity}\_{t\_0} = 80 \\) MWh and \\( \mathrm{Activity}\_{t_1} = 20 \\) MWh. As there
+is no previous solution, the marginal activity equals the activity:
+\\( \Delta\mathrm{Activity}\_{t_0} = 80 \\) MWh and \\( \Delta\mathrm{Activity}\_{t_1} = 20 \\) MWh.
 In later rounds, the marginal activity would instead be the change in activity relative to the
 previous round's solution.
 
