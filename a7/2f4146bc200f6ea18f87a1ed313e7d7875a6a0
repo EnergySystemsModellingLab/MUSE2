@@ -1,0 +1,24 @@
+src/simulation/investment/portfolio.rs
+  s_5a8ab3438e6345::t_6044d99618cfb9 16,83-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a72f4146bc200f6ea18f87a1ed313e7d7875a6a0",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_5a8ab3438e6345": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d3aad83e-e07e-47ab-86ff-9a9881916a05",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
