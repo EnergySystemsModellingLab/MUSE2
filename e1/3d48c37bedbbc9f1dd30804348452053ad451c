@@ -1,0 +1,14 @@
+examples/circularity/assets.csv
+  h_e76403a1cd4bf1 3,5-6,8,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e13d48c37bedbbc9f1dd30804348452053ad451c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
