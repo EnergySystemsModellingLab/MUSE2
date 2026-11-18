@@ -220,7 +220,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 model.parameters.capacity_tranche_fraction,
             ));
             let (agent_addition_limits, agent_total_limits) =
-                collect_agent_limits(&agent, region_id, &commodity.id, YEAR);
+                collect_agent_limits(&agent, region_id, YEAR);
 
             group.bench_with_input(
                 BenchmarkId::from_parameter(format!("{n:02}")),

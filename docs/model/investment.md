@@ -127,8 +127,8 @@ portfolio and population agents may retain only part of its capacity (see
 
 ## Investment Constraints
 
-Processes may be subject to per-agent investment constraints defined in
-[`process_investment_constraints.csv`][process-investment-constraints-csv]: an `addition_limit`
+Agents may have investment constraints on processes defined in
+[`agent_investment_constraints.csv`][agent-investment-constraints-csv]: an `addition_limit`
 constraining new-build capacity, and a `total_capacity_limit` constraining total installed
 capacity.
 
@@ -236,6 +236,6 @@ assets shaping the demand seen by those upstream.
 [simulation-protocols]: index.html#simulation-protocols
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
-[process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
+[agent-investment-constraints-csv]: ../file_formats/input_files.md#agent_investment_constraintscsv
 [dispatch-optimisation]: ./dispatch_optimisation.md
 [graph-circularities]: ./commodity_graphs.md#circularities

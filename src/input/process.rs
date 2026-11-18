@@ -3,8 +3,7 @@ use super::{input_err_msg, read_csv};
 use crate::commodity::CommodityMap;
 use crate::id::IDCollection;
 use crate::process::{
-    Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessInvestmentConstraintsMap,
-    ProcessMap, ProcessParameterMap,
+    Process, ProcessActivityLimitsMap, ProcessFlowsMap, ProcessID, ProcessMap, ProcessParameterMap,
 };
 use crate::region::{RegionID, parse_region_str};
 use crate::time_slice::TimeSliceInfo;
@@ -23,9 +22,6 @@ use flow::read_process_flows;
 mod parameter;
 use crate::id::define_id_getter;
 use parameter::read_process_parameters;
-mod investment_constraints;
-use investment_constraints::read_process_investment_constraints;
-
 const PROCESSES_FILE_NAME: &str = "processes.csv";
 
 #[derive(PartialEq, Debug, Deserialize)]
@@ -65,8 +61,6 @@ pub fn read_processes(
     let mut activity_limits = read_process_availabilities(model_dir, &processes, time_slice_info)?;
     let mut flows = read_process_flows(model_dir, &mut processes, commodities, milestone_years)?;
     let mut parameters = read_process_parameters(model_dir, &processes, milestone_years)?;
-    let mut investment_constraints =
-        read_process_investment_constraints(model_dir, &processes, milestone_years)?;
 
     // Add data to Process objects
     for (id, process) in &mut processes {
@@ -77,7 +71,6 @@ pub fn read_processes(
         process.activity_limits = activity_limits.remove(id).unwrap();
         process.flows = flows.remove(id).unwrap();
         process.parameters = parameters.remove(id).unwrap();
-        process.investment_constraints = investment_constraints.remove(id).unwrap_or_default();
     }
 
     Ok(processes)
@@ -172,7 +165,6 @@ where
             regions,
             primary_output,
             capacity_to_activity,
-            investment_constraints: ProcessInvestmentConstraintsMap::new(),
             tranche_size: process_raw.tranche_size,
         };
 

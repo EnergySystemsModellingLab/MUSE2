@@ -1,6 +1,5 @@
 //! Processes are used for converting between different commodities. The data structures in this
 //! module are used to represent these conversions along with the associated costs.
-use crate::agent::AgentID;
 use crate::commodity::{Commodity, CommodityID};
 use crate::id::define_id_type;
 use crate::region::RegionID;
@@ -33,10 +32,6 @@ pub type ProcessParameterMap = HashMap<(RegionID, u32), Arc<ProcessParameter>>;
 /// The value is actually a map itself, keyed by commodity ID.
 pub type ProcessFlowsMap = HashMap<(RegionID, u32), Arc<IndexMap<CommodityID, ProcessFlow>>>;
 
-/// Map of process investment constraints, keyed by agent, region and year
-pub type ProcessInvestmentConstraintsMap =
-    HashMap<(AgentID, RegionID, u32), Arc<ProcessInvestmentConstraint>>;
-
 /// Represents a process within the simulation
 #[derive(PartialEq, Debug, Clone)]
 pub struct Process {
@@ -62,8 +57,6 @@ pub struct Process {
     /// if capacity is measured in GW and energy is measured in PJ, the `capacity_to_activity` for the
     /// process is 31.536 because 1 GW of capacity can produce 31.536 PJ energy output in a year.
     pub capacity_to_activity: ActivityPerCapacity,
-    /// Investment constraints for this process
-    pub investment_constraints: ProcessInvestmentConstraintsMap,
     /// Capacity of each tranche for investments in this process, if any.
     ///
     /// Candidate assets are created with one tranche of this size, and MUSE2 may select multiple
@@ -77,18 +70,6 @@ impl Process {
     /// Whether the process can be commissioned in a given year
     pub fn active_for_year(&self, year: u32) -> bool {
         self.years.contains(&year)
-    }
-
-    /// Get the investment constraint for an agent, region and year.
-    pub fn investment_constraint(
-        &self,
-        agent_id: &AgentID,
-        region_id: &RegionID,
-        commission_year: u32,
-    ) -> Option<&ProcessInvestmentConstraint> {
-        self.investment_constraints
-            .get(&(agent_id.clone(), region_id.clone(), commission_year))
-            .map(Arc::as_ref)
     }
 }
 
@@ -516,7 +497,7 @@ pub struct ProcessParameter {
 /// defined in the input data to account for the number of years since the previous milestone year.
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProcessInvestmentConstraint {
-    /// Addition constraint: Limit on the new capacity an agent can invest in the process
+    /// Addition constraint: Limit on the new capacity this agent can invest in the process
     pub addition_limit: Option<Capacity>,
     /// Total capacity limit for the process
     pub total_capacity_limit: Option<Capacity>,
@@ -528,7 +509,7 @@ mod tests {
     use crate::commodity::{
         CommodityConstraintsMap, CommodityLevyMap, CommodityType, DemandMap, PricingStrategy,
     };
-    use crate::fixture::{assert_error, process, region_id, time_slice, time_slice_info2};
+    use crate::fixture::{assert_error, region_id, time_slice, time_slice_info2};
     use crate::time_slice::TimeSliceLevel;
     use crate::time_slice::TimeSliceSelection;
     use float_cmp::assert_approx_eq;
@@ -1147,30 +1128,6 @@ mod tests {
         assert_error!(
             ActivityLimits::new_from_limits(&limits, &time_slice_info2),
             "Availability limit for season winter clashes with time slice limits"
-        );
-    }
-
-    #[rstest]
-    fn investment_constraint_is_keyed_by_agent(mut process: Process, region_id: RegionID) {
-        process.investment_constraints.insert(
-            ("agent1".into(), region_id.clone(), 2015),
-            Arc::new(ProcessInvestmentConstraint {
-                addition_limit: Some(crate::units::Capacity(10.0)),
-                total_capacity_limit: Some(crate::units::Capacity(100.0)),
-            }),
-        );
-
-        assert_eq!(
-            process
-                .investment_constraint(&"agent1".into(), &region_id, 2015)
-                .unwrap()
-                .addition_limit,
-            Some(crate::units::Capacity(10.0))
-        );
-        assert!(
-            process
-                .investment_constraint(&"agent2".into(), &region_id, 2015)
-                .is_none()
         );
     }
 }

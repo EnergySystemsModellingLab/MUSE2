@@ -1,8 +1,8 @@
 //! Code for reading in agent-related data from CSV files.
 use super::{input_err_msg, read_csv};
 use crate::agent::{
-    Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
-    AgentType, DecisionRule,
+    Agent, AgentCommodityPortionsMap, AgentID, AgentInvestmentConstraintsMap, AgentMap,
+    AgentObjectiveMap, AgentSearchSpaceMap, AgentType, DecisionRule,
 };
 use crate::commodity::CommodityMap;
 use crate::process::ProcessMap;
@@ -18,6 +18,8 @@ mod search_space;
 use search_space::read_agent_search_spaces;
 mod commodity_portion;
 use commodity_portion::read_agent_commodity_portions;
+mod investment_constraints;
+use investment_constraints::read_agent_investment_constraints;
 
 const AGENT_FILE_NAME: &str = "agents.csv";
 
@@ -90,6 +92,12 @@ pub fn read_agents(
         agent.search_space = search_spaces.remove(id).unwrap();
     }
 
+    let mut investment_constraints =
+        read_agent_investment_constraints(model_dir, &agents, processes, milestone_years)?;
+    for (id, agent) in &mut agents {
+        agent.investment_constraints = investment_constraints.remove(id).unwrap_or_default();
+    }
+
     Ok(agents)
 }
 
@@ -146,6 +154,7 @@ where
             description: agent_raw.description,
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            investment_constraints: AgentInvestmentConstraintsMap::default(),
             agent_type: agent_raw.agent_type,
             decision_rule,
             regions,
@@ -189,6 +198,7 @@ mod tests {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            investment_constraints: AgentInvestmentConstraintsMap::default(),
             agent_type: AgentType::Portfolio,
             decision_rule: DecisionRule::Single,
             regions: IndexSet::from(["GBR".into()]),

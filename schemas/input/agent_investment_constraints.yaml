@@ -3,12 +3,12 @@ description: |
   Constraints on the amount agents can invest in processes.
 
 fields:
-  - name: process_id
-    type: string
-    description: The process to which this entry applies
   - name: agent_id
     type: string
     description: The agent to which this entry applies
+  - name: process_id
+    type: string
+    description: The process to which this entry applies
   - name: regions
     type: string
     description: The region(s) to which this entry applies
