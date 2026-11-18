@@ -1,0 +1,24 @@
+benches/assets.rs
+  h_e76403a1cd4bf1 264
+src/simulation/investment/competitive.rs
+  h_e76403a1cd4bf1 24,103,223,259-260,265,302-303,318,357-362,364,366,380
+src/simulation/investment/competitive/constraints.rs
+  h_e76403a1cd4bf1 21-22,25-26,28-32,34-35,46,50,52,54-59,71-72,85,88,94,96,100,106,110,112-117,122-123,127,133-134,136,138-142,154,165-166,168-172
+src/simulation/investment/competitive/metrics.rs
+  h_e76403a1cd4bf1 69,213,216,221-222,229,242,245,256-257,264,279,286
+src/simulation/investment/competitive/optimisation.rs
+  h_e76403a1cd4bf1 4,9,28-29,39-44,46-48,55,57,61,64,70,81,83,86,91-93,101-102,104,106,108-109,111,117,138,141,143-148,151-152,154,158-160,162-171,173
+src/simulation/investment/competitive/output.rs
+  h_e76403a1cd4bf1 113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f75aae385bef533d98b2691ccc0e3c49bcc80e4c",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
