@@ -3,10 +3,11 @@ use crate::agent::{AgentID, AgentMap};
 use crate::commodity::CommodityID;
 use crate::process::{FlowDirection, Process, ProcessFlow, ProcessID, ProcessMap};
 use crate::region::RegionID;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use indexmap::IndexMap;
 use itertools::iproduct;
 use petgraph::Directed;
+use petgraph::algo::toposort;
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
 use petgraph::visit::EdgeRef;
@@ -313,6 +314,22 @@ pub fn build_agent_graphs_for_model(
         .iter()
         .map(|(&year, graph)| (year, compress_commodity_graph(graph)))
         .collect()
+}
+
+/// Returns agents in downstream-first topological order.
+///
+/// `Source` and `Sink` nodes participate in sorting but are omitted from the result.
+/// Returns an error if the graph contains a cycle.
+pub fn downstream_first_topological_order(graph: &AgentGraph) -> Result<Vec<AgentID>> {
+    let order = toposort(graph, None).map_err(|_| anyhow!("Agent graph contains a cycle"))?;
+    Ok(order
+        .into_iter()
+        .rev()
+        .filter_map(|node| match &graph[node] {
+            AgentGraphNode::Agent(agent_id) => Some(agent_id.clone()),
+            AgentGraphNode::Source | AgentGraphNode::Sink => None,
+        })
+        .collect())
 }
 
 /// Gets custom DOT attributes for edges in an agent-specific commodity graph
@@ -642,5 +659,61 @@ mod tests {
             sink_node,
             &GraphEdge::Secondary("process4".into(), "GBR".into(), "agent2".into()),
         ));
+    }
+
+    #[test]
+    fn downstream_first_order_reverses_topological_order() {
+        let mut graph = AgentGraph::new();
+        let source = graph.add_node(AgentGraphNode::Source);
+        let agent1 = graph.add_node(AgentGraphNode::Agent("agent1".into()));
+        let agent2 = graph.add_node(AgentGraphNode::Agent("agent2".into()));
+        let sink = graph.add_node(AgentGraphNode::Sink);
+        graph.add_edge(
+            source,
+            agent1,
+            GraphEdge::Primary("process1".into(), "GBR".into(), "agent1".into()),
+        );
+        graph.add_edge(
+            agent1,
+            agent2,
+            GraphEdge::Primary("process2".into(), "GBR".into(), "agent2".into()),
+        );
+        graph.add_edge(
+            agent2,
+            sink,
+            GraphEdge::Primary("process3".into(), "GBR".into(), "agent2".into()),
+        );
+
+        let order = downstream_first_topological_order(&graph)
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert_eq!(order, ["agent2", "agent1"]);
+    }
+
+    #[test]
+    fn downstream_first_order_errors_on_cycles() {
+        let mut graph = AgentGraph::new();
+        let agent1 = graph.add_node(AgentGraphNode::Agent("agent1".into()));
+        let agent2 = graph.add_node(AgentGraphNode::Agent("agent2".into()));
+        graph.add_edge(
+            agent1,
+            agent2,
+            GraphEdge::Primary("process1".into(), "GBR".into(), "agent1".into()),
+        );
+        graph.add_edge(
+            agent2,
+            agent1,
+            GraphEdge::Primary("process2".into(), "GBR".into(), "agent2".into()),
+        );
+
+        assert_eq!(
+            downstream_first_topological_order(&graph)
+                .unwrap_err()
+                .to_string(),
+            "Agent graph contains a cycle"
+        );
     }
 }

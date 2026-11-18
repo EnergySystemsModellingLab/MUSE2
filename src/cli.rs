@@ -1,7 +1,7 @@
 //! Command-line interface for the MUSE2 simulation.
 use crate::graph::save_commodity_graphs_for_model;
 use crate::graph2::{
-    build_agent_graphs_for_model, save_agent_graphs_for_model,
+    build_agent_graphs_for_model, downstream_first_topological_order, save_agent_graphs_for_model,
     save_commodity_graphs_for_model as save_agent_commodity_graphs_for_model,
 };
 use crate::input::{load_graphs, load_model};
@@ -276,9 +276,20 @@ pub fn handle_save_graphs_command(model_path: &Path, opts: &GraphOpts) -> Result
     // Load commodity flow graphs and save to file
     let (commodity_graphs, agent_commodity_graphs) =
         load_graphs(model_path).context("Failed to build graphs.")?;
+    let agent_graphs = build_agent_graphs_for_model(&agent_commodity_graphs);
+    for (year, graph) in &agent_graphs {
+        let order = downstream_first_topological_order(graph)
+            .with_context(|| format!("Failed to sort agent graph for year {year}"))?;
+        let order = order
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" -> ");
+        info!("Agent graph order for {year}: {order}");
+    }
+
     save_commodity_graphs_for_model(&commodity_graphs, output_path)?;
     save_agent_commodity_graphs_for_model(&agent_commodity_graphs, output_path)?;
-    let agent_graphs = build_agent_graphs_for_model(&agent_commodity_graphs);
     save_agent_graphs_for_model(&agent_graphs, output_path)?;
     info!("Graphs saved to: {}", output_path.display());
 
