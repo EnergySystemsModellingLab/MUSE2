@@ -1,0 +1,20 @@
+src/simulation/market.rs
+  s_f286642193c3e7::t_bc0d63a917c118 214,252,291-295,343,358
+  s_f286642193c3e7::t_9ddc3a7f357841 371-375
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bc236f2ec2aa5ef219f1d11e3cecf7c0d6cc25ec",
+  "prompts": {},
+  "sessions": {
+    "s_f286642193c3e7": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "14a6bd35-b2dd-41e1-9498-4bcd0876246e",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
