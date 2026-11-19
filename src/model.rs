@@ -14,6 +14,10 @@ pub use parameters::{ALLOW_DANGEROUS_OPTION_NAME, ModelParameters};
 mod dangerous;
 pub use dangerous::dangerous_model_options_enabled;
 
+/// Re-exported so we can use it in fixtures
+#[cfg(test)]
+pub use dangerous::set_dangerous_model_options_flag_test;
+
 /// Model definition
 pub struct Model {
     /// Path to model folder

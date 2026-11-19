@@ -1,4 +1,9 @@
 //! Code for working with the dangerous model options flag.
+//!
+//! In production, the flag is a global shared value, which can only be set once per program run. In
+//! unit tests, the flag is a thread-local value, defaulting to false, which allows for changing it
+//! on a per-test basis. Note that integration tests (i.e. the ones in `tests/`) and benchmarks also
+//! use the production version.
 use log::warn;
 use std::sync::OnceLock;
 
@@ -8,13 +13,22 @@ use std::sync::OnceLock;
 /// [`set_dangerous_model_options_flag`]).
 static DANGEROUS_OPTIONS_ENABLED: OnceLock<bool> = OnceLock::new();
 
+#[cfg(test)]
+thread_local! {
+    static DANGEROUS_OPTIONS_ENABLED_TEST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Whether potentially dangerous model options were enabled by the loaded config.
 ///
 /// # Panics
 ///
 /// Panics if the global flag has not yet been set.
 pub fn dangerous_model_options_enabled() -> bool {
-    dangerous_model_options_enabled_production()
+    #[cfg(not(test))]
+    return dangerous_model_options_enabled_production();
+
+    #[cfg(test)]
+    dangerous_model_options_enabled_test()
 }
 
 /// Set the global flag indicating whether potentially dangerous model options are enabled.
@@ -23,7 +37,18 @@ pub fn dangerous_model_options_enabled() -> bool {
 /// cases; it cannot be changed during runtime. (This should not happen during normal program
 /// execution, but may happen during tests etc.)
 pub fn set_dangerous_model_options_flag(enabled: bool) {
+    #[cfg(not(test))]
     set_dangerous_model_options_flag_production(enabled);
+
+    #[cfg(test)]
+    {
+        assert_eq!(
+            dangerous_model_options_enabled(),
+            enabled,
+            "Cannot change dangerous model options flag during unit tests"
+        );
+        set_dangerous_model_options_flag_test(enabled);
+    }
 }
 
 /// Check whether dangerous model options are enabled (outside of tests)
@@ -44,6 +69,18 @@ fn set_dangerous_model_options_flag_production(enabled: bool) {
 
         warn!("set_dangerous_model_options_flag called more than once");
     }
+}
+
+#[cfg(test)]
+/// Check whether dangerous model options are enabled (within tests)
+fn dangerous_model_options_enabled_test() -> bool {
+    DANGEROUS_OPTIONS_ENABLED_TEST.get()
+}
+
+#[cfg(test)]
+/// Set the dangerous model options flag (within tests)
+pub fn set_dangerous_model_options_flag_test(enabled: bool) {
+    DANGEROUS_OPTIONS_ENABLED_TEST.set(enabled);
 }
 
 #[cfg(test)]
