@@ -53,7 +53,7 @@ pub struct AppraisalOutput {
     pub unmet_demand: DemandMap,
     /// The comparison metric to compare investment decisions
     pub metric: Option<Box<dyn MetricTrait>>,
-    /// Activity coefficients and market costs used in the appraisal
+    /// Activity coefficients and metric costs used in the appraisal
     pub coefficients: Arc<ObjectiveCoefficients>,
     /// Full solution to the optimisation
     pub solution: IndexMap<(AssetRef, TimeSliceID), Activity>,
@@ -233,7 +233,7 @@ fn calculate_lcox(
         asset.total_capacity(),
         annual_fixed_cost(asset),
         &results.asset_activity,
-        &coefficients[asset].market_costs,
+        &coefficients[asset].metric_costs,
     );
 
     Ok(AppraisalOutput::new(
@@ -278,7 +278,7 @@ fn calculate_npv(
         asset.total_capacity(),
         annual_fixed_cost,
         &results.asset_activity,
-        &coefficients[asset].market_costs,
+        &coefficients[asset].metric_costs,
     );
 
     Ok(AppraisalOutput::new(
@@ -465,7 +465,7 @@ mod tests {
     fn objective_coeffs() -> Arc<ObjectiveCoefficients> {
         Arc::new(ObjectiveCoefficients {
             activity_coefficients: IndexMap::new(),
-            market_costs: IndexMap::new(),
+            metric_costs: IndexMap::new(),
         })
     }
 
