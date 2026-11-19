@@ -3,6 +3,7 @@
 //! This module defines the `ModelParameters` struct and helpers for loading and validating the
 //! `model.toml` configuration used by the model. Validation functions ensure sensible numeric
 //! ranges and invariants for runtime use.
+use super::dangerous::set_dangerous_model_options_flag;
 use crate::commodity::PricingStrategy;
 use crate::input::{
     deserialise_finite_non_negative, deserialise_proportion_nonzero, input_err_msg,
@@ -14,7 +15,6 @@ use itertools::Itertools;
 use log::warn;
 use serde::{Deserialize, Deserializer};
 use std::path::Path;
-use std::sync::OnceLock;
 use toml::Table;
 
 const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
@@ -25,43 +25,8 @@ const MODEL_PARAMETERS_FILE_NAME: &str = "model.toml";
 /// behaviours that are normally disallowed.
 pub const ALLOW_DANGEROUS_OPTION_NAME: &str = "please_give_me_broken_results";
 
-/// Global flag indicating whether potentially dangerous model options have been enabled.
-///
-/// This is stored in a `OnceLock` and must be set exactly once during startup (see
-/// [`set_dangerous_model_options_flag`]).
-static DANGEROUS_OPTIONS_ENABLED: OnceLock<bool> = OnceLock::new();
-
 /// The default value for the `remaining_demand_absolute_tolerance` parameter
 const DEFAULT_REMAINING_DEMAND_ABSOLUTE_TOLERANCE: Flow = Flow(1e-12);
-
-/// Whether potentially dangerous model options were enabled by the loaded config.
-///
-/// # Panics
-///
-/// Panics if the global flag has not been set yet (the flag should be set by
-/// [`ModelParameters::from_path`] during program initialisation).
-pub fn dangerous_model_options_enabled() -> bool {
-    *DANGEROUS_OPTIONS_ENABLED
-        .get()
-        .expect("Dangerous options flag not set")
-}
-
-/// Set the global flag indicating whether potentially dangerous model options are enabled.
-///
-/// This function can be called more than once, provided the value of `enabled` is the same in both
-/// cases; it cannot be changed during runtime. (This should not happen during normal program
-/// execution, but may happen during tests etc.)
-fn set_dangerous_model_options_flag(enabled: bool) {
-    if DANGEROUS_OPTIONS_ENABLED.set(enabled).is_err() {
-        assert_eq!(
-            enabled,
-            dangerous_model_options_enabled(),
-            "Attempted to change DANGEROUS_OPTIONS_ENABLED during runtime"
-        );
-
-        warn!("set_dangerous_model_options_flag called more than once");
-    }
-}
 
 /// Model parameters as defined in the `model.toml` file.
 ///
@@ -381,7 +346,6 @@ mod tests {
     use std::fmt::Display;
     use std::fs::File;
     use std::io::Write;
-    use std::panic::catch_unwind;
     use tempfile::tempdir;
 
     /// Helper function to assert validation result based on expected validity
@@ -409,23 +373,6 @@ mod tests {
                 "Error message should mention the validation constraint, got: {error_message}",
             );
         }
-    }
-
-    #[test]
-    #[should_panic(expected = "Attempted to change DANGEROUS_OPTIONS_ENABLED during runtime")]
-    fn check_set_dangerous_model_options_flag() {
-        // Other tests may already have set this flag, but they **must** set it to false. Ensure
-        // it's set.
-        assert!(!DANGEROUS_OPTIONS_ENABLED.get_or_init(|| false));
-
-        // Setting to false again should be fine
-        catch_unwind(|| set_dangerous_model_options_flag(false)).expect("Unexpected panic");
-
-        // Double check the value is set
-        assert!(!dangerous_model_options_enabled());
-
-        // Should panic when trying to **change** value
-        set_dangerous_model_options_flag(true);
     }
 
     #[test]
