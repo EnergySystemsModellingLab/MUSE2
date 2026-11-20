@@ -1,0 +1,25 @@
+tests/data/two_outputs/commodity_flows.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 8-10,50-52,62-64,74-76,86-88,98-99,102-103,106-107,114-115,122-123,130-132,142-144,154-156,166-168,181-189,193-201,217-225,228-233,236-241,252-663,667-669,673-681,697-707,710-721,730-739,746-747,762-763,770-851,853-854,856-857,859-860,862-863,865-866,868-875,877-887,889-890,892-896,898-1489,1502-1809
+tests/data/two_outputs/commodity_prices.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 2-33,50-97,114-337,342-345,350-369,374-397,402-465
+tests/data/two_outputs/asset_capacities.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 8,15-19,21,24,27-30,32-34,36,38-48
+tests/data/two_outputs/assets.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 19-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb93059f884b88d478d10b8fe64b971f59b4a22f",
+  "prompts": {},
+  "sessions": {
+    "s_5afddde47aa42c": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "7fe77d3e-6a2e-4d4b-b794-4a1621c12740",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
