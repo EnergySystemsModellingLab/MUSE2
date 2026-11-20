@@ -1,0 +1,14 @@
+src/simulation/investment/population/optimisation.rs
+  h_e76403a1cd4bf1 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "47754bb9b3f738dfde825778b89607366b7545b3",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
