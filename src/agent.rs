@@ -77,6 +77,8 @@ pub enum AgentType {
     /// Existing and candidate assets compete in rounds, with the best option according to the
     /// agent's objective selected in each round
     Competitive,
+    /// Placeholder for a population agent; not yet implemented
+    Population,
 }
 
 /// The decision rule for a particular objective
