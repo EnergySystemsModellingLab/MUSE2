@@ -1,0 +1,14 @@
+src/simulation/investment/portfolio/optimisation.rs
+  h_e76403a1cd4bf1 61-62,70-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f8b7239e9f92d2afcef37fe3066c479bbd5b52b",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
