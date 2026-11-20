@@ -8,6 +8,7 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::region::RegionID;
 use crate::simulation::PriceMap;
+use crate::simulation::activity::{FlowMap, create_flow_map};
 use crate::simulation::investment::AllDemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
@@ -22,9 +23,6 @@ use std::ops::Range;
 mod constraints;
 pub(crate) use constraints::group_dispatch_equivalent_assets;
 use constraints::{ConstraintKeys, add_model_constraints};
-
-/// A map of commodity flows calculated during the optimisation
-pub type FlowMap = IndexMap<(AssetRef, CommodityID, TimeSliceID), Flow>;
 
 /// A decision variable in the optimisation
 ///
@@ -179,18 +177,7 @@ pub struct Solution<'a> {
 impl Solution<'_> {
     /// Create a map of commodity flows for each asset's coeffs at every time slice
     pub fn create_flow_map(&self) -> FlowMap {
-        // The decision variables represent assets' activity levels, not commodity flows. We
-        // multiply this value by the flow coeffs to get commodity flows.
-        let mut flows = FlowMap::new();
-        for (asset, time_slice, activity) in self.iter_activity_for_existing() {
-            for flow in asset.iter_flows() {
-                let flow_key = (asset.clone(), flow.commodity.id.clone(), time_slice.clone());
-                let flow_value = activity * flow.coeff;
-                flows.insert(flow_key, flow_value);
-            }
-        }
-
-        flows
+        create_flow_map(self.iter_activity_for_existing())
     }
 
     /// Activity for all assets (existing and candidate, if present)
