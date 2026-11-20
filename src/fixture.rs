@@ -9,6 +9,7 @@ use crate::commodity::{
     Commodity, CommodityConstraintsMap, CommodityID, CommodityLevyMap, CommodityType, DemandMap,
     PricingStrategy,
 };
+use crate::model::{dangerous_model_options_enabled, set_dangerous_model_options_flag_test};
 use crate::patch::{FilePatch, ModelPatch};
 use crate::process::{
     ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
@@ -20,7 +21,6 @@ use crate::units::{
     ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, Year,
 };
-use anyhow::Result;
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -60,7 +60,7 @@ pub(crate) fn build_patched_tempdir(
 /// Check whether the simple example passes or fails validation after applying file patches
 macro_rules! patch_and_validate_simple {
     ($file_patches:expr) => {{
-        (|| -> Result<()> {
+        (|| -> anyhow::Result<()> {
             let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
             crate::input::load_model(tmp.path())?;
             Ok(())
@@ -97,7 +97,7 @@ pub(crate) use assert_validate_fails_with_simple;
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! patch_and_run_simple {
     ($file_patches:expr) => {{
-        (|| -> Result<()> {
+        (|| -> anyhow::Result<()> {
             let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
             let model = crate::input::load_model(tmp.path())?;
             let output_path = tmp.path().join("output");
@@ -398,6 +398,41 @@ pub fn time_slice_info2() -> TimeSliceInfo {
     }
 }
 
+pub struct DangerousOptionsEnabled(());
+
+impl DangerousOptionsEnabled {
+    fn new() -> Self {
+        assert!(
+            !dangerous_model_options_enabled(),
+            "Dangerous model options already enabled"
+        );
+        set_dangerous_model_options_flag_test(true);
+
+        Self(())
+    }
+}
+
+impl Drop for DangerousOptionsEnabled {
+    fn drop(&mut self) {
+        assert!(
+            dangerous_model_options_enabled(),
+            "Dangerous model options flag changed during test"
+        );
+        set_dangerous_model_options_flag_test(false);
+    }
+}
+
+/// Run a test with the dangerous options flag set.
+///
+/// Note that this only affects the flag for the **current** thread, so if your test spawns
+/// additional threads, these will just see the default value for the flag (false). This should not
+/// be a problem in practice, as we are unlikely to want to check the flag e.g. in a parallel
+/// for-loop.
+#[fixture]
+pub fn dangerous_opts() -> DangerousOptionsEnabled {
+    DangerousOptionsEnabled::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,5 +461,15 @@ mod tests {
         let patch = FilePatch::new("commodities.csv")
             .with_deletion("RSHEAT,Residential heating,svd,daynight,PJ");
         assert!(patch_and_run_simple!(vec![patch]).is_err());
+    }
+
+    #[test]
+    fn check_dangerous_options_fixture() {
+        assert!(!dangerous_model_options_enabled());
+
+        let dangerous_opts = DangerousOptionsEnabled::new();
+        assert!(dangerous_model_options_enabled());
+        drop(dangerous_opts);
+        assert!(!dangerous_model_options_enabled());
     }
 }
