@@ -11,6 +11,9 @@
   rather than appraising options one at a time ([#1574])
 - A new `population` agent type represents a population of discrete entities with identical needs,
   such as households, and selects assets in merit order ([#1603])
+- A new optional `simulation_protocol` setting in `model.toml` selects how each milestone year is
+  simulated. The only value currently available is `system_dispatch`, which is the default and
+  corresponds to the existing behaviour
 
 ## Breaking changes
 

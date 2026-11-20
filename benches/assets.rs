@@ -14,8 +14,9 @@ use muse2::simulation::investment::competitive::{get_candidate_assets, select_be
 use muse2::simulation::market::{
     collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
 };
-use muse2::simulation::optimisation::DispatchRun;
-use muse2::simulation::prices::{Prices, calculate_prices_from_solutions};
+use muse2::simulation::prices::Prices;
+use muse2::simulation::system_dispatch::calculate_prices_from_solutions;
+use muse2::simulation::system_dispatch::optimisation::DispatchRun;
 use rayon::ThreadPoolBuilder;
 use std::hint::black_box;
 use std::sync::Arc;
@@ -88,7 +89,7 @@ fn build_assets_for_investment_year(
 }
 
 /// Dispatch the base year (with and without the investment-year candidates) to obtain realistic
-/// seed prices for investment appraisal, as per `simulation::run_dispatch_for_year` (this is the
+/// seed prices for investment appraisal, as per `simulation::system_dispatch::run_dispatch_for_year` (this is the
 /// dispatch performed before any agent investment has taken place).
 fn calculate_seed_prices(
     model: &Model,
@@ -115,6 +116,7 @@ fn calculate_seed_prices(
         BASE_YEAR,
     )
     .expect("Failed to calculate prices")
+    .0
 }
 
 /// Build `n` synthetic candidate processes, based on cycling through `templates`, so that we can

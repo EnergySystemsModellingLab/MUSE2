@@ -10,7 +10,7 @@ use super::costs::annual_fixed_cost;
 use crate::asset::AssetRef;
 use crate::commodity::Commodity;
 use crate::model::Model;
-use crate::simulation::optimisation::{ModelError, apply_highs_options_from_toml, solve_optimal};
+use crate::optimisation::{ModelError, apply_highs_options_from_toml, solve_optimal};
 use crate::simulation::PriceMap;
 use crate::simulation::investment::DemandMap;
 use crate::time_slice::TimeSliceID;
