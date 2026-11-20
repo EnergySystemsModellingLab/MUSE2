@@ -1,8 +1,8 @@
 //! Fixtures for tests
 
 use crate::agent::{
-    Agent, AgentCommodityPortionsMap, AgentID, AgentMap, AgentObjectiveMap, AgentSearchSpaceMap,
-    AgentType, DecisionRule,
+    Agent, AgentCommodityPortionsMap, AgentID, AgentInvestmentConstraintsMap, AgentMap,
+    AgentObjectiveMap, AgentSearchSpaceMap, AgentType, DecisionRule,
 };
 use crate::asset::{Asset, AssetCapacity, AssetPool};
 use crate::commodity::{
@@ -11,8 +11,8 @@ use crate::commodity::{
 };
 use crate::patch::{FilePatch, ModelPatch};
 use crate::process::{
-    ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap,
-    ProcessInvestmentConstraintsMap, ProcessMap, ProcessParameter, ProcessParameterMap,
+    ActivityLimits, Process, ProcessActivityLimitsMap, ProcessFlow, ProcessFlowsMap, ProcessMap,
+    ProcessParameter, ProcessParameterMap,
 };
 use crate::region::RegionID;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceLevel};
@@ -275,13 +275,6 @@ pub fn process_activity_limits_map(
 }
 
 #[fixture]
-/// Create an empty set of `ProcessInvestmentConstraints` for a given region/year
-/// Returns a `HashMap` keyed by (`RegionID`, year) with empty Arc<ProcessInvestmentConstraint>
-pub fn process_investment_constraints() -> ProcessInvestmentConstraintsMap {
-    HashMap::new()
-}
-
-#[fixture]
 /// Create an empty set of `ProcessFlows` for a given region/year
 pub fn process_flows() -> Arc<IndexMap<CommodityID, ProcessFlow>> {
     Arc::new(IndexMap::new())
@@ -307,7 +300,6 @@ pub fn process(
     process_parameter_map: ProcessParameterMap,
     process_activity_limits_map: ProcessActivityLimitsMap,
     process_flows_map: ProcessFlowsMap,
-    process_investment_constraints: ProcessInvestmentConstraintsMap,
 ) -> Process {
     Process {
         id: "process1".into(),
@@ -319,7 +311,6 @@ pub fn process(
         regions: region_ids,
         primary_output: None,
         capacity_to_activity: ActivityPerCapacity(1.0),
-        investment_constraints: process_investment_constraints,
         tranche_size: None,
     }
 }
@@ -338,6 +329,7 @@ pub fn agents(region_ids: IndexSet<RegionID>) -> AgentMap {
             description: String::new(),
             commodity_portions: AgentCommodityPortionsMap::new(),
             search_space: AgentSearchSpaceMap::new(),
+            investment_constraints: AgentInvestmentConstraintsMap::new(),
             agent_type: AgentType::default(),
             decision_rule: DecisionRule::Single,
             regions: region_ids,

@@ -1,0 +1,6 @@
+agent_id,process_id,regions,commission_years,addition_limit
+A1_GAS,gassupply1,R1;R2,all,10
+A1_PWR,gasCCGT,R1;R2,all,10
+A1_PWR,windturbine,R1;R2,all,10
+A1_RES,gasboiler,R1;R2,all,10
+A1_RES,heatpump,R1;R2,all,10

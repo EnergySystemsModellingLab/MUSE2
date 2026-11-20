@@ -18,6 +18,8 @@
 
 ## Breaking changes
 
+- Investment constraints are now defined per agent in `agent_investment_constraints.csv` instead
+  of per process in `process_investment_constraints.csv`.
 - The `capacity_margin` parameter has been removed ([#1557])
 - `portfolio` is now the default agent type. To keep the previous investment behaviour, set
   `agent_type` to `competitive` in `agents.csv` ([#1574])

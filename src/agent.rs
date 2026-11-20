@@ -2,7 +2,7 @@
 //! assets.
 use crate::commodity::CommodityID;
 use crate::id::define_id_type;
-use crate::process::Process;
+use crate::process::{Process, ProcessID, ProcessInvestmentConstraint};
 use crate::region::RegionID;
 use crate::units::Dimensionless;
 use indexmap::{IndexMap, IndexSet};
@@ -21,6 +21,10 @@ pub type AgentCommodityPortionsMap = HashMap<(CommodityID, u32), Dimensionless>;
 /// A map for the agent's search space, keyed by commodity, region, and year
 pub type AgentSearchSpaceMap = HashMap<(CommodityID, RegionID, u32), Arc<Vec<Arc<Process>>>>;
 
+/// A map of investment constraints for an agent, keyed by process, region and year
+pub type AgentInvestmentConstraintsMap =
+    HashMap<(ProcessID, RegionID, u32), Arc<ProcessInvestmentConstraint>>;
+
 /// A map of objectives for an agent, keyed by year.
 ///
 /// NB: As we currently only support the "single" decision rule, the only parameter we need for
@@ -38,6 +42,8 @@ pub struct Agent {
     pub commodity_portions: AgentCommodityPortionsMap,
     /// The processes that the agent will consider investing in.
     pub search_space: AgentSearchSpaceMap,
+    /// Investment constraints that apply to this agent.
+    pub investment_constraints: AgentInvestmentConstraintsMap,
     /// The algorithm that the agent uses to select assets.
     pub agent_type: AgentType,
     /// The decision rule that the agent uses to decide investment.

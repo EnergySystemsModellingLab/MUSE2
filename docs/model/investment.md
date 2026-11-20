@@ -69,8 +69,6 @@ Each commodity market may be served by multiple agents, each responsible for a d
 (or *portion*) of the total demand. An agent's portion determines:
 
 - The fraction of the total demand that the agent is responsible for meeting.
-- The scaling applied to any `addition_limit` and `total_capacity_limit` investment constraints
-  (see [Investment Constraints](#investment-constraints)).
 
 Agent portions for each commodity and milestone year are defined in the agent input files. Each
 responsible agent selects assets for its own share of demand, using the algorithm for its
@@ -129,27 +127,20 @@ portfolio and population agents may retain only part of its capacity (see
 
 ## Investment Constraints
 
-Processes may be subject to investment constraints defined in
-[`process_investment_constraints.csv`][process-investment-constraints-csv]: an `addition_limit`
+Agents may have investment constraints on processes defined in
+[`agent_investment_constraints.csv`][agent-investment-constraints-csv]: an `addition_limit`
 constraining new-build capacity, and a `total_capacity_limit` constraining total installed
 capacity.
-
-In multi-agent simulations, both limits are scaled by \\( \mathrm{AgentPortion} \\), the fraction
-of the commodity market for which an agent is responsible, to give a limit for each agent. Each
-agent type enforces these limits as part of its asset selection algorithm (see [Agents][agents]).
-One agent falling short of its own limits does **not** allow others to exceed theirs. Therefore, the
-overall limits can only ever be reached if *all* agents max out their own individual limits.
 
 ### Addition limits
 
 The `addition_limit` specifies the maximum new capacity that can be built *per year*, and applies
 only to **candidate** (new-build) assets. The installable capacity limit for a given process
-(\\( p \\)), agent (\\( g \\)), region (\\( r \\)), commodity (\\( c \\)) and milestone year
-(\\( y \\)) is:
+(\\( p \\)), agent (\\( g \\)), region (\\( r \\)) and milestone year (\\( y \\)) is:
 
 \\[
-  \mathrm{MaxInstallableCapacity}\_{p,r,y,g} = \mathrm{AdditionLimit}\_{p,r,y}
-    \cdot \Delta\_{\mathrm{MSY}} \cdot \mathrm{AgentPortion}\_{c,r,y,g}
+  \mathrm{MaxInstallableCapacity}\_{p,g,r,y} = \mathrm{AdditionLimit}\_{p,g,r,y}
+    \cdot \Delta\_{\mathrm{MSY}}
 \\]
 
 where \\( \Delta_{\mathrm{MSY}} \\) is the number of years since the previous milestone year.
@@ -159,11 +150,10 @@ where \\( \Delta_{\mathrm{MSY}} \\) is the number of years since the previous mi
 The `total_capacity_limit` specifies a hard upper limit on the **total capacity** of a process that
 may exist at any given time. This includes both existing assets which are considered for retention,
 and candidate assets which are considered for commissioning. The total capacity limit for a given
-process, agent, region, commodity and milestone year is:
+process, agent, region and milestone year is:
 
 \\[
-  \mathrm{MaxTotalCapacity}\_{p,r,y,g} = \mathrm{TotalCapacityLimit}\_{p,r,y}
-    \cdot \mathrm{AgentPortion}\_{c,r,y,g}
+  \mathrm{MaxTotalCapacity}\_{p,g,r,y} = \mathrm{TotalCapacityLimit}\_{p,g,r,y}
 \\]
 
 ## Commodity Prices
@@ -246,6 +236,6 @@ assets shaping the demand seen by those upstream.
 [simulation-protocols]: index.html#simulation-protocols
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
-[process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
+[agent-investment-constraints-csv]: ../file_formats/input_files.md#agent_investment_constraintscsv
 [dispatch-optimisation]: ./dispatch_optimisation.md
 [graph-circularities]: ./commodity_graphs.md#circularities
