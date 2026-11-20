@@ -1,8 +1,8 @@
 # Commodity Prices
 
 This section describes how commodity prices are calculated in MUSE2 at the end of each
-milestone year iteration. The pricing algorithm operates on the results of the dispatch
-optimisation, translating flows and capacities into commodity market prices.
+milestone year iteration. Prices are calculated from asset activities and the resulting commodity
+flows.
 
 ## Pricing Strategies
 
@@ -15,15 +15,17 @@ commodity.
 active assets.
 - **`full`**: Prices are set to the full cost (marginal cost + annual fixed/capital costs) of the
 highest-cost active asset producing the commodity.
+- **`full_average`**: Prices are set to the output-weighted average full cost across all active
+assets producing the commodity.
 - **`unpriced`**: No prices are calculated for the commodity. This is mandatory for all OTH
 (Other)-type commodities.
 
 ### Cost Calculations
 
 Cost-based prices (`marginal`, `marginal_average`, `full`, `full_average`) are calculated based on
-process cost parameters, asset capacities and dispatch flows. For assets producing multiple output
-commodities (e.g. an asset producing both oil and gas), generic activity costs and fixed costs are
-shared between outputs according to output flow coefficients.
+process cost parameters, asset capacities, activities and the resulting commodity flows. For assets
+producing multiple output commodities (e.g. an asset producing both oil and gas), generic activity
+costs and fixed costs are shared between outputs according to output flow coefficients.
 
 #### Generic Activity Cost
 
@@ -141,8 +143,7 @@ The following example demonstrates the calculation of full-cost prices for two c
 
 In this scenario, GASPRD (raw gas) is produced by a single GASDRV (dry gas extraction) asset. This
 asset produces 1 unit of GASPRD per unit of activity, along with 5.113 units of CO₂ emissions.
-Suppose an annual utilisation of 0.20786471743 units of activity per unit of capacity (based on
-dispatch results).
+Suppose an annual utilisation of 0.20786471743 units of activity per unit of capacity.
 
 #### Marginal Cost
 
@@ -184,8 +185,7 @@ The full cost is:
 Following on from the above scenario, GASNAT (processed natural gas) is produced by a single GASPRC
 (gas processing) asset, which consumes GASPRD as an input fuel. This asset consumes 1.05 units of
 GASPRD and produces 1 unit of GASNAT per unit of activity, along with 2.5565 units of CO₂ emissions.
-Suppose an annual utilisation of 0.2094885671 units of activity per unit of capacity (based on
-dispatch results).
+Suppose an annual utilisation of 0.2094885671 units of activity per unit of capacity.
 
 #### Marginal Cost
 

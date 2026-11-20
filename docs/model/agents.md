@@ -42,8 +42,8 @@ feasible options remain.
 
 ### Commodity prices used in appraisal
 
-Investment appraisal uses two price sets calculated from the previous MSY's dispatch (or from the
-previous [ironing-out loop][framework-overview] iteration if enabled):
+Investment appraisal uses two price sets from the previous MSY (or from the previous
+[ironing-out loop][framework-overview] iteration if enabled):
 
 - **Market prices** \\( \pi\_{c,r,t} \\): used for activity coefficients in the mini dispatch and
   for the investment metric (Cost Index or SNAS).
@@ -272,11 +272,7 @@ with the updated set of selected assets. This continues until:
 
 - The remaining demand falls below `remaining_demand_absolute_tolerance`
   (in [`model.toml`][model-toml]), or
-- No feasible options remain. In this case, a warning is logged and the loop ends early. The
-  unmet demand may still be satisfied during the full system dispatch, but is not guaranteed.
-
-If demand cannot be met at all due to overly restrictive investment constraints, the simulation
-terminates with an error.
+- No feasible options remain. In this case, the simulation terminates with an error.
 
 ### Example: Gas Power Plant
 

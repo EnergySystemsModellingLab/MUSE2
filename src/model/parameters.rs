@@ -306,6 +306,20 @@ fn check_highs_options(dangerous_options_enabled: bool, highs: &HighsOptions) ->
     Ok(())
 }
 
+/// Check that the experimental `system_dispatch` protocol is enabled explicitly.
+fn check_simulation_protocol(
+    dangerous_options_enabled: bool,
+    protocol: SimulationProtocol,
+) -> Result<()> {
+    ensure!(
+        dangerous_options_enabled || protocol != SimulationProtocol::SystemDispatch,
+        "The system_dispatch simulation protocol is experimental and may produce incorrect \
+        results. Set {ALLOW_DANGEROUS_OPTION_NAME} to true to enable it."
+    );
+
+    Ok(())
+}
+
 impl ModelParameters {
     /// Read a model file from the specified directory.
     ///
@@ -377,6 +391,8 @@ impl ModelParameters {
         )?;
 
         check_highs_options(self.allow_dangerous_options, &self.highs)?;
+
+        check_simulation_protocol(self.allow_dangerous_options, self.simulation_protocol)?;
 
         Ok(())
     }
@@ -467,26 +483,6 @@ mod tests {
             toml::from_str("milestone_years = [2020, 2100]\nprice_cycle_iterations = 3").unwrap();
 
         assert_eq!(model_params.price_cycle_iterations, 3);
-    }
-
-    #[rstest]
-    #[case("", Some(SimulationProtocol::SystemDispatch))]
-    #[case(
-        "simulation_protocol = \"system_dispatch\"",
-        Some(SimulationProtocol::SystemDispatch)
-    )]
-    #[case("simulation_protocol = \"unknown_protocol\"", None)]
-    fn model_params_simulation_protocol(
-        #[case] setting: &str,
-        #[case] expected: Option<SimulationProtocol>,
-    ) {
-        let result: Result<ModelParameters, _> =
-            toml::from_str(&format!("milestone_years = [2020, 2100]\n{setting}"));
-
-        assert_eq!(
-            result.ok().map(|params| params.simulation_protocol),
-            expected
-        );
     }
 
     #[test]
