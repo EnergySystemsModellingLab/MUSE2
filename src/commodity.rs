@@ -142,7 +142,11 @@ impl CommodityConstraint {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixture::{DangerousOptionsEnabled, dangerous_opts};
+    use crate::input::load_model;
+    use crate::patch::{FilePatch, ModelPatch};
     use crate::time_slice::TimeSliceSelection;
+    use rstest::rstest;
 
     #[test]
     fn demand_map_works() {
@@ -170,5 +174,33 @@ mod tests {
                 .is_none()
         );
         assert_eq!(map[&("GBR".into(), 2010, ts)], value);
+    }
+
+    #[rstest]
+    #[allow(unused_variables)]
+    fn commodity_constraints_work(dangerous_opts: DangerousOptionsEnabled) {
+        let tmp = ModelPatch::from_example("simple")
+            .with_toml_patch("please_give_me_broken_results = true")
+            .with_file_patch(
+                FilePatch::new("commodity_constraints.csv").with_replacement(&[
+                    "commodity_id,region_id,balance_type,years,time_slice,limits",
+                    "GASPRD,GBR,cons,all,peak.peak,..200",
+                ]),
+            )
+            .build_to_tempdir()
+            .unwrap();
+        let model = load_model(tmp.path()).unwrap();
+        assert!(
+            !model
+                .commodities
+                .get(&CommodityID::from("GASPRD"))
+                .unwrap()
+                .constraints
+                .is_empty()
+        );
+        let output_path = tmp.path().join("output");
+        std::fs::create_dir_all(&output_path).unwrap();
+
+        crate::simulation::run(&model, &output_path, false).unwrap();
     }
 }
