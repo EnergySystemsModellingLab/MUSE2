@@ -20,7 +20,6 @@ use crate::units::{
     ActivityPerCapacity, Capacity, Dimensionless, MoneyPerActivity, MoneyPerCapacity,
     MoneyPerCapacityPerYear, Year,
 };
-use anyhow::Result;
 use indexmap::indexmap;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -60,7 +59,7 @@ pub(crate) fn build_patched_tempdir(
 /// Check whether the simple example passes or fails validation after applying file patches
 macro_rules! patch_and_validate_simple {
     ($file_patches:expr) => {{
-        (|| -> Result<()> {
+        (|| -> anyhow::Result<()> {
             let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
             crate::input::load_model(tmp.path())?;
             Ok(())
@@ -97,7 +96,7 @@ pub(crate) use assert_validate_fails_with_simple;
 /// Check whether the simple example runs successfully after applying file patches
 macro_rules! patch_and_run_simple {
     ($file_patches:expr) => {{
-        (|| -> Result<()> {
+        (|| -> anyhow::Result<()> {
             let tmp = crate::fixture::build_patched_simple_tempdir($file_patches);
             let model = crate::input::load_model(tmp.path())?;
             let output_path = tmp.path().join("output");
