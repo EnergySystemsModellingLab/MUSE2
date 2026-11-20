@@ -28,6 +28,7 @@ src/simulation/investment/population/optimisation.rs
   s_1bf8cc9acbfe6f::t_13445218b918df 15,19,21
   s_1bf8cc9acbfe6f::t_ab45a61c4cad75 10-12
   s_1bf8cc9acbfe6f::t_87d966380809e2 22
+  h_e76403a1cd4bf1 1-5,9,14,16,18,20,23,25,28,30-32,34-35,38-39,44-47,49-53,58-64,69-70,72,76-83,85,89,92-95,97-98,100,102,104-106,108-121,123,126,128-132,135-146
 ---
 {
   "schema_version": "authorship/3.0.0",
