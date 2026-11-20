@@ -1,0 +1,25 @@
+tests/data/two_outputs/commodity_flows.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 806-809,812-815,830-831,931,943,967,1458-1505
+tests/data/two_outputs/commodity_prices.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 182-193
+tests/data/two_outputs/asset_capacities.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 40
+tests/data/two_outputs/assets.csv
+  s_5afddde47aa42c::t_7e95e0cf8615f1 20-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2d6701422c5824663919190ac7982b188da89405",
+  "prompts": {},
+  "sessions": {
+    "s_5afddde47aa42c": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "7fe77d3e-6a2e-4d4b-b794-4a1621c12740",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
