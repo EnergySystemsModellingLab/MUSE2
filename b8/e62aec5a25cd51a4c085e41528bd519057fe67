@@ -1,0 +1,21 @@
+docs/developer_guide/custom_highs_options.md
+  s_99af4196b18650::t_76485bdc0107f4 38
+docs/model/dispatch_optimisation.md
+  s_99af4196b18650::t_76485bdc0107f4 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8e62aec5a25cd51a4c085e41528bd519057fe67",
+  "prompts": {},
+  "sessions": {
+    "s_99af4196b18650": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "458dd827-f488-4225-9ee6-7ae45ea4175b",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
