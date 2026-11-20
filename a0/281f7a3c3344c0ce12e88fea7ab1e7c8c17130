@@ -1,0 +1,24 @@
+examples/muse1_default/agents.csv
+  h_e76403a1cd4bf1 1-4
+examples/circularity/agents.csv
+  h_e76403a1cd4bf1 1-8
+examples/two_outputs/agents.csv
+  h_e76403a1cd4bf1 1-8
+examples/simple/agents.csv
+  h_e76403a1cd4bf1 1-5
+examples/missing_commodity/agents.csv
+  h_e76403a1cd4bf1 1-7
+examples/two_regions/agents.csv
+  h_e76403a1cd4bf1 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a0281f7a3c3344c0ce12e88fea7ab1e7c8c17130",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
