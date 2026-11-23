@@ -5,7 +5,7 @@ use crate::model::Model;
 use crate::optimisation::{ModelError, apply_highs_options_from_toml, solve_optimal};
 use crate::process::ProcessID;
 use crate::simulation::activity::ActivityMap;
-use crate::simulation::investment::DemandMap;
+use crate::simulation::agent::DemandMap;
 use crate::simulation::prices::Prices;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo};
 use crate::units::{Activity, Capacity};

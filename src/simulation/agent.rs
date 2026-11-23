@@ -1,4 +1,4 @@
-//! Code for performing agent investment.
+//! Code for running agent optimisations.
 use super::activity::{ActivityMap, FlowMap, create_flow_map};
 use super::dispatch::DispatchRun;
 use crate::asset::{Asset, AssetRef};

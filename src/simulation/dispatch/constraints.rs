@@ -5,7 +5,7 @@ use crate::commodity::{BalanceType, CommodityID, CommodityType};
 use crate::model::Model;
 use crate::process::FlowDirection;
 use crate::region::RegionID;
-use crate::simulation::investment::AllDemandMap;
+use crate::simulation::agent::AllDemandMap;
 use crate::time_slice::{Season, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Flow, MoneyPerCapacityPerYear, UnitType, Year};
 use highs::RowProblem as Problem;

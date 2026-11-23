@@ -1,7 +1,7 @@
 //! Code for creating sets of markets.
 use super::activity::FlowMap;
+use super::agent::Selection;
 use super::dispatch::DispatchRun;
-use super::investment::Selection;
 use crate::agent::{Agent, AgentType};
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
@@ -9,10 +9,10 @@ use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::{Process, ProcessID};
 use crate::region::RegionID;
-use crate::simulation::investment::{
+use crate::simulation::agent::{
     AgentRunMode, AllDemandMap, AssetOptions, DemandMap, update_net_demand_map,
 };
-use crate::simulation::investment::{competitive, population, portfolio};
+use crate::simulation::agent::{competitive, population, portfolio};
 use crate::simulation::prices::Prices;
 use crate::time_slice::TimeSliceInfo;
 use crate::units::{Capacity, Dimensionless, Flow};

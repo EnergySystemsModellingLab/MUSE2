@@ -8,7 +8,7 @@ use crate::commodity::Commodity;
 use crate::finance::{lcox, snas};
 use crate::model::Model;
 use crate::simulation::activity::ActivityMap;
-use crate::simulation::investment::DemandMap;
+use crate::simulation::agent::DemandMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, MoneyPerActivity, MoneyPerCapacity};
 use anyhow::Result;
