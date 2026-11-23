@@ -1,16 +1,16 @@
 //! Code for running agent optimisations.
 use super::activity::{ActivityMap, FlowMap, create_flow_map};
 use super::dispatch::DispatchRun;
-use crate::asset::{Asset, AssetRef};
-use crate::commodity::{Commodity, CommodityID, CommodityMap};
+use crate::asset::AssetRef;
+use crate::commodity::{CommodityID, CommodityMap};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::Process;
 use crate::region::RegionID;
 use crate::simulation::prices::Prices;
-use crate::time_slice::{TimeSliceInfo, TimeSliceLevel, TimeSliceSelection};
+use crate::time_slice::TimeSliceSelection;
 use crate::timeit::InvestmentTimer;
-use crate::units::{ActivityPerCapacity, Capacity, Flow, FlowPerCapacity};
+use crate::units::Flow;
 use anyhow::Result;
 use context_manager;
 use indexmap::IndexMap;
@@ -18,7 +18,6 @@ use itertools::Itertools;
 use log::debug;
 use std::collections::HashMap;
 use std::sync::Arc;
-use strum::IntoEnumIterator;
 
 pub mod competitive;
 pub mod population;
@@ -278,244 +277,19 @@ pub fn update_net_demand_map(demand: &mut AllDemandMap, flows: &FlowMap, assets:
     }
 }
 
-/// Returns the minimum installed capacity required for `asset` to satisfy the demand that it can
-/// potentially serve, accounting for its activity constraints.
-///
-/// The returned value is the maximum capacity requirement implied by any time-slice selection,
-/// since constraints at coarser aggregation levels (e.g. seasonal or annual limits) can require
-/// more capacity than constraints at the finest time-slice level.
-///
-/// Demand is evaluated using the commodity's balance level. Demand within a balance bucket is
-/// treated as fungible: if the asset is capable of operating in any constituent time slice of a
-/// bucket, then all demand in that bucket is considered serviceable by the asset.
-///
-/// Selections whose maximum supply is zero are ignored. Such selections would otherwise imply an
-/// infinite capacity requirement and therefore provide no useful lower bound.
-pub fn get_demand_limiting_capacity(
-    time_slice_info: &TimeSliceInfo,
-    asset: &Asset,
-    commodity: &Commodity,
-    demand: &DemandMap,
-) -> Capacity {
-    let coeff = asset.get_flow(&commodity.id).unwrap().coeff;
-    let mut capacity = Capacity(0.0);
-    let mut demand_cache: HashMap<_, Flow> = HashMap::new();
-
-    // Calculate demand-limiting capacity at each timeslice level and take the max.
-    for level in TimeSliceLevel::iter() {
-        for selection in time_slice_info.iter_selections_at_level(level) {
-            // Maximum supply within this selection according to the asset's activity limits.
-            let max_supply_for_selection = *asset
-                .get_activity_per_capacity_limits_for_selection(&selection)
-                .end()
-                * coeff;
-
-            // Selections with zero supply would imply infinite demand-limiting capacity,
-            // so they do not contribute to the maximum.
-            if max_supply_for_selection == FlowPerCapacity(0.0) {
-                continue;
-            }
-
-            // Serviceable demand within this selection.
-            //
-            // Demand is effectively grouped into balance buckets at the commodity's
-            // balance level. A balance bucket contributes if:
-            //   1. The bucket is contained within this selection, and
-            //   2. The asset can operate in at least one constituent timeslice
-            //      within that bucket.
-            //
-            // Demand within a balance bucket is fungible, so if the asset can serve
-            // any timeslice in the bucket, all demand in that bucket is considered
-            // serviceable.
-            let demand_selection_level = level.max(commodity.time_slice_level);
-            let demand_selection = selection
-                .containing_selection_at_level(demand_selection_level)
-                .unwrap();
-            let serviceable_demand_for_selection = *demand_cache
-                .entry(demand_selection.clone())
-                .or_insert_with(|| {
-                    demand_selection
-                        .iter_at_level(time_slice_info, commodity.time_slice_level)
-                        .unwrap()
-                        .filter(|(bucket, _)| {
-                            bucket.iter(time_slice_info).any(|(ts, _)| {
-                                *asset.get_activity_per_capacity_limits(ts).end()
-                                    > ActivityPerCapacity(0.0)
-                            })
-                        })
-                        .map(|(bucket, _)| demand[&bucket])
-                        .sum()
-                });
-
-            // Calculate demand-limiting capacity for this selection and take the
-            // maximum across all selections.
-            capacity = capacity.max(serviceable_demand_for_selection / max_supply_for_selection);
-        }
-    }
-
-    capacity
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asset::Asset;
     use crate::commodity::Commodity;
-    use crate::fixture::{
-        agent_id, asset, process, process_activity_limits_map, process_flows_map, svd_commodity,
-        time_slice, time_slice_info, time_slice_info2,
-    };
-    use crate::process::{ActivityLimits, FlowType, Process, ProcessFlow};
-    use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
-    use crate::units::Dimensionless;
-    use crate::units::{Activity, Flow, FlowPerActivity, MoneyPerFlow};
+    use crate::fixture::{agent_id, process, process_flows_map, svd_commodity, time_slice};
+    use crate::process::{FlowType, Process, ProcessFlow};
+    use crate::time_slice::TimeSliceID;
+    use crate::units::{Activity, Capacity, Flow, FlowPerActivity, MoneyPerFlow};
     use indexmap::indexmap;
     use rstest::rstest;
 
     use std::sync::Arc;
-
-    #[rstest]
-    fn get_demand_limiting_capacity_works(
-        time_slice: TimeSliceID,
-        time_slice_info: TimeSliceInfo,
-        svd_commodity: Commodity,
-        mut process: Process,
-    ) {
-        // Add flows for the process using the existing commodity fixture
-        let commodity_rc = Arc::new(svd_commodity);
-        let process_flow = ProcessFlow {
-            commodity: Arc::clone(&commodity_rc),
-            coeff: FlowPerActivity(2.0), // 2 units of flow per unit of activity
-            kind: FlowType::Fixed,
-            cost: MoneyPerFlow(0.0),
-        };
-        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        let process_flows_map = process_flows_map(process.regions.clone(), Arc::new(process_flows));
-        process.flows = process_flows_map;
-
-        // Create asset with the configured process
-        let asset = asset(process);
-
-        // Create demand map - demand of 10.0 for our time slice
-        let demand = indexmap! { TimeSliceSelection::Single(time_slice.clone()) => Flow(10.0)};
-
-        // Call the function
-        let result = get_demand_limiting_capacity(&time_slice_info, &asset, &commodity_rc, &demand);
-
-        // Expected calculation:
-        // max_flow_per_cap = activity_per_capacity_limit (1.0) * coeff (2.0) = 2.0
-        // required_capacity = demand (10.0) / max_flow_per_cap (2.0) = 5.0
-        assert_eq!(result, Capacity(5.0));
-    }
-
-    #[rstest]
-    fn get_demand_limiting_capacity_multiple_time_slices(
-        time_slice_info2: TimeSliceInfo,
-        svd_commodity: Commodity,
-        mut process: Process,
-    ) {
-        let (time_slice1, time_slice2) =
-            time_slice_info2.time_slices.keys().collect_tuple().unwrap();
-
-        // Add flows for the process using the existing commodity fixture
-        let commodity_rc = Arc::new(svd_commodity);
-        let process_flow = ProcessFlow {
-            commodity: Arc::clone(&commodity_rc),
-            coeff: FlowPerActivity(1.0), // 1 unit of flow per unit of activity
-            kind: FlowType::Fixed,
-            cost: MoneyPerFlow(0.0),
-        };
-        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        let process_flows_map = process_flows_map(process.regions.clone(), Arc::new(process_flows));
-        process.flows = process_flows_map;
-
-        // Add activity limits for the process
-        let mut limits = ActivityLimits::new_with_full_availability(&time_slice_info2);
-        limits.add_time_slice_limit(time_slice1.clone(), Dimensionless(0.0)..=Dimensionless(0.2));
-        limits.add_time_slice_limit(time_slice2.clone(), Dimensionless(0.0)..=Dimensionless(0.0));
-        let limits_map = process_activity_limits_map(process.regions.clone(), limits);
-        process.activity_limits = limits_map;
-
-        // Create asset with the configured process
-        let asset = asset(process);
-
-        // Create demand map with different demands for each time slice
-        let demand = indexmap! {
-            TimeSliceSelection::Single(time_slice1.clone()) => Flow(4.0), // Requires capacity of 4.0/0.2 = 20.0
-            TimeSliceSelection::Single(time_slice2.clone()) => Flow(3.0), // Would require infinite capacity, but should be skipped
-        };
-
-        // Call the function
-        let result =
-            get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
-
-        // Expected: maximum of the capacity requirements across time slices (excluding zero limit)
-        // Time slice 1: demand (4.0) / (activity_limit (0.2) * coeff (1.0)) = 20.0
-        // Time slice 2: skipped due to zero activity limit
-        // Maximum = 20.0
-        assert_eq!(result, Capacity(20.0));
-    }
-
-    #[rstest]
-    fn get_demand_limiting_capacity_uses_coarser_limits(
-        time_slice_info2: TimeSliceInfo,
-        svd_commodity: Commodity,
-        mut process: Process,
-    ) {
-        let (time_slice1, time_slice2) =
-            time_slice_info2.time_slices.keys().collect_tuple().unwrap();
-
-        // Configure a 1:1 activity-to-flow relationship.
-        let commodity_rc = Arc::new(svd_commodity);
-        let process_flow = ProcessFlow {
-            commodity: Arc::clone(&commodity_rc),
-            coeff: FlowPerActivity(1.0),
-            kind: FlowType::Fixed,
-            cost: MoneyPerFlow(0.0),
-        };
-
-        let process_flows = indexmap! { commodity_rc.id.clone() => process_flow.clone() };
-        process.flows = process_flows_map(process.regions.clone(), Arc::new(process_flows));
-
-        // Fine-grained limits imply a capacity requirement of 5:
-        //   TS1: 5 / 1 = 5
-        //   TS2: 5 / 1 = 5
-        //
-        // The annual limit implies:
-        //   (5 + 5) / 0.5 = 20
-        //
-        // The function should return the larger value.
-        let limits = HashMap::from([
-            (
-                TimeSliceSelection::Single(time_slice1.clone()),
-                Dimensionless(0.0)..=Dimensionless(1.0),
-            ),
-            (
-                TimeSliceSelection::Single(time_slice2.clone()),
-                Dimensionless(0.0)..=Dimensionless(1.0),
-            ),
-            (
-                TimeSliceSelection::Annual,
-                Dimensionless(0.0)..=Dimensionless(0.5),
-            ),
-        ]);
-
-        process.activity_limits = process_activity_limits_map(
-            process.regions.clone(),
-            ActivityLimits::new_from_limits(&limits, &time_slice_info2).unwrap(),
-        );
-
-        let asset = asset(process);
-
-        let demand = indexmap! {
-            TimeSliceSelection::Single(time_slice1.clone()) => Flow(5.0),
-            TimeSliceSelection::Single(time_slice2.clone()) => Flow(5.0),
-        };
-
-        let result =
-            get_demand_limiting_capacity(&time_slice_info2, &asset, &commodity_rc, &demand);
-
-        assert_eq!(result, Capacity(20.0));
-    }
 
     fn candidate(process: &Process, commission_year: u32) -> AssetRef {
         Asset::new_candidate(
