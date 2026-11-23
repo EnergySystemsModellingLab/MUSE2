@@ -1,10 +1,9 @@
 //! Constraints for the optimisation problem.
 use super::optimisation::Variable;
-use crate::asset::AssetRef;
+use crate::asset::{AssetRef, group_dispatch_equivalent_assets};
 use crate::commodity::Commodity;
 use crate::model::Model;
 use crate::simulation::investment::DemandMap;
-use crate::simulation::optimisation::group_dispatch_equivalent_assets;
 use crate::time_slice::{Season, TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{MoneyPerCapacityPerYear, Year};
 use highs::RowProblem as Problem;
