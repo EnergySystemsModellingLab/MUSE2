@@ -1,0 +1,15 @@
+src/cli.rs
+  h_e76403a1cd4bf1 218
+  h_e76403a1cd4bf1 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb0323893bb53c31c212fb77265df37cfe97e1e5",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
