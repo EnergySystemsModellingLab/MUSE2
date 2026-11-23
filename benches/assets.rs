@@ -8,12 +8,12 @@ use muse2::input::load_model;
 use muse2::model::Model;
 use muse2::output::DataWriter;
 use muse2::process::{Process, ProcessID};
-use muse2::simulation::agent::collect_preset_demands_for_year;
 use muse2::simulation::agent::competitive::{get_candidate_assets, select_best_assets};
 use muse2::simulation::candidate_assets_for_next_year;
 use muse2::simulation::dispatch::DispatchRun;
-use muse2::simulation::market::{
-    collect_agent_limits, get_demand_portion_for_market, get_responsible_agents,
+use muse2::simulation::orchestration::{
+    collect_agent_limits, collect_preset_demands_for_year, get_demand_portion_for_market,
+    get_responsible_agents,
 };
 use muse2::simulation::prices::{Prices, calculate_prices_from_solutions};
 use rayon::ThreadPoolBuilder;
