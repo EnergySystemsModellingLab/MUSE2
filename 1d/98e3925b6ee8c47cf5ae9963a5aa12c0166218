@@ -1,0 +1,15 @@
+src/simulation/agent/competitive.rs
+  h_e76403a1cd4bf1 25,330-335
+  h_e76403a1cd4bf1 28,336-338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1d98e3925b6ee8c47cf5ae9963a5aa12c0166218",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
