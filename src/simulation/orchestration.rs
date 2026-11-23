@@ -167,6 +167,7 @@ pub fn run_agents_for_single_market(
             .filter_agent(&agent.id)
             .filter_region(region_id)
             .filter_primary_producers_of(commodity_id)
+            .filter(|asset| !excluded_processes.contains(asset.process_id()))
             .cloned()
             .collect();
 
@@ -204,11 +205,7 @@ pub fn run_agents_for_single_market(
                 // Filter available assets and processes before running the agent
                 let options = AssetOptions {
                     committed: Vec::new(),
-                    existing: agent_assets
-                        .iter()
-                        .filter(|asset| !excluded_processes.contains(asset.process_id()))
-                        .cloned()
-                        .collect(),
+                    existing: agent_assets,
                     processes: agent
                         .iter_search_space(region_id, commodity_id, year)
                         .filter(|process| !excluded_processes.contains(&process.id))
@@ -243,11 +240,11 @@ pub fn run_agents_for_single_market(
 /// turn.
 ///
 /// `feedback_processes` identifies process-region pairs that produce a cycle market and consume a
-/// market earlier in the investment order. In `Invest` mode, assets for these pairs are selected
-/// in the first pass and retained, then the remaining assets are selected in a second pass that
-/// excludes those processes. In `Dispatch` mode, there is no reselection, so all assets from the
-/// first pass are returned. A dispatch optimisation after each market updates demand for subsequent
-/// markets.
+/// market earlier in the investment order. Assets and activities for these pairs are retained from
+/// the first pass, then the remaining assets are selected in a second pass that excludes those
+/// processes. In `Dispatch` mode, capacities remain fixed in both passes. After each market, the
+/// flows of the selected assets are estimated using `flow_estimator` and used to update demand for
+/// subsequent markets.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn run_agents_for_cycle(
     model: &Model,
@@ -266,7 +263,6 @@ pub fn run_agents_for_cycle(
 
     // First pass: iterate over the markets in order, considering all processes
     let mut net_demand = demand.clone();
-    let mut assets_for_first_pass = Vec::new();
     let mut retained_first_pass = Selection::default();
     let mut excluded_flows = FlowMap::new();
     for market in markets {
@@ -294,11 +290,8 @@ pub fn run_agents_for_cycle(
             continue;
         }
 
-        if mode == AgentRunMode::Invest {
-            assets_for_first_pass.extend(selection.assets.iter().cloned());
-        }
         let mut retained = selection.clone();
-        retained.retain(|asset| mode == AgentRunMode::Dispatch || is_feedback_asset(asset));
+        retained.retain(is_feedback_asset);
         retained_first_pass.extend(retained);
 
         // Determine the flows of the newly selected assets
@@ -306,7 +299,7 @@ pub fn run_agents_for_cycle(
 
         // Update demand map with flows from newly selected assets
         for ((asset, commodity_id, time_slice), flow) in &flows {
-            if mode == AgentRunMode::Invest && is_feedback_asset(asset) {
+            if is_feedback_asset(asset) {
                 excluded_flows
                     .entry((asset.clone(), commodity_id.clone(), time_slice.clone()))
                     .and_modify(|stored_flow| *stored_flow += *flow)
@@ -316,14 +309,14 @@ pub fn run_agents_for_cycle(
         update_net_demand_map(&mut net_demand, &flows, &selection.assets);
     }
 
-    if mode == AgentRunMode::Dispatch {
-        return Ok(retained_first_pass);
-    }
-
     // Second pass: iterate over the markets in the same order, excluding feedback processes, with
     // demand updated to account for the flows of feedback assets retained from the first pass
     let mut net_demand = demand.clone();
-    update_net_demand_map(&mut net_demand, &excluded_flows, &assets_for_first_pass);
+    update_net_demand_map(
+        &mut net_demand,
+        &excluded_flows,
+        &retained_first_pass.assets,
+    );
     let mut second_pass = Selection::default();
     for market in markets {
         let (commodity_id, region_id) = market.clone();
