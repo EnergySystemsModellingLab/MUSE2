@@ -1,0 +1,51 @@
+src/simulation/agent.rs
+  s_2e1dd1bff3094e::t_faf473e2809ea4 3,5,7,12,116,119-125,127-128,130-147
+  s_2e1dd1bff3094e::t_84fefa9cd6d5a6 117
+  s_2e1dd1bff3094e::t_de5e13134d128c 8
+  s_2e1dd1bff3094e::t_47cd752b901207 115
+src/simulation.rs
+  s_2e1dd1bff3094e::t_6ec53bdb93289e 20
+  s_2e1dd1bff3094e::t_b050223d93f7e5 21
+src/simulation/orchestration.rs
+  s_2e1dd1bff3094e::t_faf473e2809ea4 6
+  s_2e1dd1bff3094e::t_b050223d93f7e5 24-32
+  s_2e1dd1bff3094e::t_4a3af0db994a05 3,224
+  s_2e1dd1bff3094e::t_b98bdbcad5d063 1-2,5,7-23,33-223,225-638
+  s_2e1dd1bff3094e::t_18e714aebba58f 4
+  s_2e1dd1bff3094e::t_6ec53bdb93289e 639-732
+src/simulation/market.rs
+  s_2e1dd1bff3094e::t_6ec53bdb93289e 13,16
+  s_cf4080527ce1cc::t_eff522dcd8c6ce 2-3,12
+benches/assets.rs
+  s_2e1dd1bff3094e::t_9753c359f241c2 14
+  s_2e1dd1bff3094e::t_50da9e9ee1ace2 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "adf772dc5554daef5cb9afe24c1c980ae583d769",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_2e1dd1bff3094e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f2448d80-6486-4588-9bef-ff56badf2822",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    },
+    "s_cf4080527ce1cc": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "65fe1d9d-0e20-4e28-bafe-99fbbd8a8f14",
+        "model": "unknown"
+      },
+      "human_author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
