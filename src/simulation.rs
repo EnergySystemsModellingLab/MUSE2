@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 pub mod activity;
 use activity::FlowMap;
-pub mod optimisation;
-use optimisation::DispatchRun;
+pub mod dispatch;
+use dispatch::DispatchRun;
 pub mod investment;
 use investment::{AgentRunMode, collect_preset_demands_for_year, run_agents_for_year};
 pub mod market;

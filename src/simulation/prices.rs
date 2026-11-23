@@ -6,8 +6,8 @@ use crate::commodity::{CommodityID, CommodityMap, CommodityType, PricingStrategy
 use crate::model::Model;
 use crate::region::RegionID;
 use crate::simulation::activity::ActivityMap;
+use crate::simulation::dispatch::Solution;
 use crate::simulation::market::MarketSet;
-use crate::simulation::optimisation::Solution;
 use crate::time_slice::{TimeSliceID, TimeSliceInfo, TimeSliceSelection};
 use crate::units::{Activity, Dimensionless, Flow, MoneyPerFlow, UnitType, Year};
 use anyhow::Result;

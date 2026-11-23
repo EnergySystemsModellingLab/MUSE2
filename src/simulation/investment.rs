@@ -1,6 +1,6 @@
 //! Code for performing agent investment.
 use super::activity::{ActivityMap, FlowMap, create_flow_map};
-use super::optimisation::DispatchRun;
+use super::dispatch::DispatchRun;
 use crate::asset::{Asset, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
 use crate::model::Model;

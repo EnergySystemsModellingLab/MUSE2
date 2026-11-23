@@ -1,7 +1,7 @@
 //! Code for creating sets of markets.
 use super::activity::FlowMap;
+use super::dispatch::DispatchRun;
 use super::investment::Selection;
-use super::optimisation::DispatchRun;
 use crate::agent::{Agent, AgentType};
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID};

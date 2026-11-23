@@ -5,7 +5,7 @@ use crate::commodity::CommodityID;
 use crate::process::ProcessID;
 use crate::region::RegionID;
 use crate::simulation::activity::FlowMap;
-use crate::simulation::optimisation::Solution;
+use crate::simulation::dispatch::Solution;
 use crate::simulation::prices::PriceMap;
 use crate::time_slice::TimeSliceID;
 use crate::units::{Activity, Capacity, Flow, Money, MoneyPerActivity, MoneyPerFlow};
