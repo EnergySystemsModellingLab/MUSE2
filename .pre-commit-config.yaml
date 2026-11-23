@@ -33,7 +33,7 @@ repos:
         files: /settings\.toml$
         types_or: [toml]
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.50.0
+    rev: v0.50.1
     hooks:
       - id: markdownlint-fix
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -55,7 +55,7 @@ repos:
       - id: clippy
         args: ["--all-targets", "--", "-D", "warnings"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.5
+    rev: v0.17.6
     hooks:
       - id: ruff-check
         types_or: [python]
@@ -73,6 +73,6 @@ repos:
     hooks:
       - id: validate-cff
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.8
+    rev: 0.13.9
     hooks:
       - id: uv-lock
