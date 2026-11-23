@@ -1,0 +1,21 @@
+src/simulation/agent.rs
+  h_e76403a1cd4bf1 4,91-111,223-261
+  h_e76403a1cd4bf1 112,222
+src/simulation.rs
+  h_e76403a1cd4bf1 6,15,56-60,62,64-74,80-81,96,98,104,114-116,134,144,148-149,168-169,171-172
+  h_e76403a1cd4bf1 17,112
+src/simulation/orchestration.rs
+  h_e76403a1cd4bf1 304-305,357-358,361,477,503,512-513,515-516,519
+  h_e76403a1cd4bf1 514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ea1ddbaffe4ad0dd063d621507fb0efa5af91e1",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
