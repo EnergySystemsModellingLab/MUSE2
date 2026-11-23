@@ -3,22 +3,18 @@ use crate::asset::{Asset, AssetPool, AssetRef};
 use crate::model::Model;
 use crate::output::DataWriter;
 use crate::process::ProcessMap;
-use crate::simulation::prices::{Prices, calculate_prices_from_solutions};
-use crate::timeit::DispatchTimer;
+use crate::simulation::prices::{Prices, calculate_prices};
 use crate::units::Capacity;
 use anyhow::{Context, Result};
-use context_manager;
 use log::info;
 use std::path::Path;
 use std::sync::Arc;
 
 pub mod activity;
-use activity::FlowMap;
-pub mod dispatch;
-use dispatch::DispatchRun;
 pub mod agent;
+pub mod dispatch;
 pub mod orchestration;
-use orchestration::{AgentRunMode, collect_preset_demands_for_year, run_agents_for_year};
+use orchestration::{AgentRunMode, run_agents_for_year};
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;
@@ -57,20 +53,32 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         model.parameters.candidate_asset_capacity,
     );
 
-    // Run dispatch optimisation
-    info!("Running dispatch optimisation...");
-    // There are no previous prices in the base year, so cyclic markets are seeded with zero
-    let (mut prices, flow_map) = run_dispatch_for_year(
+    // Agents dispatch the committed assets to get flows and prices for the base year. There are no
+    // previous prices in the base year, so cyclic markets are seeded with zero.
+    info!("Running agent dispatch...");
+    writer.set_debug_context("base year agent dispatch".to_string());
+    let base_year_selection = run_agents_for_year(
         model,
+        year,
         &asset_pool,
+        AgentRunMode::Dispatch,
+        &Prices::default(),
+        &mut writer,
+    )
+    .context("Agent dispatch failed")?;
+    writer.clear_debug_context();
+
+    // Calculate prices
+    let mut prices = calculate_prices(
+        model,
+        &base_year_selection.activity,
         &candidates,
         &Prices::default(),
         year,
-        &mut writer,
     )?;
 
-    // Write results of dispatch optimisation to file
-    writer.write_flows(year, &flow_map)?;
+    // Write base year flows and prices to file
+    writer.write_flows(year, &base_year_selection.flow_map())?;
     writer.write_prices(year, &prices.market)?;
 
     while let Some(year) = year_iter.next() {
@@ -85,16 +93,15 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         // Take all the active assets as a list of existing assets
         let existing_assets = asset_pool.take();
 
-        // Iterative loop to "iron out" prices via repeated investment and dispatch
+        // Iterative loop to "iron out" prices via repeated investment and price calculation
         let mut ironing_out_iter = 0;
-        let selected_assets: Vec<AssetRef> = loop {
+        let mut selection = loop {
             // Add context to the writer
             writer.set_debug_context(format!("ironing out iteration {ironing_out_iter}"));
 
             // Perform agent investment
             info!("Running agent investment...");
-            // NB: activities from asset selection are not currently used
-            let selected_assets = run_agents_for_year(
+            let selection = run_agents_for_year(
                 model,
                 year,
                 &existing_assets,
@@ -102,19 +109,11 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
                 &prices,
                 &mut writer,
             )
-            .context("Agent investment failed")?
-            .assets;
+            .context("Agent investment failed")?;
 
-            // Run dispatch optimisation to get updated prices for the next iteration
-            info!("Running dispatch optimisation...");
-            let (new_prices, ..) = run_dispatch_for_year(
-                model,
-                &selected_assets,
-                &candidates,
-                &prices,
-                year,
-                &mut writer,
-            )?;
+            // Calculate prices
+            let new_prices =
+                calculate_prices(model, &selection.activity, &candidates, &prices, year)?;
 
             // Check if prices have converged using time slice-weighted averages
             let prices_stable = prices.market.within_tolerance_weighted(
@@ -132,7 +131,7 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             // Break early if prices have converged
             if prices_stable {
                 info!("Prices converged after {} iterations", ironing_out_iter + 1);
-                break selected_assets;
+                break selection;
             }
 
             // Break if max iterations reached
@@ -142,12 +141,12 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
                     "Max ironing out iterations ({}) reached",
                     model.parameters.max_ironing_out_iterations
                 );
-                break selected_assets;
+                break selection;
             }
         };
 
-        // Add selected_assets to the active pool, receiving the newly commissioned ones
-        let newly_selected = asset_pool.extend(selected_assets);
+        // Commission selected assets and re-key their activities to the commissioned assets
+        let newly_selected = selection.commission(&mut asset_pool);
         new_assets.extend_from_slice(newly_selected);
 
         // Decommission unused assets
@@ -166,107 +165,18 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
             model.parameters.candidate_asset_capacity,
         );
 
-        // Run dispatch optimisation
-        info!("Running final dispatch optimisation for year {year}...");
-        let (new_prices, flow_map) =
-            run_dispatch_for_year(model, &asset_pool, &candidates, &prices, year, &mut writer)?;
+        // Calculate prices
+        let new_prices = calculate_prices(model, &selection.activity, &candidates, &prices, year)?;
 
-        // Write results of dispatch optimisation to file
-        writer.write_flows(year, &flow_map)?;
+        // Write flows and prices results to file
+        writer.write_flows(year, &selection.flow_map())?;
         writer.write_prices(year, &new_prices.market)?;
 
         // Prices for the next year
         prices = new_prices;
     }
 
-    writer.flush()?;
-
     Ok(())
-}
-
-/// Run dispatch to get flows and prices for a milestone year.
-///
-/// Tries to get commodity flows from a dispatch run which just includes existing assets and prices
-/// from a run with both existing and candidate assets. If either flows or prices cannot be
-/// calculated, empty maps are returned.
-///
-/// `previous_prices` (from the previous year or ironing-out iteration) are used to seed price
-/// calculations for cyclic markets.
-///
-/// Fully mothballed assets or mothballed tranches thereof are excluded.
-#[context_manager::wrap(DispatchTimer)]
-fn run_dispatch_for_year(
-    model: &Model,
-    assets: &[AssetRef],
-    candidates: &[AssetRef],
-    previous_prices: &Prices,
-    year: u32,
-    writer: &mut DataWriter,
-) -> Result<(Prices, FlowMap)> {
-    // Sanity checks
-    debug_assert!(assets.iter().all(|asset| !asset.is_candidate()));
-    debug_assert!(candidates.iter().all(|asset| asset.is_candidate()));
-
-    let market_demands = collect_preset_demands_for_year(&model.commodities, year);
-
-    // Run dispatch optimisation with existing assets only, if there are any. If not, then assume no
-    // flows (i.e. all are zero)
-    let (solution_existing, flow_map) = if assets.is_empty() {
-        (None, FlowMap::default())
-    } else {
-        let solution = DispatchRun::new(model, assets, year, &market_demands)
-            .run("final without candidates", writer)?;
-        let flow_map = solution.create_flow_map();
-        (Some(solution), flow_map)
-    };
-
-    // Perform a separate dispatch run with both existing assets and candidates, if there are any,
-    // to get shadow prices. If not, use the existing solution alone.
-    let solution_with_candidates = if candidates.is_empty() {
-        None
-    } else {
-        Some(
-            DispatchRun::new(model, assets, year, &market_demands)
-                .with_candidates(candidates)
-                .run("final with candidates", writer)?,
-        )
-    };
-
-    // Calculate prices from the appropriate solution(s). If there were candidates, use the solution
-    // that includes them; otherwise use the existing solution alone. If there were no assets at
-    // all, return empty prices.
-    let prices = match (
-        solution_existing.as_ref(),
-        solution_with_candidates.as_ref(),
-    ) {
-        (None, None) => Prices::default(),
-        (Some(existing), None) => calculate_prices_from_solutions(
-            model,
-            existing,
-            existing,
-            candidates,
-            previous_prices,
-            year,
-        )?,
-        (Some(existing), Some(with_candidates)) => calculate_prices_from_solutions(
-            model,
-            existing,
-            with_candidates,
-            candidates,
-            previous_prices,
-            year,
-        )?,
-        (None, Some(with_candidates)) => calculate_prices_from_solutions(
-            model,
-            with_candidates,
-            with_candidates,
-            candidates,
-            previous_prices,
-            year,
-        )?,
-    };
-
-    Ok((prices, flow_map))
 }
 
 /// Create candidate assets for all potential processes in a specified year

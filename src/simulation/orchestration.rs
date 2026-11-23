@@ -2,7 +2,6 @@
 use super::activity::FlowMap;
 use super::agent::run_agent;
 use super::agent::{AllDemandMap, AssetOptions, DemandMap, Selection};
-use super::dispatch::DispatchRun;
 use crate::agent::Agent;
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
@@ -261,8 +260,6 @@ pub fn run_agents_for_cycle(
     prices: &Prices,
     writer: &mut DataWriter,
 ) -> Result<Selection> {
-    // Precompute a joined string for logging
-    let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
     let is_feedback_asset = |asset: &AssetRef| {
         feedback_processes.contains(&(asset.process_id().clone(), asset.region_id().clone()))
     };
@@ -304,21 +301,10 @@ pub fn run_agents_for_cycle(
         retained.retain(|asset| mode == AgentRunMode::Dispatch || is_feedback_asset(asset));
         retained_first_pass.extend(retained);
 
-        // Run dispatch
-        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
-        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
-            .without_commodity_constraints()
-            .with_market_balance_subset(std::slice::from_ref(market))
-            .with_input_prices(&prices.shadow)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
+        // Determine the flows of the newly selected assets
+        let flows = selection.flow_map();
 
         // Update demand map with flows from newly selected assets
-        let flows = solution.create_flow_map();
         for ((asset, commodity_id, time_slice), flow) in &flows {
             if mode == AgentRunMode::Invest && is_feedback_asset(asset) {
                 excluded_flows
@@ -368,25 +354,11 @@ pub fn run_agents_for_cycle(
             continue;
         }
 
-        // Run dispatch
-        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
-        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
-            .without_commodity_constraints()
-            .with_market_balance_subset(std::slice::from_ref(market))
-            .with_input_prices(&prices.shadow)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
+        // Determine the flows of the newly selected assets
+        let flows = selection.flow_map();
 
         // Update demand map with flows from newly selected assets
-        update_net_demand_map(
-            &mut net_demand,
-            &solution.create_flow_map(),
-            &selection.assets,
-        );
+        update_net_demand_map(&mut net_demand, &flows, &selection.assets);
         second_pass.extend(selection);
     }
 
@@ -502,8 +474,7 @@ pub fn run_agents_for_year(
     writer: &mut DataWriter,
 ) -> Result<Selection> {
     // Initialise net demand map
-    let preset_demands = collect_preset_demands_for_year(&model.commodities, year);
-    let mut net_demand = preset_demands.clone();
+    let mut net_demand = collect_preset_demands_for_year(&model.commodities, year);
 
     // Keep track of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -514,11 +485,6 @@ pub fn run_agents_for_year(
         "Investment order for year '{year}': {}",
         investment_order.iter().join(" -> ")
     );
-
-    // Keep track of the markets that have been seen so far. This will be used to apply
-    // balance constraints in the dispatch optimisation - we only apply balance constraints for
-    // markets that have been seen so far.
-    let mut seen_markets = Vec::new();
 
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
@@ -534,12 +500,7 @@ pub fn run_agents_for_year(
             writer,
         )?;
 
-        // Update our list of seen markets
-        for market in market_set.iter_markets() {
-            seen_markets.push(market.clone());
-        }
-
-        // If no assets have been selected, skip dispatch optimisation
+        // If no assets have been selected, move on
         // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
         if selection.is_empty() {
@@ -548,28 +509,14 @@ pub fn run_agents_for_year(
         }
 
         // Add the selected assets to the list of all selected assets
-        let selected_assets = selection.assets.clone();
-        all_selected.extend(selection);
+        let new_selection = selection;
+        all_selected.extend(new_selection.clone());
 
-        // Perform dispatch optimisation with assets that have been selected so far
-        // **TODO**: presumably we only need to do this for selected_assets, as assets added in
-        // previous iterations should not change
-        debug!("Running post-investment dispatch for '{market_set}'");
-
-        // As upstream markets by definition will not yet have producers, we explicitly set
-        // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected.assets, year, &preset_demands)
-            .without_commodity_constraints()
-            .with_market_balance_subset(&seen_markets)
-            .with_input_prices(&prices.shadow)
-            .run(&format!("post {market_set} investment"), writer)?;
+        // Determine the flows of the assets selected so far
+        let flows = new_selection.flow_map();
 
         // Update demand map with flows from newly added assets
-        update_net_demand_map(
-            &mut net_demand,
-            &solution.create_flow_map(),
-            &selected_assets,
-        );
+        update_net_demand_map(&mut net_demand, &flows, &new_selection.assets);
     }
 
     Ok(all_selected)

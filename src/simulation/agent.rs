@@ -1,7 +1,7 @@
 //! Code for running agent optimisations.
 use super::activity::{ActivityMap, FlowMap, create_flow_map};
 use crate::agent::{Agent, AgentType};
-use crate::asset::AssetRef;
+use crate::asset::{AssetPool, AssetRef};
 use crate::commodity::{Commodity, CommodityID};
 use crate::model::Model;
 use crate::output::DebugDataWriter;
@@ -86,6 +86,28 @@ impl Selection {
     {
         self.assets.retain(&predicate);
         self.activity.retain(|(asset, _), _| predicate(asset));
+    }
+
+    /// Add the selected assets to the pool, re-keying activities to newly commissioned assets.
+    ///
+    /// Returns the newly commissioned assets. Retained assets keep their selected capacities.
+    pub fn commission<'a>(&mut self, pool: &'a mut AssetPool) -> &'a [AssetRef] {
+        let new_assets = pool.extend(self.assets.iter().cloned());
+        let mut commissioned = new_assets.iter();
+        let selected = self
+            .assets
+            .iter()
+            .map(|asset| {
+                let selected = if asset.id().is_none() {
+                    commissioned.next().expect("Missing commissioned asset")
+                } else {
+                    asset
+                };
+                (asset.clone(), selected.clone())
+            })
+            .collect();
+        *self = Self::from_optimisation(selected, &self.activity);
+        new_assets
     }
 
     /// Create a map of commodity flows from the activities of the selected assets
@@ -194,6 +216,46 @@ mod tests {
         assert_eq!(
             selection.activity,
             indexmap! { (selected_asset, time_slice) => Activity(1.0) }
+        );
+    }
+
+    #[rstest]
+    fn selection_commission_rekeys_activity_to_commissioned_assets(
+        process: Process,
+        time_slice: TimeSliceID,
+    ) {
+        let mut pool = AssetPool::new();
+
+        let mut retained = candidate(&process, 2015);
+        retained
+            .make_mut()
+            .select_candidate_for_investment(agent_id());
+        let retained = pool.extend([retained])[0].clone();
+        pool.take();
+        let retained_id = retained.id();
+
+        let mut ready = candidate(&process, 2020);
+        ready.make_mut().select_candidate_for_investment(agent_id());
+        let mut selection = Selection {
+            assets: vec![ready.clone(), retained.clone()],
+            activity: indexmap! {
+                (ready, time_slice.clone()) => Activity(1.0),
+                (retained.clone(), time_slice.clone()) => Activity(2.0),
+            },
+        };
+
+        let new_assets = selection.commission(&mut pool).to_vec();
+
+        assert_eq!(new_assets.len(), 1);
+        assert!(new_assets[0].id().is_some());
+        assert_eq!(selection.assets, [new_assets[0].clone(), retained.clone()]);
+        assert_eq!(selection.assets[1].id(), retained_id);
+        assert_eq!(
+            selection.activity,
+            indexmap! {
+                (new_assets[0].clone(), time_slice.clone()) => Activity(1.0),
+                (retained, time_slice) => Activity(2.0),
+            }
         );
     }
 
