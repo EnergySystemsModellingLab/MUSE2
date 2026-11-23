@@ -176,6 +176,8 @@ pub fn run(model: &Model, output_path: &Path, debug_model: bool) -> Result<()> {
         prices = new_prices;
     }
 
+    writer.flush()?;
+
     Ok(())
 }
 
