@@ -74,8 +74,7 @@ does not change the time slices defined in `time_slices.csv`. Service demand dat
 same granularity. Other inputs, such as process availability limits and commodity constraints,
 specify their own time-slice period, which may differ from the balance level of the commodities
 involved. See the [input file reference](../file_formats/input_files.md) for the fields which accept
-this syntax, and the [dispatch optimisation](./dispatch_optimisation.md) documentation for how they
-are applied.
+this syntax.
 
 ## Choosing a resolution
 

@@ -53,9 +53,9 @@ At a high level, the user defines:
 ## Framework Overview
 
 The model operates sequentially across a series of milestone years (MSYs). For the base year,
-existing assets are commissioned and a [dispatch optimisation][dispatch-optimisation] is run to
-establish [commodity prices][prices] for the first investment year. For each subsequent MSY, the
-model performs the following steps:
+existing assets are commissioned and agents determine their activities with those assets fixed.
+MUSE2 derives flows and [commodity prices][prices] from the resulting activities. For each
+subsequent MSY, the model performs the following steps:
 
 ### 1. Decommission end-of-life assets
 
@@ -69,9 +69,9 @@ markets are processed deepest-first (most downstream to most upstream), grouped 
 independent markets at the same depth. For each market, each responsible agent selects assets using
 the algorithm for its [agent type][agents]. See [Investment][investment] for full details.
 
-After all markets in each layer are settled, a **partial system dispatch** is run over all assets
-selected so far. This propagates demand upstream: input commodity flows consumed by newly committed
-assets become demand targets for the markets not yet invested in.
+Each agent returns its selected assets and their activities. MUSE2 derives commodity flows from
+those activities and updates net demand as it processes the investment order, so input flows create
+demand for upstream markets without a separate system-dispatch solve.
 
 ### 3. Mothballing and decommissioning
 
@@ -81,21 +81,20 @@ for `mothball_years` (defined in [`model.toml`][model-toml]) is permanently deco
 
 ### 4. Ironing-out loop
 
-Investment and dispatch are repeated iteratively to resolve any price instability introduced by new
-capacity commitments. Each iteration runs the full agent investment pass followed by a full system
-dispatch. The loop terminates when time-slice-weighted market prices have converged within
+Agent investment and price calculation are repeated to resolve price instability introduced by new
+capacity commitments. Each iteration calculates prices from the activities returned by the agent
+investment pass. The loop terminates when time-slice-weighted market prices have converged within
 `price_tolerance`, or when `max_ironing_out_iterations` is reached (both defined in
 [`model.toml`][model-toml]).
 
-### 5. Final dispatch
+### 5. Write milestone-year results
 
-A full [dispatch optimisation][dispatch-optimisation] is run over the settled asset pool. The
-resulting flows and commodity prices are written to the output files and carried forward as the
-price basis for the next MSY's investment.
+The selected assets are commissioned, and their activities are used to derive the flows and
+commodity prices written to the output files. The prices are carried forward as the price basis for
+the next MSY's investment.
 
 [investment]: ./investment.md
 [agents]: ./agents.md
 [commodity-graphs]: ./commodity_graphs.md
-[dispatch-optimisation]: ./dispatch_optimisation.md
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml

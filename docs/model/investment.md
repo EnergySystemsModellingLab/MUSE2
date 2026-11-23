@@ -22,11 +22,11 @@ demand created by already-committed downstream assets is already known.
 
 Markets are processed in **layers**: a layer is a set of commodity markets that are independent of
 one another (i.e. at the same depth in the commodity graph and with no dependencies between them).
-All markets within a layer are settled before moving to the next layer. After each layer is
-settled, a single [partial system dispatch](#partial-system-dispatch) is run over all assets
-selected so far. This quantifies the input commodity flows consumed by newly committed assets —
-for example, a gas generator committed during electricity market investment will consume gas,
-creating demand that the gas market investment must subsequently meet.
+All markets within a layer are settled before moving to the next layer. The activities returned by
+the agents are converted to commodity flows, which update net demand before investment proceeds to
+the next layer. For example, a gas generator committed during electricity market investment consumes
+gas, creating demand that the gas market investment must subsequently meet. This demand propagation
+is derived directly from agent activities.
 
 Only commodities of type `ServiceDemand` and `SupplyEqualsDemand` are subject to
 investment decisions. Other commodity types (e.g. `OTH`) are excluded.
@@ -46,8 +46,8 @@ market which is invested in *before* the market they supply (see
 [Commodity Graphs][graph-circularities]). If assets are selected for a feedback process, they create
 extra demand for a market that has already been invested in.
 
-To deal with this, MUSE2 invests in the circularity in two passes over its markets, running a
-[partial system dispatch](#partial-system-dispatch) after each market in each pass:
+To deal with this, MUSE2 invests in the circularity in two passes over its markets, updating net
+demand from selected asset activities after each market in each pass:
 
 1. **First pass (provisional).** The markets are visited in order, with all processes available,
    including feedback processes. Any feedback assets selected will leave some demand for earlier
@@ -167,9 +167,9 @@ process, agent, region, commodity and milestone year is:
 
 ## Commodity Prices
 
-Agents use commodity prices when selecting assets. These prices come from the previous MSY's
-dispatch (or from the previous [ironing-out loop][framework-overview] iteration, if enabled). See
-[Commodity Prices][prices] for how market, shadow and fallback prices are calculated, and
+Agents use commodity prices when selecting assets. These prices come from the previous MSY's price
+calculation (or from the previous [ironing-out loop][framework-overview] iteration, if enabled).
+See [Commodity Prices][prices] for how market and fallback prices are calculated, and
 [Agents][agents] for how each agent type uses them.
 
 ## Asset Selection
@@ -179,11 +179,7 @@ has selected to meet its share of demand. Selected existing assets are retained 
 selected mothballed capacity), and selected candidate assets are commissioned as new assets owned by
 the agent.
 
-If an agent is unable to meet its share of demand, the outcome depends on its agent type. A
-competitive agent logs a warning and stops early, keeping the assets selected so far; the unmet
-demand may still be satisfied during the full system dispatch, but this is not guaranteed. If
-investment constraints are so restrictive that it has no options left, the simulation terminates
-with an error. For a portfolio agent, the simulation terminates with an error.
+If an agent is unable to meet its share of demand, the simulation terminates with an error.
 
 > **Note:** only production of the *primary output* commodity is counted against demand. If a
 > selected asset also produces other commodities as secondary outputs, that side-production does
@@ -207,47 +203,21 @@ Capacity that has been mothballed for `mothball_years` years (as defined in
 with no remaining capacity are removed from the asset pool and excluded from all future investment
 and dispatch.
 
-## Partial System Dispatch
+## Activity-Derived Demand Propagation
 
-After each layer of commodity markets is settled during the investment loop, a **partial system
-dispatch** is run over all assets selected so far. Within a [circularity](#circularities), a partial
-dispatch is instead run after each market in each pass, over the assets just selected for that
-market. This is a standard [dispatch optimisation][dispatch-optimisation] solve, with two key
-modifications described below.
+Each agent selection includes the assets selected and their activity in each time slice. MUSE2
+multiplies these activities by the assets' flow coefficients to calculate commodity flows and
+updates net demand as it processes the investment order. Input flows increase demand for upstream
+markets, while output flows of the primary commodity reduce demand for the market being invested in.
+Secondary outputs do not reduce demand for other markets.
 
-### Market subset
-
-Only the commodity markets visited so far — i.e. the current market and all those settled in
-earlier investment rounds — are subject to commodity balance constraints. Markets that are upstream
-of the current investment frontier are not yet constrained, because no assets have been committed
-to serve them yet.
-
-### Input prices for upstream commodities
-
-Because upstream markets are unconstrained, their commodities have no balance constraints and
-therefore no shadow prices in this dispatch. Without any signal on the cost of upstream inputs,
-those inputs would appear free to the solver.
-
-To avoid this, the shadow prices \\( \lambda_{c,r,t} \\) from the previous MSY (see
-[Commodity Prices](#commodity-prices)) are passed as explicit
-cost penalties on any input flows corresponding to upstream, unconstrained commodities. This ensures
-the dispatch correctly accounts for the cost of consuming upstream resources, even before those
-markets have been invested in.
-
-### Using the partial dispatch result
-
-The flow map from the partial dispatch is used to update the **net demand** seen by each upstream
-market. For each newly committed asset, its input commodity flows are added to the demand for the
-corresponding upstream markets, and its primary output flows reduce the remaining demand for the
-current market. Only primary output flows are counted against demand; secondary outputs do not
-affect the demand targets of other commodity markets. These updated demands then drive the next
-investment decisions as the process moves along the investment order, with each market's committed
-assets shaping the demand seen by those upstream.
+This flow propagation also applies within circularities: the first pass identifies feedback assets,
+and their flows are included when net demand is initialised for the second pass. The full-system
+dispatch optimisation is not run between markets or layers.
 
 [agents]: ./agents.md
 [framework-overview]: index.html#framework-overview
 [prices]: ./prices.md
 [model-toml]: ../file_formats/input_files.md#model-parameters-modeltoml
 [process-investment-constraints-csv]: ../file_formats/input_files.md#process_investment_constraintscsv
-[dispatch-optimisation]: ./dispatch_optimisation.md
 [graph-circularities]: ./commodity_graphs.md#circularities
