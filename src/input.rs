@@ -282,6 +282,15 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
         &region_ids,
         years,
     )?;
+    for (process_id, process) in &processes {
+        for (agent_id, _, _) in process.investment_constraints.keys() {
+            ensure!(
+                agents.contains_key(agent_id),
+                "Unknown agent ID '{agent_id}' in investment constraints for process \
+                 '{process_id}'"
+            );
+        }
+    }
     let agent_ids = agents.keys().cloned().collect();
     let user_assets = read_user_assets(model_dir.as_ref(), &agent_ids, &processes, &region_ids)?;
 

@@ -6,6 +6,9 @@ fields:
   - name: process_id
     type: string
     description: The process to which this entry applies
+  - name: agent_id
+    type: string
+    description: The agent to which this entry applies
   - name: regions
     type: string
     description: The region(s) to which this entry applies
@@ -22,10 +25,7 @@ fields:
       valid year, respectively. Must be within the process's year range.
   - name: addition_limit
     type: number
-    description: Yearly constraint on the amount agents can invest in the process
-    notes: |
-      The addition limit is allocated between all agents in proportion to their share of the
-      process's primary commodity demand.
+    description: Yearly constraint on the amount the specified agent can invest in the process
   - name: capacity_growth_limit
     type: number
     description: |
@@ -40,7 +40,4 @@ fields:
     notes: This is currently unused.
   - name: total_capacity_limit
     type: number
-    description: A hard upper limit on the total amount of installed capacity that can exist at any given time
-    notes: |
-      The total capacity limit is allocated between all agents in proportion to their share of the
-      process's primary commodity demand.
+    description: A hard upper limit on the total amount of installed capacity the specified agent can own
