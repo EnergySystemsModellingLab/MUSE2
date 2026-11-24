@@ -2,10 +2,7 @@
 use crate::graph::investment::solve_investment_order_for_model;
 use crate::graph::validate::validate_commodity_graphs_for_model;
 use crate::graph::{CommoditiesGraph, build_commodity_graphs_for_model};
-use crate::graph2::{
-    CommoditiesGraph as AgentCommoditiesGraph,
-    build_commodity_graphs_for_model as build_agent_commodity_graphs_for_model,
-};
+use crate::graph2::{AgentGraph, build_agent_graphs_for_model};
 use crate::id::{HasID, ID};
 use crate::model::{Model, ModelParameters};
 use crate::units::UnitType;
@@ -322,17 +319,14 @@ pub fn load_model<P: AsRef<Path>>(model_dir: P) -> Result<Model> {
 
 /// Load commodity flow graphs for a model.
 ///
-/// Loads necessary input data and creates both the standard and agent-specific graphs of
-/// commodity flows for each year.
+/// Loads necessary input data and creates both standard commodity graphs and agent graphs for
+/// each year.
 ///
 /// Graphs validation is NOT performed. This ensures that graphs can be generated even when
 /// validation would fail, which may be helpful for debugging.
 pub fn load_graphs<P: AsRef<Path>>(
     model_dir: P,
-) -> Result<(
-    IndexMap<u32, CommoditiesGraph>,
-    IndexMap<u32, AgentCommoditiesGraph>,
-)> {
+) -> Result<(IndexMap<u32, CommoditiesGraph>, IndexMap<u32, AgentGraph>)> {
     let model_params = ModelParameters::from_path(&model_dir)?;
 
     let time_slice_info = read_time_slice_info(model_dir.as_ref())?;
@@ -357,8 +351,8 @@ pub fn load_graphs<P: AsRef<Path>>(
     )?;
 
     let commodity_graphs = build_commodity_graphs_for_model(&processes, &region_ids, years);
-    let agent_commodity_graphs = build_agent_commodity_graphs_for_model(&processes, &agents, years);
-    Ok((commodity_graphs, agent_commodity_graphs))
+    let agent_graphs = build_agent_graphs_for_model(&processes, &agents, years);
+    Ok((commodity_graphs, agent_graphs))
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-//! Module for creating and analysing agent-specific commodity graphs
+//! Module for creating and analysing agent-to-agent commodity flow graphs
 use crate::agent::{AgentID, AgentMap};
 use crate::commodity::CommodityID;
 use crate::process::{FlowDirection, Process, ProcessFlow, ProcessID, ProcessMap};
@@ -10,21 +10,17 @@ use petgraph::Directed;
 use petgraph::algo::toposort;
 use petgraph::dot::Dot;
 use petgraph::graph::{EdgeReference, Graph};
-use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
 use std::sync::Arc;
 
-/// A graph of commodity flows for a given agent, region and year
-pub type CommoditiesGraph = Graph<GraphNode, GraphEdge, Directed>;
-
-/// A graph of agent-to-agent commodity flows for a given year
+/// A graph of agent-to-agent commodity flows for a given year.
 pub type AgentGraph = Graph<AgentGraphNode, GraphEdge, Directed>;
 
 #[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
-/// A node in a compressed agent graph
+/// A node in an agent graph.
 pub enum AgentGraphNode {
     /// A node representing an agent
     #[display("{_0}")]
@@ -38,34 +34,14 @@ pub enum AgentGraphNode {
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
-/// A node in the agent-specific commodity graph
-pub enum GraphNode {
-    /// A node representing a commodity in a specific region for a specific agent
-    #[display("{_0} | {_1} | {_2}")]
-    CommodityMarket(CommodityID, RegionID, AgentID),
-    /// A source node for processes that have no inputs
-    #[display("SOURCE")]
-    Source,
-    /// A sink node for processes that have no outputs
-    #[display("SINK")]
-    Sink,
-    /// A demand node for commodities with service demands
-    #[display("DEMAND")]
-    Demand,
-}
-
-#[derive(Eq, PartialEq, Clone, Hash, derive_more::Display)]
-/// An edge in the agent-specific commodity graph
+/// An edge in the agent graph.
 pub enum GraphEdge {
-    /// An edge representing a primary flow of a process installed in the given region for an agent
+    /// A primary flow of a process installed in the given region for an agent.
     #[display("{_0} | {_1} | {_2}")]
     Primary(ProcessID, RegionID, AgentID),
-    /// An edge representing a secondary flow of a process installed in the given region for an agent
+    /// A secondary flow of a process installed in the given region for an agent.
     #[display("{_0} | {_1} | {_2}")]
     Secondary(ProcessID, RegionID, AgentID),
-    /// An edge representing a service demand
-    #[display("DEMAND")]
-    Demand,
 }
 
 /// Helper function to return a possible flow operating in the requested year
@@ -98,13 +74,13 @@ fn get_flow_for_year(
     None
 }
 
-/// Gets market nodes for agents with a share of a commodity in the given region and year.
-fn get_commodity_market_nodes(
+/// Gets graph nodes for agents with a share of a commodity in the given region and year.
+fn get_agent_market_nodes(
     agents: &AgentMap,
     commodity_id: &CommodityID,
     region_id: &RegionID,
     year: u32,
-) -> Vec<GraphNode> {
+) -> Vec<AgentGraphNode> {
     agents
         .values()
         .filter(|agent| {
@@ -113,32 +89,17 @@ fn get_commodity_market_nodes(
                     .commodity_portions
                     .contains_key(&(commodity_id.clone(), year))
         })
-        .map(|agent| {
-            GraphNode::CommodityMarket(commodity_id.clone(), region_id.clone(), agent.id.clone())
-        })
+        .map(|agent| AgentGraphNode::Agent(agent.id.clone()))
         .collect()
 }
 
-/// Creates a directed graph of commodity flows for a given year, covering all agents and regions.
+/// Creates an agent-to-agent graph of commodity flows for a given year.
 ///
-/// The graph contains nodes only for `(commodity, region, agent)` combinations where the agent has
-/// a share of the commodity for the specified year and operates in the region. A process is
-/// included when it appears in an agent's search space for the given region and year. There will
-/// be an edge from `(A, R, G1)` to `(B, R, G2)` if such a process consumes commodity A and produces
-/// commodity B in region R, and G1 and G2 have shares of A and B respectively. The edge records
-/// the agent whose search space includes the process. Commodities are traded in a common regional
-/// market, so a process can consume commodity A from any agent with a share in region R.
-///
-/// There are also special `Source` and `Sink` nodes, which are used for processes that have no
-/// inputs or outputs.
-///
-/// The graph does not take into account process availabilities or commodity demands, both of which
-/// can vary by time slice.
-fn create_commodities_graph_for_year(
-    processes: &ProcessMap,
-    agents: &AgentMap,
-    year: u32,
-) -> CommoditiesGraph {
+/// Each market node is mapped directly to its agent, so an agent is represented by a single node
+/// even when it owns shares of multiple commodities. Edges retain the process, region, and agent
+/// whose search space includes the process. Processes without inputs or outputs use `Source` and
+/// `Sink` nodes, respectively.
+fn create_agent_graph_for_year(processes: &ProcessMap, agents: &AgentMap, year: u32) -> AgentGraph {
     let mut graph = Graph::new();
     let mut node_index = HashMap::new();
 
@@ -167,28 +128,32 @@ fn create_commodities_graph_for_year(
                     .values()
                     .partition(|flow| flow.direction() == FlowDirection::Input);
 
-                // Get input nodes for the process. Commodities enter a common regional market,
-                // so any agent with a share can supply this process's input.
+                // Commodities enter a common regional market, so any agent with a share can
+                // supply this process's input.
                 let mut inputs: Vec<_> = input_flows
                     .iter()
                     .flat_map(|flow| {
-                        get_commodity_market_nodes(agents, &flow.commodity.id, region_id, year)
+                        get_agent_market_nodes(agents, &flow.commodity.id, region_id, year)
                     })
                     .collect();
-                // Get output nodes for the process.
+                // Keep each output's primary/secondary status while mapping its market to agents.
                 let mut outputs: Vec<_> = output_flows
                     .iter()
                     .flat_map(|flow| {
-                        get_commodity_market_nodes(agents, &flow.commodity.id, region_id, year)
+                        let is_primary =
+                            process.primary_output.as_ref() == Some(&flow.commodity.id);
+                        get_agent_market_nodes(agents, &flow.commodity.id, region_id, year)
+                            .into_iter()
+                            .map(move |node| (node, is_primary))
                     })
                     .collect();
 
                 // Use `Source` node if no inputs, `Sink` node if no outputs
                 if input_flows.is_empty() {
-                    inputs.push(GraphNode::Source);
+                    inputs.push(AgentGraphNode::Source);
                 }
                 if output_flows.is_empty() {
-                    outputs.push(GraphNode::Sink);
+                    outputs.push((AgentGraphNode::Sink, false));
                 }
 
                 // Skip processes when no owned market is available on either side.
@@ -196,25 +161,15 @@ fn create_commodities_graph_for_year(
                     continue;
                 }
 
-                // Get primary output for the process
-                let primary_output = &process.primary_output;
-
                 // Create edges from all inputs to all outputs.
-                // Edges carry the process's region and agent so downstream filters can identify
-                // `(process_id, region_id, agent_id)`.
-                for (input, output) in iproduct!(inputs, outputs) {
+                // Multiple markets owned by the same agent can create parallel edges.
+                for (input, (output, is_primary)) in iproduct!(inputs, outputs) {
                     let source_node_index = *node_index
                         .entry(input.clone())
                         .or_insert_with(|| graph.add_node(input.clone()));
                     let target_node_index = *node_index
                         .entry(output.clone())
                         .or_insert_with(|| graph.add_node(output.clone()));
-                    let is_primary = match &output {
-                        GraphNode::CommodityMarket(commodity_id, _, _) => {
-                            primary_output.as_ref() == Some(commodity_id)
-                        }
-                        _ => false,
-                    };
 
                     graph.add_edge(
                         source_node_index,
@@ -241,78 +196,18 @@ fn create_commodities_graph_for_year(
     graph
 }
 
-/// Builds base commodity graphs for each year, covering all agents and regions.
-///
-/// These do not take into account demand and process availability.
-pub fn build_commodity_graphs_for_model(
+/// Builds agent graphs for each year, covering all agents and regions.
+pub fn build_agent_graphs_for_model(
     processes: &ProcessMap,
     agents: &AgentMap,
     years: &[u32],
-) -> IndexMap<u32, CommoditiesGraph> {
+) -> IndexMap<u32, AgentGraph> {
     years
         .iter()
         .map(|&year| {
-            let graph = create_commodities_graph_for_year(processes, agents, year);
+            let graph = create_agent_graph_for_year(processes, agents, year);
             (year, graph)
         })
-        .collect()
-}
-
-/// Compresses commodity-market nodes into one node per agent.
-///
-/// Commodity-market nodes are merged by agent. `Source` and `Sink` nodes are retained, while
-/// demand edges are omitted. Distinct process and region edges are preserved, so compression may
-/// create parallel edges between the same pair of agents.
-pub fn compress_commodity_graph(graph: &CommoditiesGraph) -> AgentGraph {
-    let mut compressed = AgentGraph::new();
-    let mut compressed_nodes = HashMap::new();
-
-    // Merge commodity markets by agent, while keeping source and sink nodes distinct.
-    for node in graph.node_weights().filter_map(to_agent_graph_node) {
-        compressed_nodes
-            .entry(node.clone())
-            .or_insert_with(|| compressed.add_node(node));
-    }
-
-    // Preserve each process edge, including those connected to `Source` or `Sink`.
-    for edge in graph.edge_references() {
-        if matches!(edge.weight(), GraphEdge::Demand) {
-            continue;
-        }
-        let (Some(source), Some(target)) = (
-            to_agent_graph_node(&graph[edge.source()]),
-            to_agent_graph_node(&graph[edge.target()]),
-        ) else {
-            continue;
-        };
-
-        // Keep process metadata; compression can create parallel edges between agents.
-        compressed.add_edge(
-            compressed_nodes[&source],
-            compressed_nodes[&target],
-            edge.weight().clone(),
-        );
-    }
-
-    compressed
-}
-
-fn to_agent_graph_node(node: &GraphNode) -> Option<AgentGraphNode> {
-    match node {
-        GraphNode::CommodityMarket(_, _, agent_id) => Some(AgentGraphNode::Agent(agent_id.clone())),
-        GraphNode::Source => Some(AgentGraphNode::Source),
-        GraphNode::Sink => Some(AgentGraphNode::Sink),
-        GraphNode::Demand => None,
-    }
-}
-
-/// Builds compressed agent graphs for each year from agent-specific commodity graphs.
-pub fn build_agent_graphs_for_model(
-    commodity_graphs: &IndexMap<u32, CommoditiesGraph>,
-) -> IndexMap<u32, AgentGraph> {
-    commodity_graphs
-        .iter()
-        .map(|(&year, graph)| (year, compress_commodity_graph(graph)))
         .collect()
 }
 
@@ -332,47 +227,17 @@ pub fn downstream_first_topological_order(graph: &AgentGraph) -> Result<Vec<Agen
         .collect())
 }
 
-/// Gets custom DOT attributes for edges in an agent-specific commodity graph
-fn get_edge_attributes(_: &CommoditiesGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
-    get_attributes_for_edge(edge_ref.weight())
-}
-
-/// Gets custom DOT attributes for edges in a compressed agent graph
+/// Gets custom DOT attributes for edges in an agent graph.
 fn get_agent_edge_attributes(_: &AgentGraph, edge_ref: EdgeReference<GraphEdge>) -> String {
-    get_attributes_for_edge(edge_ref.weight())
-}
-
-fn get_attributes_for_edge(edge: &GraphEdge) -> String {
-    match edge {
+    match edge_ref.weight() {
         // Use dashed lines for secondary flows
         GraphEdge::Secondary(..) => "style=dashed".to_string(),
         // Other edges use default attributes
-        _ => String::new(),
+        GraphEdge::Primary(..) => String::new(),
     }
 }
 
-/// Saves agent-specific commodity graphs to file
-///
-/// The graphs are saved as DOT files to the specified output path, one file per year, with a
-/// `_v2` suffix.
-pub fn save_commodity_graphs_for_model(
-    commodity_graphs: &IndexMap<u32, CommoditiesGraph>,
-    output_path: &Path,
-) -> Result<()> {
-    for (year, graph) in commodity_graphs {
-        let dot = Dot::with_attr_getters(
-            graph,
-            &[],
-            &get_edge_attributes,  // Custom attributes for edges
-            &|_, _| String::new(), // Use default attributes for nodes
-        );
-        let mut file = File::create(output_path.join(format!("{year}_v2.dot")))?;
-        write!(file, "{dot}")?;
-    }
-    Ok(())
-}
-
-/// Saves compressed agent graphs to file
+/// Saves agent graphs to file
 ///
 /// The graphs are saved as DOT files to the specified output path, one file per year, with a
 /// `_v3` suffix.
@@ -400,6 +265,7 @@ mod tests {
     use crate::units::{ActivityPerCapacity, Dimensionless, FlowPerActivity, MoneyPerFlow};
     use indexmap::{IndexSet, indexmap};
     use petgraph::graph::NodeIndex;
+    use petgraph::visit::EdgeRef;
 
     fn commodity(id: &str) -> Arc<Commodity> {
         let mut commodity = svd_commodity();
@@ -417,21 +283,23 @@ mod tests {
     }
 
     fn process_with_flows(
+        id: &str,
         region_id: &RegionID,
         year: u32,
         flows: IndexMap<CommodityID, ProcessFlow>,
-        primary_output: CommodityID,
+        primary_output: Option<CommodityID>,
     ) -> Arc<Process> {
         Arc::new(Process {
-            id: "producer".into(),
+            id: id.into(),
             description: String::new(),
             years: year..=year,
             activity_limits: HashMap::new(),
             flows: HashMap::from([((region_id.clone(), year), Arc::new(flows))]),
             parameters: HashMap::new(),
             regions: IndexSet::from([region_id.clone()]),
-            primary_output: Some(primary_output),
+            primary_output,
             capacity_to_activity: ActivityPerCapacity(1.0),
+            investment_constraints: HashMap::new(),
             tranche_size: None,
         })
     }
@@ -459,22 +327,10 @@ mod tests {
         agent
     }
 
-    fn market_node(
-        graph: &CommoditiesGraph,
-        commodity: &Commodity,
-        region_id: &RegionID,
-        agent_id: &AgentID,
-    ) -> NodeIndex {
+    fn graph_node(graph: &AgentGraph, expected: &AgentGraphNode) -> NodeIndex {
         graph
             .node_indices()
-            .find(|&node| {
-                graph[node]
-                    == GraphNode::CommodityMarket(
-                        commodity.id.clone(),
-                        region_id.clone(),
-                        agent_id.clone(),
-                    )
-            })
+            .find(|&node| &graph[node] == expected)
             .unwrap()
     }
 
@@ -497,6 +353,7 @@ mod tests {
         let secondary_commodity = commodity("commodity3");
         let year = 2020;
         let process = process_with_flows(
+            "producer",
             &region_id,
             year,
             indexmap! {
@@ -504,7 +361,7 @@ mod tests {
                 primary_commodity.id.clone() => process_flow(primary_commodity.clone(), 1.0),
                 secondary_commodity.id.clone() => process_flow(secondary_commodity.clone(), 1.0),
             },
-            primary_commodity.id.clone(),
+            Some(primary_commodity.id.clone()),
         );
         let processes = indexmap! {process.id.clone() => process.clone()};
         let mut agents = agents(IndexSet::from([region_id.clone()]));
@@ -517,7 +374,7 @@ mod tests {
             .commodity_portions
             .insert((input_commodity.id.clone(), year), Dimensionless(0.5));
         let template = agents[&input_agent_id].clone();
-        let process_agent = agent_with_share(
+        let mut process_agent = agent_with_share(
             &template,
             process_agent_id.clone(),
             &primary_commodity,
@@ -525,6 +382,9 @@ mod tests {
             year,
             Some(process.clone()),
         );
+        process_agent
+            .commodity_portions
+            .insert((secondary_commodity.id.clone(), year), Dimensionless(0.5));
         agents.insert(process_agent_id.clone(), process_agent);
         let secondary_owner = agent_with_share(
             &template,
@@ -536,22 +396,19 @@ mod tests {
         );
         agents.insert(secondary_owner_id.clone(), secondary_owner);
 
-        let graph = create_commodities_graph_for_year(&processes, &agents, year);
+        let graphs = build_agent_graphs_for_model(&processes, &agents, &[year]);
+        let graph = &graphs[&year];
 
         assert_eq!(graph.node_count(), 3);
-        assert_eq!(graph.edge_count(), 2);
-        let input_node = market_node(&graph, &input_commodity, &region_id, &input_agent_id);
+        assert_eq!(graph.edge_count(), 3);
+        let input_node = graph_node(graph, &AgentGraphNode::Agent(input_agent_id.clone()));
         let primary_output_node =
-            market_node(&graph, &primary_commodity, &region_id, &process_agent_id);
-        let secondary_output_node = market_node(
-            &graph,
-            &secondary_commodity,
-            &region_id,
-            &secondary_owner_id,
-        );
+            graph_node(graph, &AgentGraphNode::Agent(process_agent_id.clone()));
+        let secondary_output_node =
+            graph_node(graph, &AgentGraphNode::Agent(secondary_owner_id.clone()));
 
         assert!(has_edge(
-            &graph,
+            graph,
             input_node,
             primary_output_node,
             &GraphEdge::Primary(
@@ -561,7 +418,17 @@ mod tests {
             ),
         ));
         assert!(has_edge(
-            &graph,
+            graph,
+            input_node,
+            primary_output_node,
+            &GraphEdge::Secondary(
+                "producer".into(),
+                region_id.clone(),
+                process_agent_id.clone(),
+            ),
+        ));
+        assert!(has_edge(
+            graph,
             input_node,
             secondary_output_node,
             &GraphEdge::Secondary("producer".into(), region_id, process_agent_id,),
@@ -569,95 +436,78 @@ mod tests {
     }
 
     #[test]
-    fn compression_merges_markets_and_preserves_source_and_sink_edges() {
-        let agent1: AgentID = "agent1".into();
-        let agent2: AgentID = "agent2".into();
+    fn graph_preserves_source_and_sink_edges() {
         let region_id: RegionID = "GBR".into();
-        let mut commodity_graph = CommoditiesGraph::new();
-        let agent1_market_a = commodity_graph.add_node(GraphNode::CommodityMarket(
-            "commodity1".into(),
-            region_id.clone(),
-            agent1.clone(),
-        ));
-        let agent1_market_b = commodity_graph.add_node(GraphNode::CommodityMarket(
-            "commodity2".into(),
-            region_id.clone(),
-            agent1.clone(),
-        ));
-        let agent2_market = commodity_graph.add_node(GraphNode::CommodityMarket(
-            "commodity3".into(),
-            region_id.clone(),
-            agent2.clone(),
-        ));
-        let source = commodity_graph.add_node(GraphNode::Source);
-        let sink = commodity_graph.add_node(GraphNode::Sink);
-        let demand = commodity_graph.add_node(GraphNode::Demand);
+        let input_commodity = commodity("input");
+        let output_commodity = commodity("output");
+        let year = 2020;
+        let source_process = process_with_flows(
+            "source_process",
+            &region_id,
+            year,
+            indexmap! {
+                output_commodity.id.clone() => process_flow(output_commodity.clone(), 1.0),
+            },
+            Some(output_commodity.id.clone()),
+        );
+        let sink_process = process_with_flows(
+            "sink_process",
+            &region_id,
+            year,
+            indexmap! {
+                input_commodity.id.clone() => process_flow(input_commodity.clone(), -1.0),
+            },
+            None,
+        );
 
-        commodity_graph.add_edge(
-            agent1_market_a,
-            agent1_market_b,
-            GraphEdge::Primary("process1".into(), region_id.clone(), agent2.clone()),
+        let processes = indexmap! {
+            source_process.id.clone() => source_process.clone(),
+            sink_process.id.clone() => sink_process.clone(),
+        };
+        let mut agents = agents(IndexSet::from([region_id.clone()]));
+        let template = agents.values().next().unwrap().clone();
+        agents.clear();
+        let input_agent_id: AgentID = "input_agent".into();
+        let output_agent_id: AgentID = "output_agent".into();
+        let input_agent = agent_with_share(
+            &template,
+            input_agent_id.clone(),
+            &input_commodity,
+            &region_id,
+            year,
+            Some(sink_process),
         );
-        commodity_graph.add_edge(
-            agent1_market_b,
-            agent2_market,
-            GraphEdge::Secondary("process2".into(), region_id.clone(), agent2.clone()),
+        let output_agent = agent_with_share(
+            &template,
+            output_agent_id.clone(),
+            &output_commodity,
+            &region_id,
+            year,
+            Some(source_process),
         );
-        commodity_graph.add_edge(
-            source,
-            agent2_market,
-            GraphEdge::Primary("process3".into(), region_id.clone(), agent2.clone()),
-        );
-        commodity_graph.add_edge(
-            agent1_market_a,
-            sink,
-            GraphEdge::Secondary("process4".into(), region_id.clone(), agent2.clone()),
-        );
-        commodity_graph.add_edge(agent2_market, demand, GraphEdge::Demand);
+        agents.insert(input_agent_id.clone(), input_agent);
+        agents.insert(output_agent_id.clone(), output_agent);
 
-        let agent_graph = compress_commodity_graph(&commodity_graph);
-        let agent1_node = agent_graph
-            .node_indices()
-            .find(|&node| agent_graph[node] == AgentGraphNode::Agent(agent1.clone()))
-            .unwrap();
-        let agent2_node = agent_graph
-            .node_indices()
-            .find(|&node| agent_graph[node] == AgentGraphNode::Agent(agent2.clone()))
-            .unwrap();
-        let source_node = agent_graph
-            .node_indices()
-            .find(|&node| agent_graph[node] == AgentGraphNode::Source)
-            .unwrap();
-        let sink_node = agent_graph
-            .node_indices()
-            .find(|&node| agent_graph[node] == AgentGraphNode::Sink)
-            .unwrap();
+        let graphs = build_agent_graphs_for_model(&processes, &agents, &[year]);
+        let graph = &graphs[&year];
+        let input_node = graph_node(graph, &AgentGraphNode::Agent(input_agent_id.clone()));
+        let output_node = graph_node(graph, &AgentGraphNode::Agent(output_agent_id.clone()));
+        let source_node = graph_node(graph, &AgentGraphNode::Source);
+        let sink_node = graph_node(graph, &AgentGraphNode::Sink);
 
-        assert_eq!(agent_graph.node_count(), 4);
-        assert_eq!(agent_graph.edge_count(), 4);
+        assert_eq!(graph.node_count(), 4);
+        assert_eq!(graph.edge_count(), 2);
         assert!(has_edge(
-            &agent_graph,
-            agent1_node,
-            agent1_node,
-            &GraphEdge::Primary("process1".into(), region_id.clone(), agent2.clone()),
-        ));
-        assert!(has_edge(
-            &agent_graph,
-            agent1_node,
-            agent2_node,
-            &GraphEdge::Secondary("process2".into(), region_id, agent2),
-        ));
-        assert!(has_edge(
-            &agent_graph,
+            graph,
             source_node,
-            agent2_node,
-            &GraphEdge::Primary("process3".into(), "GBR".into(), "agent2".into()),
+            output_node,
+            &GraphEdge::Primary("source_process".into(), region_id.clone(), output_agent_id),
         ));
         assert!(has_edge(
-            &agent_graph,
-            agent1_node,
+            graph,
+            input_node,
             sink_node,
-            &GraphEdge::Secondary("process4".into(), "GBR".into(), "agent2".into()),
+            &GraphEdge::Secondary("sink_process".into(), region_id, input_agent_id),
         ));
     }
 
