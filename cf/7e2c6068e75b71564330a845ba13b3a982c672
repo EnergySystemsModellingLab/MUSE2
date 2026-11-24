@@ -1,0 +1,49 @@
+src/simulation/dispatch/constraints.rs
+  h_e76403a1cd4bf1 8
+src/simulation/dispatch.rs
+  h_e76403a1cd4bf1 13
+src/simulation/market.rs
+  h_e76403a1cd4bf1 12,15
+  h_e76403a1cd4bf1 3
+src/simulation.rs
+  h_e76403a1cd4bf1 19-20
+benches/assets.rs
+  h_e76403a1cd4bf1 11-12
+src/simulation/agent.rs
+  h_e76403a1cd4bf1 1
+src/simulation/agent/competitive.rs
+  h_e76403a1cd4bf1 20-21
+src/simulation/agent/competitive/constraints.rs
+  h_e76403a1cd4bf1 6
+src/simulation/agent/competitive/metrics.rs
+  h_e76403a1cd4bf1 11
+src/simulation/agent/competitive/optimisation.rs
+  h_e76403a1cd4bf1 13
+src/simulation/agent/competitive/output.rs
+  h_e76403a1cd4bf1 7
+src/simulation/agent/population.rs
+  h_e76403a1cd4bf1 20-21,514
+src/simulation/agent/population/constraints.rs
+  h_e76403a1cd4bf1 6
+src/simulation/agent/population/optimisation.rs
+  h_e76403a1cd4bf1 15
+src/simulation/agent/population/output.rs
+  h_e76403a1cd4bf1 7
+src/simulation/agent/portfolio.rs
+  h_e76403a1cd4bf1 12
+src/simulation/agent/portfolio/constraints.rs
+  h_e76403a1cd4bf1 7
+src/simulation/agent/portfolio/optimisation.rs
+  h_e76403a1cd4bf1 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf7e2c6068e75b71564330a845ba13b3a982c672",
+  "prompts": {},
+  "humans": {
+    "h_e76403a1cd4bf1": {
+      "author": "Tom Bland <tom_bland@hotmail.co.uk>"
+    }
+  }
+}
