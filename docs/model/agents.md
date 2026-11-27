@@ -23,8 +23,8 @@ During [investment][investment], the asset selection algorithm of each agent is 
 every market (commodity–region pair) that the agent is responsible for, with the agent's share of
 demand and its share of any [investment constraints][investment-constraints]. It returns the assets
 selected by the agent: the existing assets to retain and the new candidate assets to build. The rest
-of the investment process (the investment order, handling of circularities, partial system
-dispatch, mothballing, etc.) is the same for all agent types.
+of the investment process (the investment order, handling of circularities, activity-derived flow
+propagation, mothballing, etc.) is the same for all agent types.
 
 The `agent_type` column of [`agents.csv`][agents-csv] selects competitive agents (`competitive`),
 portfolio agents (`portfolio`), or population agents (`population`).
@@ -272,8 +272,7 @@ with the updated set of selected assets. This continues until:
 
 - The remaining demand falls below `remaining_demand_absolute_tolerance`
   (in [`model.toml`][model-toml]), or
-- No feasible options remain. In this case, a warning is logged and the loop ends early. The
-  unmet demand may still be satisfied during the full system dispatch, but is not guaranteed.
+- No feasible options remain. In this case, a warning is logged and the loop ends early.
 
 If demand cannot be met at all due to overly restrictive investment constraints, the simulation
 terminates with an error.

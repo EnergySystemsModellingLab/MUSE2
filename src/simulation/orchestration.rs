@@ -2,7 +2,6 @@
 use super::activity::FlowMap;
 use super::agent::run_agent;
 use super::agent::{AllDemandMap, AssetOptions, DemandMap, Selection};
-use super::dispatch::DispatchRun;
 use crate::agent::Agent;
 use crate::asset::{AssetIterator, AssetRef};
 use crate::commodity::{Commodity, CommodityID, CommodityMap};
@@ -168,6 +167,7 @@ pub fn run_agents_for_single_market(
             .filter_agent(&agent.id)
             .filter_region(region_id)
             .filter_primary_producers_of(commodity_id)
+            .filter(|asset| !excluded_processes.contains(asset.process_id()))
             .cloned()
             .collect();
 
@@ -205,11 +205,7 @@ pub fn run_agents_for_single_market(
                 // Filter available assets and processes before running the agent
                 let options = AssetOptions {
                     committed: Vec::new(),
-                    existing: agent_assets
-                        .iter()
-                        .filter(|asset| !excluded_processes.contains(asset.process_id()))
-                        .cloned()
-                        .collect(),
+                    existing: agent_assets,
                     processes: agent
                         .iter_search_space(region_id, commodity_id, year)
                         .filter(|process| !excluded_processes.contains(&process.id))
@@ -244,11 +240,11 @@ pub fn run_agents_for_single_market(
 /// turn.
 ///
 /// `feedback_processes` identifies process-region pairs that produce a cycle market and consume a
-/// market earlier in the investment order. In `Invest` mode, assets for these pairs are selected
-/// in the first pass and retained, then the remaining assets are selected in a second pass that
-/// excludes those processes. In `Dispatch` mode, there is no reselection, so all assets from the
-/// first pass are returned. A dispatch optimisation after each market updates demand for subsequent
-/// markets.
+/// market earlier in the investment order. Assets and activities for these pairs are retained from
+/// the first pass, then the remaining assets are selected in a second pass that excludes those
+/// processes. In `Dispatch` mode, capacities remain fixed in both passes. After each market, the
+/// flows of the selected assets are estimated using `flow_estimator` and used to update demand for
+/// subsequent markets.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn run_agents_for_cycle(
     model: &Model,
@@ -261,15 +257,12 @@ pub fn run_agents_for_cycle(
     prices: &Prices,
     writer: &mut DataWriter,
 ) -> Result<Selection> {
-    // Precompute a joined string for logging
-    let markets_str = markets.iter().map(|(c, r)| format!("{c}|{r}")).join(", ");
     let is_feedback_asset = |asset: &AssetRef| {
         feedback_processes.contains(&(asset.process_id().clone(), asset.region_id().clone()))
     };
 
     // First pass: iterate over the markets in order, considering all processes
     let mut net_demand = demand.clone();
-    let mut assets_for_first_pass = Vec::new();
     let mut retained_first_pass = Selection::default();
     let mut excluded_flows = FlowMap::new();
     for market in markets {
@@ -297,30 +290,16 @@ pub fn run_agents_for_cycle(
             continue;
         }
 
-        if mode == AgentRunMode::Invest {
-            assets_for_first_pass.extend(selection.assets.iter().cloned());
-        }
         let mut retained = selection.clone();
-        retained.retain(|asset| mode == AgentRunMode::Dispatch || is_feedback_asset(asset));
+        retained.retain(is_feedback_asset);
         retained_first_pass.extend(retained);
 
-        // Run dispatch
-        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
-        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
-            .without_commodity_constraints()
-            .with_market_balance_subset(std::slice::from_ref(market))
-            .with_input_prices(&prices.shadow)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 1");
+        // Determine the flows of the newly selected assets
+        let flows = selection.flow_map();
 
         // Update demand map with flows from newly selected assets
-        let flows = solution.create_flow_map();
         for ((asset, commodity_id, time_slice), flow) in &flows {
-            if mode == AgentRunMode::Invest && is_feedback_asset(asset) {
+            if is_feedback_asset(asset) {
                 excluded_flows
                     .entry((asset.clone(), commodity_id.clone(), time_slice.clone()))
                     .and_modify(|stored_flow| *stored_flow += *flow)
@@ -330,14 +309,14 @@ pub fn run_agents_for_cycle(
         update_net_demand_map(&mut net_demand, &flows, &selection.assets);
     }
 
-    if mode == AgentRunMode::Dispatch {
-        return Ok(retained_first_pass);
-    }
-
     // Second pass: iterate over the markets in the same order, excluding feedback processes, with
     // demand updated to account for the flows of feedback assets retained from the first pass
     let mut net_demand = demand.clone();
-    update_net_demand_map(&mut net_demand, &excluded_flows, &assets_for_first_pass);
+    update_net_demand_map(
+        &mut net_demand,
+        &excluded_flows,
+        &retained_first_pass.assets,
+    );
     let mut second_pass = Selection::default();
     for market in markets {
         let (commodity_id, region_id) = market.clone();
@@ -368,25 +347,11 @@ pub fn run_agents_for_cycle(
             continue;
         }
 
-        // Run dispatch
-        debug!("Running cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
-        let solution = DispatchRun::new(model, &selection.assets, year, &net_demand)
-            .without_commodity_constraints()
-            .with_market_balance_subset(std::slice::from_ref(market))
-            .with_input_prices(&prices.shadow)
-            .run(
-                &format!("cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2"),
-                writer,
-            )
-            .with_context(|| format!("Dispatch failed for cycle ({markets_str})"))?;
-        debug!("Completed cycle ({markets_str}) post {commodity_id}|{region_id} investment pass 2");
+        // Determine the flows of the newly selected assets
+        let flows = selection.flow_map();
 
         // Update demand map with flows from newly selected assets
-        update_net_demand_map(
-            &mut net_demand,
-            &solution.create_flow_map(),
-            &selection.assets,
-        );
+        update_net_demand_map(&mut net_demand, &flows, &selection.assets);
         second_pass.extend(selection);
     }
 
@@ -502,8 +467,7 @@ pub fn run_agents_for_year(
     writer: &mut DataWriter,
 ) -> Result<Selection> {
     // Initialise net demand map
-    let preset_demands = collect_preset_demands_for_year(&model.commodities, year);
-    let mut net_demand = preset_demands.clone();
+    let mut net_demand = collect_preset_demands_for_year(&model.commodities, year);
 
     // Keep track of all the assets selected
     // This includes Commissioned assets that are selected for retention, and new Ready assets
@@ -514,11 +478,6 @@ pub fn run_agents_for_year(
         "Investment order for year '{year}': {}",
         investment_order.iter().join(" -> ")
     );
-
-    // Keep track of the markets that have been seen so far. This will be used to apply
-    // balance constraints in the dispatch optimisation - we only apply balance constraints for
-    // markets that have been seen so far.
-    let mut seen_markets = Vec::new();
 
     // Iterate over market sets in the investment order for this year
     for market_set in investment_order {
@@ -534,12 +493,7 @@ pub fn run_agents_for_year(
             writer,
         )?;
 
-        // Update our list of seen markets
-        for market in market_set.iter_markets() {
-            seen_markets.push(market.clone());
-        }
-
-        // If no assets have been selected, skip dispatch optimisation
+        // If no assets have been selected, move on
         // **TODO**: this probably means there's no demand for the market, which we could
         // presumably preempt
         if selection.is_empty() {
@@ -548,28 +502,14 @@ pub fn run_agents_for_year(
         }
 
         // Add the selected assets to the list of all selected assets
-        let selected_assets = selection.assets.clone();
-        all_selected.extend(selection);
+        let new_selection = selection;
+        all_selected.extend(new_selection.clone());
 
-        // Perform dispatch optimisation with assets that have been selected so far
-        // **TODO**: presumably we only need to do this for selected_assets, as assets added in
-        // previous iterations should not change
-        debug!("Running post-investment dispatch for '{market_set}'");
-
-        // As upstream markets by definition will not yet have producers, we explicitly set
-        // their prices using external values so that they don't appear free
-        let solution = DispatchRun::new(model, &all_selected.assets, year, &preset_demands)
-            .without_commodity_constraints()
-            .with_market_balance_subset(&seen_markets)
-            .with_input_prices(&prices.shadow)
-            .run(&format!("post {market_set} investment"), writer)?;
+        // Determine the flows of the assets selected so far
+        let flows = new_selection.flow_map();
 
         // Update demand map with flows from newly added assets
-        update_net_demand_map(
-            &mut net_demand,
-            &solution.create_flow_map(),
-            &selected_assets,
-        );
+        update_net_demand_map(&mut net_demand, &flows, &new_selection.assets);
     }
 
     Ok(all_selected)

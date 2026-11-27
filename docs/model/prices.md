@@ -1,8 +1,8 @@
 # Commodity Prices
 
 This section describes how commodity prices are calculated in MUSE2 at the end of each
-milestone year iteration. The pricing algorithm operates on the results of the dispatch
-optimisation, translating flows and capacities into commodity market prices.
+milestone year iteration. The pricing algorithm uses asset activities selected by agents, translating
+the resulting flows and capacities into commodity market prices.
 
 ## Pricing Strategies
 
@@ -141,8 +141,7 @@ The following example demonstrates the calculation of full-cost prices for two c
 
 In this scenario, GASPRD (raw gas) is produced by a single GASDRV (dry gas extraction) asset. This
 asset produces 1 unit of GASPRD per unit of activity, along with 5.113 units of CO₂ emissions.
-Suppose an annual utilisation of 0.20786471743 units of activity per unit of capacity (based on
-dispatch results).
+Suppose an annual utilisation of 0.20786471743 units of activity per unit of capacity.
 
 #### Marginal Cost
 
@@ -184,8 +183,7 @@ The full cost is:
 Following on from the above scenario, GASNAT (processed natural gas) is produced by a single GASPRC
 (gas processing) asset, which consumes GASPRD as an input fuel. This asset consumes 1.05 units of
 GASPRD and produces 1 unit of GASNAT per unit of activity, along with 2.5565 units of CO₂ emissions.
-Suppose an annual utilisation of 0.2094885671 units of activity per unit of capacity (based on
-dispatch results).
+Suppose an annual utilisation of 0.2094885671 units of activity per unit of capacity.
 
 #### Marginal Cost
 

@@ -1,9 +1,11 @@
 # Dispatch Optimisation
 
-This section describes the formulation of the dispatch optimisation model in MUSE2. For a given
-milestone year (MSY), the dispatch model calculates the least-cost operation of the
-energy system assets to satisfy commodity demands. It is solved as a Linear Programme (LP) using the
-HiGHS solver.
+> **Status:** the methods described in this page are not used in the current simulation. Instead,
+> activities come directly from agent runs, and prices are derived from these activities.
+
+The full-system dispatch implementation calculates the least-cost operation of energy system assets
+to satisfy commodity demands for a milestone year (MSY). It is solved as a Linear Programme (LP)
+using the HiGHS solver.
 
 ## Sets and Indices
 
@@ -214,7 +216,7 @@ that smoothing dispatch does not outweigh meaningful differences in operating co
 
 ## Candidate Dispatch Run
 
-After the primary dispatch run, MUSE2 performs a second dispatch run that includes
+The full-system dispatch implementation can perform a second run that includes
 **candidate assets** — technologies not yet commissioned but available for investment — alongside
 the existing assets. The purpose of this run is to obtain shadow prices for commodities that are
 not consumed or produced in the primary dispatch solution.
