@@ -19,8 +19,8 @@ use log::debug;
 use map_macro::vec_deque;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -1200,6 +1200,47 @@ where
 
 impl<'a, I> AssetIterator<'a> for I where I: Iterator<Item = &'a AssetRef> + Sized + 'a {}
 
+/// Groups assets that have equivalent dispatch properties.
+///
+/// Assets are first bucketed by `dispatch_equivalence_hash()` to avoid unnecessary pairwise
+/// comparisons. Within each hash bucket, assets are compared using `is_dispatch_equivalent()`,
+/// which is the authoritative check for equivalence. This also handles hash collisions correctly.
+///
+/// The caller must ensure that `assets` contains only assets eligible for equal-utilisation
+/// constraints.
+pub fn group_dispatch_equivalent_assets<'a, I>(assets: I) -> Vec<Vec<&'a AssetRef>>
+where
+    I: Iterator<Item = &'a AssetRef>,
+{
+    // Group assets by comparing each one with the first asset in each group. The hash index
+    // avoids comparing an asset with groups that cannot contain an equivalent asset, while the
+    // exact comparison preserves correctness in the event of hash collisions.
+    let mut asset_groups: Vec<Vec<&AssetRef>> = Vec::new();
+    let mut group_indices: HashMap<u64, Vec<usize>> = HashMap::new();
+    for asset in assets {
+        let hash = asset.dispatch_equivalence_hash();
+
+        // Only groups with the same hash can possibly match.
+        let candidate_groups = group_indices.get(&hash);
+
+        // Find a group whose representative is actually equivalent.
+        let matching_group = candidate_groups
+            .into_iter()
+            .flatten()
+            .find(|&&group_index| asset_groups[group_index][0].is_dispatch_equivalent(asset));
+
+        if let Some(group_index) = matching_group {
+            asset_groups[*group_index].push(asset);
+        } else {
+            let group_index = asset_groups.len();
+            asset_groups.push(vec![asset]);
+            group_indices.entry(hash).or_default().push(group_index);
+        }
+    }
+
+    asset_groups
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1353,6 +1394,47 @@ mod tests {
             asset.dispatch_equivalence_hash(),
             asset.dispatch_equivalence_hash()
         );
+    }
+
+    #[test]
+    fn groups_no_assets() {
+        assert_eq!(
+            group_dispatch_equivalent_assets(std::iter::empty()),
+            [] as [std::vec::Vec<&AssetRef>; 0]
+        );
+    }
+
+    #[rstest]
+    fn groups_equivalent_assets(asset: Asset) {
+        let mut equivalent = asset.clone();
+        equivalent.set_capacity(AssetCapacity::single(Capacity(3.0)));
+        let assets = [AssetRef::from(asset), AssetRef::from(equivalent)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].len(), 2);
+    }
+
+    #[rstest]
+    fn groups_non_equivalent_assets_are_separate(asset: Asset, mut process: Process) {
+        Arc::make_mut(process.parameters.get_mut(&("GBR".into(), 2015)).unwrap())
+            .variable_operating_cost = MoneyPerActivity(1.0);
+        let different = Asset::new_ready(
+            "agent1".into(),
+            Arc::new(process),
+            "GBR".into(),
+            AssetCapacity::single(Capacity(2.0)),
+            2015,
+        )
+        .unwrap();
+        let assets = [AssetRef::from(asset), AssetRef::from(different)];
+
+        let groups = group_dispatch_equivalent_assets(assets.iter());
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].len(), 1);
+        assert_eq!(groups[1].len(), 1);
     }
 
     #[fixture]

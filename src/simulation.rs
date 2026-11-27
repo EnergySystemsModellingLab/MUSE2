@@ -14,10 +14,11 @@ use std::sync::Arc;
 
 pub mod activity;
 use activity::FlowMap;
-pub mod optimisation;
-use optimisation::DispatchRun;
-pub mod investment;
-use investment::{AgentRunMode, collect_preset_demands_for_year, run_agents_for_year};
+pub mod dispatch;
+use dispatch::DispatchRun;
+pub mod agent;
+pub mod orchestration;
+use orchestration::{AgentRunMode, collect_preset_demands_for_year, run_agents_for_year};
 pub mod market;
 pub mod prices;
 pub use prices::PriceMap;

@@ -4,7 +4,7 @@ use crate::asset::AssetID;
 use crate::output::DebugDataWriter;
 use crate::process::ProcessID;
 use crate::region::RegionID;
-use crate::simulation::investment::DemandMap;
+use crate::simulation::agent::DemandMap;
 use crate::time_slice::{TimeSliceID, TimeSliceLevel, TimeSliceSelection};
 use crate::units::{Activity, Capacity, Flow, MoneyPerActivity};
 use anyhow::Result;
